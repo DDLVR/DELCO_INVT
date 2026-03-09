@@ -1,0 +1,1292 @@
+{% extends 'base.html' %}
+
+{% block title %}Inventario - {{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h1>{{ titulo }}</h1>
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportar">
+                    <i class="bi bi-upload"></i> Importar Excel
+                </button>
+                <button type="button" class="btn btn-info" id="btnExportar">
+                    <i class="bi bi-download"></i> Exportar Excel
+                </button>
+                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAyudaFormato" title="Ver formato de importación">
+                    <i class="bi bi-info-circle"></i> Formato
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs de tipos -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <ul class="nav nav-tabs" role="tablist">
+                <li class="nav-item">
+                    <a class="nav-link {% if tipo == 'medidor' %}active{% endif %}" 
+                       href="{% url 'inventario_list' %}?tipo=medidor"
+                       data-tipo="medidor">
+                        Medidores
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if tipo == 'sim' %}active{% endif %}" 
+                       href="{% url 'inventario_list' %}?tipo=sim"
+                       data-tipo="sim">
+                        SIM Cards
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link {% if tipo == 'modem' %}active{% endif %}" 
+                       href="{% url 'inventario_list' %}?tipo=modem"
+                       data-tipo="modem">
+                        Módems
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <form method="get" id="formFiltros" class="row g-3 align-items-end">
+                        <input type="hidden" name="tipo" value="{{ tipo }}">
+                        
+                        <div class="col-md-4">
+                            <label for="estado_filtro" class="form-label">Estado</label>
+                            <select class="form-select" id="estado_filtro" name="estado">
+                                <option value="">-- Todos los estados --</option>
+                                {% for estado in estados_disponibles %}
+                                <option value="{{ estado.id }}" {% if estado.id|stringformat:"s" == estado_seleccionado %}selected{% endif %}>
+                                    {{ estado.nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label for="ubicacion_filtro" class="form-label">Ubicación</label>
+                            <select class="form-select" id="ubicacion_filtro" name="ubicacion">
+                                <option value="">-- Todas las ubicaciones --</option>
+                                {% for ubicacion in ubicaciones_disponibles %}
+                                <option value="{{ ubicacion.id }}" {% if ubicacion.id|stringformat:"s" == ubicacion_seleccionada %}selected{% endif %}>
+                                    {{ ubicacion.nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-4 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary flex-grow-1">
+                                <i class="bi bi-funnel"></i> Filtrar
+                            </button>
+                            <a href="{% url 'inventario_list' %}?tipo={{ tipo }}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-clockwise"></i> Limpiar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Listado -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="table-responsive">
+                    <table id="tablaInventario" class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                {% if tipo == 'medidor' %}
+                                <th>Serie</th>
+                                <th>Marca</th>
+                                <th>Módulo</th>
+                                <th>Fecha Recepción</th>
+                                <th>Fecha Entrega</th>
+                                <th>Entregado A</th>
+                                {% elif tipo == 'sim' %}
+                                <th>IMEI</th>
+                                <th>OPERADOR</th>
+                                <th>ABONADO</th>
+                                <th>DIRECCIÓN IP</th>
+                                <th>APN</th>
+                                <th>FECHA RECEPCIÓN</th>
+                                <th>ENTREGADO A</th>
+                                <th>FECHA ENTREGA</th>
+                                {% elif tipo == 'modem' %}
+                                <th>MARCA</th>
+                                <th>MODELO</th>
+                                <th>IMEI</th>
+                                <th>SERIE</th>
+                                <th>IP</th>
+                                <th>PUERTO</th>
+                                <th>FECHA RECEPCIÓN</th>
+                                <th>FECHA ENTREGA</th>
+                                <th>TÉCNICO</th>
+                                {% endif %}
+                                <th>Estado</th>
+                                <th>Cliente</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for equipo in equipos %}
+                            <tr>
+                                {% if tipo == 'medidor' %}
+                                <td>{{ equipo.serie }}</td>
+                                <td>{{ equipo.marca|default:"-" }}</td>
+                                <td>{{ equipo.modulo|default:"-" }}</td>
+                                <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
+                                <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
+                                <td>{{ equipo.entregado_a.nombre_interno|default:"-" }}</td>
+                                {% elif tipo == 'sim' %}
+                                <td><strong>{{ equipo.imei|default:"-" }}</strong></td>
+                                <td>{{ equipo.operador|default:"-" }}</td>
+                                <td>{{ equipo.abonado|default:"-" }}</td>
+                                <td>{{ equipo.direccion_ip|default:"-" }}</td>
+                                <td>{{ equipo.apn|default:"-" }}</td>
+                                <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
+                                <td>{{ equipo.entregado_a_nombre|default:"-" }}</td>
+                                <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
+                                {% elif tipo == 'modem' %}
+                                <td>{{ equipo.marca|default:"-" }}</td>
+                                <td>{{ equipo.modelo|default:"-" }}</td>
+                                <td><strong>{{ equipo.imei|default:"-" }}</strong></td>
+                                <td>{{ equipo.serie }}</td>
+                                <td>{{ equipo.ip|default:"-" }}</td>
+                                <td>{{ equipo.puerto|default:"-" }}</td>
+                                <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
+                                <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
+                                <td>{{ equipo.tecnico_responsable|default:"-" }}</td>
+                                {% endif %}
+                                <td>
+                                    <span class="badge bg-{% if equipo.estado_inventario and equipo.estado_inventario.nombre == 'Disponible' %}success{% elif equipo.estado_inventario and equipo.estado_inventario.nombre == 'Entregado' %}info{% else %}warning{% endif %}">
+                                        {{ equipo.estado_inventario.nombre|default:"-" }}
+                                    </span>
+                                </td>
+                                <td>{{ equipo.cliente.numero_cliente|default:"-" }}</td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalModificar"
+                                            data-equipo-id="{{ equipo.id }}"
+                                            data-equipo-tipo="{{ tipo }}">
+                                        <i class="bi bi-pencil-square"></i> Modificar
+                                    </button>
+                                </td>
+                            {% empty %}
+                            <tr>
+                                <td colspan="{% if tipo == 'medidor' %}9{% elif tipo == 'sim' %}11{% else %}12{% endif %}" class="text-center text-muted py-4">
+                                    No hay equipos registrados
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Ayuda - Formato de Importación -->
+<div class="modal fade" id="modalAyudaFormato" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-info-circle-fill"></i> Guía de Formato para Importación
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Pestañas para cada tipo -->
+                <ul class="nav nav-tabs mb-3" id="ayudaTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if tipo == 'medidor' %}active{% endif %}" 
+                                id="tab-medidores" data-bs-toggle="tab" 
+                                data-bs-target="#ayuda-medidores" type="button">
+                            📏 Medidores
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if tipo == 'sim' %}active{% endif %}" 
+                                id="tab-sim" data-bs-toggle="tab" 
+                                data-bs-target="#ayuda-sim" type="button">
+                            📱 SIM Cards
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link {% if tipo == 'modem' %}active{% endif %}" 
+                                id="tab-modems" data-bs-toggle="tab" 
+                                data-bs-target="#ayuda-modems" type="button">
+                            📡 Módems
+                        </button>
+                    </li>
+                </ul>
+
+                <div class="tab-content" id="ayudaTabContent">
+                    <!-- MEDIDORES -->
+                    <div class="tab-pane fade {% if tipo == 'medidor' %}show active{% endif %}" 
+                         id="ayuda-medidores" role="tabpanel">
+                        <h5 class="mb-3">📏 Formato para Medidores</h5>
+                        
+                        <div class="alert alert-info">
+                            <strong>Objetivo:</strong> Los medidores se reciben en bodega y luego se entregan a técnicos para instalación.
+                        </div>
+
+                        <h6 class="text-success">🟢 Columnas del Excel (se importan)</h6>
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-success">
+                                    <tr>
+                                        <th>Columna</th>
+                                        <th>Campo</th>
+                                        <th>Obligatorio</th>
+                                        <th>Ejemplo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>A</td>
+                                        <td>Fecha Recepción</td>
+                                        <td><span class="badge bg-danger">Sí</span></td>
+                                        <td>15-01-2024 o 2024-01-15</td>
+                                    </tr>
+                                    <tr>
+                                        <td>B</td>
+                                        <td>Bodega</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>Bodega Central</td>
+                                    </tr>
+                                    <tr>
+                                        <td>C</td>
+                                        <td>Marca</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>Elster, Landis+Gyr</td>
+                                    </tr>
+                                    <tr>
+                                        <td>D</td>
+                                        <td>Caja</td>
+                                        <td><span class="badge bg-danger">Sí</span></td>
+                                        <td>CAJA-001</td>
+                                    </tr>
+                                    <tr>
+                                        <td>E</td>
+                                        <td>Serie</td>
+                                        <td><span class="badge bg-danger">Sí</span></td>
+                                        <td>MED-2024-001 (único)</td>
+                                    </tr>
+                                    <tr>
+                                        <td>F</td>
+                                        <td>Módulo</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>Monofásico, Trifásico</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h6 class="text-warning">🟡 Campos que completa el Administrativo (después)</h6>
+                        <ul>
+                            <li><strong>Fecha Entrega:</strong> Cuando se entrega al técnico</li>
+                            <li><strong>Entregado A:</strong> Técnico que lo recibe</li>
+                            <li><strong>Estado:</strong> Bodega, Instalado, Reparación, etc.</li>
+                            <li><strong>Cliente:</strong> Cliente asociado</li>
+                        </ul>
+                    </div>
+
+                    <!-- SIM CARDS -->
+                    <div class="tab-pane fade {% if tipo == 'sim' %}show active{% endif %}" 
+                         id="ayuda-sim" role="tabpanel">
+                        <h5 class="mb-3">📱 Formato para SIM Cards</h5>
+                        
+                        <div class="alert alert-warning">
+                            <strong>Sistema de 2 colores:</strong>
+                            <ul class="mb-0">
+                                <li><strong>🟡 AMARILLO:</strong> Datos del Excel (solo lectura en el sistema)</li>
+                                <li><strong>🟢 VERDE:</strong> Datos que completa el administrativo</li>
+                            </ul>
+                        </div>
+
+                        <h6 class="text-warning">🟡 Columnas AMARILLAS del Excel (se importan - solo lectura)</h6>
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-warning">
+                                    <tr>
+                                        <th>Columna</th>
+                                        <th>Campo</th>
+                                        <th>Obligatorio</th>
+                                        <th>Ejemplo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>A</td>
+                                        <td>IMEI</td>
+                                        <td><span class="badge bg-danger">Sí</span></td>
+                                        <td>867456789012345 (único)</td>
+                                    </tr>
+                                    <tr>
+                                        <td>B</td>
+                                        <td>OPERADOR</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>Movistar, Entel, Claro</td>
+                                    </tr>
+                                    <tr>
+                                        <td>C</td>
+                                        <td>ABONADO</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>123456789012345</td>
+                                    </tr>
+                                    <tr>
+                                        <td>D</td>
+                                        <td>DIRECCIÓN IP</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>192.168.1.100</td>
+                                    </tr>
+                                    <tr>
+                                        <td>E</td>
+                                        <td>APN</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>internet.movil</td>
+                                    </tr>
+                                    <tr>
+                                        <td>F</td>
+                                        <td>FECHA RECEPCIÓN</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>15-01-2024</td>
+                                    </tr>
+                                    <tr>
+                                        <td>G</td>
+                                        <td>ENTREGADO A</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>Juan Pérez</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h6 class="text-success">🟢 Campos VERDES (editables por administrativo)</h6>
+                        <ul>
+                            <li><strong>FECHA ENTREGA:</strong> Fecha de entrega/instalación</li>
+                            <li><strong>ESTADO:</strong> Estado actual de la SIM</li>
+                            <li><strong>CLIENTE:</strong> Cliente asociado (número de cliente)</li>
+                            <li><strong>MEDIDOR:</strong> Medidor asociado (serie del medidor)</li>
+                        </ul>
+
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-lightbulb"></i> 
+                            <strong>Nota:</strong> Los campos amarillos NO se pueden modificar después de importar. 
+                            Solo los campos verdes son editables en el sistema.
+                        </div>
+                    </div>
+
+                    <!-- MODEMS -->
+                    <div class="tab-pane fade {% if tipo == 'modem' %}show active{% endif %}" 
+                         id="ayuda-modems" role="tabpanel">
+                        <h5 class="mb-3">📡 Formato para Módems</h5>
+                        
+                        <div class="alert alert-danger">
+                            <strong>Sistema de 3 colores:</strong>
+                            <ul class="mb-0">
+                                <li><strong>🟢 VERDE:</strong> Datos del Excel (solo lectura en el sistema)</li>
+                                <li><strong>🟡 AMARILLO:</strong> Datos que completa el administrativo</li>
+                                <li><strong>🟠 NARANJA:</strong> Datos ocultos (solo visibles para admin/auditor)</li>
+                            </ul>
+                        </div>
+
+                        <h6 class="text-success">🟢 Columnas VERDES del Excel (se importan - solo lectura)</h6>
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-success">
+                                    <tr>
+                                        <th>Columna</th>
+                                        <th>Campo</th>
+                                        <th>Obligatorio</th>
+                                        <th>Ejemplo</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>A</td>
+                                        <td>MARCA</td>
+                                        <td><span class="badge bg-danger">Sí</span></td>
+                                        <td>Huawei, ZTE, Quectel</td>
+                                    </tr>
+                                    <tr>
+                                        <td>B</td>
+                                        <td>MODELO</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>E3372, MF79, EC25</td>
+                                    </tr>
+                                    <tr>
+                                        <td>C</td>
+                                        <td>IMEI</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>867456789012345</td>
+                                    </tr>
+                                    <tr>
+                                        <td>D</td>
+                                        <td>SERIE</td>
+                                        <td><span class="badge bg-danger">Sí</span></td>
+                                        <td>HW-2024-001 (único)</td>
+                                    </tr>
+                                    <tr>
+                                        <td>E</td>
+                                        <td>Fecha Recepción</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>15-01-2024</td>
+                                    </tr>
+                                    <tr>
+                                        <td>F</td>
+                                        <td>Fecha Entrega</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>20-01-2024</td>
+                                    </tr>
+                                    <tr>
+                                        <td>G</td>
+                                        <td>Caja</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>CAJA-101</td>
+                                    </tr>
+                                    <tr>
+                                        <td>H</td>
+                                        <td>Técnico Responsable</td>
+                                        <td><span class="badge bg-secondary">No</span></td>
+                                        <td>Juan Pérez</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h6 class="text-warning">🟡 Columnas AMARILLAS (editables por administrativo)</h6>
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-warning">
+                                    <tr>
+                                        <th>Columna</th>
+                                        <th>Campo</th>
+                                        <th>Descripción</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>I</td>
+                                        <td>Cliente</td>
+                                        <td>Número de cliente asociado</td>
+                                    </tr>
+                                    <tr>
+                                        <td>J</td>
+                                        <td>Medidor</td>
+                                        <td>Serie del medidor asociado</td>
+                                    </tr>
+                                    <tr>
+                                        <td>K</td>
+                                        <td>Observaciones</td>
+                                        <td>Notas adicionales</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <h6 class="text-danger">🟠 Columnas NARANJAS (ocultas para administrativo)</h6>
+                        <p><small class="text-muted">Estas columnas se importan pero NO son visibles para usuarios administrativos. 
+                        Solo accesibles desde el panel de administración para superusuarios.</small></p>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <ul class="small">
+                                    <li>L - IP</li>
+                                    <li>M - Puerto</li>
+                                    <li>N - Marca Secundaria</li>
+                                    <li>O - Retirado</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <ul class="small">
+                                    <li>P - Serie Secundaria</li>
+                                    <li>Q - Irregularidad</li>
+                                    <li>R - Proyecto</li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info mt-3">
+                            <i class="bi bi-lightbulb"></i> 
+                            <strong>Nota:</strong> Los campos verdes NO se pueden modificar desde el sistema. 
+                            Solo los campos amarillos son editables. Los campos naranjas son solo de auditoría.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notas generales -->
+                <hr>
+                <div class="alert alert-secondary">
+                    <h6><i class="bi bi-exclamation-triangle"></i> Notas Importantes</h6>
+                    <ul class="mb-0 small">
+                        <li>Los campos marcados como <span class="badge bg-danger">Obligatorios</span> deben tener un valor</li>
+                        <li>Las fechas pueden estar en formato: <code>DD-MM-YYYY</code>, <code>YYYY-MM-DD</code>, <code>DD/MM/YYYY</code></li>
+                        <li>Los campos únicos (IMEI, Serie) no pueden repetirse en la base de datos</li>
+                        <li>Si un cliente no existe, se crea automáticamente con el número proporcionado</li>
+                        <li>El archivo debe ser formato Excel (.xlsx o .xls)</li>
+                        <li>La primera fila debe contener los encabezados de columna</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Entendido</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para importar Excel -->
+<div class="modal fade" id="modalImportar" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Importar desde Excel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formImportar" enctype="multipart/form-data">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <p class="text-muted mb-3">
+                        Carga un archivo Excel (.xlsx) con los equipos a importar.
+                    </p>
+                    <input type="hidden" name="tipo" value="{{ tipo }}">
+                    <div class="mb-3">
+                        <label for="archivoImportar" class="form-label">Archivo Excel</label>
+                        <input type="file" class="form-control" id="archivoImportar" name="archivo" 
+                               accept=".xlsx,.xls" required>
+                        <small class="form-text text-muted">
+                            Formato esperado:
+                            {% if tipo == 'medidor' %}
+                            <strong>AMARILLO (importar):</strong> Fecha Recepción, Bodega, Marca, Caja, Serie, Módulo<br>
+                            <strong>VERDE (rellenar después):</strong> Fecha Entrega, Entregado A, Estado, Cliente
+                            {% elif tipo == 'sim' %}
+                            <strong>AMARILLO (importar):</strong> IMEI, OPERADOR, ABONADO, DIRECCIÓN IP, APN, FECHA DE RECEPCIÓN, ENTREGADO A<br>
+                            <strong>VERDE (rellenar después):</strong> FECHA ENTREGA, ESTADO, CLIENTE, MEDIDOR
+                            {% elif tipo == 'modem' %}
+                            <strong>AMARILLO (importar):</strong> Fecha Recepción, Bodega, Marca, Caja, Serie, Módulo<br>
+                            <strong>VERDE (rellenar después):</strong> Fecha Entrega, Entregado A, Estado, Cliente
+                            {% endif %}
+                        </small>
+                    </div>
+                    <div id="importResultados" class="mt-3" style="display:none;">
+                        <div id="importMensaje" class="alert"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" id="btnImportarSubmit">Importar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Modificar Equipo -->
+<div class="modal fade" id="modalModificar" tabindex="-1">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil-square"></i> 
+                    Modificar Equipo
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formModificar">
+                {% csrf_token %}
+                <div class="modal-body" style="max-height: 70vh; overflow-y: auto;">
+                    <input type="hidden" id="equipoId" name="equipo_id">
+                    <input type="hidden" id="equipoTipo" name="tipo">
+                    
+                    <!-- Campos para Medidor y Módems -->
+                    <div id="camposMedidorModem" class="campos-tipo">
+                        <!-- Campos para MEDIDOR -->
+                        <div id="camposMedidorSoloEntrega" style="display:none;">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="fechaEntrega" class="form-label">Fecha de Entrega</label>
+                                    <input type="date" class="form-control" id="fechaEntrega" name="fecha_entrega">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="estado" class="form-label">Estado</label>
+                                    <select class="form-select" id="estado" name="estado_medidor">
+                                        <option value="">-- Seleccionar estado --</option>
+                                        {% for estado in estados_disponibles %}
+                                        <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="entregadoA" class="form-label">Técnico/Entregado A</label>
+                                    <select class="form-select" id="entregadoA" name="entregado_a">
+                                        <option value="">-- Seleccionar técnico --</option>
+                                        {% for usuario in usuarios %}
+                                        <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="cliente" class="form-label">Cliente</label>
+                                    <select class="form-select" id="cliente" name="cliente">
+                                        <option value="">-- Seleccionar cliente --</option>
+                                        {% for cliente in clientes %}
+                                        <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campos para SIM Card -->
+                    <div id="camposSIM" class="campos-tipo" style="display:none;">
+                        <div class="alert alert-warning" role="alert">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Campos AMARILLOS (solo lectura):</strong> Vienen desde la planilla importada<br>
+                            <strong>Campos VERDES (modificables):</strong> Completa los siguientes datos
+                        </div>
+
+                        <!-- CAMPOS AMARILLOS (SOLO LECTURA) -->
+                        <div class="card mb-3 border-warning">
+                            <div class="card-header bg-warning text-dark">
+                                <strong>📋 Datos desde Planilla (Solo Lectura)</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>IMEI:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="simImei" readonly>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>OPERADOR:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="simOperador" readonly>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>ABONADO:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="simAbonado" readonly>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>DIRECCIÓN IP:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="simDireccionIp" readonly>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>APN:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="simApn" readonly>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>FECHA RECEPCIÓN:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="simFechaRecepcion" readonly>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>ENTREGADO A:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="simEntregadoANombre" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- CAMPOS VERDES (MODIFICABLES) -->
+                        <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                                <strong>✏️ Datos a Completar por Administrativo</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="simFechaEntrega" class="form-label">
+                                            <i class="bi bi-calendar-event"></i> 
+                                            Fecha de Entrega
+                                        </label>
+                                        <input type="date" class="form-control" id="simFechaEntrega" name="fecha_entrega">
+                                        <small class="text-muted">Fecha de entrega al cliente/instalación</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="estadoSIM" class="form-label">
+                                            <i class="bi bi-tag-fill"></i> 
+                                            Estado
+                                        </label>
+                                        <select class="form-select" id="estadoSIM" name="estado_sim">
+                                            <option value="">-- Seleccionar estado --</option>
+                                            {% for estado in estados_disponibles %}
+                                            <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="simCliente" class="form-label">
+                                            <i class="bi bi-building"></i> 
+                                            Cliente
+                                        </label>
+                                        <select class="form-select" id="simCliente" name="cliente">
+                                            <option value="">-- Seleccionar cliente --</option>
+                                            {% for cliente in clientes %}
+                                            <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="simMedidor" class="form-label">
+                                            <i class="bi bi-speedometer"></i> 
+                                            Medidor
+                                        </label>
+                                        <select class="form-select" id="simMedidor" name="medidor">
+                                            <option value="">-- Seleccionar medidor --</option>
+                                            {% for medidor in medidores %}
+                                            <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <small class="text-muted">Medidor asociado a esta SIM (opcional)</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Campos para Modems -->
+                    <div id="camposModem" class="campos-tipo" style="display:none;">
+                        <div class="alert alert-info" role="alert">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Campos VERDES (solo lectura):</strong> Vienen desde la planilla importada<br>
+                            <strong>Campos AMARILLOS (modificables):</strong> Completa los siguientes datos
+                        </div>
+
+                        <!-- CAMPOS VERDES (SOLO LECTURA - DESDE PLANILLA) -->
+                        <div class="card mb-3 border-success">
+                            <div class="card-header bg-success text-white">
+                                <strong>📦 Datos desde Planilla (Solo Lectura)</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>MARCA:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="modemMarca" readonly>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>MODELO:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="modemModelo" readonly>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>IMEI:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="modemImei" readonly>
+                                    </div>
+                                    <div class="col-md-6 mb-2">
+                                        <label class="form-label"><strong>SERIE:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="modemSerie" readonly>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label"><strong>FECHA RECEPCIÓN:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="modemFechaRecepcion" readonly>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label"><strong>FECHA ENTREGA:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="modemFechaEntrega" readonly>
+                                    </div>
+                                    <div class="col-md-4 mb-2">
+                                        <label class="form-label"><strong>CAJA:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="modemCaja" readonly>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-12 mb-2">
+                                        <label class="form-label"><strong>TÉCNICO RESPONSABLE:</strong></label>
+                                        <input type="text" class="form-control-plaintext" id="modemTecnico" readonly>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- CAMPOS AMARILLOS (MODIFICABLES) -->
+                        <div class="card border-warning">
+                            <div class="card-header bg-warning text-dark">
+                                <strong>✏️ Datos a Completar por Administrativo</strong>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="modemCliente" class="form-label">
+                                            <i class="bi bi-building"></i> 
+                                            Cliente
+                                        </label>
+                                        <select class="form-select" id="modemCliente" name="cliente">
+                                            <option value="">-- Seleccionar cliente --</option>
+                                            {% for cliente in clientes %}
+                                            <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="modemMedidor" class="form-label">
+                                            <i class="bi bi-speedometer"></i> 
+                                            Medidor
+                                        </label>
+                                        <select class="form-select" id="modemMedidor" name="medidor">
+                                            <option value="">-- Seleccionar medidor --</option>
+                                            {% for medidor in medidores %}
+                                            <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <small class="text-muted">Medidor asociado a este módem (opcional)</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="alertaError" class="alert alert-danger d-none" role="alert">
+                        <strong>Error:</strong>
+                        <p id="textoError" class="mb-0"></p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" id="btnGuardarModificacion">
+                        <i class="bi bi-check-circle"></i> Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+        <!-- Toasts de feedback -->
+        <div class="toast-container position-fixed bottom-0 end-0 p-3">
+            <div id="toastGuardar" class="toast align-items-center text-bg-success border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">Cambios guardados exitosamente.</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+                </div>
+            </div>
+            <div id="toastError" class="toast align-items-center text-bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">Ocurrió un error al guardar.</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
+                </div>
+            </div>
+        </div>
+
+<script>
+// Esperar a que el DOM esté completamente cargado
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('DOM cargado, inicializando scripts');
+    
+// Función para obtener fecha en formato YYYY-MM-DD
+function obtenerFechaHoy() {
+    const hoy = new Date();
+    const year = hoy.getFullYear();
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+    const dia = String(hoy.getDate()).padStart(2, '0');
+    return `${year}-${mes}-${dia}`;
+}
+
+// Mostrar/ocultar campos por tipo
+function mostrarCamposPorTipo(tipo) {
+    const camposMedidorSoloEntrega = document.getElementById('camposMedidorSoloEntrega');
+    const camposModem = document.getElementById('camposModem');
+    const camposSIM = document.getElementById('camposSIM');
+    
+    // Ocultar todos
+    if (camposMedidorSoloEntrega) camposMedidorSoloEntrega.style.display = 'none';
+    if (camposModem) camposModem.style.display = 'none';
+    if (camposSIM) camposSIM.style.display = 'none';
+    
+    // Mostrar el correspondiente
+    if (tipo === 'sim') {
+        if (camposSIM) camposSIM.style.display = 'block';
+    } else if (tipo === 'modem') {
+        if (camposModem) camposModem.style.display = 'block';
+    } else {
+        // Para medidor: solo mostrar Entregado A
+        if (camposMedidorSoloEntrega) camposMedidorSoloEntrega.style.display = 'block';
+    }
+}
+
+// Modal Modificar
+const modalModificar = new bootstrap.Modal(document.getElementById('modalModificar'));
+
+document.getElementById('modalModificar').addEventListener('show.bs.modal', function(e) {
+    const button = e.relatedTarget;
+    const equipoId = button.getAttribute('data-equipo-id');
+    const equipoTipo = button.getAttribute('data-equipo-tipo');
+    
+    console.log('Modal abierto - ID:', equipoId, 'Tipo:', equipoTipo);
+    
+    // Limpiar formulario
+    document.getElementById('formModificar').reset();
+    document.getElementById('equipoId').value = equipoId;
+    document.getElementById('equipoTipo').value = equipoTipo;
+    document.getElementById('alertaError').classList.add('d-none');
+    
+    // Mostrar campos según tipo
+    mostrarCamposPorTipo(equipoTipo);
+    
+    // Cargar datos del equipo
+    const urlObtener = `/inventario/${equipoId}/obtener-datos/?tipo=${equipoTipo}`;
+    
+    console.log('Cargando desde URL:', urlObtener);
+    
+    fetch(urlObtener)
+    .then(response => response.json())
+    .then(data => {
+        console.log('Datos recibidos:', data);
+        
+        if (data.success && data.data) {
+            const equipoData = data.data;
+            
+            if (equipoTipo === 'sim') {
+                // SIM Card - Cargar campos amarillos (solo lectura)
+                document.getElementById('simImei').value = equipoData.imei || '-';
+                document.getElementById('simOperador').value = equipoData.operador || '-';
+                document.getElementById('simAbonado').value = equipoData.abonado || '-';
+                document.getElementById('simDireccionIp').value = equipoData.direccion_ip || '-';
+                document.getElementById('simApn').value = equipoData.apn || '-';
+                document.getElementById('simFechaRecepcion').value = equipoData.fecha_recepcion || '-';
+                document.getElementById('simEntregadoANombre').value = equipoData.entregado_a_nombre || '-';
+                
+                // Cargar campos verdes (modificables)
+                const fechaEntregaSim = document.getElementById('simFechaEntrega');
+                const estadoSIM = document.getElementById('estadoSIM');
+                const clienteSIM = document.getElementById('simCliente');
+                const medidorSIM = document.getElementById('simMedidor');
+                
+                if (fechaEntregaSim) {
+                    fechaEntregaSim.value = equipoData.fecha_entrega || '';
+                }
+                if (estadoSIM && equipoData.estado_id) {
+                    estadoSIM.value = equipoData.estado_id;
+                }
+                if (clienteSIM && equipoData.cliente_id) {
+                    clienteSIM.value = equipoData.cliente_id;
+                }
+                if (medidorSIM && equipoData.medidor_id) {
+                    medidorSIM.value = equipoData.medidor_id;
+                }
+            } else if (equipoTipo === 'modem') {
+                // Módem - Cargar campos verdes (solo lectura)
+                document.getElementById('modemMarca').value = equipoData.marca || '-';
+                document.getElementById('modemModelo').value = equipoData.modelo || '-';
+                document.getElementById('modemImei').value = equipoData.imei || '-';
+                document.getElementById('modemSerie').value = equipoData.serie || '-';
+                document.getElementById('modemFechaRecepcion').value = equipoData.fecha_recepcion || '-';
+                document.getElementById('modemFechaEntrega').value = equipoData.fecha_entrega || '-';
+                document.getElementById('modemCaja').value = equipoData.caja || '-';
+                document.getElementById('modemTecnico').value = equipoData.tecnico_responsable || '-';
+                
+                // Cargar campos amarillos (modificables)
+                const clienteModem = document.getElementById('modemCliente');
+                const medidorModem = document.getElementById('modemMedidor');
+                
+                if (clienteModem && equipoData.cliente_id) {
+                    clienteModem.value = equipoData.cliente_id;
+                }
+                if (medidorModem && equipoData.medidor_id) {
+                    medidorModem.value = equipoData.medidor_id;
+                }
+            } else {
+                // Medidor - Cargar todos los campos
+                const fechaInput = document.getElementById('fechaEntrega');
+                const estadoSelect = document.getElementById('estado');
+                const entregadoSelect = document.getElementById('entregadoA');
+                const clienteSelect = document.getElementById('cliente');
+                
+                if (fechaInput) {
+                    fechaInput.value = equipoData.fecha_entrega || obtenerFechaHoy();
+                }
+                if (estadoSelect && equipoData.estado_id) {
+                    estadoSelect.value = equipoData.estado_id;
+                }
+                if (entregadoSelect && equipoData.entregado_a_id) {
+                    entregadoSelect.value = equipoData.entregado_a_id;
+                }
+                if (clienteSelect && equipoData.cliente_id) {
+                    clienteSelect.value = equipoData.cliente_id;
+                }
+            }
+        }
+    })
+    .catch(error => console.error('Error al cargar datos:', error));
+});
+
+// Evento para guardar cambios
+const btnGuardar = document.getElementById('btnGuardarModificacion');
+if (btnGuardar) {
+    console.log('Botón de guardar encontrado, agregando event listener');
+    
+    btnGuardar.addEventListener('click', function(e) {
+        e.preventDefault();
+        
+        const equipoId = document.getElementById('equipoId').value;
+        const tipo = document.getElementById('equipoTipo').value;
+        
+        if (!equipoId) {
+            alert('Error: No se encontraron los datos del equipo');
+            return;
+        }
+        
+        // Obtener valores
+        const formData = new FormData();
+        formData.append('tipo', tipo);
+        formData.append('equipo_id', equipoId);
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+        
+        if (tipo === 'medidor') {
+            const fechaEntrega = document.getElementById('fechaEntrega').value;
+            const estado = document.getElementById('estado').value;
+            const entregadoA = document.getElementById('entregadoA').value;
+            const cliente = document.getElementById('cliente').value;
+            
+            formData.append('fecha_entrega', fechaEntrega);
+            formData.append('estado_medidor', estado);
+            formData.append('entregado_a', entregadoA);
+            formData.append('cliente', cliente);
+        } else if (tipo === 'sim') {
+            const fechaEntrega = document.getElementById('simFechaEntrega').value;
+            const estado = document.getElementById('estadoSIM').value;
+            const cliente = document.getElementById('simCliente').value;
+            const medidor = document.getElementById('simMedidor').value;
+            
+            formData.append('fecha_entrega', fechaEntrega);
+            formData.append('estado_sim', estado);
+            formData.append('cliente', cliente);
+            formData.append('medidor', medidor);
+        } else if (tipo === 'modem') {
+            const cliente = document.getElementById('modemCliente').value;
+            const medidor = document.getElementById('modemMedidor').value;
+            
+            formData.append('cliente', cliente);
+            formData.append('medidor', medidor);
+        }
+        
+        const url = `/inventario/${equipoId}/modificar/`;
+        
+        btnGuardar.disabled = true;
+        btnGuardar.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>Guardando...';
+        
+        fetch(url, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const toastEl = document.getElementById('toastGuardar');
+                const toast = new bootstrap.Toast(toastEl, { delay: 2000 });
+                toast.show();
+
+                const modalEl = document.getElementById('modalModificar');
+                const modalInstance = bootstrap.Modal.getInstance(modalEl);
+                if (modalInstance) {
+                    modalInstance.hide();
+                }
+
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            } else {
+                alert('Error: ' + data.message);
+                btnGuardar.disabled = false;
+                btnGuardar.innerHTML = '<i class="bi bi-check-circle"></i> Guardar Cambios';
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error de conexión');
+            btnGuardar.disabled = false;
+            btnGuardar.innerHTML = '<i class="bi bi-check-circle"></i> Guardar Cambios';
+        });
+    });
+} else {
+    console.error('Botón btnGuardarModificacion no encontrado');
+}
+
+}); // Fin de DOMContentLoaded
+</script>
+
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Exportar Excel
+document.getElementById('btnExportar').addEventListener('click', function() {
+    const url = new URL("{% url 'inventario_exportar' %}", window.location.origin);
+    url.searchParams.append('tipo', '{{ tipo }}');
+    
+    // Agregar filtros si existen
+    const estado = document.getElementById('estado_filtro')?.value;
+    const ubicacion = document.getElementById('ubicacion_filtro')?.value;
+    
+    if (estado) url.searchParams.append('estado', estado);
+    if (ubicacion) url.searchParams.append('ubicacion', ubicacion);
+    
+    window.location.href = url.toString();
+});
+
+// Importar Excel
+document.getElementById('btnImportarSubmit').addEventListener('click', function() {
+    const form = document.getElementById('formImportar');
+    const archivo = document.getElementById('archivoImportar').files[0];
+    
+    if (!archivo) {
+        alert('Selecciona un archivo');
+        return;
+    }
+    
+    const formData = new FormData(form);
+    
+    fetch("{% url 'inventario_importar' %}", {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        const resultadosDiv = document.getElementById('importResultados');
+        const mensajeDiv = document.getElementById('importMensaje');
+        
+        resultadosDiv.style.display = 'block';
+        
+        if (data.success) {
+            mensajeDiv.className = 'alert alert-success';
+            let html = `
+                <strong>✓ Importación exitosa!</strong><br>
+                ${data.message}<br>
+                Exitosas: ${data.exitosas}<br>
+                Fallidas: ${data.fallidas}
+            `;
+            
+            // Agregar resumen de errores si hay fallidas
+            if (data.fallidas > 0 && data.errores_resumen && data.errores_resumen.length > 0) {
+                html += `
+                    <div class="mt-3 p-2 bg-light border rounded">
+                        <strong><i class="bi bi-exclamation-circle text-warning"></i> Resumen de Errores Más Comunes:</strong>
+                        <ul class="mb-2 mt-2 small">
+                `;
+                data.errores_resumen.forEach(err => {
+                    html += `<li><strong>${err.count} filas:</strong> ${err.motivo}</li>`;
+                });
+                html += `
+                        </ul>
+                    </div>
+                `;
+                html += `<a href="/importaciones/${data.importacion_id}/errores/" class="btn btn-warning btn-sm mt-2">
+                    <i class="bi bi-exclamation-triangle"></i> Ver Todos los Errores y Corregir
+                </a>`;
+            }
+            
+            mensajeDiv.innerHTML = html;
+            
+            // Recargar la tabla después de 3 segundos
+            setTimeout(() => {
+                location.reload();
+            }, 3000);
+        } else {
+            mensajeDiv.className = 'alert alert-danger';
+            let html = `
+                <strong>✗ Error en la importación</strong><br>
+                ${data.message}<br>
+                Exitosas: ${data.exitosas || 0}<br>
+                Fallidas: ${data.fallidas || 0}
+            `;
+            
+            // Agregar resumen de errores incluso si no es "success"
+            if (data.fallidas > 0 && data.errores_resumen && data.errores_resumen.length > 0) {
+                html += `
+                    <div class="mt-3 p-2 bg-light border rounded">
+                        <strong><i class="bi bi-exclamation-circle text-danger"></i> Errores Más Comunes:</strong>
+                        <ul class="mb-2 mt-2 small">
+                `;
+                data.errores_resumen.forEach(err => {
+                    html += `<li><strong>${err.count} filas:</strong> ${err.motivo}</li>`;
+                });
+                html += `
+                        </ul>
+                    </div>
+                `;
+                
+                if (data.importacion_id) {
+                    html += `<a href="/importaciones/${data.importacion_id}/errores/" class="btn btn-warning btn-sm mt-2">
+                        <i class="bi bi-exclamation-triangle"></i> Ver Todos los Errores y Corregir
+                    </a>`;
+                }
+            }
+            
+            mensajeDiv.innerHTML = html;
+        }
+    })
+    .catch(error => {
+        document.getElementById('importMensaje').className = 'alert alert-danger';
+        document.getElementById('importMensaje').textContent = 'Error: ' + error.message;
+        document.getElementById('importResultados').style.display = 'block';
+    });
+});
+
+// =============================================
+// DataTables con filtros estilo Excel
+// =============================================
+var dataTableInstance = null;
+
+$(document).ready(function() {
+    // Inicialización simple y directa
+    try {
+        $('#tablaInventario').DataTable({
+            language: {
+                url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
+            },
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+            order: [[0, 'asc']],
+            autoWidth: false,
+            columnDefs: [
+                {
+                    targets: -1,
+                    orderable: false,
+                    searchable: false
+                }
+            ]
+        });
+        console.log('✓ DataTables cargado correctamente');
+    } catch(e) {
+        console.log('Info: DataTables no pudo inicializarse (tabla podría estar vacía)');
+    }
+});
+
+// Destruir y reinicializar DataTables cuando cambio de tab
+document.querySelectorAll('.nav-tabs a').forEach(link => {
+    link.addEventListener('click', function(e) {
+        // Destruir tabla anterior si existe
+        if ($.fn.DataTable.isDataTable('#tablaInventario')) {
+            $('#tablaInventario').DataTable().destroy();
+        }
+    });
+});
+
+</script>
+{% endblock %}

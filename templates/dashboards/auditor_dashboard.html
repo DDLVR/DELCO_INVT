@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Auditor{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1>Auditoría y Logs</h1>
+            <p class="text-muted">Historial de Cambios del Sistema</p>
+        </div>
+    </div>
+
+    <!-- Opciones de Auditoría -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Consultas de Auditoría</h5>
+                </div>
+                <div class="card-body">
+                    <a href="/admin/ordenes_trabajo/ordentrabajo/" class="btn btn-primary me-2">Historial Órdenes</a>
+                    <a href="/admin/importaciones/importacionexcel/" class="btn btn-info me-2">Importaciones</a>
+                    <a href="/admin/integraciones/integracionmoreapplog/" class="btn btn-warning me-2">Integraciones</a>
+                    <a href="/admin/usuarios/usuario/" class="btn btn-secondary">Usuarios</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Últimas órdenes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Últimas 20 Órdenes (Cronología)</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Título</th>
+                                <th>Estado</th>
+                                <th>Creada por</th>
+                                <th>Responsable</th>
+                                <th>Fecha Creación</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for orden in ultimas_ordenes %}
+                            <tr>
+                                <td>{{ orden.id }}</td>
+                                <td>{{ orden.titulo }}</td>
+                                <td><span class="badge bg-info">{{ orden.get_estado_display }}</span></td>
+                                <td>{{ orden.creada_por.nombre_interno }}</td>
+                                <td>{{ orden.tecnico_responsable.nombre_interno }}</td>
+                                <td>{{ orden.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

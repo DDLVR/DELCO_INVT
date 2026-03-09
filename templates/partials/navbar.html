@@ -1,0 +1,166 @@
+{% load static %}
+<nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-semibold d-flex align-items-center" href="{% url 'dashboard' %}" style="gap: 10px;">
+      <img src="{% static 'img/delco.png' %}" alt="Delco" style="height: 35px; width: auto;">
+      <span>DelcoLtda</span>
+    </a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarTop">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="navbarTop">
+      <ul class="navbar-nav ms-auto">
+        {% if user.is_authenticated %}
+          <li class="nav-item">
+            <button 
+              class="nav-link btn btn-link text-white" 
+              data-bs-toggle="modal" 
+              data-bs-target="#profileModal"
+              title="Ver perfil"
+            >
+              👤 {{ user.nombre_interno }}
+            </button>
+          </li>
+          <li class="nav-item">
+            <span class="nav-link text-muted small">({{ user.rol }})</span>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'logout' %}" style="color: #ff6b6b !important;">Cerrar sesión</a>
+          </li>
+        {% else %}
+          <li class="nav-item">
+            <a class="nav-link" href="{% url 'login' %}">Iniciar sesión</a>
+          </li>
+        {% endif %}
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<!-- Modal de Perfil del Usuario -->
+{% if user.is_authenticated %}
+<div class="modal fade" id="profileModal" tabindex="-1" aria-labelledby="profileModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header text-white" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);">
+        <h5 class="modal-title" id="profileModalLabel">👤 Mi Perfil</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form id="profileForm">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="row mb-3">
+            <div class="col-4 text-end fw-semibold text-muted">Nombre de Usuario:</div>
+            <div class="col-8">
+              <input type="text" id="nombre_interno" name="nombre_interno" class="form-control" value="{{ user.nombre_interno }}" placeholder="Tu nombre de usuario">
+            </div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-4 text-end fw-semibold text-muted">RUT:</div>
+            <div class="col-8">
+              <input type="text" class="form-control" value="{{ user.rut }}" disabled>
+            </div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-4 text-end fw-semibold text-muted">Email:</div>
+            <div class="col-8">
+              <input type="email" class="form-control" value="{{ user.email }}" disabled>
+            </div>
+          </div>
+          <div class="row mb-3">
+            <div class="col-4 text-end fw-semibold text-muted">Rol:</div>
+            <div class="col-8">
+              <span class="badge bg-primary">{{ user.rol }}</span>
+            </div>
+          </div>
+          <div class="row mb-4">
+            <div class="col-4 text-end fw-semibold text-muted">Nombre Completo:</div>
+            <div class="col-8">{{ user.nombre }} {{ user.apellido }}</div>
+          </div>
+
+          <!-- Sección de Cambiar Contraseña (Solo para no-ADMIN) -->
+          {% if user.rol != 'ADMIN' %}
+            <hr>
+            <h6 class="mb-3">🔐 Cambiar Contraseña</h6>
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">Contraseña Actual</label>
+              <input type="password" id="current_password" name="current_password" class="form-control form-control-sm" placeholder="Tu contraseña actual">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">Nueva Contraseña</label>
+              <input type="password" id="new_password" name="new_password" class="form-control form-control-sm" placeholder="Nueva contraseña">
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold small">Confirmar Contraseña</label>
+              <input type="password" id="confirm_password" name="confirm_password" class="form-control form-control-sm" placeholder="Confirmar nueva contraseña">
+            </div>
+          {% endif %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="guardarPerfil">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('guardarPerfil').addEventListener('click', function(e) {
+  e.preventDefault();
+  const nombre_interno = document.getElementById('nombre_interno').value.trim();
+  const current_password = document.getElementById('current_password')?.value.trim() || '';
+  const new_password = document.getElementById('new_password')?.value.trim() || '';
+  const confirm_password = document.getElementById('confirm_password')?.value.trim() || '';
+  
+  if (!nombre_interno) {
+    alert('El nombre de usuario no puede estar vacío');
+    return;
+  }
+
+  // Si hay campos de contraseña, validar
+  if (new_password || confirm_password) {
+    if (!current_password) {
+      alert('Debes ingresar tu contraseña actual');
+      return;
+    }
+    if (new_password !== confirm_password) {
+      alert('Las nuevas contraseñas no coinciden');
+      return;
+    }
+    if (new_password.length < 6) {
+      alert('La nueva contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+  }
+  
+  fetch('{% url "update_profile" %}', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': document.querySelector('[name="csrfmiddlewaretoken"]').value
+    },
+    body: JSON.stringify({
+      nombre_interno: nombre_interno,
+      current_password: current_password,
+      new_password: new_password
+    })
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (data.success) {
+      alert('Perfil actualizado correctamente');
+      location.reload();
+    } else {
+      alert('Error: ' + data.message);
+    }
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    alert('Error al guardar los cambios');
+  });
+});
+</script>
+{% endif %}

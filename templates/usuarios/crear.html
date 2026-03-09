@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{% block title %}Crear Nuevo Usuario{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 600px;">
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1>➕ Crear Nuevo Usuario</h1>
+      <p class="text-muted">Completa el formulario para agregar un nuevo usuario al sistema</p>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+      <form method="post">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">RUT</label>
+          <input 
+            type="text" 
+            name="rut" 
+            class="form-control" 
+            placeholder="Ej: 111111115"
+            required
+          >
+          <small class="text-muted">Solo dígitos, sin puntos ni guión</small>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Nombre</label>
+              <input 
+                type="text" 
+                name="nombre" 
+                class="form-control" 
+                placeholder="Juan"
+                required
+              >
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Apellido</label>
+              <input 
+                type="text" 
+                name="apellido" 
+                class="form-control" 
+                placeholder="Pérez"
+                required
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nombre de Usuario</label>
+          <input 
+            type="text" 
+            name="nombre_interno" 
+            class="form-control" 
+            placeholder="Juan Pérez"
+            required
+          >
+          <small class="text-muted">Cómo se mostrará en el sistema</small>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Email</label>
+          <input 
+            type="email" 
+            name="email" 
+            class="form-control" 
+            placeholder="juan@delco.cl"
+            required
+          >
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Contraseña</label>
+          <input 
+            type="password" 
+            name="password" 
+            class="form-control" 
+            placeholder="Contraseña segura"
+            required
+          >
+          <small class="text-muted">Se recomienda una contraseña fuerte</small>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Rol</label>
+          <select name="rol" class="form-select" required>
+            <option value="">-- Selecciona un rol --</option>
+            {% for rol in roles %}
+              <option value="{{ rol }}">
+                {{ rol }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            ✓ Crear Usuario
+          </button>
+          <a href="{% url 'usuarios_list' %}" class="btn btn-secondary">
+            Cancelar
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Información de Roles -->
+  <div class="card mt-4">
+    <div class="card-header bg-light">
+      <h5 class="mb-0">ℹ️ Descripción de Roles</h5>
+    </div>
+    <div class="card-body">
+      <dl class="row small">
+        <dt class="col-sm-4"><strong>ADMIN</strong></dt>
+        <dd class="col-sm-8">Acceso total al sistema, gestión de usuarios</dd>
+
+        <dt class="col-sm-4"><strong>ADMINISTRATIVO</strong></dt>
+        <dd class="col-sm-8">Crear órdenes, asignar técnicos e inventario</dd>
+
+        <dt class="col-sm-4"><strong>TECNICO</strong></dt>
+        <dd class="col-sm-8">Ejecutar órdenes asignadas</dd>
+
+        <dt class="col-sm-4"><strong>SUPERVISOR</strong></dt>
+        <dd class="col-sm-8">Validar y supervisar órdenes</dd>
+
+        <dt class="col-sm-4"><strong>GERENCIA</strong></dt>
+        <dd class="col-sm-8">Ver reportes y dashboards</dd>
+
+        <dt class="col-sm-4"><strong>AUDITOR</strong></dt>
+        <dd class="col-sm-8">Acceso de lectura para auditoría</dd>
+      </dl>
+    </div>
+  </div>
+</div>
+{% endblock %}

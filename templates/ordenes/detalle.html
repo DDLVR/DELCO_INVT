@@ -1,0 +1,379 @@
+{% extends 'base.html' %}
+
+{% block title %}Orden #{{ orden.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <!-- Encabezado -->
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h1>
+                <i class="bi bi-clipboard-check"></i> Orden #{{ orden.id }}
+                <span class="badge bg-{% if orden.estado == 'FINALIZADA' %}success{% elif orden.estado == 'CANCELADA' %}danger{% elif orden.estado == 'EN_EJECUCION' %}primary{% else %}secondary{% endif %}">
+                    {{ orden.get_estado_display }}
+                </span>
+            </h1>
+            <a href="{% url 'ordenes_list' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Volver
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Columna principal -->
+        <div class="col-lg-8">
+            <!-- Información básica -->
+            <div class="card mb-3">
+                <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
+                    <h5 class="mb-0">📋 Información General</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted small">Título</label>
+                            <p class="mb-0"><strong>{{ orden.titulo }}</strong></p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted small">Tipo de Trabajo</label>
+                            <p class="mb-0"><span class="badge bg-secondary">{{ orden.get_tipo_trabajo_display }}</span></p>
+                        </div>
+                        <div class="col-12 mb-3">
+                            <label class="text-muted small">Descripción</label>
+                            <p class="mb-0">{{ orden.descripcion|default:"-" }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cliente y Técnico -->
+            <div class="card mb-3">
+                <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
+                    <h5 class="mb-0">👥 Asignación</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted small">Cliente</label>
+                            <p class="mb-0">
+                                {% if orden.cliente %}
+                                    <strong>{{ orden.cliente.numero_cliente }}</strong><br>
+                                    <small>{{ orden.cliente.razon_social }}</small>
+                                {% else %}
+                                    <em class="text-muted">Sin cliente asignado</em>
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="text-muted small">Técnico Responsable</label>
+                            <p class="mb-0">
+                                <strong>{{ orden.tecnico_responsable.nombre_interno }}</strong><br>
+                                <small class="text-muted">{{ orden.tecnico_responsable.email }}</small>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Equipos utilizados -->
+            <div class="card mb-3">
+                <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
+                    <h5 class="mb-0">📦 Equipos Utilizados en el Trabajo</h5>
+                </div>
+                <div class="card-body">
+                    {% if orden.medidor or orden.simcard or orden.modem %}
+                        <div class="row">
+                            {% if orden.medidor %}
+                            <div class="col-md-4 mb-3">
+                                <div class="border rounded p-2 bg-light">
+                                    <label class="text-muted small">📏 Medidor</label>
+                                    <p class="mb-0">
+                                        <strong>Serie: {{ orden.medidor.serie }}</strong><br>
+                                        <small>Caja: {{ orden.medidor.caja }}</small><br>
+                                        <small>Marca: {{ orden.medidor.marca|default:"-" }}</small><br>
+                                        {% if orden.medidor.en_custodia_de %}
+                                        <small class="text-primary">En custodia de: {{ orden.medidor.en_custodia_de.nombre_interno }}</small>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if orden.simcard %}
+                            <div class="col-md-4 mb-3">
+                                <div class="border rounded p-2 bg-light">
+                                    <label class="text-muted small">📱 SIM Card</label>
+                                    <p class="mb-0">
+                                        <strong>IMEI: {{ orden.simcard.imei }}</strong><br>
+                                        <small>Operador: {{ orden.simcard.operador|default:"-" }}</small><br>
+                                        <small>Abonado: {{ orden.simcard.abonado|default:"-" }}</small><br>
+                                        {% if orden.simcard.en_custodia_de %}
+                                        <small class="text-primary">En custodia de: {{ orden.simcard.en_custodia_de.nombre_interno }}</small>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            {% if orden.modem %}
+                            <div class="col-md-4 mb-3">
+                                <div class="border rounded p-2 bg-light">
+                                    <label class="text-muted small">📡 Módem</label>
+                                    <p class="mb-0">
+                                        <strong>Serie: {{ orden.modem.serie }}</strong><br>
+                                        <small>Marca: {{ orden.modem.marca|default:"-" }}</small><br>
+                                        <small>Modelo: {{ orden.modem.modelo|default:"-" }}</small><br>
+                                        {% if orden.modem.en_custodia_de %}
+                                        <small class="text-primary">En custodia de: {{ orden.modem.en_custodia_de.nombre_interno }}</small>
+                                        {% endif %}
+                                    </p>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-warning mb-3">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Equipos no registrados</strong> - El técnico debe registrar los equipos utilizados
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Formulario para registrar equipos (solo técnico responsable) -->
+                    {% if es_tecnico_responsable and orden.estado in 'EN_EJECUCION,FINALIZADA' %}
+                    <hr>
+                    <h6 class="mb-3"><i class="bi bi-plus-circle"></i> Registrar/Actualizar Equipos Usados</h6>
+                    <form method="post" action="{% url 'orden_registrar_equipos' orden.id %}">
+                        {% csrf_token %}
+                        <div class="row">
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label small">📏 Medidor (Serie)</label>
+                                <input type="text" name="medidor_serie" class="form-control form-control-sm" 
+                                       placeholder="Ej: MED-2024-001" 
+                                       value="{{ orden.medidor.serie|default:'' }}">
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label small">📱 SIM Card (IMEI)</label>
+                                <input type="text" name="simcard_imei" class="form-control form-control-sm" 
+                                       placeholder="Ej: 123456789012345"
+                                       value="{{ orden.simcard.imei|default:'' }}">
+                            </div>
+                            <div class="col-md-4 mb-2">
+                                <label class="form-label small">📡 Módem (Serie)</label>
+                                <input type="text" name="modem_serie" class="form-control form-control-sm" 
+                                       placeholder="Ej: MOD-2024-001"
+                                       value="{{ orden.modem.serie|default:'' }}">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="bi bi-save"></i> Registrar Equipos
+                        </button>
+                        <small class="text-muted d-block mt-2">
+                            <i class="bi bi-info-circle"></i> Solo registra los equipos que realmente usaste en este trabajo
+                        </small>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Observaciones -->
+            {% if orden.observaciones_tecnicas %}
+            <div class="card mb-3">
+                <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
+                    <h5 class="mb-0">📝 Observaciones Técnicas</h5>
+                </div>
+                <div class="card-body">
+                    <p class="mb-0">{{ orden.observaciones_tecnicas }}</p>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Adjuntos y Evidencias -->
+            <div class="card mb-3">
+                <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
+                    <h5 class="mb-0">📷 Evidencias y Adjuntos</h5>
+                </div>
+                <div class="card-body">
+                    {% if puede_editar or es_tecnico_responsable %}
+                    <form id="formSubirAdjunto" method="post" enctype="multipart/form-data" class="mb-3">
+                        {% csrf_token %}
+                        <div class="row g-2">
+                            <div class="col-md-4">
+                                <select name="tipo" class="form-select">
+                                    <option value="FOTO">📷 Fotografía</option>
+                                    <option value="PDF">📄 PDF</option>
+                                    <option value="OTRO">📎 Otro</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <input type="file" name="archivo" class="form-control" required>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-upload"></i> Subir
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                    {% endif %}
+                    
+                    {% if adjuntos %}
+                        <div class="row">
+                            {% for adjunto in adjuntos %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card h-100">
+                                    <div class="card-body">
+                                        <p class="mb-1">
+                                            <strong>{{ adjunto.get_tipo_display }}</strong>
+                                        </p>
+                                        <p class="mb-1 small text-muted">{{ adjunto.nombre_archivo }}</p>
+                                        <p class="mb-1 small">
+                                            {{ adjunto.fecha_hora|date:"d/m/Y H:i" }}
+                                        </p>
+                                        {% if adjunto.archivo %}
+                                        <a href="{{ adjunto.archivo.url }}" target="_blank" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-download"></i> Descargar
+                                        </a>
+                                        {% elif adjunto.url_externa %}
+                                        <a href="{{ adjunto.url_externa }}" target="_blank" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-link"></i> Ver
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted mb-0"><em>Sin evidencias adjuntas</em></p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Integraciones MoreApp -->
+            {% if sincronizaciones %}
+            <div class="card mb-3">
+                <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
+                    <h5 class="mb-0">🔄 Sincronizaciones MoreApp</h5>
+                </div>
+                <div class="card-body">
+                    {% for sync in sincronizaciones %}
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+                        <div>
+                            <strong>{{ sync.moreapp_submission_id }}</strong><br>
+                            <small class="text-muted">{{ sync.fecha_recepcion|date:"d/m/Y H:i" }}</small>
+                        </div>
+                        <span class="badge bg-{% if sync.estado_sincronizacion == 'EXITOSO' %}success{% elif sync.estado_sincronizacion == 'ERROR' %}danger{% else %}warning{% endif %}">
+                            {{ sync.get_estado_sincronizacion_display }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Columna derecha -->
+        <div class="col-lg-4">
+            <!-- Estados y Timeline -->
+            <div class="card mb-3">
+                <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
+                    <h5 class="mb-0">🕒 Timeline</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <strong>Creada:</strong><br>
+                            <small>{{ orden.fecha_creacion|date:"d/m/Y H:i" }}</small><br>
+                            <small class="text-muted">por {{ orden.creada_por.nombre_interno }}</small>
+                        </li>
+                        
+                        {% if orden.fecha_asignacion %}
+                        <li class="mb-2">
+                            <strong>Asignada:</strong><br>
+                            <small>{{ orden.fecha_asignacion|date:"d/m/Y H:i" }}</small>
+                        </li>
+                        {% endif %}
+                        
+                        {% if orden.fecha_inicio_ejecucion %}
+                        <li class="mb-2">
+                            <strong>Inicio Ejecución:</strong><br>
+                            <small>{{ orden.fecha_inicio_ejecucion|date:"d/m/Y H:i" }}</small>
+                        </li>
+                        {% endif %}
+                        
+                        {% if orden.fecha_fin_ejecucion %}
+                        <li class="mb-2">
+                            <strong>Fin Ejecución:</strong><br>
+                            <small>{{ orden.fecha_fin_ejecucion|date:"d/m/Y H:i" }}</small>
+                        </li>
+                        {% endif %}
+                        
+                        {% if orden.fecha_cierre %}
+                        <li class="mb-2">
+                            <strong>Cerrada:</strong><br>
+                            <small>{{ orden.fecha_cierre|date:"d/m/Y H:i" }}</small>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Cambiar estado -->
+            {% if puede_editar or es_tecnico_responsable %}
+            <div class="card">
+                <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
+                    <h5 class="mb-0">⚙️ Acciones</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" action="{% url 'cambiar_estado_orden' orden.id %}">
+                        {% csrf_token %}
+                        <label class="form-label">Cambiar Estado</label>
+                        <select name="nuevo_estado" class="form-select mb-2">
+                            <option value="EN_EJECUCION">En ejecución</option>
+                            <option value="FINALIZADA">Finalizada</option>
+                            <option value="CANCELADA">Cancelada</option>
+                            {% if puede_editar %}
+                            <option value="PENDIENTE_VALIDACION">Pendiente validación</option>
+                            <option value="VALIDADA">Validada</option>
+                            {% endif %}
+                        </select>
+                        <button type="submit" class="btn btn-warning w-100">
+                            <i class="bi bi-arrow-repeat"></i> Cambiar Estado
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<script>
+// Manejo de subida de adjuntos con AJAX
+document.getElementById('formSubirAdjunto')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(this);
+    
+    fetch("{% url 'orden_subir_adjunto' orden.id %}", {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+        },
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Archivo subido exitosamente');
+            location.reload();
+        } else {
+            alert('Error: ' + data.message);
+        }
+    })
+    .catch(error => {
+        alert('Error al subir archivo: ' + error.message);
+    });
+});
+</script>
+
+{% endblock %}

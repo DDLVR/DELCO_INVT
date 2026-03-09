@@ -1,0 +1,73 @@
+<div class="bg-white border-end h-100 p-0 d-flex flex-column">
+  <!-- Header del Sidebar -->
+  <div class="p-3 border-bottom bg-white flex-shrink-0">
+    <div class="fw-semibold">📋 Menú</div>
+    <small class="text-muted">{{ user.rol }}</small>
+  </div>
+
+  <!-- Contenido Scrolleable -->
+  <div class="list-group list-group-flush flex-grow-1" style="overflow-y: auto;">
+    <!-- Dashboard -->
+    <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'dashboard' %}active bg-primary text-white{% endif %}" href="{% url 'dashboard' %}">
+      <i class="bi bi-house"></i> 📊 Dashboard
+    </a>
+
+    <!-- Órdenes de Trabajo -->
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'TECNICO' or user.rol == 'SUPERVISOR' %}
+      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'ordenes_list' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
+        <i class="bi bi-list-check"></i> 📝 Órdenes de Trabajo
+      </a>
+    {% endif %}
+
+    <!-- Inventario -->
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'TECNICO' or user.rol == 'SUPERVISOR' %}
+      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'inventario_list' %}active bg-primary text-white{% endif %}" href="{% url 'inventario_list' %}">
+        <i class="bi bi-box"></i> 📦 Inventario
+      </a>
+    {% endif %}
+
+    <!-- Movimientos (Kardex) -->
+    {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
+      <a class="list-group-item list-group-item-action" href="#" title="Disponible pronto">
+        <i class="bi bi-arrow-left-right"></i> 🔄 Movimientos (Kardex)
+      </a>
+    {% endif %}
+
+    <!-- Reportes -->
+    {% if user.rol in 'ADMIN,GERENCIA,SUPERVISOR' %}
+      <a class="list-group-item list-group-item-action" href="#" title="Disponible pronto">
+        <i class="bi bi-file-earmark-pdf"></i> 📊 Reportes
+      </a>
+    {% endif %}
+
+    <!-- Gestión de Usuarios (Solo Admin) -->
+    {% if user.rol == 'ADMIN' %}
+      <hr class="my-2">
+      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'usuarios_list' %}active bg-primary text-white{% endif %}" href="{% url 'usuarios_list' %}">
+        <i class="bi bi-people"></i> 👥 Usuarios
+      </a>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+  .list-group-item {
+    border: none;
+    border-bottom: 1px solid #f0f0f0;
+    padding: 12px 15px;
+    color: #333;
+    text-decoration: none;
+    transition: all 0.3s;
+  }
+  
+  .list-group-item:hover {
+    background-color: #f8f9fa;
+    padding-left: 20px;
+  }
+  
+  .list-group-item.active {
+    background-color: #667eea !important;
+    border-left: 4px solid #667eea;
+    font-weight: 600;
+  }
+</style>

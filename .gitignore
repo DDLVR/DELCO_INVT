@@ -1,0 +1,13 @@
+# Ignorar archivos temporales y locales
+.env
+.db.sqlite3
+__pycache__/
+*.pyc
+*.log
+build/
+dist/
+*.egg-info/
+staticfiles/
+*.zip
+# Archivos locales y temporales
+db.sqlite3
