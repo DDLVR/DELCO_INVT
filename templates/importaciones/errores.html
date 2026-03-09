@@ -1,0 +1,358 @@
+{% extends 'base.html' %}
+
+{% block title %}Errores de Importación{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-exclamation-triangle"></i> 
+                        Errores en Importación #{{ importacion.id }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <strong>Tipo:</strong> {{ importacion.get_tipo_display }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Archivo:</strong> {{ importacion.archivo_original }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Usuario:</strong> {{ importacion.usuario.nombre_interno }}
+                        </div>
+                        <div class="col-md-3">
+                            <strong>Fecha:</strong> {{ importacion.fecha_hora|date:"d/m/Y H:i" }}
+                        </div>
+                    </div>
+                    <hr>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <span class="badge bg-success">Exitosas: {{ importacion.exitosas }}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <span class="badge bg-danger">Fallidas: {{ importacion.fallidas }}</span>
+                        </div>
+                        <div class="col-md-4">
+                            <span class="badge bg-info">Total: {{ importacion.total_filas }}</span>
+                        </div>
+                    </div>
+                    <p class="mt-3 mb-0 text-muted">
+                        <i class="bi bi-info-circle"></i> 
+                        Edita los datos en el modal y presiona "Guardar Corrección" para reintentar la importación de esa fila.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de Errores -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-list-ul"></i> 
+                        Detalle de {{ total_errores }} Errores
+                    </h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th width="8%">#Fila</th>
+                                <th width="35%">Motivo del Error</th>
+                                <th width="32%">Datos Crudos</th>
+                                <th width="25%">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for error in errores %}
+                            <tr class="align-middle">
+                                <td>
+                                    <span class="badge bg-warning text-dark">{{ error.numero_fila }}</span>
+                                </td>
+                                <td>
+                                    <small class="text-danger" title="{{ error.motivo }}">
+                                        {{ error.motivo|truncatewords:15 }}
+                                    </small>
+                                </td>
+                                <td>
+                                    <code style="font-size: 0.80rem;">
+                                        {{ error.data_cruda|truncatewords:20 }}
+                                    </code>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-primary" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#modalCorregir"
+                                            data-error-id="{{ error.id }}"
+                                            data-fila="{{ error.numero_fila }}"
+                                            data-datos="{{ error.data_cruda|escapejs }}"
+                                            data-motivo="{{ error.motivo|escapejs }}">
+                                        <i class="bi bi-pencil-square"></i> Modificar
+                                    </button>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted py-4">
+                                    <i class="bi bi-check-circle"></i> No hay errores registrados
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botones de Acción -->
+    <div class="row">
+        <div class="col-12">
+            <a href="{% url 'inventario_list' %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Volver a Inventario
+            </a>
+            {% if importacion.fallidas > 0 %}
+            <button type="button" class="btn btn-info" id="btnMostrarFormato">
+                <i class="bi bi-question-circle"></i> Ver Formato Esperado
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Corregir Error -->
+<div class="modal fade" id="modalCorregir" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="bi bi-pencil-square"></i> 
+                    Editar y Corregir - Fila <span id="filaNumero" class="badge bg-danger"></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info" id="alertaMotivo" style="display: none;">
+                    <strong>Motivo del error:</strong>
+                    <p id="errorMotivo" class="mb-0 mt-2"></p>
+                </div>
+
+                <div class="mb-3">
+                    <label for="datosCorregidos" class="form-label">
+                        <strong>Datos Corregidos (separados por comas):</strong>
+                    </label>
+                    <textarea id="datosCorregidos" class="form-control" rows="5" 
+                              placeholder='Ejemplo: 2025-01-17, Bodega Principal, METCOM, 0000100, 10267263, SI'></textarea>
+                    <small class="form-text text-muted d-block mt-2">
+                        <strong>Formato esperado (depende del tipo de equipo):</strong>
+                        <ul id="formatoEsperado" class="mb-0">
+                            <li><strong>Medidores/Módems:</strong> fecha_recepcion, bodega, marca, caja, serie, módulo</li>
+                            <li><strong>SIM:</strong> msisdn, proveedor, serie_plastico, ip_fija</li>
+                        </ul>
+                    </small>
+                </div>
+
+                <div id="vistaPrevia" class="alert alert-light d-none">
+                    <strong><i class="bi bi-eye"></i> Vista previa de campos:</strong>
+                    <div id="camposPreview" class="mt-2"></div>
+                </div>
+
+                <div id="alertaErrorValidacion" class="alert alert-danger d-none" role="alert">
+                    <strong>Error de validación:</strong>
+                    <p id="textoErrorValidacion" class="mb-0"></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnGuardarCorreccion">
+                    <i class="bi bi-check-circle"></i> Guardar y Reintentar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para mostrar formato -->
+<div class="modal fade" id="modalFormato" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">Formato Esperado</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <strong>Medidores y Módems:</strong>
+                    <code style="display: block; padding: 8px; background: #f9f9f9; margin-top: 8px;">
+                        fecha_recepcion, bodega, marca, caja, serie, módulo
+                    </code>
+                    <small class="d-block mt-2">Ejemplo: 2025-01-17, Bodega Principal, METCOM, 0000100, 10267263, SI</small>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <strong>SIM Card:</strong>
+                    <code style="display: block; padding: 8px; background: #f9f9f9; margin-top: 8px;">
+                        msisdn, proveedor, serie_plastico, ip_fija
+                    </code>
+                    <small class="d-block mt-2">Ejemplo: 9876543210, Movistar, SIM123456, 192.168.1.1</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Variables globales
+let errorIdActual = null;
+let filaActual = null;
+
+// Mostrar modal de formato
+document.getElementById('btnMostrarFormato').addEventListener('click', function() {
+    new bootstrap.Modal(document.getElementById('modalFormato')).show();
+});
+
+// Cargar datos en modal
+document.getElementById('modalCorregir').addEventListener('show.bs.modal', function(e) {
+    const button = e.relatedTarget;
+    errorIdActual = button.getAttribute('data-error-id');
+    filaActual = button.getAttribute('data-fila');
+    const motivo = button.getAttribute('data-motivo');
+    const datos = button.getAttribute('data-datos');
+    
+    document.getElementById('filaNumero').textContent = filaActual;
+    document.getElementById('errorMotivo').textContent = motivo;
+    document.getElementById('alertaMotivo').style.display = 'block';
+    document.getElementById('datosCorregidos').value = datos;
+    
+    // Limpiar alertas
+    document.getElementById('alertaErrorValidacion').classList.add('d-none');
+    
+    // Actualizar vista previa
+    actualizarVistaPrevia();
+});
+
+// Actualizar vista previa cuando el usuario edita
+document.getElementById('datosCorregidos').addEventListener('input', function() {
+    actualizarVistaPrevia();
+});
+
+function actualizarVistaPrevia() {
+    const datos = document.getElementById('datosCorregidos').value.trim();
+    const preview = document.getElementById('camposPreview');
+    
+    if (!datos) {
+        document.getElementById('vistaPrevia').classList.add('d-none');
+        return;
+    }
+    
+    try {
+        // Parsear como array
+        const campos = datos.split(',').map(s => s.trim());
+        let html = '<div class="row">';
+        
+        campos.forEach((val, idx) => {
+            const color = idx === 0 ? 'primary' : (idx < 4 ? 'info' : 'secondary');
+            html += `<div class="col-md-6 mb-2">
+                <div class="alert alert-${color} py-2 px-3 mb-0">
+                    <small><strong>Campo ${idx + 1}:</strong><br><code>${val || '(vacío)'}</code></small>
+                </div>
+            </div>`;
+        });
+        
+        html += '</div>';
+        preview.innerHTML = html;
+        document.getElementById('vistaPrevia').classList.remove('d-none');
+    } catch (e) {
+        document.getElementById('vistaPrevia').classList.add('d-none');
+    }
+}
+
+// Guardar corrección
+document.getElementById('btnGuardarCorreccion').addEventListener('click', function() {
+    const datos = document.getElementById('datosCorregidos').value.trim();
+    const alertaError = document.getElementById('alertaErrorValidacion');
+    const textoError = document.getElementById('textoErrorValidacion');
+    
+    if (!datos) {
+        textoError.textContent = 'Por favor, ingresa los datos a corregir';
+        alertaError.classList.remove('d-none');
+        return;
+    }
+    
+    // Validar que hay al menos algunos datos
+    const campos = datos.split(',').filter(f => f.trim());
+    if (campos.length < 3) {
+        textoError.textContent = 'Se requieren al menos 3 campos separados por comas';
+        alertaError.classList.remove('d-none');
+        return;
+    }
+    
+    // Mostrar estado de carga
+    const btn = document.getElementById('btnGuardarCorreccion');
+    const btnText = btn.innerHTML;
+    btn.innerHTML = '<i class="bi bi-hourglass-split"></i> Guardando...';
+    btn.disabled = true;
+    
+    const formData = new FormData();
+    formData.append('datos_corregidos', datos);
+    
+    const url = `{% url 'importacion_corregir_fila' importacion_id=importacion.id error_id=0 %}`.replace('0', errorIdActual);
+    
+    fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alertaError.classList.add('d-none');
+            alert('✓ ' + data.message + '\n\nLa página se recargará...');
+            bootstrap.Modal.getInstance(document.getElementById('modalCorregir')).hide();
+            setTimeout(() => location.reload(), 1000);
+        } else {
+            textoError.textContent = data.message || 'Error desconocido';
+            alertaError.classList.remove('d-none');
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        textoError.textContent = 'Error de conexión: ' + error.message;
+        alertaError.classList.remove('d-none');
+    })
+    .finally(() => {
+        btn.innerHTML = btnText;
+        btn.disabled = false;
+    });
+});
+</script>
+
+<style>
+code {
+    display: inline-block;
+    padding: 4px 8px;
+    background: #f5f5f5;
+    border-radius: 3px;
+    word-wrap: break-word;
+    font-family: monospace;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f9f9f9 !important;
+}
+
+.badge {
+    font-size: 0.9rem;
+}
+</style>
+{% endblock %}
+

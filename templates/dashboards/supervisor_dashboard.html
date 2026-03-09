@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Supervisor{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1>Panel de Validación</h1>
+            <p class="text-muted">Órdenes Pendientes de Validar</p>
+        </div>
+    </div>
+
+    <!-- Resumen -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Pendientes Validación</h5>
+                    <h2 class="text-warning">{{ pendientes_validacion.count }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Observadas</h5>
+                    <h2 class="text-danger">{{ observadas }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Órdenes para validar -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Órdenes Completadas sin Validar</h5>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Título</th>
+                                <th>Cliente</th>
+                                <th>Responsable</th>
+                                <th>Fecha Finalización</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for orden in pendientes_validacion %}
+                            <tr>
+                                <td>{{ orden.id }}</td>
+                                <td>{{ orden.titulo }}</td>
+                                <td>{{ orden.cliente.numero_cliente }}</td>
+                                <td>{{ orden.tecnico_responsable.nombre_interno }}</td>
+                                <td>{{ orden.fecha_cierre|date:"d/m/Y H:i" }}</td>
+                                <td>
+                                    <a href="{% url 'orden_detalle' orden.id %}" class="btn btn-sm btn-primary">
+                                        Validar
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    Sin órdenes pendientes
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,165 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Usuario - {{ usuario.nombre_interno }}{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 600px;">
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1>✏️ Editar Usuario</h1>
+      <p class="text-muted">{{ usuario.nombre_interno }} ({{ usuario.rol }})</p>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+      <form method="post">
+        {% csrf_token %}
+
+        <!-- RUT - Solo lectura -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold">RUT</label>
+          <input 
+            type="text" 
+            class="form-control" 
+            value="{{ usuario.rut }}"
+            disabled
+          >
+          <small class="text-muted">No editable</small>
+        </div>
+
+        <div class="row">
+          <div class="col-md-6">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Nombre</label>
+              <input 
+                type="text" 
+                name="nombre" 
+                class="form-control" 
+                value="{{ usuario.nombre }}"
+                required
+              >
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Apellido</label>
+              <input 
+                type="text" 
+                name="apellido" 
+                class="form-control" 
+                value="{{ usuario.apellido }}"
+                required
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nombre de Usuario</label>
+          <input 
+            type="text" 
+            name="nombre_interno" 
+            class="form-control" 
+            value="{{ usuario.nombre_interno }}"
+            required
+          >
+          <small class="text-muted">Cómo se mostrará en el sistema</small>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Email</label>
+          <input 
+            type="email" 
+            name="email" 
+            class="form-control" 
+            value="{{ usuario.email }}"
+            required
+          >
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Rol</label>
+          <select name="rol" class="form-select" required>
+            {% for rol in roles %}
+              <option value="{{ rol }}" {% if usuario.rol == rol %}selected{% endif %}>
+                {{ rol }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <!-- Estado -->
+        <div class="mb-4">
+          <div class="form-check form-switch">
+            <input 
+              class="form-check-input" 
+              type="checkbox" 
+              name="is_active" 
+              id="is_active"
+              {% if usuario.is_active %}checked{% endif %}
+            >
+            <label class="form-check-label" for="is_active">
+              Usuario Activo
+            </label>
+          </div>
+          <small class="text-muted d-block mt-2">
+            Desactiva para impedir que el usuario inicie sesión
+          </small>
+        </div>
+
+        <!-- Información adicional -->
+        <div class="alert alert-info small mb-4">
+          <strong>Miembro desde:</strong> {{ usuario.date_joined|date:"d/m/Y H:i" }}<br>
+          <strong>Último acceso:</strong> 
+          {% if usuario.last_login %}
+            {{ usuario.last_login|date:"d/m/Y H:i" }}
+          {% else %}
+            Nunca ha ingresado
+          {% endif %}
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">
+            ✓ Guardar Cambios
+          </button>
+          <a href="{% url 'usuarios_list' %}" class="btn btn-secondary">
+            Cancelar
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Sección de Cambio de Contraseña para ADMIN (solo si el usuario NO es admin) -->
+  {% if usuario.rol != 'ADMIN' %}
+  <div class="card mt-4">
+    <div class="card-header bg-light">
+      <h5 class="mb-0">🔐 Cambio de Contraseña</h5>
+    </div>
+    <div class="card-body">
+      <p class="text-muted small mb-3">Como administrador, puedes restablecer la contraseña de este usuario:</p>
+      <form method="post" action="{% url 'usuario_reset_password' usuario.pk %}">
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Nueva Contraseña</label>
+          <input type="password" name="new_password" class="form-control" placeholder="Ingresar nueva contraseña" required>
+          <small class="text-muted">Se recomienda usar una contraseña segura</small>
+        </div>
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Confirmar Contraseña</label>
+          <input type="password" name="confirm_password" class="form-control" placeholder="Confirmar contraseña" required>
+        </div>
+        <button type="submit" class="btn btn-warning">
+          🔐 Restablecer Contraseña
+        </button>
+      </form>
+    </div>
+  </div>
+  {% else %}
+  <div class="alert alert-info mt-4">
+    <strong>ℹ️ Nota:</strong> No se puede cambiar la contraseña de administradores desde aquí. Los administradores deben cambiar su propia contraseña desde su perfil.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

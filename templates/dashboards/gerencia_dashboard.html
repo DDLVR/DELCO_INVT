@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Gerencia{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1>Dashboard Gerencial</h1>
+            <p class="text-muted">Indicadores y Reportes</p>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Órdenes Finalizadas</h5>
+                    <h2 class="text-success">{{ ordenes_finalizadas }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Tasa de Cumplimiento</h5>
+                    <h2 class="text-info">{{ tasa_cumplimiento }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Opciones -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Reportes</h5>
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'ordenes_list' %}" class="btn btn-primary me-2">Ver Todas las Órdenes</a>
+                    <a href="/admin/ordenes_trabajo/ordentrabajo/" class="btn btn-secondary">Panel Administrativo</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

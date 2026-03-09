@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Movimientos de Inventario{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <h1><i class="bi bi-arrow-left-right"></i> Movimientos de Inventario</h1>
+            <p class="text-muted">
+                Trazabilidad de entregas, recepciones, instalaciones y retiros • 
+                <span class="badge bg-success"><i class="bi bi-broadcast-pin"></i> Sincronización automática con MoreApp</span>
+            </p>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card border-primary shadow-sm">
+                <div class="card-body text-center">
+                    <h3 class="text-primary mb-1">{{ total_movimientos }}</h3>
+                    <small class="text-muted">Total Movimientos</small>
+                </div>
+            </div>
+        </div>
+        {% for tipo in por_tipo %}
+        <div class="col-md-2">
+            <div class="card shadow-sm">
+                <div class="card-body text-center">
+                    <h4 class="mb-1">{{ tipo.cantidad }}</h4>
+                    <small class="text-muted">{{ tipo.tipo }}</small>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-funnel"></i> Filtros de Búsqueda</h5>
+        </div>
+        <div class="card-body">
+            <form method="GET" id="filtrosForm">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Tipo de Movimiento</label>
+                        <select name="tipo" class="form-select">
+                            <option value="">Todos</option>
+                            {% for codigo, nombre in tipos_movimiento %}
+                            <option value="{{ codigo }}" {% if tipo_filtro == codigo %}selected{% endif %}>
+                                {{ nombre }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Fecha Desde</label>
+                        <input type="date" name="fecha_desde" class="form-control" value="{{ fecha_desde }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Fecha Hasta</label>
+                        <input type="date" name="fecha_hasta" class="form-control" value="{{ fecha_hasta }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Responsable</label>
+                        <select name="responsable" class="form-select">
+                            <option value="">Todos</option>
+                            {% for resp in responsables %}
+                            <option value="{{ resp.id }}" {% if responsable_id|stringformat:"s" == resp.id|stringformat:"s" %}selected{% endif %}>
+                                {{ resp.nombre_interno }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Búsqueda</label>
+                        <input type="text" name="q" class="form-control" placeholder="OT, observación..." value="{{ busqueda }}">
+                    </div>
+                </div>
+                <div class="row mt-3">
+                    <div class="col-12 text-end">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Filtrar
+                        </button>
+                        <a href="{% url 'movimientos_list' %}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Limpiar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabla de Movimientos -->
+    <div class="card shadow-sm">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="bi bi-list-ul"></i> Listado de Movimientos</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped" id="tablaMovimientos">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Fecha/Hora</th>
+                            <th>Tipo</th>
+                            <th>Origen</th>
+                            <th>Destino</th>
+                            <th>Responsable</th>
+                            <th>Items</th>
+                            <th>Orden Trabajo</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for mov in movimientos %}
+                        <tr>
+                            <td>{{ mov.fecha_hora|date:"d/m/Y H:i" }}</td>
+                            <td>
+                                {% if mov.tipo == 'ENTREGA' %}
+                                <span class="badge bg-success">{{ mov.get_tipo_display }}</span>
+                                {% elif mov.tipo == 'RECEPCION' %}
+                                <span class="badge bg-info">{{ mov.get_tipo_display }}</span>
+                                {% elif mov.tipo == 'INSTALACION' %}
+                                <span class="badge bg-primary">{{ mov.get_tipo_display }}</span>
+                                {% elif mov.tipo == 'RETIRO' %}
+                                <span class="badge bg-warning">{{ mov.get_tipo_display }}</span>
+                                {% elif mov.tipo == 'DEVOLUCION' %}
+                                <span class="badge bg-danger">{{ mov.get_tipo_display }}</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ mov.get_tipo_display }}</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ mov.origen.nombre|default:"-" }}</td>
+                            <td>{{ mov.destino.nombre|default:"-" }}</td>
+                            <td>{{ mov.responsable.nombre_interno }}</td>
+                            <td><span class="badge bg-secondary">{{ mov.total_items }}</span></td>
+                            <td>
+                                {% if mov.orden_trabajo %}
+                                <a href="{% url 'ordenes_detalle' mov.orden_trabajo.id %}" target="_blank">
+                                    {{ mov.orden_trabajo.numero_ot }}
+                                </a>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'movimientos_detalle' mov.id %}" 
+                                   class="btn btn-sm btn-outline-primary" 
+                                   title="Ver Detalle">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center text-muted">
+                                <i class="bi bi-inbox"></i> No hay movimientos registrados
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // DataTables
+    $('#tablaMovimientos').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
+        },
+        order: [[0, 'desc']],
+        pageLength: 25,
+        responsive: true
+    });
+});
+</script>
+{% endblock %}

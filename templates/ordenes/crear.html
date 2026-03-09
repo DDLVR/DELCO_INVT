@@ -1,0 +1,155 @@
+{% extends 'base.html' %}
+
+{% block title %}Nueva Orden de Trabajo{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1><i class="bi bi-plus-circle"></i> Nueva Orden de Trabajo</h1>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="post" id="formCrearOrden">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Título *</label>
+                            <input type="text" name="titulo" class="form-control" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Descripción</label>
+                            <textarea name="descripcion" class="form-control" rows="3"></textarea>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Tipo de Trabajo *</label>
+                                <select name="tipo_trabajo" class="form-select" required>
+                                    <option value="">-- Seleccionar tipo --</option>
+                                    {% for tipo_code, tipo_nombre in tipos_trabajo %}
+                                    <option value="{{ tipo_code }}">
+                                        {% if tipo_code == 'INSTALACION' %}🔧
+                                        {% elif tipo_code == 'CAMBIO' %}🔄
+                                        {% elif tipo_code == 'RETIRO' %}📤
+                                        {% elif tipo_code == 'MANTENCION' %}🛠️
+                                        {% elif tipo_code == 'REPARACION' %}⚙️
+                                        {% elif tipo_code == 'INSPECCION' %}🔍
+                                        {% elif tipo_code == 'CONFIGURACION' %}⚡
+                                        {% else %}📋{% endif %}
+                                        {{ tipo_nombre }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Tipo de actividad a realizar</small>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label">Técnico Responsable *</label>
+                                <select name="tecnico_responsable" class="form-select" required>
+                                    <option value="">-- Seleccionar técnico --</option>
+                                    {% for tecnico in tecnicos %}
+                                    <option value="{{ tecnico.id }}">
+                                        👤 {{ tecnico.nombre_interno }}{% if tecnico.email %} - {{ tecnico.email }}{% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Solo técnicos activos disponibles</small>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Cliente</label>
+                            <select name="cliente" class="form-select">
+                                <option value="">-- Sin cliente asignado --</option>
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.id }}">
+                                    🏢 {{ cliente.numero_cliente }} - {{ cliente.razon_social|truncatewords:5 }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Seleccionar cliente atendido (opcional)</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Observaciones Iniciales</label>
+                            <textarea name="observaciones_tecnicas" class="form-control" rows="3" placeholder="Instrucciones especiales o detalles del trabajo a realizar..."></textarea>
+                            <small class="text-muted">El técnico podrá agregar más observaciones durante la ejecución</small>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong>Nota:</strong> Los equipos utilizados (medidor, SIM, módem) serán registrados por el técnico después de ejecutar el trabajo.
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-check-circle"></i> Crear Orden
+                            </button>
+                            <a href="{% url 'ordenes_list' %}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card bg-light mb-3">
+                <div class="card-body">
+                    <h5><i class="bi bi-info-circle"></i> Información</h5>
+                    <p class="small">
+                        Al crear una orden:
+                    </p>
+                    <ul class="small">
+                        <li>El estado inicial será <strong>ASIGNADA</strong></li>
+                        <li>El técnico recibirá la asignación</li>
+                        <li>Los equipos usados se registrarán <strong>después</strong></li>
+                        <li>Se registrará la trazabilidad completa</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card border-primary">
+                <div class="card-header bg-primary text-white">
+                    <h6 class="mb-0"><i class="bi bi-people"></i> Personal y Clientes</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-2">
+                        <strong>👤 Técnicos Activos:</strong>
+                        <span class="badge bg-success float-end">{{ tecnicos|length }}</span>
+                    </div>
+                    <div class="mb-0">
+                        <strong>🏢 Clientes Registrados:</strong>
+                        <span class="badge bg-info float-end">{{ clientes|length }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card border-warning mt-3">
+                <div class="card-header bg-warning">
+                    <h6 class="mb-0"><i class="bi bi-box-seam"></i> Flujo de Equipos</h6>
+                </div>
+                <div class="card-body">
+                    <p class="small mb-2">
+                        <strong>1.</strong> Equipos se entregan a técnicos previamente
+                    </p>
+                    <p class="small mb-2">
+                        <strong>2.</strong> Técnico ejecuta trabajo con sus equipos
+                    </p>
+                    <p class="small mb-0">
+                        <strong>3.</strong> Técnico registra equipos usados en la orden
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

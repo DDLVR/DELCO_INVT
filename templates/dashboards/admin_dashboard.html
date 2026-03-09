@@ -1,0 +1,415 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard - Administrador{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1><i class="bi bi-speedometer2"></i> Dashboard Administrador</h1>
+            <p class="text-muted">Bienvenido, <strong>{{ usuario.nombre_interno }}</strong></p>
+        </div>
+    </div>
+
+    <!-- KPIs Principales -->
+    <div class="row mb-4">
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card shadow-sm h-100" style="border-left: 4px solid #1a3a5c;">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Órdenes Totales</h6>
+                            <h2 class="mb-0" style="color: #1a3a5c;">{{ total_ordenes }}</h2>
+                        </div>
+                        <div style="color: #1a3a5c;">
+                            <i class="bi bi-clipboard-check" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                    <hr>
+                    <small class="text-muted">
+                        <i class="bi bi-clock"></i> {{ ordenes_pendientes }} pendientes
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-success shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Completadas</h6>
+                            <h2 class="mb-0 text-success">{{ ordenes_completadas }}</h2>
+                        </div>
+                        <div class="text-success">
+                            <i class="bi bi-check-circle" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                    <hr>
+                    <small class="text-muted">
+                        <i class="bi bi-x-circle"></i> {{ ordenes_canceladas }} canceladas
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-info shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Usuarios Activos</h6>
+                            <h2 class="mb-0 text-info">{{ usuarios_activos }}</h2>
+                        </div>
+                        <div class="text-info">
+                            <i class="bi bi-people" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                    <hr>
+                    <small class="text-muted">
+                        <i class="bi bi-wrench"></i> {{ total_tecnicos }} técnicos
+                    </small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-warning shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Total Clientes</h6>
+                            <h2 class="mb-0 text-warning">{{ total_clientes }}</h2>
+                        </div>
+                        <div class="text-warning">
+                            <i class="bi bi-building" style="font-size: 2.5rem;"></i>
+                        </div>
+                    </div>
+                    <hr>
+                    <small class="text-muted">
+                        <i class="bi bi-person-badge"></i> {{ total_administrativos }} admins
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventario -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4 class="mb-3"><i class="bi bi-box-seam"></i> Resumen de Inventario</h4>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <!-- Medidores -->
+        <div class="col-lg-4 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);">
+                    <h5 class="mb-0"><i class="bi bi-speedometer"></i> Medidores</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="mb-0">{{ total_medidores }}</h3>
+                        <span class="badge bg-primary fs-6">Total</span>
+                    </div>
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ medidores_instalados_pct }}%"
+                             aria-valuenow="{{ medidores_instalados }}" aria-valuemin="0" aria-valuemax="{{ total_medidores }}">
+                            Instalados: {{ medidores_instalados }}
+                        </div>
+                        <div class="progress-bar bg-warning" role="progressbar" 
+                             style="width: {{ medidores_bodega_pct }}%"
+                             aria-valuenow="{{ medidores_bodega }}" aria-valuemin="0" aria-valuemax="{{ total_medidores }}">
+                            Bodega: {{ medidores_bodega }}
+                        </div>
+                    </div>
+                    <ul class="list-unstyled mt-3">
+                        <li class="mb-1">
+                            <i class="bi bi-check-circle-fill text-success"></i> 
+                            <strong>Instalados:</strong> {{ medidores_instalados }}
+                        </li>
+                        <li class="mb-1">
+                            <i class="bi bi-box-fill text-warning"></i> 
+                            <strong>En Bodega:</strong> {{ medidores_bodega }}
+                        </li>
+                    </ul>
+                    <a href="{% url 'inventario_list' %}?tipo=medidor" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="bi bi-eye"></i> Ver Medidores
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIM Cards -->
+        <div class="col-lg-4 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #2c5282 0%, #4a90e2 100%);">
+                    <h5 class="mb-0"><i class="bi bi-sim"></i> SIM Cards</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="mb-0">{{ total_sims }}</h3>
+                        <span class="badge bg-info fs-6">Total</span>
+                    </div>
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ sims_instaladas_pct }}%"
+                             aria-valuenow="{{ sims_instaladas }}" aria-valuemin="0" aria-valuemax="{{ total_sims }}">
+                            Instaladas: {{ sims_instaladas }}
+                        </div>
+                        <div class="progress-bar bg-warning" role="progressbar" 
+                             style="width: {{ sims_bodega_pct }}%"
+                             aria-valuenow="{{ sims_bodega }}" aria-valuemin="0" aria-valuemax="{{ total_sims }}">
+                            Bodega: {{ sims_bodega }}
+                        </div>
+                    </div>
+                    <ul class="list-unstyled mt-3">
+                        <li class="mb-1">
+                            <i class="bi bi-check-circle-fill text-success"></i> 
+                            <strong>Instaladas:</strong> {{ sims_instaladas }}
+                        </li>
+                        <li class="mb-1">
+                            <i class="bi bi-box-fill text-warning"></i> 
+                            <strong>En Bodega:</strong> {{ sims_bodega }}
+                        </li>
+                    </ul>
+                    <a href="{% url 'inventario_list' %}?tipo=sim" class="btn btn-sm btn-outline-info w-100">
+                        <i class="bi bi-eye"></i> Ver SIM Cards
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Módems -->
+        <div class="col-lg-4 mb-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-header text-white" style="background-color: #0f2438;">
+                    <h5 class="mb-0"><i class="bi bi-router"></i> Módems</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h3 class="mb-0">{{ total_modems }}</h3>
+                        <span class="badge bg-secondary fs-6">Total</span>
+                    </div>
+                    <div class="progress mb-2" style="height: 25px;">
+                        <div class="progress-bar bg-success" role="progressbar" 
+                             style="width: {{ modems_instalados_pct }}%"
+                             aria-valuenow="{{ modems_instalados }}" aria-valuemin="0" aria-valuemax="{{ total_modems }}">
+                            Instalados: {{ modems_instalados }}
+                        </div>
+                        <div class="progress-bar bg-warning" role="progressbar" 
+                             style="width: {{ modems_bodega_pct }}%"
+                             aria-valuenow="{{ modems_bodega }}" aria-valuemin="0" aria-valuemax="{{ total_modems }}">
+                            Bodega: {{ modems_bodega }}
+                        </div>
+                    </div>
+                    <ul class="list-unstyled mt-3">
+                        <li class="mb-1">
+                            <i class="bi bi-check-circle-fill text-success"></i> 
+                            <strong>Instalados:</strong> {{ modems_instalados }}
+                        </li>
+                        <li class="mb-1">
+                            <i class="bi bi-box-fill text-warning"></i> 
+                            <strong>En Bodega:</strong> {{ modems_bodega }}
+                        </li>
+                    </ul>
+                    <a href="{% url 'inventario_list' %}?tipo=modem" class="btn btn-sm btn-outline-secondary w-100">
+                        <i class="bi bi-eye"></i> Ver Módems
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Acciones Rápidas -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);">
+                    <h5 class="mb-0"><i class="bi bi-lightning-fill"></i> Acciones Rápidas</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'ordenes_list' %}" class="btn w-100 text-white" style="background-color: #1a3a5c;">
+                                <i class="bi bi-clipboard-check"></i> Ver Órdenes
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'inventario_list' %}" class="btn w-100 text-white" style="background-color: #2c5282;">
+                                <i class="bi bi-box-seam"></i> Inventario
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="{% url 'movimientos_list' %}" class="btn w-100 text-white" style="background-color: #0f7173;">
+                                <i class="bi bi-arrow-left-right"></i> Movimientos
+                            </a>
+                        </div>
+                        <div class="col-md-3 mb-2">
+                            <a href="/admin/usuarios/usuario/" class="btn w-100 text-white" style="background-color: #4a90e2;">
+                                <i class="bi bi-people"></i> Gestionar Usuarios
+                            </a>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-md-3 mb-2">
+                            <a href="/admin/clientes/cliente/" class="btn btn-warning w-100">
+                                <i class="bi bi-building"></i> Gestionar Clientes
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Movimientos de Inventario -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4 class="mb-3"><i class="bi bi-arrow-left-right"></i> Movimientos de Inventario</h4>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #0f7173 0%, #1a9a9e 100%);">
+                    <h5 class="mb-0"><i class="bi bi-calendar-day"></i> Resumen</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <h2 class="text-primary mb-0">{{ movimientos_hoy|default:0 }}</h2>
+                            <small class="text-muted">Movimientos hoy</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <h2 class="text-info mb-0">{{ movimientos_recientes|default:0 }}</h2>
+                            <small class="text-muted">Últimos 7 días</small>
+                        </div>
+                    </div>
+                    <div class="d-grid">
+                        <a href="{% url 'movimientos_list' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-list-ul"></i> Ver Todos los Movimientos
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card shadow-sm">
+                <div class="card-header text-white" style="background: linear-gradient(135deg, #0f7173 0%, #1a9a9e 100%);">
+                    <h5 class="mb-0"><i class="bi bi-broadcast"></i> Integración MoreApp (API)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-success mb-3">
+                        <i class="bi bi-check-circle-fill"></i> <strong>Conexión en Tiempo Real</strong><br>
+                        Los datos se registran automáticamente al completar formularios
+                    </div>
+                    <ul class="list-unstyled mb-3">
+                        <li><i class="bi bi-lightning-fill text-warning"></i> Sincronización instantánea</li>
+                        <li><i class="bi bi-shield-check text-success"></i> Validación automática</li>
+                        <li><i class="bi bi-clock-history text-info"></i> Sin polling ni esperas</li>
+                    </ul>
+                    <div class="card bg-light">
+                        <div class="card-body p-2">
+                            <small class="text-muted">
+                                <strong>URL Webhook:</strong><br>
+                                <code>https://tudominio.com/api/moreapp-webhook/</code>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Estados de Inventario -->
+    <div class="row">
+        <div class="col-12">
+            <h4 class="mb-3"><i class="bi bi-bar-chart-fill"></i> Distribución por Estados</h4>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Medidores por Estado -->
+        <div class="col-lg-4 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h6 class="mb-0">Medidores por Estado</h6>
+                </div>
+                <div class="card-body">
+                    {% if medidores_por_estado %}
+                    <ul class="list-group list-group-flush">
+                        {% for item in medidores_por_estado %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ item.estado_inventario__nombre|default:"Sin estado" }}
+                            <span class="badge bg-primary rounded-pill">{{ item.cantidad }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted text-center mb-0">No hay medidores registrados</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- SIM Cards por Estado -->
+        <div class="col-lg-4 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h6 class="mb-0">SIM Cards por Estado</h6>
+                </div>
+                <div class="card-body">
+                    {% if sims_por_estado %}
+                    <ul class="list-group list-group-flush">
+                        {% for item in sims_por_estado %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ item.estado_inventario__nombre|default:"Sin estado" }}
+                            <span class="badge bg-info rounded-pill">{{ item.cantidad }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted text-center mb-0">No hay SIM cards registradas</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Módems por Estado -->
+        <div class="col-lg-4 mb-3">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <h6 class="mb-0">Módems por Estado</h6>
+                </div>
+                <div class="card-body">
+                    {% if modems_por_estado %}
+                    <ul class="list-group list-group-flush">
+                        {% for item in modems_por_estado %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ item.estado_inventario__nombre|default:"Sin estado" }}
+                            <span class="badge bg-secondary rounded-pill">{{ item.cantidad }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted text-center mb-0">No hay módems registrados</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Dashboard admin - sin scripts adicionales necesarios
+    // La integración API/webhook funciona automáticamente sin intervención manual
+});
+</script>
+{% endblock %}
+

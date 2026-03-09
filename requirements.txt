@@ -1,0 +1,22 @@
+# ============================================
+# REQUIREMENTS PARA Python 3.8+ 
+# Compatible con Hostingplus
+# ============================================
+
+# Core Django - Compatible con Python 3.8
+Django>=4.2,<5.0
+djangorestframework>=3.14,<4.0
+
+# Database - PyMySQL (puro Python, sin compilación)
+PyMySQL>=1.0.0
+
+# Environment variables (usado en settings.py)
+python-dotenv>=1.0.0
+
+# Excel import/export (usado en importaciones/utils.py)
+openpyxl>=3.1.0
+
+# Utilities
+python-dateutil>=2.8.0
+sqlparse>=0.4.0
+pytz>=2023.3

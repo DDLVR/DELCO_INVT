@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - Inventario{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1>Control de Inventario</h1>
+            <p class="text-muted">Gestión de Equipos</p>
+        </div>
+    </div>
+
+    <!-- Resumen de Stock -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Medidores en Bodega</h5>
+                    <h2 class="text-primary">{{ medidores_bodega }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">SIM Disponibles</h5>
+                    <h2 class="text-info">{{ sim_disponibles }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <h5 class="card-title">Módems Disponibles</h5>
+                    <h2 class="text-success">{{ modems_disponibles }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Acciones -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Gestión</h5>
+                </div>
+                <div class="card-body">
+                    <a href="{% url 'inventario_list' %}?tipo=medidor" class="btn btn-primary me-2">Ver Medidores</a>
+                    <a href="{% url 'inventario_list' %}?tipo=sim" class="btn btn-info me-2">Ver SIM Cards</a>
+                    <a href="{% url 'inventario_list' %}?tipo=modem" class="btn btn-warning me-2">Ver Módems</a>
+                    <a href="/admin/importaciones/importacionexcel/" class="btn btn-success">Importar Equipos</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

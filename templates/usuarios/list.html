@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block title %}Gestión de Usuarios{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="d-flex justify-content-between align-items-center">
+        <h1>👥 Gestión de Usuarios</h1>
+        <a href="{% url 'usuario_crear' %}" class="btn btn-primary">
+          ➕ Nuevo Usuario
+        </a>
+      </div>
+      <p class="text-muted">Total de usuarios activos: <strong>{{ total_usuarios }}</strong></p>
+    </div>
+  </div>
+
+  <!-- Tabs por Rol -->
+  <ul class="nav nav-tabs mb-4" role="tablist">
+    {% for rol in roles_order %}
+      <li class="nav-item" role="presentation">
+        <button 
+          class="nav-link {% if forloop.first %}active{% endif %}" 
+          id="tab-{{ rol }}" 
+          data-bs-toggle="tab" 
+          data-bs-target="#content-{{ rol }}" 
+          type="button"
+        >
+          {{ rol }}
+          <span class="badge bg-secondary ms-2" id="count-{{ rol }}">0</span>
+        </button>
+      </li>
+    {% endfor %}
+  </ul>
+
+  <!-- Contenido de Tabs -->
+  <div class="tab-content">
+    {% for rol in roles_order %}
+      <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="content-{{ rol }}">
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead class="table-light">
+              <tr>
+                <th>RUT</th>
+                <th>Nombre de Usuario</th>
+                <th>Nombre Completo</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-{{ rol }}">
+              <!-- Rellenado por JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+  .nav-link {
+    color: #666 !important;
+    border-bottom: 3px solid transparent;
+  }
+  
+  .nav-link.active {
+    color: #667eea !important;
+    border-bottom: 3px solid #667eea !important;
+    background: transparent !important;
+  }
+
+  .table {
+    margin-bottom: 0;
+  }
+
+  .table tbody tr:hover {
+    background-color: #f8f9fa;
+  }
+
+  .badge {
+    font-size: 12px;
+  }
+</style>
+
+<script>
+// Datos de usuarios por rol
+const usuariosPorRol = {
+  {% for rol, usuarios in usuarios_por_rol.items %}
+    "{{ rol }}": [
+      {% for usuario in usuarios %}
+        {
+          id: {{ usuario.id }},
+          rut: "{{ usuario.rut }}",
+          nombre_interno: "{{ usuario.nombre_interno }}",
+          nombre: "{{ usuario.nombre }}",
+          apellido: "{{ usuario.apellido }}",
+          email: "{{ usuario.email }}",
+          rol: "{{ usuario.rol }}"
+        }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ]{% if not forloop.last %},{% endif %}
+  {% endfor %}
+};
+
+// Poblar tablas
+document.addEventListener('DOMContentLoaded', function() {
+  Object.keys(usuariosPorRol).forEach(rol => {
+    const usuarios = usuariosPorRol[rol];
+    const tbody = document.getElementById('tbody-' + rol);
+    const countBadge = document.getElementById('count-' + rol);
+    
+    if (usuarios.length === 0) return;
+    
+    countBadge.textContent = usuarios.length;
+    
+    usuarios.forEach(usuario => {
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td><strong>${usuario.rut}</strong></td>
+        <td>${usuario.nombre_interno}</td>
+        <td>${usuario.nombre} ${usuario.apellido}</td>
+        <td>${usuario.email}</td>
+        <td><span class="badge bg-primary">${usuario.rol}</span></td>
+        <td>
+          <a href="/usuarios/${usuario.id}/editar/" class="btn btn-sm btn-info">
+            ✏️ Editar
+          </a>
+        </td>
+      `;
+      tbody.appendChild(row);
+    });
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+
+{% block title %}Órdenes de Trabajo{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <h1><i class="bi bi-clipboard-check"></i> Órdenes de Trabajo</h1>
+            {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
+            <a href="{% url 'orden_crear' %}" class="btn btn-success">
+                <i class="bi bi-plus-circle"></i> Nueva Orden
+            </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <form method="get" class="row g-3 align-items-end">
+                        <div class="col-md-2">
+                            <label class="form-label">Estado</label>
+                            <select name="estado" class="form-select">
+                                <option value="">Todos</option>
+                                {% for estado_code, estado_nombre in estados %}
+                                <option value="{{ estado_code }}" {% if estado_code == estado_filtro %}selected{% endif %}>
+                                    {{ estado_nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">Tipo Trabajo</label>
+                            <select name="tipo_trabajo" class="form-select">
+                                <option value="">Todos</option>
+                                {% for tipo_code, tipo_nombre in tipos_trabajo %}
+                                <option value="{{ tipo_code }}" {% if tipo_code == tipo_filtro %}selected{% endif %}>
+                                    {{ tipo_nombre }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        {% if request.user.rol != 'TECNICO' %}
+                        <div class="col-md-2">
+                            <label class="form-label">Técnico</label>
+                            <select name="tecnico" class="form-select">
+                                <option value="">Todos</option>
+                                {% for tecnico in tecnicos %}
+                                <option value="{{ tecnico.id }}" {% if tecnico.id|stringformat:"s" == tecnico_filtro %}selected{% endif %}>
+                                    {{ tecnico.nombre_interno }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="col-md-2">
+                            <label class="form-label">Cliente</label>
+                            <select name="cliente" class="form-select">
+                                <option value="">Todos</option>
+                                {% for cliente in clientes %}
+                                <option value="{{ cliente.id }}" {% if cliente.id|stringformat:"s" == cliente_filtro %}selected{% endif %}>
+                                    {{ cliente.numero_cliente }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-3">
+                            <label class="form-label">Buscar</label>
+                            <input type="text" name="buscar" class="form-control" placeholder="Título, descripción..." value="{{ buscar }}">
+                        </div>
+                        
+                        <div class="col-md-1 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-funnel"></i>
+                            </button>
+                            <a href="{% url 'ordenes_list' %}" class="btn btn-secondary">
+                                <i class="bi bi-x"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla de órdenes -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="table-responsive">
+                    <table id="tablaOrdenes" class="table table-hover mb-0">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>ID</th>
+                                <th>Título</th>
+                                <th>Tipo</th>
+                                <th>Estado</th>
+                                <th>Cliente</th>
+                                <th>Técnico</th>
+                                <th>Equipos</th>
+                                <th>Fecha Creación</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for orden in ordenes %}
+                            <tr>
+                                <td><strong>#{{ orden.id }}</strong></td>
+                                <td>{{ orden.titulo }}</td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ orden.get_tipo_trabajo_display }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{% if orden.estado == 'FINALIZADA' %}success{% elif orden.estado == 'CANCELADA' %}danger{% elif orden.estado == 'EN_EJECUCION' %}primary{% elif orden.estado == 'PENDIENTE_VALIDACION' %}warning{% else %}secondary{% endif %}">
+                                        {{ orden.get_estado_display }}
+                                    </span>
+                                </td>
+                                <td>{{ orden.cliente.numero_cliente|default:"-" }}</td>
+                                <td>{{ orden.tecnico_responsable.nombre_interno }}</td>
+                                <td>
+                                    <small>
+                                        {% if orden.medidor %}
+                                            <span class="badge bg-info">📏 {{ orden.medidor.serie }}</span>
+                                        {% endif %}
+                                        {% if orden.simcard %}
+                                            <span class="badge bg-info">📱 {{ orden.simcard.imei }}</span>
+                                        {% endif %}
+                                        {% if orden.modem %}
+                                            <span class="badge bg-info">📡 {{ orden.modem.serie }}</span>
+                                        {% endif %}
+                                        {% if not orden.medidor and not orden.simcard and not orden.modem %}
+                                            -
+                                        {% endif %}
+                                    </small>
+                                </td>
+                                <td>{{ orden.fecha_creacion|date:"d/m/Y H:i" }}</td>
+                                <td>
+                                    <a href="{% url 'orden_detalle' orden.id %}" class="btn btn-sm btn-primary">
+                                        <i class="bi bi-eye"></i> Ver
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="9" class="text-center text-muted py-4">
+                                    No hay órdenes de trabajo
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function() {
+    $('#tablaOrdenes').DataTable({
+        language: {
+            url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
+        },
+        pageLength: 25,
+        order: [[7, 'desc']], // Ordenar por fecha creación desc
+        columnDefs: [
+            {
+                targets: -1, // Columna acciones
+                orderable: false,
+                searchable: false
+            }
+        ]
+    });
+});
+</script>
+
+{% endblock %}
