@@ -28,17 +28,6 @@ except Exception as e:
     # y dejar que Django muestre un error más descriptivo si falla al conectar
     pass
 
-# Ruta al intérprete de Python del virtualenv (ajusta si tu hosting usa otra)
-INTERP = os.path.expanduser("~/virtualenv/APPS_WEB/3.8/bin/python")
-
-# Cambiar el intérprete sólo si la ruta existe; evita errores si la ruta no está
-# disponible en el entorno del host (por ejemplo en local/Windows).
-if os.path.exists(INTERP) and sys.executable != INTERP:
-    try:
-        os.execv(INTERP, [INTERP] + sys.argv)
-    except Exception:
-        # No forzar fallo del proceso; continuar con el intérprete actual
-        pass
 
 # Agregar el directorio del proyecto al path
 sys.path.insert(0, current_dir)
