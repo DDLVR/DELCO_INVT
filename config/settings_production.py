@@ -8,25 +8,36 @@ import os
 import pymysql
 pymysql.install_as_MySQLdb()
 
+
+def _env_list(var_name, default_values=None):
+    """Obtiene una lista separada por coma desde variables de entorno."""
+    raw = os.environ.get(var_name, '')
+    if raw:
+        return [item.strip() for item in raw.split(',') if item.strip()]
+    return list(default_values or [])
+
 # SEGURIDAD
-DEBUG = os.environ.get('DEBUG', 'False') == 'True'
+DEBUG = os.environ.get('DEBUG', 'False').strip().lower() == 'true'
 
 # IMPORTANTE: Cambiar esta clave por una segura y única
 SECRET_KEY = os.environ.get('SECRET_KEY', 'CAMBIAR-POR-CLAVE-SEGURA-EN-PRODUCCION')
 
 # Dominios permitidos - Configuración mínima para producción
-ALLOWED_HOSTS = [
+ALLOWED_HOSTS = _env_list('ALLOWED_HOSTS', [
     'inventario.delcochile',
-    'www.inventario.delcochile',  # opcional, si tienes subdominio
-]
+    'www.inventario.delcochile',
+    'delcochile.inventario.delcochile.cl',
+])
 
-# Si existe variable de entorno, agregarla también
-env_hosts = os.environ.get('ALLOWED_HOSTS', '')
-if env_hosts:
-    ALLOWED_HOSTS.extend([h.strip() for h in env_hosts.split(',') if h.strip()])
+# Origenes confiables para CSRF (requieren esquema http/https).
+CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS', [
+    'https://delcochile.inventario.delcochile.cl',
+    'http://delcochile.inventario.delcochile.cl',
+])
 
 # Configuración para proxy reverso
 USE_X_FORWARDED_HOST = True
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Base de datos MySQL (Hostingplus usa MySQL)
 DATABASES = {
