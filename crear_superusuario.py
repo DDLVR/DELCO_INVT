@@ -27,7 +27,7 @@ django.setup()
 from usuarios.models import Usuario
 
 # Datos del superusuario
-rut = '12345678-9'  # Cambia este RUT si necesitas otro
+rut = '20591586-9'  # Cambia este RUT si necesitas otro
 email = 'die.delavega@delcochile.cl'
 password = 'Chomuske132'
 nombre = 'Diego'
