@@ -34,9 +34,6 @@ CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS', [
     'http://inventario.delcochile.cl',
 ])
 
-# Django debe aceptar Referer con protocolo https cuando viene a través de proxy
-CSRF_FAILURE_VIEW = 'web.views.csrf_failure_view'
-
 # Configuración para proxy reverso
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
