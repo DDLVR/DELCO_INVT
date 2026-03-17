@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error 403 - CSRF verificación fallida</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .error-container {
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            max-width: 600px;
+        }
+        h1 {
+            color: #e74c3c;
+            margin-bottom: 20px;
+        }
+        .error-details {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 14px;
+            color: #555;
+        }
+        .btn-primary {
+            background-color: #667eea;
+            border: none;
+        }
+        .btn-primary:hover {
+            background-color: #764ba2;
+        }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <h1>❌ Error 403 - Validación CSRF fallida</h1>
+        
+        <p>La solicitud fue rechazada por motivos de seguridad. Esto ocurre cuando:</p>
+        
+        <ul>
+            <li>No hay cookies habilitadas en el navegador</li>
+            <li>Has abierto el formulario en una pestaña privada/incógnito</li>
+            <li>Tu sesión ha expirado</li>
+            <li>El token CSRF es inválido</li>
+        </ul>
+        
+        <div class="error-details">
+            <strong>Razón técnica:</strong><br>
+            {{ reason }}
+        </div>
+        
+        <p class="text-muted small">
+            <strong>Nota:</strong> Este error ha sido registrado en los logs del servidor para análisis.
+            Si el problema persiste, contacta al administrador.
+        </p>
+        
+        <div class="text-center mt-4">
+            <a href="/" class="btn btn-primary">Volver al inicio</a>
+            <a href="/login/" class="btn btn-secondary">Ir a Login</a>
+        </div>
+    </div>
+</body>
+</html>

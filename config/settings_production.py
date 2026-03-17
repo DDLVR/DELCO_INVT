@@ -34,12 +34,18 @@ CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS', [
     'http://inventario.delcochile.cl',
 ])
 
+# Django debe aceptar Referer con protocolo https cuando viene a través de proxy
+CSRF_FAILURE_VIEW = 'web.views.csrf_failure_view'
+
 # Configuración para proxy reverso
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = 'Lax'  # Permite cookies cross-site en POST desde mismo dominio
 SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = 'Lax'
 SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False').strip().lower() == 'true'
+CSRF_COOKIE_AGE = 31449600  # 1 año en segundos
 
 # Base de datos MySQL (Hostingplus usa MySQL)
 DATABASES = {
