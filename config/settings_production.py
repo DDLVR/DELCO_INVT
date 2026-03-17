@@ -24,20 +24,22 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'CAMBIAR-POR-CLAVE-SEGURA-EN-PRODUCCIO
 
 # Dominios permitidos - Configuración mínima para producción
 ALLOWED_HOSTS = _env_list('ALLOWED_HOSTS', [
-    'inventario.delcochile',
-    'www.inventario.delcochile',
-    'delcochile.inventario.delcochile.cl',
+    'inventario.delcochile.cl',
+    'www.inventario.delcochile.cl',
 ])
 
 # Origenes confiables para CSRF (requieren esquema http/https).
 CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS', [
-    'https://delcochile.inventario.delcochile.cl',
-    'http://delcochile.inventario.delcochile.cl',
+    'https://inventario.delcochile.cl',
+    'http://inventario.delcochile.cl',
 ])
 
 # Configuración para proxy reverso
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False').strip().lower() == 'true'
 
 # Base de datos MySQL (Hostingplus usa MySQL)
 DATABASES = {
@@ -65,8 +67,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles')
 
 # CORS - Configurar según tus necesidades
 CORS_ALLOWED_ORIGINS = [
-    "https://inventario.delcochile",
-    "https://www.inventario.delcochile",  # opcional, si tienes subdominio
+    "https://inventario.delcochile.cl",
+    "https://www.inventario.delcochile.cl",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
