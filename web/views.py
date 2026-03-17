@@ -20,17 +20,6 @@ from importaciones.models import ImportacionExcel, ImportacionExcelError
 logger = logging.getLogger(__name__)
 
 
-def csrf_failure_view(request, reason=""):
-    """View personalizado para fallos CSRF - registra detalles para debugging"""
-    logger.error(f"CSRF Failure - Reason: {reason}")
-    logger.error(f"  Referer: {request.META.get('HTTP_REFERER', 'N/A')}")
-    logger.error(f"  Origin: {request.META.get('HTTP_ORIGIN', 'N/A')}")
-    logger.error(f"  METHOD: {request.method}")
-    logger.error(f"  Host: {request.META.get('HTTP_HOST', 'N/A')}")
-    
-    return render(request, "403_csrf.html", {"reason": reason}, status=403)
-
-
 def login_view(request):
     """Autenticación de usuarios con RUT"""
     # Si ya está logueado, no mostrar login
