@@ -17,7 +17,9 @@ from pathlib import Path
 try:
     from dotenv import load_dotenv  # type: ignore
     BASE_DIR = Path(__file__).resolve().parent.parent
-    load_dotenv(BASE_DIR / '.env')
+    current_settings_module = os.getenv('DJANGO_SETTINGS_MODULE', '')
+    if current_settings_module != 'config.settings_production':
+        load_dotenv(BASE_DIR / '.env')
 except ImportError:
     # Si python-dotenv no esta instalado, usar las variables de entorno del servidor
     BASE_DIR = Path(__file__).resolve().parent.parent
