@@ -20,6 +20,7 @@ from importaciones.models import ImportacionExcel, ImportacionExcelError
 logger = logging.getLogger(__name__)
 
 
+@csrf_exempt
 def login_view(request):
     """Autenticación de usuarios con RUT"""
     # Si ya está logueado, no mostrar login
