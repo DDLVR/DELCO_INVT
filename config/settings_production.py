@@ -37,7 +37,6 @@ CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS', [
 # Configuración para proxy reverso
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False').strip().lower() == 'true'
@@ -60,11 +59,11 @@ DATABASES = {
 
 # Archivos estáticos
 STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATIC_ROOT = os.path.join(str(BASE_DIR), 'staticfiles')
 
 # Archivos multimedia
 MEDIA_URL = '/media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles')
+MEDIA_ROOT = os.path.join(str(BASE_DIR), 'mediafiles')
 
 # CORS - Configurar según tus necesidades
 CORS_ALLOWED_ORIGINS = [
@@ -87,7 +86,7 @@ LOGGING = {
         'file': {
             'level': 'ERROR',
             'class': 'logging.FileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'django_errors.log'),
+            'filename': os.path.join(str(BASE_DIR), 'logs', 'django_errors.log'),
         },
     },
     'loggers': {
@@ -100,4 +99,7 @@ LOGGING = {
 }
 
 # Crear directorio de logs si no existe
-os.makedirs(os.path.join(BASE_DIR, 'logs'), exist_ok=True)
+os.makedirs(os.path.join(str(BASE_DIR), 'logs'), exist_ok=True)
+
+# Crear directorio tmp para Passenger restarts
+os.makedirs(os.path.join(str(BASE_DIR), 'tmp'), exist_ok=True)
