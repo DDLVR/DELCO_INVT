@@ -27,12 +27,12 @@ django.setup()
 from usuarios.models import Usuario
 
 # Datos del superusuario
-rut = '20591586-9'  # Cambia este RUT si necesitas otro
-email = 'die.delavega@delcochile.cl'
-password = 'Chomuske132'
-nombre = 'Diego'
+rut = '11253000-2'  # Cambia este RUT si necesitas otro
+email = 'jdelavega@delcochile.cl'
+password = 'DelcoChileTL'
+nombre = 'Jose'
 apellido = 'De la Vega'
-nombre_interno = 'Diego De la Vega'
+nombre_interno = 'Jose Miguel De la Vega'
 
 # Verificar si ya existe por RUT o email
 usuario_existente = Usuario.objects.filter(rut=rut).first() or Usuario.objects.filter(email=email).first()
