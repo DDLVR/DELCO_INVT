@@ -30,23 +30,25 @@ def login_view(request):
     if request.method == "POST":
         rut = request.POST.get("username")  # RUT
         password = request.POST.get("password")
-        
-        # Debug: verificar si el usuario existe
+        # Limpiar el RUT: quitar puntos y guion
+        rut_limpio = rut.replace('.', '').replace('-', '').upper()
         from usuarios.models import Usuario
         try:
-            usuario = Usuario.objects.get(rut=rut)
-            # Intentar autenticar
-            user = authenticate(request, username=rut, password=password)
-            
-            if user is not None:
-                login(request, user)
-                messages.success(request, f"Bienvenido {usuario.nombre_interno}!")
-                return redirect('dashboard')
+            # Buscar usuario por rut en ambos formatos
+            usuario = Usuario.objects.filter(rut=rut).first()
+            if not usuario:
+                usuario = Usuario.objects.filter(rut=rut_limpio).first()
+            if not usuario:
+                messages.error(request, "RUT no encontrado en el sistema.")
             else:
-                # El usuario existe pero la contraseña es incorrecta
-                messages.error(request, "Contraseña incorrecta.")
-        except Usuario.DoesNotExist:
-            messages.error(request, "RUT no encontrado en el sistema.")
+                # Intentar autenticar
+                user = authenticate(request, username=usuario.rut, password=password)
+                if user is not None:
+                    login(request, user)
+                    messages.success(request, f"Bienvenido {usuario.nombre_interno}!")
+                    return redirect('dashboard')
+                else:
+                    messages.error(request, "Contraseña incorrecta.")
         except Exception as e:
             messages.error(request, f"Error: {str(e)}")
 
@@ -983,25 +985,15 @@ def profile_view(request):
 @login_required
 @role_required(['ADMIN'])
 def usuarios_list_view(request):
-    """Listar todos los usuarios separados por roles"""
+    """Listar todos los usuarios activos y pasar roles para filtro select"""
     from usuarios.models import Usuario
-    from django.db.models import Q
-    
-    usuarios = Usuario.objects.filter(is_active=True).order_by('rol', 'nombre_interno')
-    
-    # Agrupar por rol
+    usuarios = Usuario.objects.filter(is_active=True).order_by('nombre_interno')
     roles_order = ['ADMIN', 'ADMINISTRATIVO', 'TECNICO', 'SUPERVISOR', 'GERENCIA', 'AUDITOR']
-    usuarios_por_rol = {}
-    
-    for rol in roles_order:
-        usuarios_por_rol[rol] = usuarios.filter(rol=rol)
-    
     context = {
-        'usuarios_por_rol': usuarios_por_rol,
+        'usuarios': usuarios,
         'roles_order': roles_order,
         'total_usuarios': usuarios.count(),
     }
-    
     return render(request, 'usuarios/list.html', context)
 
 
@@ -1069,29 +1061,34 @@ def usuario_editar_view(request, pk):
     
     if request.method == "POST":
         nombre_interno = request.POST.get('nombre_interno', '').strip()
-        email = request.POST.get('email', '').strip()
-        nombre = request.POST.get('nombre', '').strip()
-        apellido = request.POST.get('apellido', '').strip()
         rol = request.POST.get('rol', usuario.rol).strip()
-        is_active = request.POST.get('is_active') == 'on'
-        
-        if not all([nombre_interno, email, rol]):
-            messages.error(request, "Campos requeridos vacíos")
-            return redirect('usuario_editar', pk=pk)
-        
-        # Verificar email único (excepto el del usuario actual)
-        if Usuario.objects.filter(email=email).exclude(pk=pk).exists():
-            messages.error(request, "Ya existe otro usuario con ese email")
-            return redirect('usuario_editar', pk=pk)
-        
+        nueva_contrasena = request.POST.get('nueva_contrasena', '').strip()
+        confirmar_contrasena = request.POST.get('confirmar_contrasena', '').strip()
+        # Cambiar contraseña solo si ambos campos están llenos y coinciden
+        if nueva_contrasena or confirmar_contrasena:
+            if nueva_contrasena != confirmar_contrasena:
+                error_msg = "Las contraseñas no coinciden"
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'error': error_msg})
+                messages.error(request, error_msg)
+                return redirect('usuario_editar', pk=pk)
+            usuario.set_password(nueva_contrasena)
         usuario.nombre_interno = nombre_interno
-        usuario.email = email
-        usuario.nombre = nombre
-        usuario.apellido = apellido
         usuario.rol = rol
-        usuario.is_active = is_active
         usuario.save()
-        
+
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse({
+                'success': True,
+                'usuario': {
+                    'id': usuario.id,
+                    'nombre_interno': usuario.nombre_interno,
+                    'nombre': usuario.nombre,
+                    'apellido': usuario.apellido,
+                    'email': usuario.email,
+                    'rol': usuario.rol,
+                }
+            })
         messages.success(request, "Usuario actualizado correctamente")
         return redirect('usuarios_list')
     
@@ -1160,14 +1157,9 @@ def update_profile_view(request):
         
         # Si se intenta cambiar contraseña
         if new_password:
-            # Verificar que sea un usuario no-ADMIN
-            if request.user.rol == 'ADMIN':
-                return JsonResponse({'success': False, 'message': 'Solo administradores pueden cambiar contraseña desde el admin'})
-            
             # Verificar contraseña actual
             if not request.user.check_password(current_password):
                 return JsonResponse({'success': False, 'message': 'Contraseña actual incorrecta'})
-            
             # Cambiar contraseña
             request.user.set_password(new_password)
         
@@ -1581,3 +1573,24 @@ def movimientos_importar_moreapp_webhook(request):
             'success': False,
             'error': f'Error interno: {str(e)}'
         }, status=500)
+
+
+@login_required
+@role_required(['ADMIN'])
+def usuario_eliminar_view(request, pk):
+    from usuarios.models import Usuario
+    from django.contrib import messages
+    if request.method == "POST":
+        try:
+            usuario = Usuario.objects.get(pk=pk)
+        except Usuario.DoesNotExist:
+            messages.error(request, "Usuario no encontrado")
+            return redirect('usuarios_list')
+        # No permitir que un usuario se elimine a sí mismo
+        if usuario == request.user:
+            messages.error(request, "No puedes eliminar tu propio perfil.")
+            return redirect('usuarios_list')
+        usuario.delete()
+        messages.success(request, "Usuario eliminado correctamente.")
+        return redirect('usuarios_list')
+    return redirect('usuarios_list')

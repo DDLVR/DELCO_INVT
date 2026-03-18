@@ -80,23 +80,21 @@
             <div class="col-8">{{ user.nombre }} {{ user.apellido }}</div>
           </div>
 
-          <!-- Sección de Cambiar Contraseña (Solo para no-ADMIN) -->
-          {% if user.rol != 'ADMIN' %}
-            <hr>
-            <h6 class="mb-3">🔐 Cambiar Contraseña</h6>
-            <div class="mb-3">
-              <label class="form-label fw-semibold small">Contraseña Actual</label>
-              <input type="password" id="current_password" name="current_password" class="form-control form-control-sm" placeholder="Tu contraseña actual">
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold small">Nueva Contraseña</label>
-              <input type="password" id="new_password" name="new_password" class="form-control form-control-sm" placeholder="Nueva contraseña">
-            </div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold small">Confirmar Contraseña</label>
-              <input type="password" id="confirm_password" name="confirm_password" class="form-control form-control-sm" placeholder="Confirmar nueva contraseña">
-            </div>
-          {% endif %}
+          <!-- Sección de Cambiar Contraseña (siempre visible) -->
+          <hr>
+          <h6 class="mb-3">🔐 Cambiar Contraseña</h6>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Contraseña Actual</label>
+            <input type="password" id="current_password" name="current_password" class="form-control form-control-sm" placeholder="Tu contraseña actual">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Nueva Contraseña</label>
+            <input type="password" id="new_password" name="new_password" class="form-control form-control-sm" placeholder="Nueva contraseña">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold small">Confirmar Contraseña</label>
+            <input type="password" id="confirm_password" name="confirm_password" class="form-control form-control-sm" placeholder="Confirmar nueva contraseña">
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
