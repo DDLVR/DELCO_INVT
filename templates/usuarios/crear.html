@@ -18,14 +18,8 @@
 
         <div class="mb-3">
           <label class="form-label fw-semibold">RUT</label>
-          <input 
-            type="text" 
-            name="rut" 
-            class="form-control" 
-            placeholder="Ej: 111111115"
-            required
-          >
-          <small class="text-muted">Solo dígitos, sin puntos ni guión</small>
+          <input type="text" name="rut" class="form-control" id="crear-rut" maxlength="12" pattern="\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]" placeholder="12.345.678-K" required autocomplete="off">
+          <small class="text-muted">Ejemplo: 12.345.678-K</small>
         </div>
 
         <div class="row">
@@ -78,6 +72,19 @@
           >
         </div>
 
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Rol</label>
+          <select name="rol" class="form-select" required>
+            <option value="" disabled selected>Selecciona un rol</option>
+            <option value="ADMIN">Administrador</option>
+            <option value="GERENCIA">Gerencia</option>
+            <option value="ADMINISTRATIVO">Administrativo</option>
+            <option value="TECNICO">Técnico</option>
+            <option value="AUDITOR">Auditor</option>
+          </select>
+        </div>
+
         <div class="mb-3">
           <label class="form-label fw-semibold">Contraseña</label>
           <input 
@@ -90,17 +97,30 @@
           <small class="text-muted">Se recomienda una contraseña fuerte</small>
         </div>
 
-        <div class="mb-4">
-          <label class="form-label fw-semibold">Rol</label>
-          <select name="rol" class="form-select" required>
-            <option value="">-- Selecciona un rol --</option>
-            {% for rol in roles %}
-              <option value="{{ rol }}">
-                {{ rol }}
-              </option>
-            {% endfor %}
-          </select>
-        </div>
+<script>
+// Formateo automático de RUT en crear usuario
+document.addEventListener('DOMContentLoaded', function() {
+  const rutInput = document.getElementById('crear-rut');
+  rutInput.addEventListener('input', function() {
+    let val = this.value.replace(/[^0-9Kk]/g, '').toUpperCase();
+    let formatted = '';
+    if (val.length > 1) {
+      let dv = val.slice(-1);
+      let num = val.slice(0, -1);
+      if (num.length > 6) {
+        formatted = num.slice(0, num.length - 6) + '.' + num.slice(num.length - 6, num.length - 3) + '.' + num.slice(num.length - 3) + '-' + dv;
+      } else if (num.length > 3) {
+        formatted = num.slice(0, num.length - 3) + '.' + num.slice(num.length - 3) + '-' + dv;
+      } else {
+        formatted = num + '-' + dv;
+      }
+    } else {
+      formatted = val;
+    }
+    this.value = formatted;
+  });
+});
+</script>
 
         <div class="d-flex gap-2">
           <button type="submit" class="btn btn-primary">
