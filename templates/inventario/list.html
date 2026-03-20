@@ -3,6 +3,7 @@
 {% block title %}Inventario - {{ titulo }}{% endblock %}
 
 {% block content %}
+{# Calcular el número total de columnas según el tipo #}
 <div class="container-fluid py-5">
     <div class="row mb-4">
         <div class="col-12 d-flex justify-content-between align-items-center">
@@ -1254,6 +1255,8 @@ document.getElementById('btnImportarSubmit').addEventListener('click', function(
 var dataTableInstance = null;
 
 $(document).ready(function() {
+    // Suprimir warnings de DataTables (por ejemplo, columnas incorrectas en tabla vacía)
+    $.fn.dataTable.ext.errMode = 'none';
     // Inicialización simple y directa
     try {
         $('#tablaInventario').DataTable({
