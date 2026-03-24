@@ -42,6 +42,11 @@ class Ubicacion(models.Model):
 
 class Medidor(models.Model):
     """Medidores con trazabilidad completa - importados en bodega y entregados a técnicos"""
+    entregado_a_info = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Información textual de ENTREGADO A desde Excel (para corrección manual)'
+    )
     
     # Campos de recepción en bodega (AMARILLOS - Se cargan en importación Excel)
     fecha_recepcion = models.DateField(
@@ -487,11 +492,13 @@ class Modem(models.Model):
 class MovimientoInventario(models.Model):
     """Registro de cambios de estado/custodia de equipos (trazabilidad)"""
     TIPO_CHOICES = [
+        ('IMPORTACION', 'Importación masiva'),
         ('ENTREGA', 'Entrega a técnico'),
         ('RECEPCION', 'Recepción en bodega'),
         ('DEVOLUCION', 'Devolución'),
         ('INSTALACION', 'Instalación en cliente'),
         ('RETIRO', 'Retiro de cliente'),
+        ('ELIMINACION', 'Eliminación de registro'),
     ]
     
     fecha_hora = models.DateTimeField(auto_now_add=True)

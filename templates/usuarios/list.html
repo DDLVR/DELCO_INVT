@@ -33,6 +33,7 @@
     <table class="table table-hover">
       <thead class="table-light">
         <tr>
+          <th>#</th>
           <th>RUT</th>
           <th>Nombre de Usuario</th>
           <th>Nombre Completo</th>
@@ -44,6 +45,7 @@
       <tbody id="usuarios-tbody">
         {% for usuario in usuarios %}
         <tr data-rol="{{ usuario.rol }}" data-id="{{ usuario.id }}">
+          <td>{{ forloop.counter }}</td>
           <td><strong>{{ usuario.rut }}</strong></td>
           <td>{{ usuario.nombre_interno }}</td>
           <td>{{ usuario.nombre }} {{ usuario.apellido }}</td>
@@ -240,10 +242,10 @@ document.addEventListener('DOMContentLoaded', function() {
           // Actualizar la fila en la tabla
           const fila = document.querySelector(`#usuarios-tbody tr[data-id='${usuarioId}']`);
           if (fila) {
-            fila.querySelector('td:nth-child(2)').textContent = data.usuario.nombre_interno;
-            fila.querySelector('td:nth-child(3)').textContent = data.usuario.nombre + ' ' + data.usuario.apellido;
-            fila.querySelector('td:nth-child(4)').textContent = data.usuario.email;
-            fila.querySelector('td:nth-child(5) .badge').textContent = data.usuario.rol;
+            fila.querySelector('td:nth-child(3)').textContent = data.usuario.nombre_interno;
+            fila.querySelector('td:nth-child(4)').textContent = data.usuario.nombre + ' ' + data.usuario.apellido;
+            fila.querySelector('td:nth-child(5)').textContent = data.usuario.email;
+            fila.querySelector('td:nth-child(6) .badge').textContent = data.usuario.rol;
             fila.setAttribute('data-rol', data.usuario.rol);
             // Actualizar los data-* del botón editar
             const btnEditar = fila.querySelector('.btn-editar');
