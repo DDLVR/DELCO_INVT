@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     login_view, logout_view, dashboard_view,
     ordenes_list_view, orden_detalle_view, orden_crear_view,
-    inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, profile_view, update_profile_view,
+    inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, inventario_eliminar_view, profile_view, update_profile_view,
     usuarios_list_view, usuario_crear_view, usuario_editar_view, usuario_reset_password_view, usuario_eliminar_view,
     importacion_errores_view, importacion_corregir_fila_view,
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook
@@ -32,6 +32,9 @@ urlpatterns = [
     path('inventario/importar/', inventario_importar_view, name='inventario_importar'),
     path('inventario/<int:pk>/obtener-datos/', inventario_obtener_datos_view, name='inventario_obtener_datos'),
     path('inventario/<int:pk>/modificar/', inventario_modificar_view, name='inventario_modificar'),
+
+    # Eliminar registro de inventario
+    path('inventario/<int:pk>/eliminar/', inventario_eliminar_view, name='inventario_eliminar'),
 
     # Importaciones y errores
     path('importaciones/<int:pk>/errores/', importacion_errores_view, name='importacion_errores'),
