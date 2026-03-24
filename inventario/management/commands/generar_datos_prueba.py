@@ -13,8 +13,11 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Generando datos de prueba...'))
         
         # Obtener o crear estados
-        estado_disponible, _ = EstadoInventario.objects.get_or_create(nombre='Disponible')
-        estado_entregado, _ = EstadoInventario.objects.get_or_create(nombre='Entregado')
+        estado_bodega,     _ = EstadoInventario.objects.get_or_create(nombre='En bodega')
+        estado_instalado,  _ = EstadoInventario.objects.get_or_create(nombre='Instalado')
+        estado_retirado,   _ = EstadoInventario.objects.get_or_create(nombre='Retirado')
+        estado_reparacion, _ = EstadoInventario.objects.get_or_create(nombre='En reparación')
+        estado_baja,       _ = EstadoInventario.objects.get_or_create(nombre='Dado de baja')
         
         # Obtener clientes
         clientes = list(Cliente.objects.all())
@@ -46,7 +49,7 @@ class Command(BaseCommand):
                         'fecha_recepcion': timezone.now() - timedelta(days=randint(1, 30)),
                         'entregado_a_nombre': choice(tecnicos).nombre_interno,
                         'fecha_entrega': timezone.now() - timedelta(days=randint(0, 10)),
-                        'estado_inventario': choice([estado_disponible, estado_entregado]),
+                        'estado_inventario': choice([estado_bodega, estado_instalado, estado_retirado]),
                         'cliente': choice(clientes),
                         'en_custodia_de': choice(tecnicos) if randint(0, 1) else None,
                     }
@@ -83,7 +86,7 @@ class Command(BaseCommand):
                         'observaciones': f'Modem de prueba #{i}',
                         'ip': f'192.168.{randint(1, 254)}.{randint(1, 254)}',
                         'puerto': str(choice([8080, 8081, 8082, 9000])),
-                        'estado_inventario': choice([estado_disponible, estado_entregado]),
+                        'estado_inventario': choice([estado_bodega, estado_instalado, estado_retirado]),
                         'entregado_a': choice(tecnicos) if randint(0, 1) else None,
                     }
                 )

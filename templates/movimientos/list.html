@@ -105,9 +105,10 @@
                 <table class="table table-hover table-striped" id="tablaMovimientos">
                     <thead class="table-dark">
                         <tr>
+                            <th>#</th>
                             <th>Fecha/Hora</th>
                             <th>Tipo</th>
-                            <th>Origen</th>
+                            <th>Origen / Ítem</th>
                             <th>Destino</th>
                             <th>Responsable</th>
                             <th>Items</th>
@@ -118,9 +119,12 @@
                     <tbody>
                         {% for mov in movimientos %}
                         <tr>
+                            <td>{{ forloop.counter }}</td>
                             <td>{{ mov.fecha_hora|date:"d/m/Y H:i" }}</td>
                             <td>
-                                {% if mov.tipo == 'ENTREGA' %}
+                                {% if mov.tipo == 'IMPORTACION' %}
+                                <span class="badge bg-indigo" style="background-color:#5b5bd6;">{{ mov.get_tipo_display }}</span>
+                                {% elif mov.tipo == 'ENTREGA' %}
                                 <span class="badge bg-success">{{ mov.get_tipo_display }}</span>
                                 {% elif mov.tipo == 'RECEPCION' %}
                                 <span class="badge bg-info">{{ mov.get_tipo_display }}</span>
@@ -130,11 +134,16 @@
                                 <span class="badge bg-warning">{{ mov.get_tipo_display }}</span>
                                 {% elif mov.tipo == 'DEVOLUCION' %}
                                 <span class="badge bg-danger">{{ mov.get_tipo_display }}</span>
+                                {% elif mov.tipo == 'ELIMINACION' %}
+                                <span class="badge bg-dark">{{ mov.get_tipo_display }}</span>
                                 {% else %}
                                 <span class="badge bg-secondary">{{ mov.get_tipo_display }}</span>
                                 {% endif %}
                             </td>
-                            <td>{{ mov.origen.nombre|default:"-" }}</td>
+                            <td>
+                                <div><strong>{{ mov.item_origen_display }}</strong></div>
+                                <small class="text-muted">Ubicación: {{ mov.origen.nombre|default:"-" }}</small>
+                            </td>
                             <td>{{ mov.destino.nombre|default:"-" }}</td>
                             <td>{{ mov.responsable.nombre_interno }}</td>
                             <td><span class="badge bg-secondary">{{ mov.total_items }}</span></td>
@@ -157,7 +166,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="text-center text-muted">
+                            <td colspan="9" class="text-center text-muted">
                                 <i class="bi bi-inbox"></i> No hay movimientos registrados
                             </td>
                         </tr>
@@ -179,7 +188,7 @@ $(document).ready(function() {
         language: {
             url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
         },
-        order: [[0, 'desc']],
+        order: [[1, 'desc']],
         pageLength: 25,
         responsive: true
     });

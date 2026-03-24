@@ -26,10 +26,10 @@
       </a>
     {% endif %}
 
-    <!-- Movimientos (Kardex) -->
+    <!-- Movimientos -->
     {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
-      <a class="list-group-item list-group-item-action" href="#" title="Disponible pronto">
-        <i class="bi bi-arrow-left-right"></i> 🔄 Movimientos (Kardex)
+      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'movimientos_list' or request.resolver_match.url_name == 'movimientos_detalle' or request.resolver_match.url_name == 'movimientos_historial_equipo' %}active bg-primary text-white{% endif %}" href="{% url 'movimientos_list' %}">
+        <i class="bi bi-arrow-left-right"></i> 🔄 Movimientos
       </a>
     {% endif %}
 

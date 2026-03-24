@@ -11,3 +11,4 @@ staticfiles/
 *.zip
 # Archivos locales y temporales
 db.sqlite3
+delete

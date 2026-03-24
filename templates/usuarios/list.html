@@ -16,49 +16,141 @@
     </div>
   </div>
 
-  <!-- Tabs por Rol -->
-  <ul class="nav nav-tabs mb-4" role="tablist">
-    {% for rol in roles_order %}
-      <li class="nav-item" role="presentation">
-        <button 
-          class="nav-link {% if forloop.first %}active{% endif %}" 
-          id="tab-{{ rol }}" 
-          data-bs-toggle="tab" 
-          data-bs-target="#content-{{ rol }}" 
-          type="button"
-        >
-          {{ rol }}
-          <span class="badge bg-secondary ms-2" id="count-{{ rol }}">0</span>
-        </button>
-      </li>
-    {% endfor %}
-  </ul>
+  <!-- Filtro select por rol -->
+  <div class="row mb-3">
+    <div class="col-md-4">
+      <label for="filtro-rol" class="form-label">Filtrar por rol:</label>
+      <select id="filtro-rol" class="form-select">
+        <option value="">Todos</option>
+        {% for rol in roles_order %}
+          <option value="{{ rol }}">{{ rol }}</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
 
-  <!-- Contenido de Tabs -->
-  <div class="tab-content">
-    {% for rol in roles_order %}
-      <div class="tab-pane fade {% if forloop.first %}show active{% endif %}" id="content-{{ rol }}">
-        <div class="table-responsive">
-          <table class="table table-hover">
-            <thead class="table-light">
-              <tr>
-                <th>RUT</th>
-                <th>Nombre de Usuario</th>
-                <th>Nombre Completo</th>
-                <th>Email</th>
-                <th>Rol</th>
-                <th>Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="tbody-{{ rol }}">
-              <!-- Rellenado por JavaScript -->
-            </tbody>
-          </table>
+  <div class="table-responsive">
+    <table class="table table-hover">
+      <thead class="table-light">
+        <tr>
+          <th>#</th>
+          <th>RUT</th>
+          <th>Nombre de Usuario</th>
+          <th>Nombre Completo</th>
+          <th>Email</th>
+          <th>Rol</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="usuarios-tbody">
+        {% for usuario in usuarios %}
+        <tr data-rol="{{ usuario.rol }}" data-id="{{ usuario.id }}">
+          <td>{{ forloop.counter }}</td>
+          <td><strong>{{ usuario.rut }}</strong></td>
+          <td>{{ usuario.nombre_interno }}</td>
+          <td>{{ usuario.nombre }} {{ usuario.apellido }}</td>
+          <td>{{ usuario.email }}</td>
+          <td><span class="badge bg-primary">{{ usuario.rol }}</span></td>
+          <td>
+            <button class="btn btn-sm btn-info btn-editar" data-id="{{ usuario.id }}" data-nombre="{{ usuario.nombre }}" data-apellido="{{ usuario.apellido }}" data-nombre_interno="{{ usuario.nombre_interno }}" data-email="{{ usuario.email }}" data-rol="{{ usuario.rol }}" data-rut="{{ usuario.rut }}">
+              ✏️ Editar
+            </button>
+            <form action="{% url 'usuario_eliminar' usuario.id %}" method="post" style="display:inline;" class="form-borrar-usuario">
+              {% csrf_token %}
+              <button type="button" class="btn btn-sm btn-danger btn-borrar" data-id="{{ usuario.id }}" data-nombre_interno="{{ usuario.nombre_interno }}">
+                🗑️ Borrar
+              </button>
+            </form>
+          </td>
+        </tr>
+
+
+        
+        <!-- Aquí termina el bucle de usuarios -->
+        <!-- Modal Editar Usuario (único, fuera del bucle) -->
+        <div class="modal fade" id="modalEditarUsuario" tabindex="-1" aria-labelledby="modalEditarUsuarioLabel" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+              <form id="formEditarUsuario" method="post">
+                {% csrf_token %}
+                <div class="modal-header">
+                  <h5 class="modal-title" id="modalEditarUsuarioLabel">Editar Usuario</h5>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                  <input type="hidden" name="usuario_id" id="editar-usuario-id">
+                  <div class="mb-3">
+                    <label class="form-label">RUT</label>
+                    <input type="text" class="form-control" name="rut" id="editar-usuario-rut" maxlength="12" pattern="\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]" placeholder="12.345.678-K" required autocomplete="off" disabled>
+                    <small class="text-muted">Ejemplo: 12.345.678-K</small>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Nombre</label>
+                    <input type="text" class="form-control" name="nombre" id="editar-usuario-nombre" required disabled>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Apellido</label>
+                    <input type="text" class="form-control" name="apellido" id="editar-usuario-apellido" required disabled>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Nombre de Usuario</label>
+                    <input type="text" class="form-control" name="nombre_interno" id="editar-usuario-nombre_interno" required>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" name="email" id="editar-usuario-email" required disabled>
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Rol</label>
+                    <select class="form-select" name="rol" id="editar-usuario-rol" required>
+                      {% for rol in roles_order %}
+                        <option value="{{ rol }}">{{ rol }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <hr>
+                  <div class="mb-3">
+                    <label class="form-label">Nueva Contraseña</label>
+                    <input type="password" class="form-control" name="nueva_contrasena" id="editar-usuario-nueva-contrasena" autocomplete="new-password">
+                  </div>
+                  <div class="mb-3">
+                    <label class="form-label">Confirmar Contraseña</label>
+                    <input type="password" class="form-control" name="confirmar_contrasena" id="editar-usuario-confirmar-contrasena" autocomplete="new-password">
+                  </div>
+                  <small class="text-muted">Deja los campos vacíos si no deseas cambiar la contraseña.</small>
+                </div>
+                <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                  <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
-      </div>
-    {% endfor %}
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </div>
+
+<!-- Modal Confirmar Borrado (global, fuera del bucle) -->
+<div class="modal fade" id="modalBorrarUsuario" tabindex="-1" aria-labelledby="modalBorrarUsuarioLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalBorrarUsuarioLabel">Confirmar Borrado</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <p>¿Estás seguro de que deseas borrar al usuario <strong id="borrar-usuario-nombre"></strong>?</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="confirmarBorradoBtn">Borrar</button>
+      </div>
+    </div>
+  </div>
+
 
 <style>
   .nav-link {
@@ -86,52 +178,165 @@
 </style>
 
 <script>
-// Datos de usuarios por rol
-const usuariosPorRol = {
-  {% for rol, usuarios in usuarios_por_rol.items %}
-    "{{ rol }}": [
-      {% for usuario in usuarios %}
-        {
-          id: {{ usuario.id }},
-          rut: "{{ usuario.rut }}",
-          nombre_interno: "{{ usuario.nombre_interno }}",
-          nombre: "{{ usuario.nombre }}",
-          apellido: "{{ usuario.apellido }}",
-          email: "{{ usuario.email }}",
-          rol: "{{ usuario.rol }}"
-        }{% if not forloop.last %},{% endif %}
-      {% endfor %}
-    ]{% if not forloop.last %},{% endif %}
-  {% endfor %}
-};
-
-// Poblar tablas
+// Filtro select por rol y popups de edición/borrado
 document.addEventListener('DOMContentLoaded', function() {
-  Object.keys(usuariosPorRol).forEach(rol => {
-    const usuarios = usuariosPorRol[rol];
-    const tbody = document.getElementById('tbody-' + rol);
-    const countBadge = document.getElementById('count-' + rol);
-    
-    if (usuarios.length === 0) return;
-    
-    countBadge.textContent = usuarios.length;
-    
-    usuarios.forEach(usuario => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td><strong>${usuario.rut}</strong></td>
-        <td>${usuario.nombre_interno}</td>
-        <td>${usuario.nombre} ${usuario.apellido}</td>
-        <td>${usuario.email}</td>
-        <td><span class="badge bg-primary">${usuario.rol}</span></td>
-        <td>
-          <a href="/usuarios/${usuario.id}/editar/" class="btn btn-sm btn-info">
-            ✏️ Editar
-          </a>
-        </td>
-      `;
-      tbody.appendChild(row);
+  const filtroRol = document.getElementById('filtro-rol');
+  const filas = document.querySelectorAll('#usuarios-tbody tr');
+  filtroRol.addEventListener('change', function() {
+    const valor = this.value;
+    filas.forEach(fila => {
+      if (!valor || fila.getAttribute('data-rol') === valor) {
+        fila.style.display = '';
+      } else {
+        fila.style.display = 'none';
+      }
     });
+  });
+
+  // Modal editar usuario
+  const modalEditarUsuario = document.getElementById('modalEditarUsuario');
+  const modalEditar = new bootstrap.Modal(modalEditarUsuario);
+  document.querySelectorAll('.btn-editar').forEach(btn => {
+    btn.addEventListener('click', function() {
+      document.getElementById('editar-usuario-id').value = this.dataset.id;
+      // Rellenar campos deshabilitados
+      document.getElementById('editar-usuario-rut').value = this.dataset.rut;
+      document.getElementById('editar-usuario-nombre').value = this.dataset.nombre;
+      document.getElementById('editar-usuario-apellido').value = this.dataset.apellido;
+      document.getElementById('editar-usuario-email').value = this.dataset.email;
+      // Rellenar campo editable
+      document.getElementById('editar-usuario-nombre_interno').value = this.dataset.nombre_interno;
+      // Seleccionar el rol correcto
+      const selectRol = document.getElementById('editar-usuario-rol');
+      Array.from(selectRol.options).forEach(opt => {
+        opt.selected = (opt.value === this.dataset.rol);
+      });
+      // Limpiar campos de contraseña siempre que se abre el popup
+      document.getElementById('editar-usuario-nueva-contrasena').value = '';
+      document.getElementById('editar-usuario-confirmar-contrasena').value = '';
+      // Cambiar la acción del formulario para que apunte a la URL de edición correcta
+      const formEditar = document.getElementById('formEditarUsuario');
+      formEditar.action = `/usuarios/${this.dataset.id}/editar/`;
+      modalEditar.show();
+    });
+  });
+
+  // Enviar edición por AJAX y actualizar la tabla dinámicamente
+  const formEditar = document.getElementById('formEditarUsuario');
+  if (formEditar) {
+    formEditar.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const usuarioId = document.getElementById('editar-usuario-id').value;
+      const url = `/usuarios/${usuarioId}/editar/`;
+      const formData = new FormData(formEditar);
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        body: formData
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.success) {
+          // Actualizar la fila en la tabla
+          const fila = document.querySelector(`#usuarios-tbody tr[data-id='${usuarioId}']`);
+          if (fila) {
+            fila.querySelector('td:nth-child(3)').textContent = data.usuario.nombre_interno;
+            fila.querySelector('td:nth-child(4)').textContent = data.usuario.nombre + ' ' + data.usuario.apellido;
+            fila.querySelector('td:nth-child(5)').textContent = data.usuario.email;
+            fila.querySelector('td:nth-child(6) .badge').textContent = data.usuario.rol;
+            fila.setAttribute('data-rol', data.usuario.rol);
+            // Actualizar los data-* del botón editar
+            const btnEditar = fila.querySelector('.btn-editar');
+            btnEditar.dataset.nombre = data.usuario.nombre;
+            btnEditar.dataset.apellido = data.usuario.apellido;
+            btnEditar.dataset.nombre_interno = data.usuario.nombre_interno;
+            btnEditar.dataset.email = data.usuario.email;
+            btnEditar.dataset.rol = data.usuario.rol;
+          }
+          // Toast de éxito y cerrar modal
+          mostrarToast('Usuario actualizado correctamente', 'success');
+          const modalInstance = bootstrap.Modal.getInstance(modalEditarUsuario);
+          if (modalInstance) modalInstance.hide();
+
+  // Limpiar mensaje al cerrar el modal
+  modalEditarUsuario.addEventListener('hidden.bs.modal', function () {
+    const alerta = document.getElementById('editar-usuario-alerta');
+    if (alerta) alerta.remove();
+  });
+        } else {
+          mostrarToast(data.error || 'Error al actualizar usuario', 'danger');
+        }
+      })
+      .catch(() => {
+        mostrarToast('Error de red al actualizar usuario', 'danger');
+      });
+    });
+  }
+
+  // Toast Bootstrap simple
+  function mostrarToast(msg, tipo) {
+    let toast = document.getElementById('toast-usuarios');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'toast-usuarios';
+      toast.className = 'toast align-items-center text-bg-' + (tipo === 'success' ? 'success' : 'danger') + ' border-0 position-fixed top-0 end-0 m-3';
+      toast.style.zIndex = 9999;
+      toast.style.minWidth = '250px';
+      toast.innerHTML = '<div class="d-flex"><div class="toast-body"></div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>';
+      document.body.appendChild(toast);
+    }
+    toast.querySelector('.toast-body').textContent = msg;
+    toast.className = 'toast align-items-center text-bg-' + (tipo === 'success' ? 'success' : 'danger') + ' border-0 position-fixed top-0 end-0 m-3';
+    const toastInstance = bootstrap.Toast.getOrCreateInstance(toast, { delay: 2500 });
+    toastInstance.show();
+  }
+
+  // Función para mostrar mensajes en el modal
+  function mostrarMensajeModal(msg, tipo) {
+    let alert = document.getElementById('editar-usuario-alerta');
+    if (!alert) {
+      const div = document.createElement('div');
+      div.id = 'editar-usuario-alerta';
+      div.className = 'alert mt-2';
+      formEditar.querySelector('.modal-body').prepend(div);
+      alert = div;
+    }
+    alert.className = 'alert mt-2 alert-' + tipo;
+    alert.textContent = msg;
+  }
+
+  // Modal borrar usuario
+    let formToDelete = null;
+    const modalBorrar = new bootstrap.Modal(document.getElementById('modalBorrarUsuario'));
+    document.querySelectorAll('.btn-borrar').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        formToDelete = this.closest('form');
+        document.getElementById('borrar-usuario-nombre').textContent = this.dataset.nombre_interno;
+        modalBorrar.show();
+      });
+    });
+    document.getElementById('confirmarBorradoBtn').addEventListener('click', function() {
+      if (formToDelete) {
+        formToDelete.submit();
+      }
+      modalBorrar.hide();
+    });
+  // Formateo automático de RUT mientras el usuario digita
+  const rutInput = document.getElementById('editar-usuario-rut-numero');
+  rutInput.addEventListener('input', function() {
+    let val = this.value.replace(/[^0-9]/g, '');
+    let formatted = '';
+    if (val.length > 7) {
+      formatted = val.slice(0, val.length - 7) + '.' + val.slice(val.length - 7, val.length - 4) + '.' + val.slice(val.length - 4);
+    } else if (val.length > 4) {
+      formatted = val.slice(0, val.length - 4) + '.' + val.slice(val.length - 4);
+    } else {
+      formatted = val;
+    }
+    this.value = formatted;
   });
 });
 </script>

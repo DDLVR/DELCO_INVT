@@ -42,19 +42,25 @@ class Ubicacion(models.Model):
 
 class Medidor(models.Model):
     """Medidores con trazabilidad completa - importados en bodega y entregados a técnicos"""
+    entregado_a_info = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Información textual de ENTREGADO A desde Excel (para corrección manual)'
+    )
     
     # Campos de recepción en bodega (AMARILLOS - Se cargan en importación Excel)
     fecha_recepcion = models.DateField(
         null=True,
         blank=True,
-        help_text='Fecha de recepción en bodega'
+        help_text='Fecha de recepción en bodega (solo lectura)',
+        editable=False
     )
     bodega = models.CharField(
         max_length=100,
         blank=True,
         help_text='Bodega de origen o referencia'
     )
-    marca = models.CharField(max_length=100, blank=True)
+    marca = models.CharField(max_length=100, blank=True, editable=False, help_text='Marca (solo lectura)')
     caja = models.CharField(
         max_length=50,
         null=True,
@@ -62,17 +68,17 @@ class Medidor(models.Model):
         help_text='Número de caja de recepción (múltiples medidores por caja)'
     )
     serie = models.CharField(max_length=50, unique=True)
-    modulo = models.CharField(
-        max_length=100,
+    modulo = models.BooleanField(
+        null=True,
         blank=True,
-        help_text='Módulo o tipo de medidor'
+        help_text='¿Tiene módulo? (Sí/No)'
     )
     
     # Campos que rellenará el administrativo (VERDES - Después de recibir)
     fecha_entrega = models.DateField(
         null=True,
         blank=True,
-        help_text='Fecha de entrega al técnico'
+        help_text='Fecha de entrega al técnico (editable)'
     )
     entregado_a = models.ForeignKey(
         Usuario,
@@ -80,21 +86,23 @@ class Medidor(models.Model):
         null=True,
         blank=True,
         related_name='medidores_entregados',
-        help_text='Usuario a quien se entregó'
+        help_text='Usuario a quien se entregó (editable)'
     )
     estado_inventario = models.ForeignKey(
         EstadoInventario,
         on_delete=models.PROTECT,
         related_name='medidores',
         null=True,
-        blank=True
+        blank=True,
+        help_text='Estado del medidor (editable)'
     )
     cliente = models.ForeignKey(
         'clientes.Cliente',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='medidores_asignados'
+        related_name='medidores_asignados',
+        help_text='Cliente (editable)'
     )
     
     # Campos de trazabilidad
@@ -484,11 +492,13 @@ class Modem(models.Model):
 class MovimientoInventario(models.Model):
     """Registro de cambios de estado/custodia de equipos (trazabilidad)"""
     TIPO_CHOICES = [
+        ('IMPORTACION', 'Importación masiva'),
         ('ENTREGA', 'Entrega a técnico'),
         ('RECEPCION', 'Recepción en bodega'),
         ('DEVOLUCION', 'Devolución'),
         ('INSTALACION', 'Instalación en cliente'),
         ('RETIRO', 'Retiro de cliente'),
+        ('ELIMINACION', 'Eliminación de registro'),
     ]
     
     fecha_hora = models.DateTimeField(auto_now_add=True)
