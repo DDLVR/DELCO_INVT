@@ -4,8 +4,9 @@ Utilidades para importación desde Excel
 
 import openpyxl
 from importaciones.models import ImportacionExcel, ImportacionExcelError
-from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion
+from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion, MovimientoInventario, MovimientoItem
 from clientes.models import Cliente
+from usuarios.models import Usuario
 
 
 def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
@@ -20,6 +21,31 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
     Retorna: ImportacionExcel instance
     """
     from datetime import datetime
+
+    def registrar_movimiento_importacion(equipo_obj, tipo_item, estado_obj_local, detalle, fila):
+        try:
+            movimiento = MovimientoInventario.objects.create(
+                tipo='IMPORTACION',
+                origen=bodega,
+                destino=bodega,
+                responsable=usuario,
+                observacion=f'Importación masiva {tipo_item} fila {fila}: {detalle}',
+            )
+            item_kwargs = {
+                'movimiento': movimiento,
+                'tipo_equipo': tipo_item,
+                'cantidad': 1,
+            }
+            if tipo_item == 'MEDIDOR':
+                item_kwargs['medidor'] = equipo_obj
+            elif tipo_item == 'SIM':
+                item_kwargs['simcard'] = equipo_obj
+            else:
+                item_kwargs['modem'] = equipo_obj
+            MovimientoItem.objects.create(**item_kwargs)
+        except Exception:
+            # No interrumpir importación si falla el registro de trazabilidad
+            pass
     
     # Crear registro de importación
     importacion = ImportacionExcel.objects.create(
@@ -46,9 +72,9 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
             )
         
         # Estado por defecto (Bodega)
-        estado = EstadoInventario.objects.filter(nombre='BODEGA').first()
+        estado = EstadoInventario.objects.filter(nombre='En bodega').first()
         if not estado:
-            estado = EstadoInventario.objects.create(nombre='BODEGA')
+            estado = EstadoInventario.objects.create(nombre='En bodega')
         
         contador_filas = 0
         exitosas = 0
@@ -75,55 +101,159 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                 
                 # Procesar según tipo de equipo
                 if tipo_equipo.upper() == 'MEDIDORES':
-                    # Nuevo formato: fecha_recepcion, bodega, marca, caja, serie, modulo
-                    # + campos verdes (opcionales): fecha_entrega, entregado_a, estado, cliente
-                    # Asegurar que tenemos al menos 6 columnas
-                    while len(valores) < 6:
+                    # Formato real planilla medidores:
+                    # #, fecha_recepcion, bodega, marca, caja, medidor, modulo, fecha_entrega, entregado_a, estado, cliente
+                    while len(valores) < 11:
                         valores.append(None)
-                    
-                    fecha_recepcion = valores[0]
-                    bodega_ref = valores[1]
-                    marca = valores[2]
-                    caja = valores[3]
-                    serie = valores[4]
-                    modulo = valores[5] if len(valores) > 5 else None
-                    
-                    if not all([fecha_recepcion, caja, serie]):
-                        raise ValueError('Faltan campos requeridos: fecha_recepcion, caja, serie')
-                    
-                    # Convertir serie y caja a string
+
+                    correlativo = valores[0]
+                    fecha_recepcion = valores[1]
+                    bodega_ref = valores[2]
+                    marca = valores[3]
+                    caja = valores[4]
+                    serie = valores[5]
+                    modulo = valores[6]
+                    fecha_entrega = valores[7]
+                    entregado_a_nombre = valores[8]
+                    estado_nombre = valores[9]
+                    cliente_numero = valores[10]
+
+                    # Validar campos obligatorios reales
+                    if not all([fecha_recepcion, serie]):
+                        raise ValueError('Faltan campos requeridos: fecha_recepcion, serie')
+
+                    # Convertir serie y caja a string (pero serie debe ser igual a columna Medidor)
                     serie = str(serie).strip() if serie else None
                     caja = str(caja).strip() if caja else None
-                    
-                    if not all([fecha_recepcion, caja, serie]):
-                        raise ValueError('Faltan campos requeridos (después de conversión)')
-                    
-                    # Convertir fecha si es necesario
+                    marca = str(marca).strip() if marca else None  # Igual a planilla
+
+                    # Convertir fecha de recepción de forma tolerante
+                    from datetime import datetime, date
                     if isinstance(fecha_recepcion, datetime):
                         fecha_recepcion = fecha_recepcion.date()
-                    elif isinstance(fecha_recepcion, str):
-                        # Intentar parsear si viene como string
-                        from datetime import datetime
-                        try:
-                            fecha_recepcion = datetime.strptime(fecha_recepcion, '%Y-%m-%d').date()
-                        except:
-                            raise ValueError(f'Fecha inválida: {fecha_recepcion}')
-                    
-                    # Verificar duplicados (solo serie es identificador único)
+                    elif isinstance(fecha_recepcion, date):
+                        pass
+                    else:
+                        # Si es string tipo 'datetime.datetime(YYYY, MM, DD, ...)', convertir a DD/MM/YYYY (robusto)
+                        if isinstance(fecha_recepcion, str) and 'datetime.datetime' in fecha_recepcion:
+                            import re
+                            fr = fecha_recepcion.replace("'", "").replace('"', '').replace('\\u0027', '').replace('\\', '').strip()
+                            match = re.search(r'datetime\.datetime\s*\(\s*(\d+),\s*(\d+),\s*(\d+)', fr)
+                            if match:
+                                y, m, d = match.groups()
+                                fecha_recepcion = f"{int(d):02d}/{int(m):02d}/{y}"
+                        formatos = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
+                        convertido = False
+                        for fmt in formatos:
+                            try:
+                                fecha_recepcion = datetime.strptime(str(fecha_recepcion).strip(), fmt).date()
+                                convertido = True
+                                break
+                            except Exception:
+                                continue
+                        if not convertido:
+                            # Si no se pudo convertir, dejar como None (vacío)
+                            fecha_recepcion = None
+
+                    # Convertir modulo desde texto SI/NO a booleano para el modelo
+                    if isinstance(modulo, str):
+                        modulo = modulo.strip().lower()
+                        if modulo in ['si', 'sí', 'yes', 'true', '1']:
+                            modulo = True
+                        elif modulo in ['no', 'false', '0']:
+                            modulo = False
+                        else:
+                            modulo = None
+                    elif isinstance(modulo, (int, bool)):
+                        modulo = bool(modulo)
+                    else:
+                        modulo = None
+
+                    # Validar unicidad de serie
                     if Medidor.objects.filter(serie=serie).exists():
                         raise ValueError(f'Medidor con serie {serie} ya existe')
-                    
-                    # Crear medidor con datos amarillos (recepción)
-                    Medidor.objects.create(
+
+                    # Buscar estado si viene
+                    estado_obj = None
+                    if estado_nombre:
+                        estado_nombre_str = str(estado_nombre).strip()
+                        estado_obj = EstadoInventario.objects.filter(nombre__icontains=estado_nombre_str).first()
+                    if not estado_obj:
+                        estado_obj = estado
+
+                    # Cliente por número (desde planilla)
+                    cliente_obj = None
+                    if cliente_numero:
+                        cliente_num_str = str(cliente_numero).strip()
+                        cliente_obj = Cliente.objects.filter(numero_cliente=cliente_num_str).first()
+                        if not cliente_obj:
+                            cliente_obj = Cliente.objects.create(
+                                numero_cliente=cliente_num_str,
+                                direccion=f'Cliente {cliente_num_str}',
+                                comuna='Por definir'
+                            )
+
+                    # Buscar usuario entregado_a si viene
+
+                    # Guardar el valor textual de ENTREGADO A en entregado_a_info, no buscar usuario ni relacionar con clientes
+                    entregado_a_info = str(entregado_a_nombre).strip() if entregado_a_nombre else ''
+
+                    # Convertir fecha_entrega si viene, de forma tolerante
+                    if fecha_entrega:
+                        if isinstance(fecha_entrega, datetime):
+                            fecha_entrega = fecha_entrega.date()
+                        elif isinstance(fecha_entrega, date):
+                            pass
+                        else:
+                            if isinstance(fecha_entrega, str) and 'datetime.datetime' in fecha_entrega:
+                                import re
+                                fe = fecha_entrega.replace("'", "").replace('"', '').replace('\\u0027', '').replace('\\', '').strip()
+                                match = re.search(r'datetime\.datetime\s*\(\s*(\d+),\s*(\d+),\s*(\d+)', fe)
+                                if match:
+                                    y, m, d = match.groups()
+                                    fecha_entrega = f"{int(d):02d}/{int(m):02d}/{y}"
+                            formatos = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
+                            convertido = False
+                            for fmt in formatos:
+                                try:
+                                    fecha_entrega = datetime.strptime(str(fecha_entrega).strip(), fmt).date()
+                                    convertido = True
+                                    break
+                                except Exception:
+                                    continue
+                            if not convertido:
+                                # Si no se pudo convertir, dejar como None (vacío)
+                                fecha_entrega = None
+
+                    # Crear medidor
+                    medidor = Medidor.objects.create(
                         fecha_recepcion=fecha_recepcion,
                         bodega=str(bodega_ref).strip() if bodega_ref else '',
-                        marca=str(marca).strip() if marca else '',
+                        marca=marca,
                         caja=caja,
                         serie=serie,
-                        modulo=str(modulo).strip() if modulo else '',
-                        estado_inventario=estado,
+                        modulo=modulo,
+                        fecha_entrega=fecha_entrega,
+                        entregado_a=None,
+                        entregado_a_info=entregado_a_info,
+                        estado_inventario=estado_obj,
+                        cliente=cliente_obj,
                         ubicacion_actual=bodega
                     )
+                    registrar_movimiento_importacion(
+                        medidor,
+                        'MEDIDOR',
+                        estado_obj,
+                        f'Serie {medidor.serie}',
+                        idx,
+                    )
+                    # Guardar trazas textuales de cliente/correlativo en observaciones
+                    observaciones = []
+                    if correlativo:
+                        observaciones.append(f"Correlativo: {correlativo}")
+                    if observaciones:
+                        medidor.observaciones = ' | '.join(observaciones)
+                        medidor.save()
                 
                 elif tipo_equipo.upper() == 'SIM':
                     # Nuevo formato según imagen del usuario:
@@ -282,7 +412,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         ).first()
                     
                     # Crear SIM Card
-                    SimCard.objects.create(
+                    sim = SimCard.objects.create(
                         imei=imei,
                         operador=operador,
                         abonado=abonado,
@@ -296,15 +426,21 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         medidor=medidor_obj,
                         ubicacion_actual=bodega
                     )
+                    registrar_movimiento_importacion(
+                        sim,
+                        'SIM',
+                        estado_obj,
+                        f'IMEI {sim.imei}',
+                        idx,
+                    )
                 
                 elif tipo_equipo.upper() == 'MODEMS':
                     # Formato según imagen del usuario:
                     # VERDE (Excel): MARCA, MODELO, IMEI, SERIE, Fecha Recepción, Fecha Entrega, Caja, Técnico
-                    # AMARILLO (admin): Cliente, Medidor, Obs
-                    # NARANJA (oculto): IP, Puerto, Marca, Retirado, Serie, Irregularidad, Proyecto
+                    # AZUL (admin): Cliente, Medidor, IP, Puerto, Marca, Obs, Retirado, Serie, Irregularidad, Proyecto
                     
                     # Asegurar que tenemos suficientes columnas
-                    while len(valores) < 17:
+                    while len(valores) < 18:
                         valores.append(None)
                     
                     # Columnas VERDES (0-7)
@@ -317,11 +453,9 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     caja = valores[6]
                     tecnico_responsable = valores[7]
                     
-                    # Columnas AMARILLAS (8-10)
+                    # Columnas editables/azules (8-17)
                     cliente_numero = valores[8] if len(valores) > 8 else None
                     medidor_serie = valores[9] if len(valores) > 9 else None
-                    
-                    # Columnas NARANJAS (10-16) - IP y Puerto vienen del Excel
                     ip = valores[10] if len(valores) > 10 else None
                     puerto = valores[11] if len(valores) > 11 else None
                     marca_secundaria = valores[12] if len(valores) > 12 else None
@@ -417,12 +551,12 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         medidor_obj = Medidor.objects.filter(serie=medidor_serie_str).first()
                     
                     # Crear estado por defecto
-                    estado_obj = EstadoInventario.objects.filter(nombre='Instalado').first()
+                    estado_obj = EstadoInventario.objects.filter(nombre='BODEGA').first()
                     if not estado_obj:
-                        estado_obj = EstadoInventario.objects.create(nombre='Instalado')
+                        estado_obj = EstadoInventario.objects.create(nombre='BODEGA')
                     
                     # Crear Modem
-                    Modem.objects.create(
+                    modem = Modem.objects.create(
                         marca=marca,
                         modelo=modelo,
                         imei=imei if imei else None,
@@ -443,6 +577,13 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         proyecto=limpiar_valor(proyecto),
                         estado_inventario=estado_obj,
                         ubicacion_actual=bodega
+                    )
+                    registrar_movimiento_importacion(
+                        modem,
+                        'MODEM',
+                        estado_obj,
+                        f'Serie {modem.serie}',
+                        idx,
                     )
                 
                 exitosas += 1
@@ -568,8 +709,9 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
     
     # Encabezados según tipo
     if tipo_equipo.upper() == 'MEDIDORES':
-        headers = ['Serie', 'Marca', 'Modelo', 'ID Interno', 'Estado', 'Ubicación', 'En Custodia De']
-        col_widths = [15, 15, 15, 15, 15, 15, 15]
+        # Debe coincidir con el formato de importación de medidores
+        headers = ['#', 'Fecha Recepción', 'Bodega', 'Marca', 'Caja', 'Medidor', 'Módulo', 'Fecha Entrega', 'Entregado A', 'Estado', 'Cliente']
+        col_widths = [6, 16, 18, 15, 12, 16, 12, 16, 20, 15, 15]
     elif tipo_equipo.upper() == 'SIM':
         headers = ['IMEI', 'OPERADOR', 'ABONADO', 'DIRECCIÓN IP', 'APN', 'FECHA RECEPCIÓN', 'ENTREGADO A', 'FECHA ENTREGA', 'ESTADO', 'CLIENTE', 'MEDIDOR']
         col_widths = [18, 15, 18, 18, 25, 18, 18, 18, 15, 15, 15]
@@ -594,16 +736,20 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
         ws.column_dimensions[openpyxl.utils.get_column_letter(idx)].width = width
     
     # Agregar datos
-    for equipo in equipos:
+    for indice, equipo in enumerate(equipos, start=1):
         if tipo_equipo.upper() == 'MEDIDORES':
             row = [
-                equipo.serie,
+                indice,
+                equipo.fecha_recepcion.strftime('%d-%m-%Y') if equipo.fecha_recepcion else '',
+                equipo.bodega or '',
                 equipo.marca,
-                equipo.modelo,
-                equipo.identificador_interno or '',
+                equipo.caja or '',
+                equipo.serie,
+                'SI' if getattr(equipo, 'modulo', None) is True else ('NO' if getattr(equipo, 'modulo', None) is False else ''),
+                equipo.fecha_entrega.strftime('%d-%m-%Y') if equipo.fecha_entrega else '',
+                equipo.entregado_a.nombre_interno if equipo.entregado_a else (equipo.entregado_a_info or ''),
                 equipo.estado_inventario.nombre if equipo.estado_inventario else '',
-                equipo.ubicacion_actual.nombre if equipo.ubicacion_actual else '',
-                equipo.en_custodia_de.nombre_interno if equipo.en_custodia_de else ''
+                equipo.cliente.numero_cliente if equipo.cliente else ''
             ]
         elif tipo_equipo.upper() == 'SIM':
             row = [
