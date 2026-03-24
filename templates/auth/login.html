@@ -1,3 +1,4 @@
+{% load static %}
 <!doctype html>
 <html lang="es">
 <head>
@@ -10,8 +11,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100vh;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      min-height: 100svh;
+      padding: 16px;
+      background: linear-gradient(to top, #89cbe9 0%, #c8e9f7 45%, #eaf7ff 100%);
     }
     .login-container {
       width: 100%;
@@ -20,7 +23,7 @@
     .card {
       border: none;
       border-radius: 15px;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 10px 30px rgba(16, 67, 96, 0.2);
     }
     .card-body {
       padding: 40px;
@@ -32,11 +35,11 @@
       font-size: 15px;
     }
     .form-control:focus {
-      border-color: #667eea;
-      box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+      border-color: #2c5282;
+      box-shadow: 0 0 0 0.2rem rgba(44, 82, 130, 0.2);
     }
     .btn-primary {
-      background-color: #667eea;
+      background-color: #1a3a5c;
       border: none;
       padding: 10px;
       font-weight: 600;
@@ -44,20 +47,39 @@
       margin-top: 20px;
     }
     .btn-primary:hover {
-      background-color: #764ba2;
+      background-color: #2c5282;
     }
     .logo {
       text-align: center;
       margin-bottom: 30px;
     }
+    .logo img {
+      max-width: 160px;
+      width: 100%;
+      height: auto;
+      margin-bottom: 8px;
+    }
     .logo h1 {
-      color: #667eea;
-      font-weight: bold;
-      font-size: 28px;
+      color: #1a3a5c;
+      font-weight: 700;
+      font-size: 26px;
+      margin-bottom: 0;
     }
     .alert {
       border-radius: 8px;
       margin-bottom: 20px;
+    }
+
+    @media (max-width: 576px) {
+      .card-body {
+        padding: 26px 20px;
+      }
+      .logo img {
+        max-width: 130px;
+      }
+      .logo h1 {
+        font-size: 22px;
+      }
     }
   </style>
 </head>
@@ -66,7 +88,8 @@
     <div class="card">
       <div class="card-body">
         <div class="logo">
-          <h1>🔐 DelcoLtda</h1>
+          <img src="{% static 'img/delco.png' %}" alt="DelcoLtda">
+          <h1>DelcoLtda</h1>
           <p class="text-muted">Sistema de Operaciones</p>
         </div>
 
@@ -84,9 +107,35 @@
 
           <div class="mb-3">
             <label class="form-label fw-semibold">RUT</label>
-            <input type="text" name="username" class="form-control" placeholder="Ej: 111111115" required autofocus>
-            <small class="text-muted">Ingresa solo los dígitos sin puntos ni guión</small>
+            <input type="text" name="username" class="form-control" id="login-rut" maxlength="12" pattern="\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]" placeholder="Ej: 12.345.678-K" required autofocus autocomplete="off">
+            <small class="text-muted">Ejemplo: 12.345.678-K</small>
           </div>
+  <script>
+  // Formateo automático de RUT en login
+  document.addEventListener('DOMContentLoaded', function() {
+    const rutInput = document.getElementById('login-rut');
+    rutInput.addEventListener('input', function() {
+      let val = this.value.replace(/[^0-9Kk]/g, '').toUpperCase();
+      let formatted = '';
+      if (val.length > 1) {
+        // Dígito verificador
+        let dv = val.slice(-1);
+        let num = val.slice(0, -1);
+        // Formateo progresivo
+        if (num.length > 6) {
+          formatted = num.slice(0, num.length - 6) + '.' + num.slice(num.length - 6, num.length - 3) + '.' + num.slice(num.length - 3) + '-' + dv;
+        } else if (num.length > 3) {
+          formatted = num.slice(0, num.length - 3) + '.' + num.slice(num.length - 3) + '-' + dv;
+        } else {
+          formatted = num + '-' + dv;
+        }
+      } else {
+        formatted = val;
+      }
+      this.value = formatted;
+    });
+  });
+  </script>
 
           <div class="mb-3">
             <label class="form-label fw-semibold">Contraseña</label>
@@ -96,12 +145,6 @@
           <button class="btn btn-primary w-100" type="submit">Iniciar Sesión</button>
         </form>
 
-        <hr class="my-4">
-        <p class="text-center text-muted small">
-          <strong>Usuarios de prueba:</strong><br>
-          RUT: 111111112 | 111111113 | 111111114 | 111111115 | 111111116<br>
-          <strong>Contraseña:</strong> 123456789
-        </p>
       </div>
     </div>
   </div>

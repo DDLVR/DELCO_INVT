@@ -19,13 +19,12 @@
         <!-- RUT - Solo lectura -->
         <div class="mb-3">
           <label class="form-label fw-semibold">RUT</label>
-          <input 
-            type="text" 
-            class="form-control" 
-            value="{{ usuario.rut }}"
-            disabled
-          >
-          <small class="text-muted">No editable</small>
+          <div class="input-group">
+            <input type="text" class="form-control" value="{{ usuario.rut|slice:':-2'|default:'' }}" disabled>
+            <span class="input-group-text">-</span>
+            <input type="text" class="form-control" value="{{ usuario.rut|slice:'-1'|default:'' }}" disabled>
+          </div>
+          <small class="text-muted">Ejemplo: 12.345.678-K</small>
         </div>
 
         <div class="row">

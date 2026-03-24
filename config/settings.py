@@ -35,11 +35,15 @@ SECRET_KEY = 'django-insecure-ze21q-q$&2(!*!orvf)w-_s&xttn0^((b+2qzlvew&y$hfb%23
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = [  
+
+ALLOWED_HOSTS = [
     'inventario.delcochile',          # el dominio donde corre la app
     'www.inventario.delcochile',      # opcional, si existe
     'localhost',                      # para acceso local/ssh
-    ]
+]
+# Solo agregar 127.0.0.1 en modo desarrollo
+if os.getenv('DJANGO_SETTINGS_MODULE', '') != 'config.settings_production':
+    ALLOWED_HOSTS.append('127.0.0.1')
 
 
 # Application definition
