@@ -4,6 +4,7 @@ from .views import (
     ordenes_list_view, orden_detalle_view, orden_crear_view,
     inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, inventario_eliminar_view, profile_view, update_profile_view,
     usuarios_list_view, usuario_crear_view, usuario_editar_view, usuario_reset_password_view, usuario_eliminar_view,
+    clientes_list_view, cliente_crear_view, cliente_editar_view, cliente_eliminar_view,
     importacion_errores_view, importacion_corregir_fila_view,
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook
 )
@@ -46,6 +47,12 @@ urlpatterns = [
     path('usuarios/<int:pk>/editar/', usuario_editar_view, name='usuario_editar'),
     path('usuarios/<int:pk>/eliminar/', usuario_eliminar_view, name='usuario_eliminar'),
     path('usuarios/<int:pk>/reset-password/', usuario_reset_password_view, name='usuario_reset_password'),
+
+    # Clientes
+    path('clientes/', clientes_list_view, name='clientes_list'),
+    path('clientes/crear/', cliente_crear_view, name='cliente_crear'),
+    path('clientes/<int:pk>/editar/', cliente_editar_view, name='cliente_editar'),
+    path('clientes/<int:pk>/eliminar/', cliente_eliminar_view, name='cliente_eliminar'),
 
     # Movimientos de Inventario
     path('movimientos/', movimientos_list_view, name='movimientos_list'),

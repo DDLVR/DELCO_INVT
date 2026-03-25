@@ -47,6 +47,17 @@
         <i class="bi bi-people"></i> 👥 Usuarios
       </a>
     {% endif %}
+
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'clientes_list' or request.resolver_match.url_name == 'cliente_crear' or request.resolver_match.url_name == 'cliente_editar' %}active bg-primary text-white{% endif %}" href="{% url 'clientes_list' %}">
+        <i class="bi bi-building"></i>
+        {% if user.rol == 'ADMIN' %}
+          🏢 Gestion Clientes
+        {% else %}
+          🏢 Clientes (Lectura)
+        {% endif %}
+      </a>
+    {% endif %}
   </div>
 </div>
 

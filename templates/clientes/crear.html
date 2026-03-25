@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+
+{% block title %}Crear Cliente{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 700px;">
+  <div class="row mb-4">
+    <div class="col-12">
+      <h1>➕ Crear Cliente</h1>
+      <p class="text-muted">Completa los datos para registrar un nuevo cliente.</p>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-body p-4">
+      <form method="post">
+        {% csrf_token %}
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Numero de Cliente</label>
+          <input type="text" name="numero_cliente" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Direccion</label>
+          <input type="text" name="direccion" class="form-control" required>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold">Comuna</label>
+          <input type="text" name="comuna" class="form-control" required>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Referencia</label>
+          <textarea name="referencia" class="form-control" rows="3" placeholder="Opcional"></textarea>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold">Identificacion del Medidor</label>
+          <input type="text" name="medidor_serie" class="form-control" placeholder="Serie del medidor (opcional)">
+          <small class="text-muted">Si se informa una serie, debe existir en inventario y no estar asignada a otro cliente.</small>
+        </div>
+
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-primary">✓ Guardar</button>
+          <a href="{% url 'clientes_list' %}" class="btn btn-secondary">Cancelar</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
