@@ -1632,6 +1632,121 @@ def usuario_reset_password_view(request, pk):
 
 
 @login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
+def clientes_list_view(request):
+    """Lista de clientes activos con modo solo lectura para ADMINISTRATIVO."""
+    clientes = Cliente.objects.filter(activo=True).order_by('numero_cliente')
+    context = {
+        'clientes': clientes,
+        'total_clientes': clientes.count(),
+        'puede_editar': request.user.rol == 'ADMIN',
+    }
+    return render(request, 'clientes/list.html', context)
+
+
+@login_required
+@role_required(['ADMIN'])
+def cliente_crear_view(request):
+    """Crear cliente (solo rol ADMIN)."""
+    if request.method == 'POST':
+        numero_cliente = request.POST.get('numero_cliente', '').strip()
+        direccion = request.POST.get('direccion', '').strip()
+        comuna = request.POST.get('comuna', '').strip()
+        referencia = request.POST.get('referencia', '').strip()
+        medidor_serie = request.POST.get('medidor_serie', '').strip()
+
+        if not all([numero_cliente, direccion, comuna]):
+            messages.error(request, 'Numero de cliente, direccion y comuna son obligatorios.')
+            return redirect('cliente_crear')
+
+        if Cliente.objects.filter(numero_cliente=numero_cliente).exists():
+            messages.error(request, f'Ya existe un cliente con numero {numero_cliente}.')
+            return redirect('cliente_crear')
+
+        medidor_obj = None
+        if medidor_serie:
+            medidor_obj = Medidor.objects.filter(serie=medidor_serie).first()
+            if not medidor_obj:
+                messages.error(request, f'No existe un medidor con serie {medidor_serie}.')
+                return redirect('cliente_crear')
+            if Cliente.objects.filter(medidor_actual=medidor_obj, activo=True).exists():
+                messages.error(request, f'El medidor {medidor_serie} ya esta asignado a otro cliente.')
+                return redirect('cliente_crear')
+
+        Cliente.objects.create(
+            numero_cliente=numero_cliente,
+            direccion=direccion,
+            comuna=comuna,
+            referencia=referencia,
+            medidor_actual=medidor_obj,
+            activo=True,
+        )
+        messages.success(request, f'Cliente {numero_cliente} creado correctamente.')
+        return redirect('clientes_list')
+
+    return render(request, 'clientes/crear.html')
+
+
+@login_required
+@role_required(['ADMIN'])
+def cliente_editar_view(request, pk):
+    """Editar cliente (solo rol ADMIN)."""
+    cliente = get_object_or_404(Cliente, pk=pk, activo=True)
+
+    if request.method == 'POST':
+        numero_cliente = request.POST.get('numero_cliente', '').strip()
+        direccion = request.POST.get('direccion', '').strip()
+        comuna = request.POST.get('comuna', '').strip()
+        referencia = request.POST.get('referencia', '').strip()
+        medidor_serie = request.POST.get('medidor_serie', '').strip()
+
+        if not all([numero_cliente, direccion, comuna]):
+            messages.error(request, 'Numero de cliente, direccion y comuna son obligatorios.')
+            return redirect('cliente_editar', pk=pk)
+
+        if Cliente.objects.filter(numero_cliente=numero_cliente).exclude(pk=pk).exists():
+            messages.error(request, f'Ya existe un cliente con numero {numero_cliente}.')
+            return redirect('cliente_editar', pk=pk)
+
+        medidor_obj = None
+        if medidor_serie:
+            medidor_obj = Medidor.objects.filter(serie=medidor_serie).first()
+            if not medidor_obj:
+                messages.error(request, f'No existe un medidor con serie {medidor_serie}.')
+                return redirect('cliente_editar', pk=pk)
+            if Cliente.objects.filter(medidor_actual=medidor_obj, activo=True).exclude(pk=pk).exists():
+                messages.error(request, f'El medidor {medidor_serie} ya esta asignado a otro cliente.')
+                return redirect('cliente_editar', pk=pk)
+
+        cliente.numero_cliente = numero_cliente
+        cliente.direccion = direccion
+        cliente.comuna = comuna
+        cliente.referencia = referencia
+        cliente.medidor_actual = medidor_obj
+        cliente.save()
+
+        messages.success(request, f'Cliente {numero_cliente} actualizado correctamente.')
+        return redirect('clientes_list')
+
+    context = {'cliente': cliente}
+    return render(request, 'clientes/editar.html', context)
+
+
+@login_required
+@role_required(['ADMIN'])
+def cliente_eliminar_view(request, pk):
+    """Elimina logicamente un cliente (solo rol ADMIN)."""
+    if request.method != 'POST':
+        return redirect('clientes_list')
+
+    cliente = get_object_or_404(Cliente, pk=pk, activo=True)
+    cliente.activo = False
+    cliente.save(update_fields=['activo'])
+    messages.success(request, f'Cliente {cliente.numero_cliente} eliminado correctamente.')
+    return redirect('clientes_list')
+
+
+@login_required
 @require_http_methods(["POST"])
 def update_profile_view(request):
     """Actualizar perfil del usuario"""
