@@ -90,13 +90,19 @@ LOGGING = {
             'level': 'ERROR',
             'class': 'logging.FileHandler',
             'filename': os.path.join(str(BASE_DIR), 'logs', 'django_errors.log'),
+            'encoding': 'utf-8',
         },
     },
     'loggers': {
         'django': {
             'handlers': ['file'],
             'level': 'ERROR',
-            'propagate': True,
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['file'],
+            'level': 'ERROR',
+            'propagate': False,
         },
     },
 }

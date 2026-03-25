@@ -2090,6 +2090,7 @@ def movimientos_importar_moreapp_webhook(request):
 def usuario_eliminar_view(request, pk):
     from usuarios.models import Usuario
     from django.contrib import messages
+    from django.db.models.deletion import ProtectedError
     if request.method == "POST":
         try:
             usuario = Usuario.objects.get(pk=pk)
@@ -2100,7 +2101,19 @@ def usuario_eliminar_view(request, pk):
         if usuario == request.user:
             messages.error(request, "No puedes eliminar tu propio perfil.")
             return redirect('usuarios_list')
-        usuario.delete()
-        messages.success(request, "Usuario eliminado correctamente.")
+        try:
+            usuario.delete()
+            messages.success(request, "Usuario eliminado correctamente.")
+        except ProtectedError:
+            # Mantiene trazabilidad histórica cuando el usuario tiene movimientos registrados.
+            if usuario.is_active:
+                usuario.is_active = False
+                usuario.save(update_fields=['is_active'])
+            movimientos_asociados = usuario.movimientos_registrados.count()
+            messages.warning(
+                request,
+                f"El usuario no puede eliminarse porque tiene {movimientos_asociados} movimientos asociados. "
+                "Fue desactivado para ocultarlo del listado."
+            )
         return redirect('usuarios_list')
     return redirect('usuarios_list')
