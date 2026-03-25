@@ -3,10 +3,14 @@ Utilidades para importación desde Excel
 """
 
 import openpyxl
+import logging
 from importaciones.models import ImportacionExcel, ImportacionExcelError
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion, MovimientoInventario, MovimientoItem
 from clientes.models import Cliente
 from usuarios.models import Usuario
+
+
+logger = logging.getLogger(__name__)
 
 
 def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
@@ -59,9 +63,9 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
         wb = openpyxl.load_workbook(archivo)
         ws = wb.active
         
-        # Leer headers de la primera fila para debugging
+        # Leer headers de la primera fila para debugging (sin imprimir a stdout)
         headers = [cell.value for cell in ws[1]]
-        print(f"[DEBUG] Headers encontrados: {headers}")
+        logger.debug('Headers encontrados en importacion: %s', headers)
         
         # Ubicación por defecto (Bodega)
         bodega = Ubicacion.objects.filter(nombre__icontains='Bodega').first()
@@ -87,9 +91,9 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
             try:
                 valores = [cell.value for cell in row]
                 
-                # DEBUG: Mostrar primera fila con datos para diagnóstico
+                # Debug opcional de primera fila sin uso de print (evita errores de encoding en hosting)
                 if idx == 2:
-                    print(f"[DEBUG] Primera fila de datos (fila {idx}): {valores}")
+                    logger.debug('Primera fila de datos (fila %s): %s', idx, valores)
                 
                 # Validar que la fila no esté vacía (al menos las primeras 3 columnas deben tener datos)
                 if not any(valores[:3]):
