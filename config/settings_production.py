@@ -63,6 +63,14 @@ DATABASES = {
 # Archivos estáticos
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(str(BASE_DIR), 'staticfiles')
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
+# Servir archivos estaticos directamente desde Django en Passenger.
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    *[mw for mw in MIDDLEWARE if mw != 'django.middleware.security.SecurityMiddleware'],
+]
 
 # Archivos multimedia
 MEDIA_URL = '/media/'
