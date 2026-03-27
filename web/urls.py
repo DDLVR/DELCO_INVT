@@ -6,7 +6,8 @@ from .views import (
     usuarios_list_view, usuario_crear_view, usuario_editar_view, usuario_reset_password_view, usuario_eliminar_view,
     clientes_list_view, cliente_crear_view, cliente_editar_view, cliente_eliminar_view,
     importacion_errores_view, importacion_corregir_fila_view,
-    movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook
+    movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
+    reportes_moreapp_list, reportes_moreapp_detalle, reportes_moreapp_sincronizar,
 )
 
 urlpatterns = [
@@ -59,6 +60,11 @@ urlpatterns = [
     path('movimientos/<int:movimiento_id>/', movimientos_detalle_view, name='movimientos_detalle'),
     path('movimientos/historial/', movimientos_historial_equipo_view, name='movimientos_historial_equipo'),
     
+    # Reportes — Integraciones MoreApp (lectura directa de carpetas)
+    path('reportes/moreapp/', reportes_moreapp_list, name='reportes_moreapp_list'),
+    path('reportes/moreapp/<int:pk>/', reportes_moreapp_detalle, name='reportes_moreapp_detalle'),
+    path('reportes/moreapp/sincronizar/', reportes_moreapp_sincronizar, name='reportes_moreapp_sincronizar'),
+
     # API Webhook MoreApp (tiempo real - sin autenticación Django)
     path('api/moreapp-webhook/', movimientos_importar_moreapp_webhook, name='movimientos_webhook_moreapp'),
 ]

@@ -1,0 +1,188 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Detalle — {{ registro.nombre_formulario|default:registro.moreapp_submission_id }}{% endblock %}
+
+{% block content %}
+{% with d=registro.datos_procesados %}
+<div class="container-fluid py-4">
+
+  <!-- Header -->
+  <div class="row mb-4 align-items-start">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+          <li class="breadcrumb-item"><a href="{% url 'reportes_moreapp_list' %}">Reportes MoreApp</a></li>
+          <li class="breadcrumb-item active">Registro #{{ registro.numero_correlativo|default:registro.pk }}</li>
+        </ol>
+      </nav>
+      <h1 class="mb-1"><i class="bi bi-file-earmark-text"></i> {{ registro.nombre_formulario|default:"—" }}</h1>
+      <span class="text-muted small">ID: {{ registro.moreapp_submission_id }}</span>
+    </div>
+    <div class="col-auto d-flex gap-2">
+      {% if registro.alerta_doble_trabajo %}
+      <span class="badge bg-warning text-dark fs-6 align-self-center">
+        <i class="bi bi-exclamation-triangle-fill"></i> Alerta doble trabajo
+      </span>
+      {% endif %}
+      {% if registro.estado_sincronizacion == 'PROCESADO' %}
+        <span class="badge bg-success fs-6 align-self-center">Procesado</span>
+      {% elif registro.estado_sincronizacion == 'DUPLICADO' %}
+        <span class="badge bg-secondary fs-6 align-self-center">Duplicado</span>
+      {% elif registro.estado_sincronizacion == 'ERROR_JSON' or registro.estado_sincronizacion == 'ERROR_LECTURA' %}
+        <span class="badge bg-danger fs-6 align-self-center">{{ registro.estado_sincronizacion }}</span>
+      {% elif registro.estado_sincronizacion == 'ALERTA_REVISION' %}
+        <span class="badge bg-warning text-dark fs-6 align-self-center">Revisión</span>
+      {% else %}
+        <span class="badge bg-light text-dark fs-6 align-self-center">{{ registro.estado_sincronizacion }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Alerta si aplica -->
+  {% if registro.alerta_doble_trabajo and registro.descripcion_alerta %}
+  <div class="alert alert-warning d-flex align-items-start gap-2 mb-4">
+    <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0 mt-1"></i>
+    <div>
+      <strong>Posible doble trabajo:</strong> {{ registro.descripcion_alerta }}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if registro.mensaje_error %}
+  <div class="alert alert-danger mb-4">
+    <i class="bi bi-x-circle-fill me-2"></i><strong>Error:</strong> {{ registro.mensaje_error }}
+  </div>
+  {% endif %}
+
+  <div class="row g-4">
+
+    <!-- Columna izquierda: datos clave -->
+    <div class="col-lg-7">
+
+      <!-- Datos del cliente -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-person-fill"></i> Cliente</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Código</dt>
+            <dd class="col-sm-8">{{ d.cliente_codigo|default:"—" }}</dd>
+            <dt class="col-sm-4">Nombre</dt>
+            <dd class="col-sm-8">{{ d.cliente_nombre|default:"—" }}</dd>
+            <dt class="col-sm-4">Dirección</dt>
+            <dd class="col-sm-8">{{ d.cliente_direccion|default:"—" }}</dd>
+            <dt class="col-sm-4">Comuna</dt>
+            <dd class="col-sm-8">{{ d.cliente_comuna|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- Datos del trabajo -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-secondary text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-tools"></i> Trabajo</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Actividad</dt>
+            <dd class="col-sm-8">{{ d.actividad|default:"—" }}</dd>
+            <dt class="col-sm-4">Trabajo</dt>
+            <dd class="col-sm-8">{{ d.trabajo|default:"—" }}</dd>
+            <dt class="col-sm-4">Empresa</dt>
+            <dd class="col-sm-8">{{ d.empresa|default:"—" }}</dd>
+            <dt class="col-sm-4">Con SIM</dt>
+            <dd class="col-sm-8">{{ d.con_sim|default:"—" }}</dd>
+            <dt class="col-sm-4">Tipo telemetría</dt>
+            <dd class="col-sm-8">{{ d.tipo_telemetria|default:"—" }}</dd>
+            <dt class="col-sm-4">Fecha trabajo</dt>
+            <dd class="col-sm-8">{{ d.fecha_trabajo|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- Técnicos -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-info text-dark py-2">
+          <h6 class="mb-0"><i class="bi bi-person-badge"></i> Técnicos</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-4">Responsable</dt>
+            <dd class="col-sm-8">{{ d.tecnico_responsable|default:"—" }}</dd>
+            <dt class="col-sm-4">Asistente</dt>
+            <dd class="col-sm-8">{{ d.tecnico_asistente|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      {% if d.observacion %}
+      <div class="card shadow-sm mb-4">
+        <div class="card-header py-2">
+          <h6 class="mb-0"><i class="bi bi-chat-left-text"></i> Observación</h6>
+        </div>
+        <div class="card-body">
+          <p class="mb-0">{{ d.observacion }}</p>
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+
+    <!-- Columna derecha: metadata y JSON -->
+    <div class="col-lg-5">
+
+      <!-- Metadata de sincronización -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header py-2">
+          <h6 class="mb-0"><i class="bi bi-info-circle"></i> Metadata</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0 small">
+            <dt class="col-sm-5">Correlativo</dt>
+            <dd class="col-sm-7">{{ registro.numero_correlativo|default:"—" }}</dd>
+            <dt class="col-sm-5">Formulario</dt>
+            <dd class="col-sm-7">{{ registro.nombre_formulario|default:"—" }}</dd>
+            <dt class="col-sm-5">Recibido</dt>
+            <dd class="col-sm-7">{{ registro.fecha_recepcion|date:"d/m/Y H:i" }}</dd>
+            <dt class="col-sm-5">Procesado</dt>
+            <dd class="col-sm-7">{{ registro.fecha_procesamiento|date:"d/m/Y H:i"|default:"—" }}</dd>
+            <dt class="col-sm-5">Ruta carpeta</dt>
+            <dd class="col-sm-7 text-break"><code class="small">{{ registro.ruta_carpeta|default:"—" }}</code></dd>
+            {% if registro.orden %}
+            <dt class="col-sm-5">OT vinculada</dt>
+            <dd class="col-sm-7"><a href="#">OT #{{ registro.orden.numero_ot }}</a></dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+      <!-- Payload JSON raw -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+          <h6 class="mb-0"><i class="bi bi-code-slash"></i> JSON recibido</h6>
+          <button class="btn btn-xs btn-outline-secondary btn-sm py-0 px-2"
+                  type="button" data-bs-toggle="collapse" data-bs-target="#collapseJson">
+            Ver / Ocultar
+          </button>
+        </div>
+        <div class="collapse" id="collapseJson">
+          <div class="card-body p-0">
+            <pre class="mb-0 p-3 bg-dark text-success rounded-bottom"
+                 style="max-height:400px;overflow-y:auto;font-size:0.75rem">{{ registro.datos_recibidos|stringformat:"s" }}</pre>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Botón volver -->
+  <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left"></i> Volver a la lista
+  </a>
+
+</div>
+{% endwith %}
+{% endblock %}

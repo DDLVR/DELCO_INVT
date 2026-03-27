@@ -2232,3 +2232,91 @@ def usuario_eliminar_view(request, pk):
             )
         return redirect('usuarios_list')
     return redirect('usuarios_list')
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# REPORTES — Integraciones MoreApp
+# ─────────────────────────────────────────────────────────────────────────────
+
+ROLES_REPORTES = ('ADMIN', 'ADMINISTRATIVO', 'SUPERVISOR')
+
+
+@login_required
+def reportes_moreapp_list(request):
+    """Lista de registros sincronizados desde carpetas de MoreApp."""
+    from ordenes_trabajo.models import IntegracionMoreApp
+
+    if request.user.rol not in ROLES_REPORTES:
+        messages.error(request, 'No tienes permiso para acceder a Reportes.')
+        return redirect('dashboard')
+
+    qs = IntegracionMoreApp.objects.all().order_by('-fecha_recepcion')
+
+    # Filtros
+    estado = request.GET.get('estado', '')
+    alerta = request.GET.get('alerta', '')
+    q = request.GET.get('q', '')
+
+    if estado:
+        qs = qs.filter(estado_sincronizacion=estado)
+    if alerta == '1':
+        qs = qs.filter(alerta_doble_trabajo=True)
+    if q:
+        qs = qs.filter(
+            Q(nombre_formulario__icontains=q) |
+            Q(moreapp_submission_id__icontains=q) |
+            Q(datos_procesados__cliente_nombre__icontains=q) |
+            Q(datos_procesados__cliente_codigo__icontains=q)
+        )
+
+    context = {
+        'registros': qs,
+        'estado_actual': estado,
+        'alerta_actual': alerta,
+        'q': q,
+        'total': qs.count(),
+        'pendientes': IntegracionMoreApp.objects.filter(estado_sincronizacion='PENDIENTE').count(),
+        'alertas': IntegracionMoreApp.objects.filter(alerta_doble_trabajo=True).count(),
+        'errores': IntegracionMoreApp.objects.filter(
+            estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR')
+        ).count(),
+        'estados_choices': IntegracionMoreApp.ESTADO_CHOICES,
+    }
+    return render(request, 'reportes/integraciones_list.html', context)
+
+
+@login_required
+def reportes_moreapp_detalle(request, pk):
+    """Detalle de un registro MoreApp individual."""
+    from ordenes_trabajo.models import IntegracionMoreApp
+    from integraciones.reader import leer_carpetas
+
+    if request.user.rol not in ROLES_REPORTES:
+        messages.error(request, 'No tienes permiso para acceder a Reportes.')
+        return redirect('dashboard')
+
+    registro = get_object_or_404(IntegracionMoreApp, pk=pk)
+    return render(request, 'reportes/integracion_detalle.html', {'registro': registro})
+
+
+@login_required
+def reportes_moreapp_sincronizar(request):
+    """Dispara la sincronización manual desde el navegador."""
+    from integraciones.reader import leer_carpetas
+
+    if request.user.rol not in ROLES_REPORTES:
+        messages.error(request, 'No tienes permiso.')
+        return redirect('dashboard')
+
+    if request.method != 'POST':
+        return redirect('reportes_moreapp_list')
+
+    stats = leer_carpetas()
+    messages.success(
+        request,
+        f'Sincronización completada — Nuevos: {stats["nuevos"]} | '
+        f'Duplicados: {stats["duplicados"]} | '
+        f'Alertas: {stats["alertas"]} | '
+        f'Errores: {stats["errores"]}'
+    )
+    return redirect('reportes_moreapp_list')

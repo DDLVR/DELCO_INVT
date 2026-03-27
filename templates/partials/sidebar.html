@@ -34,9 +34,10 @@
     {% endif %}
 
     <!-- Reportes -->
-    {% if user.rol in 'ADMIN,GERENCIA,SUPERVISOR' %}
-      <a class="list-group-item list-group-item-action" href="#" title="Disponible pronto">
-        <i class="bi bi-file-earmark-pdf"></i> 📊 Reportes
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'SUPERVISOR' %}
+      <a class="list-group-item list-group-item-action {% if 'reportes_moreapp' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}"
+         href="{% url 'reportes_moreapp_list' %}">
+        <i class="bi bi-cloud-download"></i> Reportes MoreApp
       </a>
     {% endif %}
 
