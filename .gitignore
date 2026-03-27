@@ -12,3 +12,5 @@ staticfiles/
 # Archivos locales y temporales
 db.sqlite3
 delete
+# Archivos generados en runtime por la app
+Registros/
