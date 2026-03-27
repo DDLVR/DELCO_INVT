@@ -101,19 +101,33 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.getenv('DB_NAME'),
-        'USER': os.getenv('DB_USER'),
-        'PASSWORD': os.getenv('DB_PASSWORD'),
-        'HOST': os.getenv('DB_HOST'),
-        'PORT': os.getenv('DB_PORT'),
-        'OPTIONS': {
-            'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
-        },
+db_name = os.getenv('DB_NAME')
+db_user = os.getenv('DB_USER')
+db_password = os.getenv('DB_PASSWORD')
+db_host = os.getenv('DB_HOST')
+db_port = os.getenv('DB_PORT')
+
+if all([db_name, db_user, db_host]):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': db_name,
+            'USER': db_user,
+            'PASSWORD': db_password or '',
+            'HOST': db_host,
+            'PORT': db_port or '3306',
+            'OPTIONS': {
+                'init_command': "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
@@ -171,6 +185,10 @@ LOGOUT_REDIRECT_URL = 'login'
 # Configuracion API para integracion con MoreApp (Webhooks)
 # Token de seguridad para validar solicitudes de MoreApp
 MOREAPP_WEBHOOK_SECRET = os.getenv('MOREAPP_WEBHOOK_SECRET', 'nC1IeThyHxR1h_DoZ2f8-KG9kGB3Ca98wZPkTiilQA4=')
+
+# Directorio raíz donde MoreApp deposita los registros (vía FTPS)
+# Estructura: {MOREAPP_REGISTROS_DIR}/{customerId}/{formName}/{correlativo}/registration.json
+MOREAPP_REGISTROS_DIR = os.getenv('MOREAPP_REGISTROS_DIR', str(BASE_DIR / 'Registros'))
 
 # Ejemplo (usa TUS datos reales):
 # FTPS_HOST=ftp.tuservidor.com

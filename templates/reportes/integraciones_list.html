@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Reportes — Integraciones MoreApp{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+  <!-- Header -->
+  <div class="row mb-4 align-items-center">
+    <div class="col">
+      <h1 class="mb-1"><i class="bi bi-cloud-download"></i> Reportes MoreApp</h1>
+      <p class="text-muted mb-0">Registros sincronizados desde carpetas locales</p>
+    </div>
+    <div class="col-auto">
+      <form method="post" action="{% url 'reportes_moreapp_sincronizar' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-arrow-repeat"></i> Sincronizar ahora
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-2 fw-bold text-primary">{{ total }}</div>
+          <div class="text-muted small">Total registros</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-2 fw-bold text-warning">{{ pendientes }}</div>
+          <div class="text-muted small">Pendientes</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-2 fw-bold text-danger">{{ alertas }}</div>
+          <div class="text-muted small">Alertas doble trabajo</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-body text-center">
+          <div class="fs-2 fw-bold text-dark">{{ errores }}</div>
+          <div class="text-muted small">Con errores</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="card shadow-sm mb-4">
+    <div class="card-body">
+      <form method="GET" class="row g-2 align-items-end">
+        <div class="col-md-4">
+          <label class="form-label mb-1 small fw-semibold">Buscar</label>
+          <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
+                 placeholder="Formulario, ID, cliente…">
+        </div>
+        <div class="col-md-3">
+          <label class="form-label mb-1 small fw-semibold">Estado</label>
+          <select name="estado" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for codigo, nombre in estados_choices %}
+            <option value="{{ codigo }}" {% if estado_actual == codigo %}selected{% endif %}>{{ nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Alertas</label>
+          <select name="alerta" class="form-select form-select-sm">
+            <option value="">Todas</option>
+            <option value="1" {% if alerta_actual == '1' %}selected{% endif %}>Solo con alerta</option>
+          </select>
+        </div>
+        <div class="col-md-auto">
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="bi bi-search"></i> Filtrar
+          </button>
+          <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm btn-outline-secondary ms-1">
+            <i class="bi bi-x"></i> Limpiar
+          </a>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Tabla -->
+  <div class="card shadow-sm">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0" id="tablaRegistros">
+          <thead class="table-dark">
+            <tr>
+              <th>#</th>
+              <th>Formulario</th>
+              <th>Cliente</th>
+              <th>Trabajo / Actividad</th>
+              <th>Técnico</th>
+              <th>Fecha registro</th>
+              <th>Estado</th>
+              <th>Alerta</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for reg in registros %}
+            {% with d=reg.datos_procesados %}
+            <tr class="{% if reg.alerta_doble_trabajo %}table-warning{% elif reg.estado_sincronizacion == 'ERROR_JSON' or reg.estado_sincronizacion == 'ERROR_LECTURA' %}table-danger{% endif %}">
+              <td class="text-muted small">{{ reg.numero_correlativo|default:reg.pk }}</td>
+              <td class="small fw-semibold">{{ reg.nombre_formulario|default:"—" }}</td>
+              <td class="small">
+                {% if d.cliente_nombre %}
+                  {{ d.cliente_nombre }}
+                  {% if d.cliente_codigo %}<br><span class="text-muted">{{ d.cliente_codigo }}</span>{% endif %}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td class="small">{{ d.actividad|default:d.trabajo|default:"—" }}</td>
+              <td class="small">{{ d.tecnico_responsable|default:"—" }}</td>
+              <td class="small text-nowrap">{{ reg.fecha_recepcion|date:"d/m/Y H:i" }}</td>
+              <td>
+                {% if reg.estado_sincronizacion == 'PROCESADO' %}
+                  <span class="badge bg-success">Procesado</span>
+                {% elif reg.estado_sincronizacion == 'ALERTA_REVISION' %}
+                  <span class="badge bg-warning text-dark">Alerta</span>
+                {% elif reg.estado_sincronizacion == 'DUPLICADO' %}
+                  <span class="badge bg-secondary">Duplicado</span>
+                {% elif reg.estado_sincronizacion == 'ERROR_JSON' %}
+                  <span class="badge bg-danger">Error JSON</span>
+                {% elif reg.estado_sincronizacion == 'ERROR_LECTURA' %}
+                  <span class="badge bg-danger">Error lectura</span>
+                {% elif reg.estado_sincronizacion == 'PENDIENTE' %}
+                  <span class="badge bg-info text-dark">Pendiente</span>
+                {% else %}
+                  <span class="badge bg-light text-dark">{{ reg.estado_sincronizacion }}</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                {% if reg.alerta_doble_trabajo %}
+                  <i class="bi bi-exclamation-triangle-fill text-warning" title="{{ reg.descripcion_alerta }}"></i>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <a href="{% url 'reportes_moreapp_detalle' reg.pk %}" class="btn btn-xs btn-outline-primary btn-sm py-0 px-2">
+                  <i class="bi bi-eye"></i>
+                </a>
+              </td>
+            </tr>
+            {% endwith %}
+            {% empty %}
+            <tr>
+              <td colspan="9" class="text-center text-muted py-4">
+                <i class="bi bi-inbox fs-4 d-block mb-2"></i>
+                No hay registros{% if q or estado_actual or alerta_actual %} con los filtros aplicados{% endif %}.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% if registros %}
+    <div class="card-footer text-muted small">
+      Mostrando {{ registros|length }} registro{{ registros|length|pluralize }}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

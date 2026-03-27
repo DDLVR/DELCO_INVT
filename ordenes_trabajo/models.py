@@ -427,9 +427,13 @@ class IntegracionMoreApp(models.Model):
     ESTADO_CHOICES = [
         ('PENDIENTE', 'Pendiente'),
         ('PROCESANDO', 'Procesando'),
+        ('PROCESADO', 'Procesado'),
         ('EXITOSO', 'Exitoso'),
         ('ERROR', 'Error'),
+        ('ERROR_JSON', 'Error - JSON inválido'),
+        ('ERROR_LECTURA', 'Error - Lectura'),
         ('DUPLICADO', 'Duplicado'),
+        ('ALERTA_REVISION', 'Alerta - Revisión requerida'),
     ]
     
     orden = models.ForeignKey(
@@ -483,6 +487,31 @@ class IntegracionMoreApp(models.Model):
     actualizo_cliente = models.BooleanField(default=False)
     actualizo_equipos = models.BooleanField(default=False)
     creo_adjuntos = models.BooleanField(default=False)
+
+    # Campos para integración por lectura directa de carpetas
+    ruta_carpeta = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text='Ruta local de la carpeta correlativa del registro'
+    )
+    numero_correlativo = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text='Número de carpeta correlativa MoreApp (1, 2, 3, ...)'
+    )
+    nombre_formulario = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Nombre del formulario (info.formName del JSON)'
+    )
+    alerta_doble_trabajo = models.BooleanField(
+        default=False,
+        help_text='True si se detectó posible trabajo duplicado al mismo cliente'
+    )
+    descripcion_alerta = models.TextField(
+        blank=True,
+        help_text='Descripción del motivo de la alerta de doble trabajo'
+    )
     
     def __str__(self):
         return f'MoreApp {self.moreapp_submission_id} - {self.estado_sincronizacion}'
@@ -495,5 +524,6 @@ class IntegracionMoreApp(models.Model):
             models.Index(fields=['moreapp_submission_id']),
             models.Index(fields=['estado_sincronizacion']),
             models.Index(fields=['-fecha_recepcion']),
+            models.Index(fields=['alerta_doble_trabajo']),
         ]
 
