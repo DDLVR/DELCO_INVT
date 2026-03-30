@@ -14,7 +14,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 
 from django.conf import settings
 from django.db import transaction
@@ -68,7 +68,7 @@ def _extraer_datos_normalizados(data: dict) -> Dict[str, Any]:
     }
 
 
-def _detectar_alerta_doble_trabajo(submission_id: str, datos: Dict[str, Any]) -> tuple[bool, str]:
+def _detectar_alerta_doble_trabajo(submission_id: str, datos: Dict[str, Any]) -> Tuple[bool, str]:
     """
     Detecta si existe un registro previo para el mismo cliente + trabajo en una
     ventana de tiempo corta (mismo día = alta, 7 días = media).
