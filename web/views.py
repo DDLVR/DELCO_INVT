@@ -1480,6 +1480,33 @@ def inventario_importar_view(request):
 
 @login_required
 @admin_or_administrativo
+def registro_errores_view(request):
+    """Vista resumen del registro de errores de importaciones."""
+    q = request.GET.get('q', '').strip()
+
+    importaciones = ImportacionExcel.objects.filter(
+        fallidas__gt=0
+    ).order_by('-fecha_hora')
+
+    if q:
+        importaciones = importaciones.filter(
+            Q(archivo_original__icontains=q)
+            | Q(usuario_nombre__icontains=q)
+            | Q(observaciones__icontains=q)
+        )
+
+    context = {
+        'importaciones': importaciones,
+        'q': q,
+        'total_importaciones': importaciones.count(),
+        'total_filas_fallidas': sum(i.fallidas for i in importaciones),
+    }
+
+    return render(request, 'importaciones/registro_errores.html', context)
+
+
+@login_required
+@admin_or_administrativo
 def importacion_errores_view(request, pk):
     """Vista detallada de errores de una importación"""
     importacion = get_object_or_404(ImportacionExcel, pk=pk)
