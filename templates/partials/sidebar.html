@@ -50,6 +50,12 @@
     {% endif %}
 
     {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'registro_errores' or request.resolver_match.url_name == 'importacion_errores' %}active bg-primary text-white{% endif %}" href="{% url 'registro_errores' %}">
+        <i class="bi bi-exclamation-octagon"></i> Registro de Errores
+      </a>
+    {% endif %}
+
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
       {% url 'clientes_list' as clientes_list_url %}
       {% if clientes_list_url %}
       <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'clientes_list' or request.resolver_match.url_name == 'cliente_crear' or request.resolver_match.url_name == 'cliente_editar' %}active bg-primary text-white{% endif %}" href="{{ clientes_list_url }}">

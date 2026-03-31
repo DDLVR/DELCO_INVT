@@ -5,7 +5,7 @@ from .views import (
     inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, inventario_eliminar_view, inventario_crear_view, inventario_modificar_masivo_view, inventario_custodia_masivo_view, profile_view, update_profile_view,
     usuarios_list_view, usuario_crear_view, usuario_editar_view, usuario_reset_password_view, usuario_eliminar_view,
     clientes_list_view, cliente_crear_view, cliente_editar_view, cliente_eliminar_view,
-    importacion_errores_view, importacion_corregir_fila_view,
+    registro_errores_view, importacion_errores_view, importacion_corregir_fila_view,
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
     reportes_moreapp_list, reportes_moreapp_detalle, reportes_moreapp_sincronizar,
 )
@@ -42,6 +42,7 @@ urlpatterns = [
     path('inventario/<int:pk>/eliminar/', inventario_eliminar_view, name='inventario_eliminar'),
 
     # Importaciones y errores
+    path('registro-errores/', registro_errores_view, name='registro_errores'),
     path('importaciones/<int:pk>/errores/', importacion_errores_view, name='importacion_errores'),
     path('importaciones/<int:importacion_id>/corregir/<int:error_id>/', importacion_corregir_fila_view, name='importacion_corregir_fila'),
 
