@@ -275,36 +275,14 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // Toast Bootstrap simple
+  // Toast → delega al sistema global de base.html
   function mostrarToast(msg, tipo) {
-    let toast = document.getElementById('toast-usuarios');
-    if (!toast) {
-      toast = document.createElement('div');
-      toast.id = 'toast-usuarios';
-      toast.className = 'toast align-items-center text-bg-' + (tipo === 'success' ? 'success' : 'danger') + ' border-0 position-fixed top-0 end-0 m-3';
-      toast.style.zIndex = 9999;
-      toast.style.minWidth = '250px';
-      toast.innerHTML = '<div class="d-flex"><div class="toast-body"></div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button></div>';
-      document.body.appendChild(toast);
-    }
-    toast.querySelector('.toast-body').textContent = msg;
-    toast.className = 'toast align-items-center text-bg-' + (tipo === 'success' ? 'success' : 'danger') + ' border-0 position-fixed top-0 end-0 m-3';
-    const toastInstance = bootstrap.Toast.getOrCreateInstance(toast, { delay: 2500 });
-    toastInstance.show();
+    window.showToast(msg, tipo);
   }
 
-  // Función para mostrar mensajes en el modal
+  // Mensajes de operaciones del modal → toast global
   function mostrarMensajeModal(msg, tipo) {
-    let alert = document.getElementById('editar-usuario-alerta');
-    if (!alert) {
-      const div = document.createElement('div');
-      div.id = 'editar-usuario-alerta';
-      div.className = 'alert mt-2';
-      formEditar.querySelector('.modal-body').prepend(div);
-      alert = div;
-    }
-    alert.className = 'alert mt-2 alert-' + tipo;
-    alert.textContent = msg;
+    window.showToast(msg, tipo);
   }
 
   // Modal borrar usuario

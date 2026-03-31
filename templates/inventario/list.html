@@ -7,7 +7,15 @@
 <div class="container-fluid py-5">
     <div class="row mb-4">
         <div class="col-12 d-flex justify-content-between align-items-center">
-            <h1>{{ titulo }}</h1>
+            <div>
+                <h1 class="mb-1">{{ titulo }}</h1>
+                {% if tipo == 'medidor' %}
+                <div class="d-flex gap-2">
+                    <span class="badge bg-secondary">Directos: {{ total_medidores_directos }}</span>
+                    <span class="badge bg-primary">Indirectos: {{ total_medidores_indirectos }}</span>
+                </div>
+                {% endif %}
+            </div>
             <div class="btn-group" role="group">
                 {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarEquipo">
@@ -87,10 +95,11 @@
                                 <option value="2">Marca</option>
                                 <option value="3">Caja</option>
                                 <option value="4">Módulo</option>
-                                <option value="7">Entregado A</option>
-                                <option value="8">Proyecto</option>
-                                <option value="9">Estado</option>
-                                <option value="10">Cliente</option>
+                                <option value="5">Tipo Medidor</option>
+                                <option value="8">Entregado A</option>
+                                <option value="9">Proyecto</option>
+                                <option value="10">Estado</option>
+                                <option value="11">Cliente</option>
                                 {% elif tipo == 'sim' %}
                                 <option value="1">IMEI</option>
                                 <option value="2">Operador</option>
@@ -125,6 +134,17 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        {% if tipo == 'medidor' %}
+                        <div class="col-md-2">
+                            <label for="filtroTipoMedidor" class="form-label mb-1">Tipo Medidor</label>
+                            <select id="filtroTipoMedidor" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                {% for codigo, nombre in tipo_medidor_choices %}
+                                <option value="{{ codigo }}" {% if codigo == tipo_medidor_seleccionado %}selected{% endif %}>{{ nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        {% endif %}
                         <div class="col-md-2 {% if tipo == 'sim' %}d-none{% endif %}">
                             <label for="filtroCaja" class="form-label mb-1">Caja</label>
                             <input type="text" id="filtroCaja" class="form-control form-control-sm" value="{{ caja_seleccionada|default:'' }}" placeholder="N° caja...">
@@ -157,6 +177,7 @@
                                 <th>Marca</th>
                                 <th>Caja</th>
                                 <th>Módulo</th>
+                                <th>Tipo Medidor</th>
                                 <th>Fecha Recepción</th>
                                 <th>Fecha Entrega</th>
                                 <th>Entregado A</th>
@@ -203,6 +224,11 @@
                                 <td>{{ equipo.marca|default:"-" }}</td>
                                 <td>{{ equipo.caja|default:"-" }}</td>
                                 <td>{{ equipo.modulo|default:"-" }}</td>
+                                <td>
+                                    <span class="badge {% if equipo.tipo_medidor == 'INDIRECTO' %}bg-primary{% else %}bg-secondary{% endif %}">
+                                        {{ equipo.get_tipo_medidor_display|default:"-" }}
+                                    </span>
+                                </td>
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.entregado_a.nombre_interno|default:"-" }}</td>
@@ -252,7 +278,7 @@
                                 </td>
                             {% empty %}
                             <tr>
-                                <td colspan="{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}{% if tipo == 'medidor' %}13{% elif tipo == 'sim' %}14{% else %}14{% endif %}{% else %}{% if tipo == 'medidor' %}12{% elif tipo == 'sim' %}13{% else %}13{% endif %}{% endif %}" class="text-center text-muted py-4">
+                                <td colspan="{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}{% if tipo == 'medidor' %}14{% elif tipo == 'sim' %}14{% else %}14{% endif %}{% else %}{% if tipo == 'medidor' %}13{% elif tipo == 'sim' %}13{% else %}13{% endif %}{% endif %}" class="text-center text-muted py-4">
                                     No hay equipos registrados
                                 </td>
                             </tr>
@@ -302,10 +328,11 @@
 
                 <div class="tab-content" id="ayudaTabContent">
                     <div class="tab-pane fade {% if tipo == 'medidor' %}show active{% endif %}" id="ayuda-medidores" role="tabpanel">
-                        <h6 class="mb-2">Formato requerido (11 columnas)</h6>
-                        <p class="small text-muted mb-2">Orden exacto: <code>#, Fecha Recepción, Bodega, Marca, Caja, Medidor, Módulo, Fecha Entrega, Entregado A, Estado, Cliente</code></p>
+                        <h6 class="mb-2">Formato requerido (12 columnas)</h6>
+                        <p class="small text-muted mb-2">Orden exacto: <code>#, Fecha Recepción, Bodega, Marca, Caja, Medidor, Módulo, Tipo Medidor, Fecha Entrega, Entregado A, Estado, Cliente</code></p>
                         <div class="alert alert-light border small mb-2">
-                            <strong>Obligatorio:</strong> Fecha Recepción y Medidor (serie).<br>
+                            <strong>Obligatorio:</strong> Fecha Recepción, Medidor (serie) y Tipo Medidor.<br>
+                            <strong>Tipo Medidor válido:</strong> DIRECTO o INDIRECTO.<br>
                             <strong>Estados válidos:</strong> En bodega, Instalado, Retirado, En reparación, Dado de baja.
                         </div>
                         <div class="alert alert-secondary small mb-0">
@@ -378,7 +405,7 @@
                         <small class="form-text text-muted">
                             Formato esperado:
                             {% if tipo == 'medidor' %}
-                            <strong>AMARILLO (importar):</strong> Fecha Recepción, Bodega, Marca, Caja, Serie, Módulo<br>
+                            <strong>AMARILLO (importar):</strong> Fecha Recepción, Bodega, Marca, Caja, Serie, Módulo, Tipo Medidor (DIRECTO/INDIRECTO)<br>
                             <strong>VERDE (rellenar después):</strong> Fecha Entrega, Entregado A, Estado, Cliente
                             {% elif tipo == 'sim' %}
                             <strong>AMARILLO (importar):</strong> IMEI, OPERADOR, ABONADO, DIRECCIÓN IP, APN, FECHA DE RECEPCIÓN, ENTREGADO A<br>
@@ -428,6 +455,15 @@
                     <div class="mb-3">
                         <label class="form-label">Caja</label>
                         <input type="text" class="form-control" name="caja">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de medidor *</label>
+                        <select class="form-select" name="tipo_medidor" required>
+                            <option value="">-- Seleccionar --</option>
+                            {% for codigo, nombre in tipo_medidor_choices %}
+                            <option value="{{ codigo }}">{{ nombre }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
@@ -534,6 +570,15 @@
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
                         <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de medidor</label>
+                        <select class="form-select" name="tipo_medidor">
+                            <option value="">-- No cambiar --</option>
+                            {% for codigo, nombre in tipo_medidor_choices %}
+                            <option value="{{ codigo }}">{{ nombre }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     {% elif tipo == 'sim' %}
                     <div class="mb-3">
@@ -747,6 +792,15 @@
                                 <div class="col-md-6 mb-3">
                                     <label for="medidorProyecto" class="form-label">Proyecto</label>
                                     <input type="text" class="form-control" id="medidorProyecto" name="proyecto" placeholder="Proyecto asociado">
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="medidorTipoMedidor" class="form-label">Tipo de medidor *</label>
+                                    <select class="form-select" id="medidorTipoMedidor" name="tipo_medidor" required>
+                                        <option value="">-- Seleccionar --</option>
+                                        {% for codigo, nombre in tipo_medidor_choices %}
+                                        <option value="{{ codigo }}">{{ nombre }}</option>
+                                        {% endfor %}
+                                    </select>
                                 </div>
                             </div>
                                 </div>
@@ -1039,35 +1093,26 @@
     </div>
 </div>
 
-        <!-- Toasts de feedback -->
-        <div class="toast-container position-fixed bottom-0 end-0 p-3">
-            <div id="toastGuardar" class="toast align-items-center text-bg-success border-0 mb-2" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="d-flex">
-                    <div class="toast-body">Cambios guardados exitosamente.</div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
-                </div>
-            </div>
-            <div id="toastError" class="toast align-items-center text-bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
-                <div class="d-flex">
-                    <div class="toast-body">Ocurrió un error al guardar.</div>
-                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>
-                </div>
-            </div>
-        </div>
+
 
 <script>
 // Eliminar registro con confirmación simple para evitar bloqueo de modales
 const btnEliminar = document.getElementById('btnEliminarRegistro');
 if (btnEliminar) {
-    btnEliminar.addEventListener('click', function(e) {
+    btnEliminar.addEventListener('click', async function(e) {
         e.preventDefault();
         const equipoIdEliminar = document.getElementById('equipoId').value;
         const equipoTipoEliminar = document.getElementById('equipoTipo').value;
         if (!equipoIdEliminar || !equipoTipoEliminar) {
-            alert('No se encontró el registro a eliminar.');
+            showToast('No se encontró el registro a eliminar.', 'danger');
             return;
         }
-        const confirmado = window.confirm('¿Estás seguro de eliminar este registro? Esta acción no se puede deshacer.');
+        const confirmado = await window.showConfirm(
+            '¿Estás seguro de eliminar este registro? Esta acción no se puede deshacer.',
+            'Eliminar registro',
+            'Sí, eliminar',
+            'Cancelar'
+        );
         if (!confirmado) {
             return;
         }
@@ -1083,14 +1128,14 @@ if (btnEliminar) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert('Registro eliminado correctamente.');
-                location.reload();
+                showToast('Registro eliminado correctamente.', 'success');
+                setTimeout(() => location.reload(), 1500);
             } else {
-                alert('Error al eliminar: ' + data.message);
+                showToast('Error al eliminar: ' + data.message, 'danger');
             }
         })
         .catch(() => {
-            alert('Error de conexión al eliminar.');
+            showToast('Error de conexión al eliminar.', 'danger');
         });
     });
 }
@@ -1276,6 +1321,10 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 if (medidorProyecto) {
                     medidorProyecto.value = equipoData.proyecto || '';
                 }
+                const medidorTipoMedidor = document.getElementById('medidorTipoMedidor');
+                if (medidorTipoMedidor) {
+                    medidorTipoMedidor.value = equipoData.tipo_medidor || '';
+                }
             }
         }
     })
@@ -1294,7 +1343,7 @@ if (btnGuardar) {
         const tipo = document.getElementById('equipoTipo').value;
         
         if (!equipoId) {
-            alert('Error: No se encontraron los datos del equipo');
+            showToast('Error: No se encontraron los datos del equipo.', 'danger');
             return;
         }
         
@@ -1310,12 +1359,19 @@ if (btnGuardar) {
             const entregadoA = document.getElementById('entregadoA').value;
             const clienteTexto = document.getElementById('clienteTexto').value;
             const proyecto = document.getElementById('medidorProyecto')?.value || '';
+            const tipoMedidor = document.getElementById('medidorTipoMedidor')?.value || '';
+
+            if (!tipoMedidor) {
+                showToast('Debes seleccionar el tipo de medidor (Directo o Indirecto).', 'warning');
+                return;
+            }
             
             formData.append('fecha_entrega', fechaEntrega);
             formData.append('estado_medidor', estado);
             formData.append('entregado_a', entregadoA);
             formData.append('cliente_texto', clienteTexto);
             formData.append('proyecto', proyecto);
+            formData.append('tipo_medidor', tipoMedidor);
         } else if (tipo === 'sim') {
             const fechaEntrega = document.getElementById('simFechaEntrega').value;
             const estado = document.getElementById('estadoSIM').value;
@@ -1366,9 +1422,7 @@ if (btnGuardar) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                const toastEl = document.getElementById('toastGuardar');
-                const toast = new bootstrap.Toast(toastEl, { delay: 2000 });
-                toast.show();
+                showToast('Cambios guardados exitosamente.', 'success');
 
                 const modalEl = document.getElementById('modalModificar');
                 const modalInstance = bootstrap.Modal.getInstance(modalEl);
@@ -1380,14 +1434,14 @@ if (btnGuardar) {
                     location.reload();
                 }, 2000);
             } else {
-                alert('Error: ' + data.message);
+                showToast('Error: ' + data.message, 'danger');
                 btnGuardar.disabled = false;
                 btnGuardar.innerHTML = '<i class="bi bi-check-circle"></i> Guardar Cambios';
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('Error de conexión');
+            showToast('Error de conexión al guardar.', 'danger');
             btnGuardar.disabled = false;
             btnGuardar.innerHTML = '<i class="bi bi-check-circle"></i> Guardar Cambios';
         });
@@ -1411,7 +1465,7 @@ if (btnAbrirMasivo) {
     btnAbrirMasivo.addEventListener('click', function() {
         const seleccionados = Array.from(document.querySelectorAll('.equipo-checkbox:checked'));
         if (!seleccionados.length) {
-            alert('Selecciona al menos un equipo para la modificación masiva.');
+            showToast('Selecciona al menos un equipo para la modificación masiva.', 'warning');
             return;
         }
 
@@ -1438,13 +1492,13 @@ if (formEditarMasivo) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(data.message || 'Actualización masiva aplicada.');
-                location.reload();
+                showToast(data.message || 'Actualización masiva aplicada.', 'success');
+                setTimeout(() => location.reload(), 1500);
             } else {
-                alert('Error: ' + (data.message || 'No se pudo aplicar la actualización masiva'));
+                showToast('Error: ' + (data.message || 'No se pudo aplicar la actualización masiva'), 'danger');
             }
         })
-        .catch(() => alert('Error de conexión al aplicar cambios masivos.'));
+        .catch(() => showToast('Error de conexión al aplicar cambios masivos.', 'danger'));
     });
 }
 
@@ -1453,7 +1507,7 @@ if (btnAbrirCustodiaMasiva) {
     btnAbrirCustodiaMasiva.addEventListener('click', function() {
         const seleccionados = Array.from(document.querySelectorAll('.equipo-checkbox:checked'));
         if (!seleccionados.length) {
-            alert('Selecciona al menos un equipo para cambio de custodia.');
+            showToast('Selecciona al menos un equipo para cambio de custodia.', 'warning');
             return;
         }
 
@@ -1480,13 +1534,13 @@ if (formCustodiaMasiva) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(data.message || 'Cambio de custodia aplicado.');
-                location.reload();
+                showToast(data.message || 'Cambio de custodia aplicado.', 'success');
+                setTimeout(() => location.reload(), 1500);
             } else {
-                alert('Error: ' + (data.message || 'No se pudo aplicar el cambio de custodia'));
+                showToast('Error: ' + (data.message || 'No se pudo aplicar el cambio de custodia'), 'danger');
             }
         })
-        .catch(() => alert('Error de conexión al aplicar cambio de custodia.'));
+        .catch(() => showToast('Error de conexión al aplicar cambio de custodia.', 'danger'));
     });
 }
 
@@ -1503,13 +1557,13 @@ if (formAgregarEquipo) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                alert(data.message || 'Equipo creado correctamente.');
-                location.reload();
+                showToast(data.message || 'Equipo creado correctamente.', 'success');
+                setTimeout(() => location.reload(), 1500);
             } else {
-                alert('Error: ' + (data.message || 'No se pudo crear el equipo'));
+                showToast('Error: ' + (data.message || 'No se pudo crear el equipo'), 'danger');
             }
         })
-        .catch(() => alert('Error de conexión al crear equipo.'));
+        .catch(() => showToast('Error de conexión al crear equipo.', 'danger'));
     });
 }
 
@@ -1532,12 +1586,14 @@ document.getElementById('btnExportar').addEventListener('click', function() {
     const limit = document.getElementById('tablaLength')?.value || '25';
     const proyecto = document.getElementById('filtroProyecto')?.value || '';
     const caja = document.getElementById('filtroCaja')?.value || '';
+    const tipoMedidor = document.getElementById('filtroTipoMedidor')?.value || '';
 
     if (search) url.searchParams.append('search', search);
     url.searchParams.append('search_field', searchField);
     url.searchParams.append('limit', limit);
     if (proyecto) url.searchParams.append('proyecto', proyecto);
     if (caja) url.searchParams.append('caja', caja);
+    if (tipoMedidor) url.searchParams.append('tipo_medidor', tipoMedidor);
     
     window.location.href = url.toString();
 });
@@ -1548,7 +1604,7 @@ document.getElementById('btnImportarSubmit').addEventListener('click', function(
     const archivo = document.getElementById('archivoImportar').files[0];
     
     if (!archivo) {
-        alert('Selecciona un archivo');
+        showToast('Selecciona un archivo antes de importar.', 'warning');
         return;
     }
     
@@ -1569,6 +1625,7 @@ document.getElementById('btnImportarSubmit').addEventListener('click', function(
         resultadosDiv.style.display = 'block';
         
         if (data.success) {
+            showToast(`✓ Importación exitosa: ${data.exitosas} registros importados.`, 'success', 6000);
             mensajeDiv.className = 'alert alert-success';
             let html = `
                 <strong>✓ Importación exitosa!</strong><br>
@@ -1603,6 +1660,7 @@ document.getElementById('btnImportarSubmit').addEventListener('click', function(
                 location.reload();
             }, 3000);
         } else {
+            showToast(`✗ Importación con errores: ${data.fallidas || 0} fallidas.`, 'danger', 0);
             mensajeDiv.className = 'alert alert-danger';
             let html = `
                 <strong>✗ Error en la importación</strong><br>
@@ -1637,6 +1695,7 @@ document.getElementById('btnImportarSubmit').addEventListener('click', function(
         }
     })
     .catch(error => {
+        showToast('Error de conexión al importar: ' + error.message, 'danger', 0);
         document.getElementById('importMensaje').className = 'alert alert-danger';
         document.getElementById('importMensaje').textContent = 'Error: ' + error.message;
         document.getElementById('importResultados').style.display = 'block';
@@ -1676,6 +1735,7 @@ $(document).ready(function() {
         const tablaLength = document.getElementById('tablaLength');
         const tablaBuscarCampo = document.getElementById('tablaBuscarCampo');
         const filtroProyecto = document.getElementById('filtroProyecto');
+        const filtroTipoMedidor = document.getElementById('filtroTipoMedidor');
         const filtroCaja = document.getElementById('filtroCaja');
         const btnAplicarFiltroTabla = document.getElementById('btnAplicarFiltroTabla');
         const btnLimpiarFiltroTabla = document.getElementById('btnLimpiarFiltroTabla');
@@ -1685,6 +1745,7 @@ $(document).ready(function() {
             const texto = tablaBuscar.value || '';
             const campo = tablaBuscarCampo ? tablaBuscarCampo.value : 'all';
             const proyecto = filtroProyecto ? (filtroProyecto.value || '') : '';
+            const tipoMedidor = filtroTipoMedidor ? (filtroTipoMedidor.value || '') : '';
             const caja = filtroCaja ? (filtroCaja.value || '') : '';
 
             // Limpiar búsquedas por columna antes de aplicar una nueva
@@ -1699,8 +1760,15 @@ $(document).ready(function() {
 
             if (filtroProyecto) {
                 const tipoActual = '{{ tipo }}';
-                const colProyecto = (tipoActual === 'medidor') ? 8 : ((tipoActual === 'sim') ? 9 : 11);
+                const colProyecto = (tipoActual === 'medidor') ? 9 : ((tipoActual === 'sim') ? 9 : 11);
                 dataTableInstance.column(colProyecto).search(proyecto).draw();
+            }
+
+            if (filtroTipoMedidor) {
+                const tipoActual = '{{ tipo }}';
+                if (tipoActual === 'medidor') {
+                    dataTableInstance.column(5).search(tipoMedidor).draw();
+                }
             }
 
             if (filtroCaja) {
@@ -1730,6 +1798,12 @@ $(document).ready(function() {
             });
         }
 
+        if (filtroTipoMedidor) {
+            filtroTipoMedidor.addEventListener('change', function() {
+                aplicarBusqueda();
+            });
+        }
+
         if (filtroCaja) {
             filtroCaja.addEventListener('input', function() {
                 aplicarBusqueda();
@@ -1747,6 +1821,7 @@ $(document).ready(function() {
                 if (tablaBuscar) tablaBuscar.value = '';
                 if (tablaBuscarCampo) tablaBuscarCampo.value = 'all';
                 if (filtroProyecto) filtroProyecto.value = '';
+                if (filtroTipoMedidor) filtroTipoMedidor.value = '';
                 if (filtroCaja) filtroCaja.value = '';
                 dataTableInstance.search('');
                 dataTableInstance.columns().search('');

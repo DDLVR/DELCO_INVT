@@ -316,9 +316,9 @@ document.getElementById('btnGuardarCorreccion').addEventListener('click', functi
     .then(data => {
         if (data.success) {
             alertaError.classList.add('d-none');
-            alert('✓ ' + data.message + '\n\nLa página se recargará...');
+            showToast('✓ ' + data.message + ' — La página se recargará...', 'success', 4000);
             bootstrap.Modal.getInstance(document.getElementById('modalCorregir')).hide();
-            setTimeout(() => location.reload(), 1000);
+            setTimeout(() => location.reload(), 2000);
         } else {
             textoError.textContent = data.message || 'Error desconocido';
             alertaError.classList.remove('d-none');

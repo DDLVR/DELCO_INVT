@@ -114,22 +114,22 @@ document.getElementById('guardarPerfil').addEventListener('click', function(e) {
   const confirm_password = document.getElementById('confirm_password')?.value.trim() || '';
   
   if (!nombre_interno) {
-    alert('El nombre de usuario no puede estar vacío');
+    showToast('El nombre de usuario no puede estar vacío.', 'warning');
     return;
   }
 
   // Si hay campos de contraseña, validar
   if (new_password || confirm_password) {
     if (!current_password) {
-      alert('Debes ingresar tu contraseña actual');
+      showToast('Debes ingresar tu contraseña actual.', 'warning');
       return;
     }
     if (new_password !== confirm_password) {
-      alert('Las nuevas contraseñas no coinciden');
+      showToast('Las nuevas contraseñas no coinciden.', 'warning');
       return;
     }
     if (new_password.length < 6) {
-      alert('La nueva contraseña debe tener al menos 6 caracteres');
+      showToast('La nueva contraseña debe tener al menos 6 caracteres.', 'warning');
       return;
     }
   }
@@ -149,15 +149,15 @@ document.getElementById('guardarPerfil').addEventListener('click', function(e) {
   .then(response => response.json())
   .then(data => {
     if (data.success) {
-      alert('Perfil actualizado correctamente');
-      location.reload();
+      showToast('Perfil actualizado correctamente.', 'success');
+      setTimeout(() => location.reload(), 2000);
     } else {
-      alert('Error: ' + data.message);
+      showToast('Error: ' + data.message, 'danger');
     }
   })
   .catch(error => {
     console.error('Error:', error);
-    alert('Error al guardar los cambios');
+    showToast('Error al guardar los cambios.', 'danger');
   });
 });
 </script>

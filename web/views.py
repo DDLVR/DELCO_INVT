@@ -400,6 +400,7 @@ def inventario_list_view(request):
     ubicacion_filtro = request.GET.get('ubicacion', '')
     proyecto_filtro = request.GET.get('proyecto', '').strip()
     caja_filtro = request.GET.get('caja', '').strip()
+    tipo_medidor_filtro = request.GET.get('tipo_medidor', '').strip()
     
     # Obtener datos base
     if tipo == 'medidor':
@@ -437,6 +438,9 @@ def inventario_list_view(request):
 
     if caja_filtro and tipo in ('medidor', 'modem'):
         equipos = equipos.filter(caja__icontains=caja_filtro)
+
+    if tipo == 'medidor' and tipo_medidor_filtro:
+        equipos = equipos.filter(tipo_medidor=tipo_medidor_filtro)
     
     # Obtener opciones para filtros (solo estados de negocio definidos)
     if tipo in ('medidor', 'modem'):
@@ -468,7 +472,11 @@ def inventario_list_view(request):
         'ubicacion_seleccionada': ubicacion_filtro,
         'proyecto_seleccionado': proyecto_filtro,
         'caja_seleccionada': caja_filtro,
+        'tipo_medidor_seleccionado': tipo_medidor_filtro,
         'proyectos_disponibles': proyectos_disponibles,
+        'tipo_medidor_choices': Medidor.TIPO_MEDIDOR_CHOICES,
+        'total_medidores_directos': Medidor.objects.filter(tipo_medidor='DIRECTO').count(),
+        'total_medidores_indirectos': Medidor.objects.filter(tipo_medidor='INDIRECTO').count(),
     }
     return render(request, 'inventario/list.html', context)
 
@@ -578,6 +586,7 @@ def inventario_obtener_datos_view(request, pk):
                 'entregado_a_id': getattr(equipo, 'entregado_a_id', '') or '',
                 'cliente_id': getattr(equipo, 'cliente_id', '') or '',
                 'proyecto': getattr(equipo, 'proyecto', '') or '',
+                'tipo_medidor': getattr(equipo, 'tipo_medidor', '') or '',
             }
         
         return JsonResponse({
@@ -643,6 +652,7 @@ def inventario_modificar_view(request, pk):
                 'entregado_a_id': equipo.entregado_a_id,
                 'cliente_id': equipo.cliente_id,
                 'proyecto': equipo.proyecto,
+                'tipo_medidor': equipo.tipo_medidor,
             }
         elif tipo == 'sim':
             before = {
@@ -769,6 +779,13 @@ def inventario_modificar_view(request, pk):
             entregado_a_id = request.POST.get('entregado_a', '').strip()
             cliente_texto = request.POST.get('cliente_texto', '').strip()
             proyecto = request.POST.get('proyecto', '').strip()
+            tipo_medidor = request.POST.get('tipo_medidor', '').strip().upper()
+
+            if tipo_medidor not in {'DIRECTO', 'INDIRECTO'}:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'El tipo de medidor es obligatorio (DIRECTO o INDIRECTO)'
+                }, status=400)
             
             if fecha_entrega:
                 equipo.fecha_entrega = fecha_entrega
@@ -799,6 +816,7 @@ def inventario_modificar_view(request, pk):
             else:
                 equipo.cliente = None
             equipo.proyecto = proyecto
+            equipo.tipo_medidor = tipo_medidor
         
         # Guardar cambios
         equipo.save()
@@ -811,6 +829,7 @@ def inventario_modificar_view(request, pk):
                 'entregado_a_id': equipo.entregado_a_id,
                 'cliente_id': equipo.cliente_id,
                 'proyecto': equipo.proyecto,
+                'tipo_medidor': equipo.tipo_medidor,
             }
             etiquetas = {
                 'fecha_entrega': 'Fecha Entrega',
@@ -818,6 +837,7 @@ def inventario_modificar_view(request, pk):
                 'entregado_a_id': 'Entregado A',
                 'cliente_id': 'Cliente',
                 'proyecto': 'Proyecto',
+                'tipo_medidor': 'Tipo Medidor',
             }
             tipo_item = 'MEDIDOR'
             identificador = equipo.serie
@@ -908,8 +928,11 @@ def inventario_crear_view(request):
 
         if tipo == 'medidor':
             serie = request.POST.get('serie', '').strip()
+            tipo_medidor = request.POST.get('tipo_medidor', '').strip().upper()
             if not serie:
                 return JsonResponse({'success': False, 'message': 'La serie del medidor es obligatoria'})
+            if tipo_medidor not in {'DIRECTO', 'INDIRECTO'}:
+                return JsonResponse({'success': False, 'message': 'El tipo de medidor es obligatorio (DIRECTO o INDIRECTO)'})
 
             equipo = Medidor.objects.create(
                 serie=serie,
@@ -918,6 +941,7 @@ def inventario_crear_view(request):
                 fecha_recepcion=request.POST.get('fecha_recepcion', '').strip() or None,
                 estado_inventario=estado_obj,
                 proyecto=request.POST.get('proyecto', '').strip(),
+                tipo_medidor=tipo_medidor,
             )
             tipo_item = 'MEDIDOR'
             identificador = equipo.serie
@@ -1021,6 +1045,7 @@ def inventario_modificar_masivo_view(request):
     entregado_a_id = request.POST.get('entregado_a_id', '').strip()
     medidor_id = request.POST.get('medidor_id', '').strip()
     proyecto = request.POST.get('proyecto', '').strip()
+    tipo_medidor = request.POST.get('tipo_medidor', '').strip().upper()
 
     cliente_obj = None
     if cliente_texto:
@@ -1071,6 +1096,9 @@ def inventario_modificar_masivo_view(request):
             if proyecto and equipo.proyecto != proyecto:
                 equipo.proyecto = proyecto
                 campos.append('Proyecto')
+            if tipo_medidor in {'DIRECTO', 'INDIRECTO'} and equipo.tipo_medidor != tipo_medidor:
+                equipo.tipo_medidor = tipo_medidor
+                campos.append('Tipo Medidor')
 
         elif tipo == 'sim':
             if cliente_obj and equipo.cliente_id != cliente_obj.id:
@@ -1245,6 +1273,7 @@ def inventario_exportar_view(request):
     limit_raw = (request.GET.get('limit') or '-1').strip()
     proyecto_filtro = (request.GET.get('proyecto') or '').strip()
     caja_filtro = (request.GET.get('caja') or '').strip()
+    tipo_medidor_filtro = (request.GET.get('tipo_medidor') or '').strip()
     
     # Obtener datos base
     if tipo == 'medidor':
@@ -1278,6 +1307,9 @@ def inventario_exportar_view(request):
 
     if caja_filtro and tipo in ('medidor', 'modem'):
         equipos = equipos.filter(caja__icontains=caja_filtro)
+
+    if tipo == 'medidor' and tipo_medidor_filtro:
+        equipos = equipos.filter(tipo_medidor=tipo_medidor_filtro)
     
     # Aplicar búsqueda (según filtros visibles en la tabla)
     if search:
@@ -1287,6 +1319,7 @@ def inventario_exportar_view(request):
                     Q(serie__icontains=search)
                     | Q(marca__icontains=search)
                     | Q(caja__icontains=search)
+                    | Q(tipo_medidor__icontains=search)
                     | Q(entregado_a__nombre_interno__icontains=search)
                     | Q(entregado_a_info__icontains=search)
                     | Q(estado_inventario__nombre__icontains=search)
@@ -1321,10 +1354,11 @@ def inventario_exportar_view(request):
                     '1': 'serie',
                     '2': 'marca',
                     '3': 'caja',
-                    '7': 'entregado_a__nombre_interno',
-                    '8': 'proyecto',
-                    '9': 'estado_inventario__nombre',
-                    '10': 'cliente__numero_cliente',
+                    '5': 'tipo_medidor',
+                    '8': 'entregado_a__nombre_interno',
+                    '9': 'proyecto',
+                    '10': 'estado_inventario__nombre',
+                    '11': 'cliente__numero_cliente',
                 },
                 'sim': {
                     '1': 'imei',

@@ -42,6 +42,11 @@ class Ubicacion(models.Model):
 
 class Medidor(models.Model):
     """Medidores con trazabilidad completa - importados en bodega y entregados a técnicos"""
+    TIPO_MEDIDOR_CHOICES = [
+        ('DIRECTO', 'Directo'),
+        ('INDIRECTO', 'Indirecto'),
+    ]
+
     entregado_a_info = models.CharField(
         max_length=255,
         blank=True,
@@ -72,6 +77,12 @@ class Medidor(models.Model):
         null=True,
         blank=True,
         help_text='¿Tiene módulo? (Sí/No)'
+    )
+    tipo_medidor = models.CharField(
+        max_length=20,
+        choices=TIPO_MEDIDOR_CHOICES,
+        default='DIRECTO',
+        help_text='Subtipo operativo obligatorio: DIRECTO o INDIRECTO'
     )
     
     # Campos que rellenará el administrativo (VERDES - Después de recibir)
@@ -132,7 +143,7 @@ class Medidor(models.Model):
     observaciones = models.TextField(blank=True)
     
     def __str__(self):
-        return f'Medidor {self.serie} - Caja {self.caja}'
+        return f'Medidor {self.serie} ({self.get_tipo_medidor_display()}) - Caja {self.caja}'
     
     class Meta:
         verbose_name_plural = 'Medidores'

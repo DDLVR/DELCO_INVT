@@ -88,7 +88,7 @@
             <td>
               {% if puede_editar %}
                 <a href="{% url 'cliente_editar' cliente.id %}" class="btn btn-sm btn-info">✏️ Editar</a>
-                <form action="{% url 'cliente_eliminar' cliente.id %}" method="post" style="display:inline;" onsubmit="return confirm('¿Eliminar cliente {{ cliente.numero_cliente }}?');">
+                <form action="{% url 'cliente_eliminar' cliente.id %}" method="post" style="display:inline;" class="form-eliminar-cliente" data-cliente-numero="{{ cliente.numero_cliente }}">
                   {% csrf_token %}
                   <button type="submit" class="btn btn-sm btn-danger">🗑️ Eliminar</button>
                 </form>
@@ -189,6 +189,18 @@
                 dataTableClientes.page.len(parseInt(this.value, 10)).draw();
               });
             }
+
+            document.querySelectorAll('.form-eliminar-cliente').forEach(function(form) {
+              form.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const numeroCliente = form.getAttribute('data-cliente-numero') || '';
+                const mensaje = '¿Eliminar cliente ' + numeroCliente + '? Esta acción no se puede deshacer.';
+                const confirmado = await window.showConfirm(mensaje, 'Eliminar cliente', 'Sí, eliminar', 'Cancelar');
+                if (confirmado) {
+                  form.submit();
+                }
+              });
+            });
           } catch (e) {
             console.log('Info: DataTables no pudo inicializarse en clientes');
           }
