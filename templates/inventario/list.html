@@ -9,6 +9,17 @@
         <div class="col-12 d-flex justify-content-between align-items-center">
             <h1>{{ titulo }}</h1>
             <div class="btn-group" role="group">
+                {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarEquipo">
+                    <i class="bi bi-plus-circle"></i> Agregar equipo
+                </button>
+                <button type="button" class="btn btn-outline-dark" id="btnAbrirMasivo">
+                    <i class="bi bi-check2-square"></i> Edición múltiple
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btnAbrirCustodiaMasiva">
+                    <i class="bi bi-arrow-left-right"></i> Cambio custodia
+                </button>
+                {% endif %}
                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportar">
                     <i class="bi bi-upload"></i> Importar Excel
                 </button>
@@ -74,31 +85,49 @@
                                 {% if tipo == 'medidor' %}
                                 <option value="1">Serie</option>
                                 <option value="2">Marca</option>
-                                <option value="3">Módulo</option>
-                                <option value="6">Entregado A</option>
-                                <option value="7">Estado</option>
-                                <option value="8">Cliente</option>
+                                <option value="3">Caja</option>
+                                <option value="4">Módulo</option>
+                                <option value="7">Entregado A</option>
+                                <option value="8">Proyecto</option>
+                                <option value="9">Estado</option>
+                                <option value="10">Cliente</option>
                                 {% elif tipo == 'sim' %}
                                 <option value="1">IMEI</option>
                                 <option value="2">Operador</option>
                                 <option value="3">Abonado</option>
                                 <option value="7">Entregado A</option>
-                                <option value="9">Estado</option>
-                                <option value="10">Cliente</option>
+                                <option value="9">Proyecto</option>
+                                <option value="10">Estado</option>
+                                <option value="11">Cliente</option>
                                 {% elif tipo == 'modem' %}
                                 <option value="1">Marca</option>
                                 <option value="2">Modelo</option>
                                 <option value="3">IMEI</option>
                                 <option value="4">Serie</option>
-                                <option value="7">Técnico</option>
-                                <option value="8">Estado</option>
-                                <option value="9">Cliente</option>
+                                <option value="7">Caja</option>
+                                <option value="8">Técnico</option>
+                                <option value="9">Estado</option>
+                                <option value="10">Cliente</option>
+                                <option value="11">Proyecto</option>
                                 {% endif %}
                             </select>
                         </div>
                         <div class="col-md-5">
                             <label for="tablaBuscar" class="form-label mb-1">Buscar</label>
                             <input type="text" id="tablaBuscar" class="form-control form-control-sm" placeholder="Escribe para filtrar...">
+                        </div>
+                        <div class="col-md-2">
+                            <label for="filtroProyecto" class="form-label mb-1">Proyecto</label>
+                            <select id="filtroProyecto" class="form-select form-select-sm">
+                                <option value="">Todos</option>
+                                {% for proyecto in proyectos_disponibles %}
+                                <option value="{{ proyecto }}" {% if proyecto == proyecto_seleccionado %}selected{% endif %}>{{ proyecto }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 {% if tipo == 'sim' %}d-none{% endif %}">
+                            <label for="filtroCaja" class="form-label mb-1">Caja</label>
+                            <input type="text" id="filtroCaja" class="form-control form-control-sm" value="{{ caja_seleccionada|default:'' }}" placeholder="N° caja...">
                         </div>
                         <div class="col-md-2 d-flex gap-2">
                             <button type="button" class="btn btn-primary btn-sm flex-grow-1" id="btnAplicarFiltroTabla">
@@ -126,10 +155,12 @@
                                 {% if tipo == 'medidor' %}
                                 <th>Serie</th>
                                 <th>Marca</th>
+                                <th>Caja</th>
                                 <th>Módulo</th>
                                 <th>Fecha Recepción</th>
                                 <th>Fecha Entrega</th>
                                 <th>Entregado A</th>
+                                <th>Proyecto</th>
                                 {% elif tipo == 'sim' %}
                                 <th>IMEI</th>
                                 <th>OPERADOR</th>
@@ -139,6 +170,7 @@
                                 <th>FECHA RECEPCIÓN</th>
                                 <th>ENTREGADO A</th>
                                 <th>FECHA ENTREGA</th>
+                                <th>Proyecto</th>
                                 {% elif tipo == 'modem' %}
                                 <th>MARCA</th>
                                 <th>MODELO</th>
@@ -146,10 +178,19 @@
                                 <th>SERIE</th>
                                 <th>FECHA RECEPCIÓN</th>
                                 <th>FECHA ENTREGA</th>
+                                <th>Caja</th>
                                 <th>TÉCNICO</th>
                                 {% endif %}
                                 <th>Estado</th>
                                 <th>Cliente</th>
+                                {% if tipo == 'modem' %}
+                                <th>Proyecto</th>
+                                {% endif %}
+                                {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+                                <th class="text-center">
+                                    <input type="checkbox" id="selectAllEquipos" title="Seleccionar todos">
+                                </th>
+                                {% endif %}
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -160,10 +201,12 @@
                                 {% if tipo == 'medidor' %}
                                 <td>{{ equipo.serie }}</td>
                                 <td>{{ equipo.marca|default:"-" }}</td>
+                                <td>{{ equipo.caja|default:"-" }}</td>
                                 <td>{{ equipo.modulo|default:"-" }}</td>
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.entregado_a.nombre_interno|default:"-" }}</td>
+                                <td>{{ equipo.proyecto|default:"-" }}</td>
                                 {% elif tipo == 'sim' %}
                                 <td><strong>{{ equipo.imei|default:"-" }}</strong></td>
                                 <td>{{ equipo.operador|default:"-" }}</td>
@@ -173,6 +216,7 @@
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.entregado_a_nombre|default:"-" }}</td>
                                 <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
+                                <td>{{ equipo.proyecto|default:"-" }}</td>
                                 {% elif tipo == 'modem' %}
                                 <td>{{ equipo.marca|default:"-" }}</td>
                                 <td>{{ equipo.modelo|default:"-" }}</td>
@@ -180,14 +224,23 @@
                                 <td>{{ equipo.serie }}</td>
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
+                                <td>{{ equipo.caja|default:"-" }}</td>
                                 <td>{{ equipo.tecnico_responsable|default:"-" }}</td>
                                 {% endif %}
                                 <td>
-                                    <span class="badge bg-{% if equipo.estado_inventario %}{% if equipo.estado_inventario.nombre == 'Instalado' %}success{% elif equipo.estado_inventario.nombre == 'Retirado' %}warning{% elif equipo.estado_inventario.nombre == 'En reparación' %}info{% elif equipo.estado_inventario.nombre == 'Dado de baja' %}danger{% else %}secondary{% endif %}{% else %}secondary{% endif %}">
+                                    <span class="badge bg-{% if equipo.estado_inventario %}{% if equipo.estado_inventario.nombre == 'Instalado' %}success{% elif equipo.estado_inventario.nombre == 'Retirado' %}warning{% elif equipo.estado_inventario.nombre == 'En reparación' %}info{% elif equipo.estado_inventario.nombre == 'Dado de baja' %}danger{% elif equipo.estado_inventario.nombre == 'En peaje' %}dark{% else %}secondary{% endif %}{% else %}secondary{% endif %}">
                                         {{ equipo.estado_inventario.nombre|default:"-" }}
                                     </span>
                                 </td>
                                 <td>{{ equipo.cliente.numero_cliente|default:"-" }}</td>
+                                {% if tipo == 'modem' %}
+                                <td>{{ equipo.proyecto|default:"-" }}</td>
+                                {% endif %}
+                                {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+                                <td class="text-center">
+                                    <input type="checkbox" class="equipo-checkbox" value="{{ equipo.id }}" data-tipo="{{ tipo }}">
+                                </td>
+                                {% endif %}
                                 <td>
                                     <button class="btn btn-sm btn-primary" 
                                             data-bs-toggle="modal" 
@@ -199,7 +252,7 @@
                                 </td>
                             {% empty %}
                             <tr>
-                                <td colspan="{% if tipo == 'medidor' %}10{% elif tipo == 'sim' %}12{% else %}11{% endif %}" class="text-center text-muted py-4">
+                                <td colspan="{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}{% if tipo == 'medidor' %}13{% elif tipo == 'sim' %}14{% else %}14{% endif %}{% else %}{% if tipo == 'medidor' %}12{% elif tipo == 'sim' %}13{% else %}13{% endif %}{% endif %}" class="text-center text-muted py-4">
                                     No hay equipos registrados
                                 </td>
                             </tr>
@@ -349,6 +402,241 @@
     </div>
 </div>
 
+{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+<!-- Modal para agregar equipo individual -->
+<div class="modal fade" id="modalAgregarEquipo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Agregar {{ titulo|lower|slice:':-1' }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formAgregarEquipo">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="tipo" value="{{ tipo }}">
+
+                    {% if tipo == 'medidor' %}
+                    <div class="mb-3">
+                        <label class="form-label">Serie *</label>
+                        <input type="text" class="form-control" name="serie" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Marca</label>
+                        <input type="text" class="form-control" name="marca">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Caja</label>
+                        <input type="text" class="form-control" name="caja">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="Proyecto asociado">
+                    </div>
+                    {% elif tipo == 'sim' %}
+                    <div class="mb-3">
+                        <label class="form-label">IMEI *</label>
+                        <input type="text" class="form-control" name="imei" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Operador</label>
+                        <input type="text" class="form-control" name="operador">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Abonado</label>
+                        <input type="text" class="form-control" name="abonado">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="Proyecto asociado">
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label">Serie *</label>
+                        <input type="text" class="form-control" name="serie" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Marca</label>
+                        <input type="text" class="form-control" name="marca">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Modelo</label>
+                        <input type="text" class="form-control" name="modelo">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="Proyecto asociado">
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">Fecha recepción</label>
+                        <input type="date" class="form-control" name="fecha_recepcion">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Estado inicial</label>
+                        <select class="form-select" name="estado_id">
+                            <option value="">-- Sin estado --</option>
+                            {% for estado in estados_disponibles %}
+                            <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para edición masiva -->
+<div class="modal fade" id="modalEditarMasivo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title"><i class="bi bi-check2-square"></i> Modificación masiva</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formEditarMasivo">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="tipo" value="{{ tipo }}">
+                    <input type="hidden" name="ids" id="bulkIds">
+                    <p class="small text-muted" id="bulkResumenSeleccion">0 equipos seleccionados</p>
+
+                    <div class="mb-3">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" name="estado_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for estado in estados_disponibles %}
+                            <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {% if tipo == 'medidor' %}
+                    <div class="mb-3">
+                        <label class="form-label">Entregado a</label>
+                        <select class="form-select" name="entregado_a_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for usuario in usuarios %}
+                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cliente (número)</label>
+                        <input type="text" class="form-control" name="cliente_texto" placeholder="-- No cambiar --">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
+                    </div>
+                    {% elif tipo == 'sim' %}
+                    <div class="mb-3">
+                        <label class="form-label">Cliente (número)</label>
+                        <input type="text" class="form-control" name="cliente_texto" placeholder="-- No cambiar --">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Medidor</label>
+                        <select class="form-select" name="medidor_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for medidor in medidores %}
+                            <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label">Cliente</label>
+                        <select class="form-select" name="cliente_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for cliente in clientes %}
+                            <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Medidor</label>
+                        <select class="form-select" name="medidor_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for medidor in medidores %}
+                            <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-dark">Aplicar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para cambio masivo de custodia -->
+<div class="modal fade" id="modalCustodiaMasiva" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title"><i class="bi bi-arrow-left-right"></i> Cambio masivo de custodia</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formCustodiaMasiva">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="tipo" value="{{ tipo }}">
+                    <input type="hidden" name="ids" id="custodiaIds">
+                    <p class="small text-muted" id="custodiaResumenSeleccion">0 equipos seleccionados</p>
+
+                    <div class="mb-3">
+                        <label class="form-label">Ubicación destino *</label>
+                        <select class="form-select" name="destino_ubicacion_id" required>
+                            <option value="">-- Seleccionar --</option>
+                            {% for ubicacion in ubicaciones_disponibles %}
+                            <option value="{{ ubicacion.id }}">{{ ubicacion.nombre }} ({{ ubicacion.get_tipo_display }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Técnico destino (opcional)</label>
+                        <select class="form-select" name="tecnico_destino_id">
+                            <option value="">-- Sin asignar --</option>
+                            {% for usuario in usuarios %}
+                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Observación</label>
+                        <textarea class="form-control" name="observacion" rows="2" placeholder="Detalle operativo del cambio"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Aplicar cambio</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- Modal para Modificar Equipo -->
 <div class="modal fade" id="modalModificar" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -455,6 +743,10 @@
                                     <label for="clienteTexto" class="form-label">Cliente (número)</label>
                                     <input type="text" class="form-control" id="clienteTexto" name="cliente_texto" placeholder="Ej: 579549">
                                     <small class="text-muted">Campo digitable. Se guarda por número de cliente.</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label for="medidorProyecto" class="form-label">Proyecto</label>
+                                    <input type="text" class="form-control" id="medidorProyecto" name="proyecto" placeholder="Proyecto asociado">
                                 </div>
                             </div>
                                 </div>
@@ -564,6 +856,13 @@
                                             {% endfor %}
                                         </select>
                                         <small class="text-muted">Medidor asociado a esta SIM (opcional)</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="simProyecto" class="form-label">
+                                            <i class="bi bi-diagram-3"></i>
+                                            Proyecto
+                                        </label>
+                                        <input type="text" class="form-control" id="simProyecto" name="proyecto" placeholder="Proyecto asociado">
                                     </div>
                                 </div>
                             </div>
@@ -890,6 +1189,10 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 if (medidorSIM && equipoData.medidor_id) {
                     medidorSIM.value = equipoData.medidor_id;
                 }
+                const simProyecto = document.getElementById('simProyecto');
+                if (simProyecto) {
+                    simProyecto.value = equipoData.proyecto || '';
+                }
             } else if (equipoTipo === 'modem') {
                 // Módem - Cargar campos verdes (solo lectura)
                 document.getElementById('modemMarca').value = equipoData.marca || '-';
@@ -969,6 +1272,10 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 if (clienteTexto) {
                     clienteTexto.value = equipoData.cliente_numero || '';
                 }
+                const medidorProyecto = document.getElementById('medidorProyecto');
+                if (medidorProyecto) {
+                    medidorProyecto.value = equipoData.proyecto || '';
+                }
             }
         }
     })
@@ -1002,21 +1309,25 @@ if (btnGuardar) {
             const estado = document.getElementById('estado').value;
             const entregadoA = document.getElementById('entregadoA').value;
             const clienteTexto = document.getElementById('clienteTexto').value;
+            const proyecto = document.getElementById('medidorProyecto')?.value || '';
             
             formData.append('fecha_entrega', fechaEntrega);
             formData.append('estado_medidor', estado);
             formData.append('entregado_a', entregadoA);
             formData.append('cliente_texto', clienteTexto);
+            formData.append('proyecto', proyecto);
         } else if (tipo === 'sim') {
             const fechaEntrega = document.getElementById('simFechaEntrega').value;
             const estado = document.getElementById('estadoSIM').value;
             const cliente = document.getElementById('simClienteTexto').value;
             const medidor = document.getElementById('simMedidor').value;
+            const proyecto = document.getElementById('simProyecto')?.value || '';
             
             formData.append('fecha_entrega', fechaEntrega);
             formData.append('estado_sim', estado);
             formData.append('cliente_texto', cliente);
             formData.append('medidor', medidor);
+            formData.append('proyecto', proyecto);
         } else if (tipo === 'modem') {
             const cliente = document.getElementById('modemCliente').value;
             const medidor = document.getElementById('modemMedidor').value;
@@ -1085,6 +1396,123 @@ if (btnGuardar) {
     console.error('Botón btnGuardarModificacion no encontrado');
 }
 
+// Selección múltiple y edición masiva
+const selectAllEquipos = document.getElementById('selectAllEquipos');
+if (selectAllEquipos) {
+    selectAllEquipos.addEventListener('change', function() {
+        document.querySelectorAll('.equipo-checkbox').forEach(cb => {
+            cb.checked = this.checked;
+        });
+    });
+}
+
+const btnAbrirMasivo = document.getElementById('btnAbrirMasivo');
+if (btnAbrirMasivo) {
+    btnAbrirMasivo.addEventListener('click', function() {
+        const seleccionados = Array.from(document.querySelectorAll('.equipo-checkbox:checked'));
+        if (!seleccionados.length) {
+            alert('Selecciona al menos un equipo para la modificación masiva.');
+            return;
+        }
+
+        const ids = seleccionados.map(cb => cb.value).join(',');
+        document.getElementById('bulkIds').value = ids;
+        document.getElementById('bulkResumenSeleccion').textContent = `${seleccionados.length} equipos seleccionados`;
+
+        const modalEl = document.getElementById('modalEditarMasivo');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    });
+}
+
+const formEditarMasivo = document.getElementById('formEditarMasivo');
+if (formEditarMasivo) {
+    formEditarMasivo.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(formEditarMasivo);
+
+        fetch("{% url 'inventario_modificar_masivo' %}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message || 'Actualización masiva aplicada.');
+                location.reload();
+            } else {
+                alert('Error: ' + (data.message || 'No se pudo aplicar la actualización masiva'));
+            }
+        })
+        .catch(() => alert('Error de conexión al aplicar cambios masivos.'));
+    });
+}
+
+const btnAbrirCustodiaMasiva = document.getElementById('btnAbrirCustodiaMasiva');
+if (btnAbrirCustodiaMasiva) {
+    btnAbrirCustodiaMasiva.addEventListener('click', function() {
+        const seleccionados = Array.from(document.querySelectorAll('.equipo-checkbox:checked'));
+        if (!seleccionados.length) {
+            alert('Selecciona al menos un equipo para cambio de custodia.');
+            return;
+        }
+
+        const ids = seleccionados.map(cb => cb.value).join(',');
+        document.getElementById('custodiaIds').value = ids;
+        document.getElementById('custodiaResumenSeleccion').textContent = `${seleccionados.length} equipos seleccionados`;
+
+        const modalEl = document.getElementById('modalCustodiaMasiva');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    });
+}
+
+const formCustodiaMasiva = document.getElementById('formCustodiaMasiva');
+if (formCustodiaMasiva) {
+    formCustodiaMasiva.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(formCustodiaMasiva);
+
+        fetch("{% url 'inventario_custodia_masivo' %}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message || 'Cambio de custodia aplicado.');
+                location.reload();
+            } else {
+                alert('Error: ' + (data.message || 'No se pudo aplicar el cambio de custodia'));
+            }
+        })
+        .catch(() => alert('Error de conexión al aplicar cambio de custodia.'));
+    });
+}
+
+const formAgregarEquipo = document.getElementById('formAgregarEquipo');
+if (formAgregarEquipo) {
+    formAgregarEquipo.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(formAgregarEquipo);
+
+        fetch("{% url 'inventario_crear' %}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message || 'Equipo creado correctamente.');
+                location.reload();
+            } else {
+                alert('Error: ' + (data.message || 'No se pudo crear el equipo'));
+            }
+        })
+        .catch(() => alert('Error de conexión al crear equipo.'));
+    });
+}
+
 }); // Fin de DOMContentLoaded
 </script>
 
@@ -1102,10 +1530,14 @@ document.getElementById('btnExportar').addEventListener('click', function() {
     const search = document.getElementById('tablaBuscar')?.value || '';
     const searchField = document.getElementById('tablaBuscarCampo')?.value || 'all';
     const limit = document.getElementById('tablaLength')?.value || '25';
+    const proyecto = document.getElementById('filtroProyecto')?.value || '';
+    const caja = document.getElementById('filtroCaja')?.value || '';
 
     if (search) url.searchParams.append('search', search);
     url.searchParams.append('search_field', searchField);
     url.searchParams.append('limit', limit);
+    if (proyecto) url.searchParams.append('proyecto', proyecto);
+    if (caja) url.searchParams.append('caja', caja);
     
     window.location.href = url.toString();
 });
@@ -1243,6 +1675,8 @@ $(document).ready(function() {
         const tablaBuscar = document.getElementById('tablaBuscar');
         const tablaLength = document.getElementById('tablaLength');
         const tablaBuscarCampo = document.getElementById('tablaBuscarCampo');
+        const filtroProyecto = document.getElementById('filtroProyecto');
+        const filtroCaja = document.getElementById('filtroCaja');
         const btnAplicarFiltroTabla = document.getElementById('btnAplicarFiltroTabla');
         const btnLimpiarFiltroTabla = document.getElementById('btnLimpiarFiltroTabla');
 
@@ -1250,6 +1684,8 @@ $(document).ready(function() {
             if (!dataTableInstance || !tablaBuscar) return;
             const texto = tablaBuscar.value || '';
             const campo = tablaBuscarCampo ? tablaBuscarCampo.value : 'all';
+            const proyecto = filtroProyecto ? (filtroProyecto.value || '') : '';
+            const caja = filtroCaja ? (filtroCaja.value || '') : '';
 
             // Limpiar búsquedas por columna antes de aplicar una nueva
             dataTableInstance.columns().search('');
@@ -1259,6 +1695,20 @@ $(document).ready(function() {
             } else {
                 dataTableInstance.search('');
                 dataTableInstance.column(parseInt(campo, 10)).search(texto).draw();
+            }
+
+            if (filtroProyecto) {
+                const tipoActual = '{{ tipo }}';
+                const colProyecto = (tipoActual === 'medidor') ? 8 : ((tipoActual === 'sim') ? 9 : 11);
+                dataTableInstance.column(colProyecto).search(proyecto).draw();
+            }
+
+            if (filtroCaja) {
+                const tipoActual = '{{ tipo }}';
+                const colCaja = (tipoActual === 'medidor') ? 3 : ((tipoActual === 'modem') ? 7 : -1);
+                if (colCaja >= 0) {
+                    dataTableInstance.column(colCaja).search(caja).draw();
+                }
             }
         }
 
@@ -1274,6 +1724,18 @@ $(document).ready(function() {
             });
         }
 
+        if (filtroProyecto) {
+            filtroProyecto.addEventListener('change', function() {
+                aplicarBusqueda();
+            });
+        }
+
+        if (filtroCaja) {
+            filtroCaja.addEventListener('input', function() {
+                aplicarBusqueda();
+            });
+        }
+
         if (btnAplicarFiltroTabla) {
             btnAplicarFiltroTabla.addEventListener('click', function() {
                 aplicarBusqueda();
@@ -1284,6 +1746,8 @@ $(document).ready(function() {
             btnLimpiarFiltroTabla.addEventListener('click', function() {
                 if (tablaBuscar) tablaBuscar.value = '';
                 if (tablaBuscarCampo) tablaBuscarCampo.value = 'all';
+                if (filtroProyecto) filtroProyecto.value = '';
+                if (filtroCaja) filtroCaja.value = '';
                 dataTableInstance.search('');
                 dataTableInstance.columns().search('');
                 dataTableInstance.draw();

@@ -100,13 +100,24 @@ def _tipo_movimiento_desde_estado(estado_nombre):
     return 'ENTREGA'
 
 
-def _registrar_movimiento_inventario(equipo, tipo_item, usuario, observacion, tipo_movimiento=None):
+def _registrar_movimiento_inventario(
+    equipo,
+    tipo_item,
+    usuario,
+    observacion,
+    tipo_movimiento=None,
+    origen=None,
+    destino=None,
+):
     """Registra movimiento en Kardex para cambios de inventario."""
-    ubicacion = getattr(equipo, 'ubicacion_actual', None)
-    if ubicacion is None:
-        ubicacion = Ubicacion.objects.filter(nombre__icontains='Bodega').first()
-    if ubicacion is None:
-        ubicacion = Ubicacion.objects.create(tipo='BODEGA_DELCO', nombre='Bodega Principal')
+    ubicacion_actual = getattr(equipo, 'ubicacion_actual', None)
+    if ubicacion_actual is None:
+        ubicacion_actual = Ubicacion.objects.filter(nombre__icontains='Bodega').first()
+    if ubicacion_actual is None:
+        ubicacion_actual = Ubicacion.objects.create(tipo='BODEGA_DELCO', nombre='Bodega Principal')
+
+    origen_mov = origen or ubicacion_actual
+    destino_mov = destino or ubicacion_actual
 
     if not tipo_movimiento:
         estado_nombre = equipo.estado_inventario.nombre if getattr(equipo, 'estado_inventario', None) else ''
@@ -114,8 +125,8 @@ def _registrar_movimiento_inventario(equipo, tipo_item, usuario, observacion, ti
 
     movimiento = MovimientoInventario.objects.create(
         tipo=tipo_movimiento,
-        origen=ubicacion,
-        destino=ubicacion,
+        origen=origen_mov,
+        destino=destino_mov,
         responsable=usuario,
         observacion=observacion,
     )
@@ -387,6 +398,8 @@ def inventario_list_view(request):
     tipo = request.GET.get('tipo', 'medidor')
     estado_filtro = request.GET.get('estado', '')
     ubicacion_filtro = request.GET.get('ubicacion', '')
+    proyecto_filtro = request.GET.get('proyecto', '').strip()
+    caja_filtro = request.GET.get('caja', '').strip()
     
     # Obtener datos base
     if tipo == 'medidor':
@@ -418,15 +431,29 @@ def inventario_list_view(request):
     
     if ubicacion_filtro:
         equipos = equipos.filter(ubicacion_actual_id=ubicacion_filtro)
+
+    if proyecto_filtro:
+        equipos = equipos.filter(proyecto__icontains=proyecto_filtro)
+
+    if caja_filtro and tipo in ('medidor', 'modem'):
+        equipos = equipos.filter(caja__icontains=caja_filtro)
     
     # Obtener opciones para filtros (solo estados de negocio definidos)
-    estados_permitidos = ['En bodega', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja']
+    if tipo in ('medidor', 'modem'):
+        estados_permitidos = ['En bodega', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja', 'En peaje']
+    else:
+        estados_permitidos = ['En bodega', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja']
     estados_disponibles = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
     estados_disponibles.sort(key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99)
     ubicaciones_disponibles = Ubicacion.objects.all()
     usuarios = Usuario.objects.filter(rol='TECNICO')  # Solo técnicos
     clientes = Cliente.objects.all()
     medidores = Medidor.objects.all().order_by('serie')  # Todos los medidores
+    proyectos_disponibles = sorted(set(
+        list(Medidor.objects.exclude(proyecto='').values_list('proyecto', flat=True))
+        + list(SimCard.objects.exclude(proyecto='').values_list('proyecto', flat=True))
+        + list(Modem.objects.exclude(proyecto='').values_list('proyecto', flat=True))
+    ))
     
     context = {
         'equipos': equipos,
@@ -439,6 +466,9 @@ def inventario_list_view(request):
         'medidores': medidores,
         'estado_seleccionado': estado_filtro,
         'ubicacion_seleccionada': ubicacion_filtro,
+        'proyecto_seleccionado': proyecto_filtro,
+        'caja_seleccionada': caja_filtro,
+        'proyectos_disponibles': proyectos_disponibles,
     }
     return render(request, 'inventario/list.html', context)
 
@@ -500,6 +530,7 @@ def inventario_obtener_datos_view(request, pk):
                 'cliente_id': getattr(equipo, 'cliente_id', '') or '',
                 'cliente_numero': equipo.cliente.numero_cliente if getattr(equipo, 'cliente', None) else '',
                 'medidor_id': getattr(equipo, 'medidor_id', '') or '',
+                'proyecto': getattr(equipo, 'proyecto', '') or '',
             }
         elif tipo == 'modem':
             # Para módems: devolver campos VERDE (solo lectura) y AMARILLO (editables)
@@ -546,6 +577,7 @@ def inventario_obtener_datos_view(request, pk):
                 'estado_id': getattr(equipo, 'estado_inventario_id', '') or '',
                 'entregado_a_id': getattr(equipo, 'entregado_a_id', '') or '',
                 'cliente_id': getattr(equipo, 'cliente_id', '') or '',
+                'proyecto': getattr(equipo, 'proyecto', '') or '',
             }
         
         return JsonResponse({
@@ -610,6 +642,7 @@ def inventario_modificar_view(request, pk):
                 'estado_id': equipo.estado_inventario_id,
                 'entregado_a_id': equipo.entregado_a_id,
                 'cliente_id': equipo.cliente_id,
+                'proyecto': equipo.proyecto,
             }
         elif tipo == 'sim':
             before = {
@@ -617,6 +650,7 @@ def inventario_modificar_view(request, pk):
                 'estado_id': equipo.estado_inventario_id,
                 'cliente_id': equipo.cliente_id,
                 'medidor_id': equipo.medidor_id,
+                'proyecto': equipo.proyecto,
             }
         else:
             before = {
@@ -641,6 +675,7 @@ def inventario_modificar_view(request, pk):
             cliente_texto = request.POST.get('cliente_texto', '').strip()
             cliente_id = request.POST.get('cliente', '').strip()
             medidor_id = request.POST.get('medidor', '').strip()
+            proyecto = request.POST.get('proyecto', '').strip()
             
             # Debug
             print(f'[DEBUG SIMCARD] fecha_entrega={fecha_entrega} | estado_id={estado_id}')
@@ -678,6 +713,7 @@ def inventario_modificar_view(request, pk):
                     equipo.medidor_id = int(medidor_id)
                 except (ValueError, TypeError):
                     pass
+            equipo.proyecto = proyecto
         elif tipo == 'modem':
             # Para Módems - solo campos AMARILLO (editables por administrativo)
             cliente_id = request.POST.get('cliente', '').strip()
@@ -732,6 +768,7 @@ def inventario_modificar_view(request, pk):
             estado_id = request.POST.get('estado_medidor', '').strip()
             entregado_a_id = request.POST.get('entregado_a', '').strip()
             cliente_texto = request.POST.get('cliente_texto', '').strip()
+            proyecto = request.POST.get('proyecto', '').strip()
             
             if fecha_entrega:
                 equipo.fecha_entrega = fecha_entrega
@@ -761,6 +798,7 @@ def inventario_modificar_view(request, pk):
                 equipo.cliente = cliente_obj
             else:
                 equipo.cliente = None
+            equipo.proyecto = proyecto
         
         # Guardar cambios
         equipo.save()
@@ -772,12 +810,14 @@ def inventario_modificar_view(request, pk):
                 'estado_id': equipo.estado_inventario_id,
                 'entregado_a_id': equipo.entregado_a_id,
                 'cliente_id': equipo.cliente_id,
+                'proyecto': equipo.proyecto,
             }
             etiquetas = {
                 'fecha_entrega': 'Fecha Entrega',
                 'estado_id': 'Estado',
                 'entregado_a_id': 'Entregado A',
                 'cliente_id': 'Cliente',
+                'proyecto': 'Proyecto',
             }
             tipo_item = 'MEDIDOR'
             identificador = equipo.serie
@@ -787,12 +827,14 @@ def inventario_modificar_view(request, pk):
                 'estado_id': equipo.estado_inventario_id,
                 'cliente_id': equipo.cliente_id,
                 'medidor_id': equipo.medidor_id,
+                'proyecto': equipo.proyecto,
             }
             etiquetas = {
                 'fecha_entrega': 'Fecha Entrega',
                 'estado_id': 'Estado',
                 'cliente_id': 'Cliente',
                 'medidor_id': 'Medidor',
+                'proyecto': 'Proyecto',
             }
             tipo_item = 'SIM'
             identificador = equipo.imei or equipo.abonado or str(equipo.pk)
@@ -846,6 +888,352 @@ def inventario_modificar_view(request, pk):
 
 
 @login_required
+@admin_or_administrativo
+@require_http_methods(["POST"])
+def inventario_crear_view(request):
+    """Crea un equipo individual en inventario y registra movimiento de recepción."""
+
+    from django.db import IntegrityError
+
+    tipo = request.POST.get('tipo', 'medidor').strip().lower()
+
+    try:
+        estado_id = request.POST.get('estado_id', '').strip()
+        estado_obj = None
+        if estado_id:
+            try:
+                estado_obj = EstadoInventario.objects.get(pk=int(estado_id))
+            except (ValueError, TypeError, EstadoInventario.DoesNotExist):
+                estado_obj = None
+
+        if tipo == 'medidor':
+            serie = request.POST.get('serie', '').strip()
+            if not serie:
+                return JsonResponse({'success': False, 'message': 'La serie del medidor es obligatoria'})
+
+            equipo = Medidor.objects.create(
+                serie=serie,
+                marca=request.POST.get('marca', '').strip(),
+                caja=request.POST.get('caja', '').strip() or None,
+                fecha_recepcion=request.POST.get('fecha_recepcion', '').strip() or None,
+                estado_inventario=estado_obj,
+                proyecto=request.POST.get('proyecto', '').strip(),
+            )
+            tipo_item = 'MEDIDOR'
+            identificador = equipo.serie
+
+        elif tipo == 'sim':
+            imei = request.POST.get('imei', '').strip()
+            if not imei:
+                return JsonResponse({'success': False, 'message': 'El IMEI de la SIM es obligatorio'})
+
+            equipo = SimCard.objects.create(
+                imei=imei,
+                operador=request.POST.get('operador', '').strip(),
+                abonado=request.POST.get('abonado', '').strip(),
+                direccion_ip=request.POST.get('direccion_ip', '').strip(),
+                apn=request.POST.get('apn', '').strip(),
+                fecha_recepcion=request.POST.get('fecha_recepcion', '').strip() or None,
+                estado_inventario=estado_obj,
+                proyecto=request.POST.get('proyecto', '').strip(),
+            )
+            tipo_item = 'SIM'
+            identificador = equipo.imei or str(equipo.pk)
+
+        elif tipo == 'modem':
+            serie = request.POST.get('serie', '').strip()
+            if not serie:
+                return JsonResponse({'success': False, 'message': 'La serie del módem es obligatoria'})
+
+            equipo = Modem.objects.create(
+                serie=serie,
+                marca=request.POST.get('marca', '').strip(),
+                modelo=request.POST.get('modelo', '').strip(),
+                imei=request.POST.get('imei', '').strip() or None,
+                fecha_recepcion=request.POST.get('fecha_recepcion', '').strip() or None,
+                estado_inventario=estado_obj,
+                proyecto=request.POST.get('proyecto', '').strip(),
+            )
+            tipo_item = 'MODEM'
+            identificador = equipo.serie
+        else:
+            return JsonResponse({'success': False, 'message': 'Tipo de equipo no válido'})
+
+        _registrar_movimiento_inventario(
+            equipo,
+            tipo_item,
+            request.user,
+            f'Alta manual de {tipo_item} {identificador}',
+            tipo_movimiento='RECEPCION',
+        )
+
+        return JsonResponse({'success': True, 'message': f'{tipo.capitalize()} creado correctamente'})
+
+    except IntegrityError as exc:
+        return JsonResponse({'success': False, 'message': f'Dato duplicado: {exc}'})
+    except Exception as exc:
+        return JsonResponse({'success': False, 'message': f'Error al crear equipo: {exc}'})
+
+
+@login_required
+@admin_or_administrativo
+@require_http_methods(["POST"])
+def inventario_modificar_masivo_view(request):
+    """Aplica cambios masivos a equipos del mismo tipo y registra trazabilidad."""
+
+    from usuarios.models import Usuario
+
+    tipo = request.POST.get('tipo', 'medidor').strip().lower()
+    ids_raw = request.POST.get('ids', '').strip()
+    if not ids_raw:
+        return JsonResponse({'success': False, 'message': 'Selecciona al menos un equipo'})
+
+    try:
+        ids = [int(x) for x in ids_raw.split(',') if x.strip().isdigit()]
+    except Exception:
+        ids = []
+
+    if not ids:
+        return JsonResponse({'success': False, 'message': 'IDs inválidos para modificación masiva'})
+
+    if tipo == 'medidor':
+        queryset = Medidor.objects.filter(pk__in=ids)
+        tipo_item = 'MEDIDOR'
+    elif tipo == 'sim':
+        queryset = SimCard.objects.filter(pk__in=ids)
+        tipo_item = 'SIM'
+    elif tipo == 'modem':
+        queryset = Modem.objects.filter(pk__in=ids)
+        tipo_item = 'MODEM'
+    else:
+        return JsonResponse({'success': False, 'message': 'Tipo de equipo no válido'})
+
+    estado_id = request.POST.get('estado_id', '').strip()
+    estado_obj = None
+    if estado_id:
+        try:
+            estado_obj = EstadoInventario.objects.get(pk=int(estado_id))
+        except (ValueError, TypeError, EstadoInventario.DoesNotExist):
+            estado_obj = None
+
+    cliente_texto = request.POST.get('cliente_texto', '').strip()
+    cliente_id = request.POST.get('cliente_id', '').strip()
+    entregado_a_id = request.POST.get('entregado_a_id', '').strip()
+    medidor_id = request.POST.get('medidor_id', '').strip()
+    proyecto = request.POST.get('proyecto', '').strip()
+
+    cliente_obj = None
+    if cliente_texto:
+        cliente_obj = Cliente.objects.filter(numero_cliente=cliente_texto).first()
+        if not cliente_obj:
+            cliente_obj = Cliente.objects.create(
+                numero_cliente=cliente_texto,
+                direccion=f'Cliente {cliente_texto}',
+                comuna='Por definir'
+            )
+    elif cliente_id:
+        try:
+            cliente_obj = Cliente.objects.get(pk=int(cliente_id))
+        except (ValueError, TypeError, Cliente.DoesNotExist):
+            cliente_obj = None
+
+    entregado_obj = None
+    if entregado_a_id:
+        try:
+            entregado_obj = Usuario.objects.get(pk=int(entregado_a_id))
+        except (ValueError, TypeError, Usuario.DoesNotExist):
+            entregado_obj = None
+
+    medidor_obj = None
+    if medidor_id:
+        try:
+            medidor_obj = Medidor.objects.get(pk=int(medidor_id))
+        except (ValueError, TypeError, Medidor.DoesNotExist):
+            medidor_obj = None
+
+    actualizados = 0
+    sin_cambios = 0
+
+    for equipo in queryset:
+        campos = []
+
+        if estado_obj and getattr(equipo, 'estado_inventario_id', None) != estado_obj.id:
+            equipo.estado_inventario = estado_obj
+            campos.append('Estado')
+
+        if tipo == 'medidor':
+            if entregado_obj and equipo.entregado_a_id != entregado_obj.id:
+                equipo.entregado_a = entregado_obj
+                campos.append('Entregado A')
+            if cliente_obj and equipo.cliente_id != cliente_obj.id:
+                equipo.cliente = cliente_obj
+                campos.append('Cliente')
+            if proyecto and equipo.proyecto != proyecto:
+                equipo.proyecto = proyecto
+                campos.append('Proyecto')
+
+        elif tipo == 'sim':
+            if cliente_obj and equipo.cliente_id != cliente_obj.id:
+                equipo.cliente = cliente_obj
+                campos.append('Cliente')
+            if medidor_obj and equipo.medidor_id != medidor_obj.id:
+                equipo.medidor = medidor_obj
+                campos.append('Medidor')
+            if proyecto and equipo.proyecto != proyecto:
+                equipo.proyecto = proyecto
+                campos.append('Proyecto')
+
+        elif tipo == 'modem':
+            if cliente_obj and equipo.cliente_id != cliente_obj.id:
+                equipo.cliente = cliente_obj
+                campos.append('Cliente')
+            if medidor_obj and equipo.medidor_id != medidor_obj.id:
+                equipo.medidor = medidor_obj
+                campos.append('Medidor')
+            if proyecto and equipo.proyecto != proyecto:
+                equipo.proyecto = proyecto
+                campos.append('Proyecto')
+
+        if not campos:
+            sin_cambios += 1
+            continue
+
+        equipo.save()
+
+        if tipo_item == 'MEDIDOR':
+            identificador = equipo.serie
+        elif tipo_item == 'SIM':
+            identificador = equipo.imei or equipo.abonado or str(equipo.pk)
+        else:
+            identificador = equipo.serie
+
+        _registrar_movimiento_inventario(
+            equipo,
+            tipo_item,
+            request.user,
+            f'Modificación masiva {tipo_item} {identificador}. Campos: {", ".join(campos)}'
+        )
+        actualizados += 1
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Actualizados: {actualizados} | Sin cambios: {sin_cambios}',
+        'actualizados': actualizados,
+        'sin_cambios': sin_cambios,
+    })
+
+
+@login_required
+@admin_or_administrativo
+@require_http_methods(["POST"])
+def inventario_custodia_masivo_view(request):
+    """Cambia custodia/ubicación de múltiples equipos y registra trazabilidad completa."""
+    from usuarios.models import Usuario
+
+    tipo = request.POST.get('tipo', 'medidor').strip().lower()
+    ids_raw = request.POST.get('ids', '').strip()
+    destino_ubicacion_id = request.POST.get('destino_ubicacion_id', '').strip()
+    tecnico_destino_id = request.POST.get('tecnico_destino_id', '').strip()
+    observacion = request.POST.get('observacion', '').strip()
+
+    if not ids_raw:
+        return JsonResponse({'success': False, 'message': 'Selecciona al menos un equipo'})
+    if not destino_ubicacion_id:
+        return JsonResponse({'success': False, 'message': 'Selecciona una ubicación destino'})
+
+    try:
+        ids = [int(x) for x in ids_raw.split(',') if x.strip().isdigit()]
+    except Exception:
+        ids = []
+
+    if not ids:
+        return JsonResponse({'success': False, 'message': 'IDs inválidos para cambio de custodia'})
+
+    try:
+        destino = Ubicacion.objects.get(pk=int(destino_ubicacion_id))
+    except (ValueError, TypeError, Ubicacion.DoesNotExist):
+        return JsonResponse({'success': False, 'message': 'Ubicación destino inválida'})
+
+    tecnico_destino = None
+    if tecnico_destino_id:
+        try:
+            tecnico_destino = Usuario.objects.get(pk=int(tecnico_destino_id))
+        except (ValueError, TypeError, Usuario.DoesNotExist):
+            tecnico_destino = None
+
+    if tipo == 'medidor':
+        queryset = Medidor.objects.filter(pk__in=ids)
+        tipo_item = 'MEDIDOR'
+    elif tipo == 'sim':
+        queryset = SimCard.objects.filter(pk__in=ids)
+        tipo_item = 'SIM'
+    elif tipo == 'modem':
+        queryset = Modem.objects.filter(pk__in=ids)
+        tipo_item = 'MODEM'
+    else:
+        return JsonResponse({'success': False, 'message': 'Tipo de equipo no válido'})
+
+    actualizados = 0
+
+    for equipo in queryset:
+        origen = getattr(equipo, 'ubicacion_actual', None)
+        if origen is None:
+            origen = Ubicacion.objects.filter(nombre__icontains='Bodega').first()
+        if origen is None:
+            origen = Ubicacion.objects.create(tipo='BODEGA_DELCO', nombre='Bodega Principal')
+
+        cambios = []
+        if getattr(equipo, 'ubicacion_actual_id', None) != destino.id:
+            equipo.ubicacion_actual = destino
+            cambios.append('Ubicación')
+
+        if tipo == 'sim':
+            nuevo_custodio_id = tecnico_destino.id if tecnico_destino else None
+            if equipo.en_custodia_de_id != nuevo_custodio_id:
+                equipo.en_custodia_de = tecnico_destino
+                cambios.append('Custodia')
+        else:
+            nuevo_custodio_id = tecnico_destino.id if tecnico_destino else None
+            if equipo.entregado_a_id != nuevo_custodio_id:
+                equipo.entregado_a = tecnico_destino
+                cambios.append('Entregado A')
+
+        if not cambios:
+            continue
+
+        equipo.save()
+
+        if tipo_item == 'MEDIDOR':
+            identificador = equipo.serie
+        elif tipo_item == 'SIM':
+            identificador = equipo.imei or equipo.abonado or str(equipo.pk)
+        else:
+            identificador = equipo.serie
+
+        detalle_obs = observacion or 'Cambio masivo de custodia'
+        _registrar_movimiento_inventario(
+            equipo,
+            tipo_item,
+            request.user,
+            (
+                f'Cambio custodia {tipo_item} {identificador}. '
+                f'Origen: {origen.nombre} -> Destino: {destino.nombre}. '
+                f'Cambios: {", ".join(cambios)}. {detalle_obs}'
+            ),
+            tipo_movimiento='ENTREGA',
+            origen=origen,
+            destino=destino,
+        )
+        actualizados += 1
+
+    return JsonResponse({
+        'success': True,
+        'message': f'Cambio de custodia aplicado a {actualizados} equipo(s).',
+        'actualizados': actualizados,
+    })
+
+
+@login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO'])
 @require_http_methods(["GET"])
 def inventario_exportar_view(request):
@@ -855,6 +1243,8 @@ def inventario_exportar_view(request):
     search = (request.GET.get('search') or '').strip()
     search_field = (request.GET.get('search_field') or 'all').strip()
     limit_raw = (request.GET.get('limit') or '-1').strip()
+    proyecto_filtro = (request.GET.get('proyecto') or '').strip()
+    caja_filtro = (request.GET.get('caja') or '').strip()
     
     # Obtener datos base
     if tipo == 'medidor':
@@ -882,6 +1272,12 @@ def inventario_exportar_view(request):
         else:
             # Medidor y Modem usan 'entregado_a'
             equipos = equipos.filter(entregado_a=request.user)
+
+    if proyecto_filtro:
+        equipos = equipos.filter(proyecto__icontains=proyecto_filtro)
+
+    if caja_filtro and tipo in ('medidor', 'modem'):
+        equipos = equipos.filter(caja__icontains=caja_filtro)
     
     # Aplicar búsqueda (según filtros visibles en la tabla)
     if search:
@@ -890,10 +1286,12 @@ def inventario_exportar_view(request):
                 equipos = equipos.filter(
                     Q(serie__icontains=search)
                     | Q(marca__icontains=search)
+                    | Q(caja__icontains=search)
                     | Q(entregado_a__nombre_interno__icontains=search)
                     | Q(entregado_a_info__icontains=search)
                     | Q(estado_inventario__nombre__icontains=search)
                     | Q(cliente__numero_cliente__icontains=search)
+                    | Q(proyecto__icontains=search)
                 )
             elif tipo == 'sim':
                 equipos = equipos.filter(
@@ -903,6 +1301,7 @@ def inventario_exportar_view(request):
                     | Q(entregado_a_nombre__icontains=search)
                     | Q(estado_inventario__nombre__icontains=search)
                     | Q(cliente__numero_cliente__icontains=search)
+                    | Q(proyecto__icontains=search)
                 )
             else:
                 equipos = equipos.filter(
@@ -910,38 +1309,45 @@ def inventario_exportar_view(request):
                     | Q(modelo__icontains=search)
                     | Q(imei__icontains=search)
                     | Q(serie__icontains=search)
+                    | Q(caja__icontains=search)
                     | Q(tecnico_responsable__icontains=search)
                     | Q(estado_inventario__nombre__icontains=search)
                     | Q(cliente__numero_cliente__icontains=search)
+                    | Q(proyecto__icontains=search)
                 )
         else:
             field_map = {
                 'medidor': {
                     '1': 'serie',
                     '2': 'marca',
-                    '6': 'entregado_a__nombre_interno',
-                    '7': 'estado_inventario__nombre',
-                    '8': 'cliente__numero_cliente',
+                    '3': 'caja',
+                    '7': 'entregado_a__nombre_interno',
+                    '8': 'proyecto',
+                    '9': 'estado_inventario__nombre',
+                    '10': 'cliente__numero_cliente',
                 },
                 'sim': {
                     '1': 'imei',
                     '2': 'operador',
                     '3': 'abonado',
                     '7': 'entregado_a_nombre',
-                    '9': 'estado_inventario__nombre',
-                    '10': 'cliente__numero_cliente',
+                    '9': 'proyecto',
+                    '10': 'estado_inventario__nombre',
+                    '11': 'cliente__numero_cliente',
                 },
                 'modem': {
                     '1': 'marca',
                     '2': 'modelo',
                     '3': 'imei',
                     '4': 'serie',
-                    '7': 'tecnico_responsable',
-                    '8': 'estado_inventario__nombre',
-                    '9': 'cliente__numero_cliente',
+                    '7': 'caja',
+                    '8': 'tecnico_responsable',
+                    '9': 'estado_inventario__nombre',
+                    '10': 'cliente__numero_cliente',
+                    '11': 'proyecto',
                 },
             }
-            if tipo == 'medidor' and search_field == '3':
+            if tipo == 'medidor' and search_field == '4':
                 val = search.lower()
                 if val in ['si', 'sí', 'true', '1', 'yes']:
                     equipos = equipos.filter(modulo=True)
