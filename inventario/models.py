@@ -104,6 +104,12 @@ class Medidor(models.Model):
         related_name='medidores_asignados',
         help_text='Cliente (editable)'
     )
+    proyecto = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Proyecto asociado al medidor'
+    )
     
     # Campos de trazabilidad
     en_custodia_de = models.ForeignKey(
@@ -229,6 +235,12 @@ class SimCard(models.Model):
         blank=True,
         related_name='simcards_asociadas',
         help_text='Medidor asociado a esta SIM'
+    )
+    proyecto = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Proyecto asociado a la SIM'
     )
     
     # ===== CAMPOS LEGACY (mantener compatibilidad) =====

@@ -9,6 +9,8 @@ Uso:
 Diseñado para ejecutarse periódicamente (cron, celery beat, etc.).
 """
 
+from typing import Optional, cast
+
 from django.core.management.base import BaseCommand
 
 from integraciones.reader import leer_carpetas
@@ -32,7 +34,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         dry_run = options['dry_run']
-        base_dir = options.get('base_dir')
+        base_dir = cast(Optional[str], options.get('base_dir'))
 
         if dry_run:
             self.stdout.write(self.style.WARNING('Modo DRY-RUN — no se guardará nada'))

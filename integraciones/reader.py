@@ -14,7 +14,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Optional
 
 from django.conf import settings
 from django.db import transaction
@@ -122,7 +122,7 @@ def _detectar_alerta_doble_trabajo(submission_id: str, datos: Dict[str, Any]) ->
     return False, ''
 
 
-def leer_carpetas(base_dir: str = None, dry_run: bool = False) -> Dict[str, Any]:
+def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict[str, Any]:
     """
     Recorre la estructura de carpetas de MoreApp y registra los submissions nuevos.
 
@@ -199,7 +199,7 @@ def leer_carpetas(base_dir: str = None, dry_run: bool = False) -> Dict[str, Any]
 
 
 def _procesar_json(json_path: str, ruta_carpeta: str,
-                   numero_correlativo: int, dry_run: bool) -> Dict[str, Any]:
+                   numero_correlativo: Optional[int], dry_run: bool) -> Dict[str, Any]:
     """Procesa un registration.json individual y lo registra en BD."""
     from ordenes_trabajo.models import IntegracionMoreApp
 
