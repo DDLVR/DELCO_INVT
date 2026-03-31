@@ -82,18 +82,6 @@
 
     <!-- Contenido Principal -->
     <main class="flex-fill">
-      <!-- Mensajes del sistema (éxito/error) -->
-      {% if messages %}
-        <div class="mb-3">
-          {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-              {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-          {% endfor %}
-        </div>
-      {% endif %}
-
       {% block content %}{% endblock %}
     </main>
   </div>
@@ -109,5 +97,154 @@
   <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 
   {% block extra_js %}{% endblock %}
+
+  <!-- ════════════════════════════════════════════
+       SISTEMA GLOBAL DE TOASTS
+       Uso: showToast('Texto', 'success'|'danger'|'warning'|'info', ms)
+       Duración 0 = sin auto-cierre (para errores)
+  ════════════════════════════════════════════ -->
+  <div id="delco-toast-container"
+       class="toast-container position-fixed top-0 end-0 p-3"
+       style="z-index:1100; min-width:320px;"></div>
+
+  <!-- Confirmación global (reemplaza confirm() del navegador) -->
+  <div class="modal fade" id="delcoConfirmModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-warning-subtle">
+          <h5 class="modal-title" id="delcoConfirmTitle">
+            <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>
+            Confirmar acción
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body" id="delcoConfirmMessage">
+          ¿Deseas continuar?
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="delcoConfirmCancelBtn">
+            Cancelar
+          </button>
+          <button type="button" class="btn btn-danger" id="delcoConfirmOkBtn">
+            Sí, continuar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  window.showToast = function (message, type, duration) {
+    if (!type) type = 'success';
+    if (type === 'error') type = 'danger';
+    if (duration === undefined) {
+      duration = (type === 'danger') ? 0 : (type === 'warning' ? 7000 : 4000);
+    }
+    var icons = {
+      success:   'bi-check-circle-fill',
+      danger:    'bi-x-circle-fill',
+      warning:   'bi-exclamation-triangle-fill',
+      info:      'bi-info-circle-fill',
+      secondary: 'bi-bell-fill'
+    };
+    var light   = (type === 'warning' || type === 'info');
+    var icon    = icons[type] || 'bi-bell-fill';
+    var textCls = light ? 'text-dark' : 'text-white';
+    var closeCls= light ? 'btn-close' : 'btn-close btn-close-white';
+
+    var container = document.getElementById('delco-toast-container');
+    if (!container) return;
+
+    var el = document.createElement('div');
+    el.className = 'toast align-items-center bg-' + type + ' ' + textCls + ' border-0 shadow-sm mb-2';
+    el.setAttribute('role', 'alert');
+    el.setAttribute('aria-live', 'assertive');
+    el.setAttribute('aria-atomic', 'true');
+    el.style.minWidth = '280px';
+    el.innerHTML =
+      '<div class="d-flex">'
+      + '<div class="toast-body fw-semibold"><i class="bi ' + icon + ' me-2"></i>' + message + '</div>'
+      + '<button type="button" class="' + closeCls + ' me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>'
+      + '</div>';
+
+    container.appendChild(el);
+    var opts = duration > 0 ? { delay: duration, autohide: true } : { autohide: false };
+    bootstrap.Toast.getOrCreateInstance(el, opts).show();
+    el.addEventListener('hidden.bs.toast', function () { el.remove(); });
+  };
+
+  // Confirmación global visual para reemplazar window.confirm
+  window.showConfirm = function (message, title, confirmText, cancelText) {
+    return new Promise(function (resolve) {
+      var modalEl = document.getElementById('delcoConfirmModal');
+      if (!modalEl || typeof bootstrap === 'undefined') {
+        if (window.showToast) {
+          window.showToast('No fue posible mostrar la confirmación visual.', 'warning');
+        }
+        resolve(false);
+        return;
+      }
+
+      var titleEl = document.getElementById('delcoConfirmTitle');
+      var messageEl = document.getElementById('delcoConfirmMessage');
+      var okBtn = document.getElementById('delcoConfirmOkBtn');
+      var cancelBtn = document.getElementById('delcoConfirmCancelBtn');
+
+      messageEl.textContent = message || '¿Deseas continuar?';
+      if (title) {
+        titleEl.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>' + title;
+      } else {
+        titleEl.innerHTML = '<i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirmar acción';
+      }
+      okBtn.textContent = confirmText || 'Sí, continuar';
+      cancelBtn.textContent = cancelText || 'Cancelar';
+
+      var modal = bootstrap.Modal.getOrCreateInstance(modalEl, {
+        backdrop: 'static',
+        keyboard: true
+      });
+
+      var done = false;
+      var cleanup = function () {
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        modalEl.removeEventListener('hidden.bs.modal', onHidden);
+      };
+      var finish = function (result) {
+        if (done) return;
+        done = true;
+        cleanup();
+        resolve(result);
+      };
+
+      var onOk = function () {
+        modal.hide();
+        finish(true);
+      };
+      var onCancel = function () {
+        modal.hide();
+        finish(false);
+      };
+      var onHidden = function () {
+        finish(false);
+      };
+
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      modalEl.addEventListener('hidden.bs.modal', onHidden);
+      modal.show();
+    });
+  };
+
+  // Auto-mostrar mensajes Django como toasts al cargar la página
+  document.addEventListener('DOMContentLoaded', function () {
+    {% for message in messages %}
+    showToast(
+      "{{ message|escapejs }}",
+      "{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}"
+    );
+    {% endfor %}
+  });
+  </script>
 </body>
 </html>

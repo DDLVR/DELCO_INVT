@@ -364,14 +364,14 @@ document.getElementById('formSubirAdjunto')?.addEventListener('submit', function
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            alert('Archivo subido exitosamente');
-            location.reload();
+            showToast('Archivo subido exitosamente.', 'success');
+            setTimeout(() => location.reload(), 1500);
         } else {
-            alert('Error: ' + data.message);
+            showToast('Error: ' + data.message, 'danger');
         }
     })
     .catch(error => {
-        alert('Error al subir archivo: ' + error.message);
+        showToast('Error al subir archivo: ' + error.message, 'danger');
     });
 });
 </script>

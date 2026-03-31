@@ -4,6 +4,7 @@ Utilidades para importación desde Excel
 
 import openpyxl
 import logging
+import unicodedata
 from importaciones.models import ImportacionExcel, ImportacionExcelError
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion, MovimientoInventario, MovimientoItem
 from clientes.models import Cliente
@@ -62,10 +63,45 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
         # Cargar workbook
         wb = openpyxl.load_workbook(archivo)
         ws = wb.active
+
+        def normalizar_header(valor):
+            """Normaliza encabezados para mapear columnas de forma robusta."""
+            if valor is None:
+                return ''
+            texto = str(valor).strip().lower()
+            texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('ascii')
+            texto = texto.replace(':', '').replace('#', 'numero')
+            texto = texto.replace(' ', '_')
+            while '__' in texto:
+                texto = texto.replace('__', '_')
+            return texto
         
         # Leer headers de la primera fila para debugging (sin imprimir a stdout)
         headers = [cell.value for cell in ws[1]]
         logger.debug('Headers encontrados en importacion: %s', headers)
+        headers_norm = [normalizar_header(h) for h in headers]
+
+        def idx_col(*aliases):
+            for alias in aliases:
+                alias_n = normalizar_header(alias)
+                if alias_n in headers_norm:
+                    return headers_norm.index(alias_n)
+            return None
+
+        medidores_cols = {
+            'correlativo': idx_col('numero', '#'),
+            'fecha_recepcion': idx_col('fecha_recepcion', 'fecha_de_recepcion'),
+            'bodega': idx_col('bodega'),
+            'marca': idx_col('marca'),
+            'caja': idx_col('caja'),
+            'serie': idx_col('medidor', 'serie'),
+            'modulo': idx_col('modulo'),
+            'fecha_entrega': idx_col('fecha_de_entrega', 'fecha_entrega'),
+            'entregado_a': idx_col('entregado_a', 'entregado_a_'),
+            'estado': idx_col('estado'),
+            'cliente': idx_col('cliente'),
+            'tipo_medidor': idx_col('tipo_medidor', 'tipo_de_medidor'),
+        }
         
         # Ubicación por defecto (Bodega)
         bodega = Ubicacion.objects.filter(nombre__icontains='Bodega').first()
@@ -105,31 +141,53 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                 
                 # Procesar según tipo de equipo
                 if tipo_equipo.upper() == 'MEDIDORES':
-                    # Formato real planilla medidores:
-                    # #, fecha_recepcion, bodega, marca, caja, medidor, modulo, fecha_entrega, entregado_a, estado, cliente
-                    while len(valores) < 11:
-                        valores.append(None)
+                    # Mapear por nombre de columna para soportar cambios de orden.
+                    def get_val(campo):
+                        idx_c = medidores_cols.get(campo)
+                        if idx_c is None or idx_c >= len(valores):
+                            return None
+                        return valores[idx_c]
 
-                    correlativo = valores[0]
-                    fecha_recepcion = valores[1]
-                    bodega_ref = valores[2]
-                    marca = valores[3]
-                    caja = valores[4]
-                    serie = valores[5]
-                    modulo = valores[6]
-                    fecha_entrega = valores[7]
-                    entregado_a_nombre = valores[8]
-                    estado_nombre = valores[9]
-                    cliente_numero = valores[10]
+                    # Saltar filas vacías o de plantilla (con formato pero sin datos reales).
+                    fecha_recepcion_raw = get_val('fecha_recepcion')
+                    serie_raw = get_val('serie')
+                    tipo_medidor_raw = get_val('tipo_medidor')
+                    if not any([
+                        fecha_recepcion_raw,
+                        serie_raw,
+                        tipo_medidor_raw,
+                    ]):
+                        continue
+
+                    correlativo = get_val('correlativo')
+                    fecha_recepcion = fecha_recepcion_raw
+                    bodega_ref = get_val('bodega')
+                    marca = get_val('marca')
+                    caja = get_val('caja')
+                    serie = serie_raw
+                    modulo = get_val('modulo')
+                    tipo_medidor = tipo_medidor_raw
+                    fecha_entrega = get_val('fecha_entrega')
+                    entregado_a_nombre = get_val('entregado_a')
+                    estado_nombre = get_val('estado')
+                    cliente_numero = get_val('cliente')
 
                     # Validar campos obligatorios reales
-                    if not all([fecha_recepcion, serie]):
-                        raise ValueError('Faltan campos requeridos: fecha_recepcion, serie')
+                    if not all([fecha_recepcion, serie, tipo_medidor]):
+                        raise ValueError('Faltan campos requeridos: fecha_recepcion, serie, tipo_medidor')
 
                     # Convertir serie y caja a string (pero serie debe ser igual a columna Medidor)
                     serie = str(serie).strip() if serie else None
                     caja = str(caja).strip() if caja else None
                     marca = str(marca).strip() if marca else None  # Igual a planilla
+                    tipo_medidor = str(tipo_medidor).strip().upper() if tipo_medidor else ''
+
+                    if tipo_medidor in ['D', 'DIR', 'DIRECTO']:
+                        tipo_medidor = 'DIRECTO'
+                    elif tipo_medidor in ['I', 'IND', 'INDIRECTO']:
+                        tipo_medidor = 'INDIRECTO'
+                    else:
+                        raise ValueError('TIPO MEDIDOR inválido. Valores válidos: DIRECTO o INDIRECTO')
 
                     # Convertir fecha de recepción de forma tolerante
                     from datetime import datetime, date
@@ -237,6 +295,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         caja=caja,
                         serie=serie,
                         modulo=modulo,
+                        tipo_medidor=tipo_medidor,
                         fecha_entrega=fecha_entrega,
                         entregado_a=None,
                         entregado_a_info=entregado_a_info,
@@ -714,8 +773,8 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
     # Encabezados según tipo
     if tipo_equipo.upper() == 'MEDIDORES':
         # Debe coincidir con el formato de importación de medidores
-        headers = ['#', 'Fecha Recepción', 'Bodega', 'Marca', 'Caja', 'Medidor', 'Módulo', 'Fecha Entrega', 'Entregado A', 'Estado', 'Cliente']
-        col_widths = [6, 16, 18, 15, 12, 16, 12, 16, 20, 15, 15]
+        headers = ['#', 'Fecha Recepción', 'Bodega', 'Marca', 'Caja', 'Medidor', 'Módulo', 'Tipo Medidor', 'Fecha Entrega', 'Entregado A', 'Estado', 'Cliente']
+        col_widths = [6, 16, 18, 15, 12, 16, 12, 14, 16, 20, 15, 15]
     elif tipo_equipo.upper() == 'SIM':
         headers = ['IMEI', 'OPERADOR', 'ABONADO', 'DIRECCIÓN IP', 'APN', 'FECHA RECEPCIÓN', 'ENTREGADO A', 'FECHA ENTREGA', 'ESTADO', 'CLIENTE', 'MEDIDOR']
         col_widths = [18, 15, 18, 18, 25, 18, 18, 18, 15, 15, 15]
@@ -750,6 +809,7 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
                 equipo.caja or '',
                 equipo.serie,
                 'SI' if getattr(equipo, 'modulo', None) is True else ('NO' if getattr(equipo, 'modulo', None) is False else ''),
+                equipo.get_tipo_medidor_display() if getattr(equipo, 'tipo_medidor', None) else '',
                 equipo.fecha_entrega.strftime('%d-%m-%Y') if equipo.fecha_entrega else '',
                 equipo.entregado_a.nombre_interno if equipo.entregado_a else (equipo.entregado_a_info or ''),
                 equipo.estado_inventario.nombre if equipo.estado_inventario else '',

@@ -93,13 +93,14 @@
           <p class="text-muted">Sistema de Operaciones</p>
         </div>
 
+        {# Mensajes Django → toasts (ver script al final del body) #}
         {% if messages %}
+        <div id="login-pending-toasts" style="display:none">
           {% for message in messages %}
-            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-              {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
+          <span data-msg="{{ message|escapejs }}"
+                data-type="{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}"></span>
           {% endfor %}
+        </div>
         {% endif %}
 
         <form method="post">
@@ -150,5 +151,55 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Toast container + showToast (standalone, no extiende base.html) -->
+  <div id="delco-toast-container"
+       class="toast-container position-fixed top-0 end-0 p-3"
+       style="z-index:1100; min-width:320px;"></div>
+
+  <script>
+  (function () {
+    function showToast(message, type, duration) {
+      if (!type) type = 'success';
+      if (type === 'error') type = 'danger';
+      if (duration === undefined) {
+        duration = (type === 'danger') ? 0 : (type === 'warning' ? 7000 : 4000);
+      }
+      var icons = {
+        success: 'bi-check-circle-fill', danger: 'bi-x-circle-fill',
+        warning: 'bi-exclamation-triangle-fill', info: 'bi-info-circle-fill'
+      };
+      var light   = (type === 'warning' || type === 'info');
+      var icon    = icons[type] || 'bi-bell-fill';
+      var textCls = light ? 'text-dark' : 'text-white';
+      var closeCls= light ? 'btn-close' : 'btn-close btn-close-white';
+      var container = document.getElementById('delco-toast-container');
+      if (!container) return;
+      var el = document.createElement('div');
+      el.className = 'toast align-items-center bg-' + type + ' ' + textCls + ' border-0 shadow-sm mb-2';
+      el.setAttribute('role', 'alert');
+      el.setAttribute('aria-live', 'assertive');
+      el.setAttribute('aria-atomic', 'true');
+      el.style.minWidth = '280px';
+      el.innerHTML =
+        '<div class="d-flex">'
+        + '<div class="toast-body fw-semibold"><i class="bi ' + icon + ' me-2"></i>' + message + '</div>'
+        + '<button type="button" class="' + closeCls + ' me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>'
+        + '</div>';
+      container.appendChild(el);
+      var opts = duration > 0 ? { delay: duration, autohide: true } : { autohide: false };
+      bootstrap.Toast.getOrCreateInstance(el, opts).show();
+      el.addEventListener('hidden.bs.toast', function () { el.remove(); });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var pending = document.getElementById('login-pending-toasts');
+      if (!pending) return;
+      pending.querySelectorAll('span[data-msg]').forEach(function (s) {
+        showToast(s.dataset.msg, s.dataset.type);
+      });
+    });
+  }());
+  </script>
 </body>
 </html>
