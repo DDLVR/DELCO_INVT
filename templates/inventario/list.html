@@ -24,9 +24,6 @@
                 <button type="button" class="btn btn-outline-dark" id="btnAbrirMasivo">
                     <i class="bi bi-check2-square"></i> Edición múltiple
                 </button>
-                <button type="button" class="btn btn-outline-secondary" id="btnAbrirCustodiaMasiva">
-                    <i class="bi bi-arrow-left-right"></i> Cambio custodia
-                </button>
                 {% endif %}
                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportar">
                     <i class="bi bi-upload"></i> Importar Excel
@@ -75,59 +72,58 @@
         <div class="col-12">
             <div class="card bg-light">
                 <div class="card-body">
-                    <div class="row g-2 align-items-end">
+                    <form method="get" class="row g-2 align-items-end">
+                        <input type="hidden" name="tipo" value="{{ tipo }}">
                         <div class="col-md-2">
-                            <label for="tablaLength" class="form-label mb-1">Mostrar</label>
-                            <select id="tablaLength" class="form-select form-select-sm">
-                                <option value="10">10</option>
-                                <option value="25" selected>25</option>
-                                <option value="50">50</option>
-                                <option value="100">100</option>
-                                <option value="-1">Todos</option>
+                            <label class="form-label mb-1">Carga por página</label>
+                            <select name="per_page" class="form-select form-select-sm">
+                                {% for opt in per_page_options %}
+                                <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
+                                {% endfor %}
                             </select>
                         </div>
                         <div class="col-md-3">
                             <label for="tablaBuscarCampo" class="form-label mb-1">Buscar en</label>
-                            <select id="tablaBuscarCampo" class="form-select form-select-sm">
-                                <option value="all">Todos los campos</option>
+                            <select id="tablaBuscarCampo" name="campo" class="form-select form-select-sm">
+                                <option value="all" {% if campo_busqueda == 'all' %}selected{% endif %}>Todos los campos</option>
                                 {% if tipo == 'medidor' %}
-                                <option value="1">Serie</option>
-                                <option value="2">Marca</option>
-                                <option value="3">Caja</option>
-                                <option value="4">Módulo</option>
-                                <option value="5">Tipo Medidor</option>
-                                <option value="8">Entregado A</option>
-                                <option value="9">Proyecto</option>
-                                <option value="10">Estado</option>
-                                <option value="11">Cliente</option>
+                                <option value="serie" {% if campo_busqueda == 'serie' %}selected{% endif %}>Serie</option>
+                                <option value="marca" {% if campo_busqueda == 'marca' %}selected{% endif %}>Marca</option>
+                                <option value="caja" {% if campo_busqueda == 'caja' %}selected{% endif %}>Caja</option>
+                                <option value="modulo" {% if campo_busqueda == 'modulo' %}selected{% endif %}>Módulo</option>
+                                <option value="tipo_medidor" {% if campo_busqueda == 'tipo_medidor' %}selected{% endif %}>Tipo Medidor</option>
+                                <option value="entregado_a" {% if campo_busqueda == 'entregado_a' %}selected{% endif %}>Entregado A</option>
+                                <option value="proyecto" {% if campo_busqueda == 'proyecto' %}selected{% endif %}>Proyecto</option>
+                                <option value="estado" {% if campo_busqueda == 'estado' %}selected{% endif %}>Estado</option>
+                                <option value="cliente" {% if campo_busqueda == 'cliente' %}selected{% endif %}>Cliente</option>
                                 {% elif tipo == 'sim' %}
-                                <option value="1">IMEI</option>
-                                <option value="2">Operador</option>
-                                <option value="3">Abonado</option>
-                                <option value="7">Entregado A</option>
-                                <option value="9">Proyecto</option>
-                                <option value="10">Estado</option>
-                                <option value="11">Cliente</option>
+                                <option value="imei" {% if campo_busqueda == 'imei' %}selected{% endif %}>IMEI</option>
+                                <option value="operador" {% if campo_busqueda == 'operador' %}selected{% endif %}>Operador</option>
+                                <option value="abonado" {% if campo_busqueda == 'abonado' %}selected{% endif %}>Abonado</option>
+                                <option value="entregado_a" {% if campo_busqueda == 'entregado_a' %}selected{% endif %}>Entregado A</option>
+                                <option value="proyecto" {% if campo_busqueda == 'proyecto' %}selected{% endif %}>Proyecto</option>
+                                <option value="estado" {% if campo_busqueda == 'estado' %}selected{% endif %}>Estado</option>
+                                <option value="cliente" {% if campo_busqueda == 'cliente' %}selected{% endif %}>Cliente</option>
                                 {% elif tipo == 'modem' %}
-                                <option value="1">Marca</option>
-                                <option value="2">Modelo</option>
-                                <option value="3">IMEI</option>
-                                <option value="4">Serie</option>
-                                <option value="7">Caja</option>
-                                <option value="8">Técnico</option>
-                                <option value="9">Estado</option>
-                                <option value="10">Cliente</option>
-                                <option value="11">Proyecto</option>
+                                <option value="marca" {% if campo_busqueda == 'marca' %}selected{% endif %}>Marca</option>
+                                <option value="modelo" {% if campo_busqueda == 'modelo' %}selected{% endif %}>Modelo</option>
+                                <option value="imei" {% if campo_busqueda == 'imei' %}selected{% endif %}>IMEI</option>
+                                <option value="serie" {% if campo_busqueda == 'serie' %}selected{% endif %}>Serie</option>
+                                <option value="caja" {% if campo_busqueda == 'caja' %}selected{% endif %}>Caja</option>
+                                <option value="tecnico" {% if campo_busqueda == 'tecnico' %}selected{% endif %}>Técnico</option>
+                                <option value="estado" {% if campo_busqueda == 'estado' %}selected{% endif %}>Estado</option>
+                                <option value="cliente" {% if campo_busqueda == 'cliente' %}selected{% endif %}>Cliente</option>
+                                <option value="proyecto" {% if campo_busqueda == 'proyecto' %}selected{% endif %}>Proyecto</option>
                                 {% endif %}
                             </select>
                         </div>
                         <div class="col-md-5">
                             <label for="tablaBuscar" class="form-label mb-1">Buscar</label>
-                            <input type="text" id="tablaBuscar" class="form-control form-control-sm" placeholder="Escribe para filtrar...">
+                            <input type="text" id="tablaBuscar" name="q" value="{{ busqueda|default:'' }}" class="form-control form-control-sm" placeholder="Escribe para filtrar...">
                         </div>
                         <div class="col-md-2">
                             <label for="filtroProyecto" class="form-label mb-1">Proyecto</label>
-                            <select id="filtroProyecto" class="form-select form-select-sm">
+                            <select id="filtroProyecto" name="proyecto" class="form-select form-select-sm">
                                 <option value="">Todos</option>
                                 {% for proyecto in proyectos_disponibles %}
                                 <option value="{{ proyecto }}" {% if proyecto == proyecto_seleccionado %}selected{% endif %}>{{ proyecto }}</option>
@@ -137,7 +133,7 @@
                         {% if tipo == 'medidor' %}
                         <div class="col-md-2">
                             <label for="filtroTipoMedidor" class="form-label mb-1">Tipo Medidor</label>
-                            <select id="filtroTipoMedidor" class="form-select form-select-sm">
+                            <select id="filtroTipoMedidor" name="tipo_medidor" class="form-select form-select-sm">
                                 <option value="">Todos</option>
                                 {% for codigo, nombre in tipo_medidor_choices %}
                                 <option value="{{ codigo }}" {% if codigo == tipo_medidor_seleccionado %}selected{% endif %}>{{ nombre }}</option>
@@ -147,17 +143,17 @@
                         {% endif %}
                         <div class="col-md-2 {% if tipo == 'sim' %}d-none{% endif %}">
                             <label for="filtroCaja" class="form-label mb-1">Caja</label>
-                            <input type="text" id="filtroCaja" class="form-control form-control-sm" value="{{ caja_seleccionada|default:'' }}" placeholder="N° caja...">
+                            <input type="text" id="filtroCaja" name="caja" class="form-control form-control-sm" value="{{ caja_seleccionada|default:'' }}" placeholder="N° caja...">
                         </div>
                         <div class="col-md-2 d-flex gap-2">
-                            <button type="button" class="btn btn-primary btn-sm flex-grow-1" id="btnAplicarFiltroTabla">
+                            <button type="submit" class="btn btn-primary btn-sm flex-grow-1" id="btnAplicarFiltroTabla">
                                 <i class="bi bi-funnel"></i> Filtrar
                             </button>
-                            <button type="button" class="btn btn-secondary btn-sm" id="btnLimpiarFiltroTabla">
+                            <a href="{% url 'inventario_list' %}?tipo={{ tipo }}" class="btn btn-secondary btn-sm" id="btnLimpiarFiltroTabla">
                                 <i class="bi bi-arrow-clockwise"></i> Limpiar
-                            </button>
+                            </a>
                         </div>
-                    </div>
+                    </form>
                 </div>
             </div>
         </div>
@@ -218,7 +214,7 @@
                         <tbody>
                             {% for equipo in equipos %}
                             <tr>
-                                <td>{{ forloop.revcounter }}</td>
+                                <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
                                 {% if tipo == 'medidor' %}
                                 <td>{{ equipo.serie }}</td>
                                 <td>{{ equipo.marca|default:"-" }}</td>
@@ -286,6 +282,39 @@
                         </tbody>
                     </table>
                 </div>
+                {% if page_obj.paginator.num_pages > 1 %}
+                <div class="card-footer bg-white">
+                    <nav aria-label="Paginación inventario">
+                        <ul class="pagination pagination-sm mb-0 justify-content-center">
+                            {% if page_obj.has_previous %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                            {% endif %}
+
+                            {% for num in page_obj.paginator.page_range %}
+                                {% if num == page_obj.number %}
+                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                                {% elif num >= page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %}
+                                <li class="page-item">
+                                    <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ num }}">{{ num }}</a>
+                                </li>
+                                {% endif %}
+                            {% endfor %}
+
+                            {% if page_obj.has_next %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
+                            {% endif %}
+                        </ul>
+                    </nav>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -622,6 +651,12 @@
                         <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
                     </div>
                     {% endif %}
+
+                    <hr class="my-3">
+                    <div class="mb-3">
+                        <label class="form-label">Observación</label>
+                        <textarea class="form-control" name="observacion" rows="2" placeholder="Detalle operativo del movimiento"></textarea>
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -632,54 +667,6 @@
     </div>
 </div>
 
-<!-- Modal para cambio masivo de custodia -->
-<div class="modal fade" id="modalCustodiaMasiva" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-secondary text-white">
-                <h5 class="modal-title"><i class="bi bi-arrow-left-right"></i> Cambio masivo de custodia</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <form id="formCustodiaMasiva">
-                {% csrf_token %}
-                <div class="modal-body">
-                    <input type="hidden" name="tipo" value="{{ tipo }}">
-                    <input type="hidden" name="ids" id="custodiaIds">
-                    <p class="small text-muted" id="custodiaResumenSeleccion">0 equipos seleccionados</p>
-
-                    <div class="mb-3">
-                        <label class="form-label">Ubicación destino *</label>
-                        <select class="form-select" name="destino_ubicacion_id" required>
-                            <option value="">-- Seleccionar --</option>
-                            {% for ubicacion in ubicaciones_disponibles %}
-                            <option value="{{ ubicacion.id }}">{{ ubicacion.nombre }} ({{ ubicacion.get_tipo_display }})</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Técnico destino (opcional)</label>
-                        <select class="form-select" name="tecnico_destino_id">
-                            <option value="">-- Sin asignar --</option>
-                            {% for usuario in usuarios %}
-                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Observación</label>
-                        <textarea class="form-control" name="observacion" rows="2" placeholder="Detalle operativo del cambio"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Aplicar cambio</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 {% endif %}
 
 <!-- Modal para Modificar Equipo -->
@@ -1502,48 +1489,6 @@ if (formEditarMasivo) {
     });
 }
 
-const btnAbrirCustodiaMasiva = document.getElementById('btnAbrirCustodiaMasiva');
-if (btnAbrirCustodiaMasiva) {
-    btnAbrirCustodiaMasiva.addEventListener('click', function() {
-        const seleccionados = Array.from(document.querySelectorAll('.equipo-checkbox:checked'));
-        if (!seleccionados.length) {
-            showToast('Selecciona al menos un equipo para cambio de custodia.', 'warning');
-            return;
-        }
-
-        const ids = seleccionados.map(cb => cb.value).join(',');
-        document.getElementById('custodiaIds').value = ids;
-        document.getElementById('custodiaResumenSeleccion').textContent = `${seleccionados.length} equipos seleccionados`;
-
-        const modalEl = document.getElementById('modalCustodiaMasiva');
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
-    });
-}
-
-const formCustodiaMasiva = document.getElementById('formCustodiaMasiva');
-if (formCustodiaMasiva) {
-    formCustodiaMasiva.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const formData = new FormData(formCustodiaMasiva);
-
-        fetch("{% url 'inventario_custodia_masivo' %}", {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showToast(data.message || 'Cambio de custodia aplicado.', 'success');
-                setTimeout(() => location.reload(), 1500);
-            } else {
-                showToast('Error: ' + (data.message || 'No se pudo aplicar el cambio de custodia'), 'danger');
-            }
-        })
-        .catch(() => showToast('Error de conexión al aplicar cambio de custodia.', 'danger'));
-    });
-}
-
 const formAgregarEquipo = document.getElementById('formAgregarEquipo');
 if (formAgregarEquipo) {
     formAgregarEquipo.addEventListener('submit', function(e) {
@@ -1710,15 +1655,17 @@ var dataTableInstance = null;
 $(document).ready(function() {
     // Suprimir warnings de DataTables (por ejemplo, columnas incorrectas en tabla vacía)
     $.fn.dataTable.ext.errMode = 'none';
-    // Inicialización simple y directa
+    // La paginación y filtros principales se manejan en servidor.
+    // DataTables se usa solo para ordenación visual de la página actual.
     try {
         dataTableInstance = $('#tablaInventario').DataTable({
             language: {
                 url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
             },
-            dom: 'rt<"d-flex justify-content-between align-items-center mt-2"ip>',
-            pageLength: 25,
-            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+            dom: 'rt',
+            paging: false,
+            searching: false,
+            info: false,
             order: [[0, 'desc']],
             autoWidth: false,
             columnDefs: [
@@ -1729,112 +1676,6 @@ $(document).ready(function() {
                 }
             ]
         });
-
-        // Controles externos dentro de la tarjeta de filtros
-        const tablaBuscar = document.getElementById('tablaBuscar');
-        const tablaLength = document.getElementById('tablaLength');
-        const tablaBuscarCampo = document.getElementById('tablaBuscarCampo');
-        const filtroProyecto = document.getElementById('filtroProyecto');
-        const filtroTipoMedidor = document.getElementById('filtroTipoMedidor');
-        const filtroCaja = document.getElementById('filtroCaja');
-        const btnAplicarFiltroTabla = document.getElementById('btnAplicarFiltroTabla');
-        const btnLimpiarFiltroTabla = document.getElementById('btnLimpiarFiltroTabla');
-
-        function aplicarBusqueda() {
-            if (!dataTableInstance || !tablaBuscar) return;
-            const texto = tablaBuscar.value || '';
-            const campo = tablaBuscarCampo ? tablaBuscarCampo.value : 'all';
-            const proyecto = filtroProyecto ? (filtroProyecto.value || '') : '';
-            const tipoMedidor = filtroTipoMedidor ? (filtroTipoMedidor.value || '') : '';
-            const caja = filtroCaja ? (filtroCaja.value || '') : '';
-
-            // Limpiar búsquedas por columna antes de aplicar una nueva
-            dataTableInstance.columns().search('');
-
-            if (campo === 'all') {
-                dataTableInstance.search(texto).draw();
-            } else {
-                dataTableInstance.search('');
-                dataTableInstance.column(parseInt(campo, 10)).search(texto).draw();
-            }
-
-            if (filtroProyecto) {
-                const tipoActual = '{{ tipo }}';
-                const colProyecto = (tipoActual === 'medidor') ? 9 : ((tipoActual === 'sim') ? 9 : 11);
-                dataTableInstance.column(colProyecto).search(proyecto).draw();
-            }
-
-            if (filtroTipoMedidor) {
-                const tipoActual = '{{ tipo }}';
-                if (tipoActual === 'medidor') {
-                    dataTableInstance.column(5).search(tipoMedidor).draw();
-                }
-            }
-
-            if (filtroCaja) {
-                const tipoActual = '{{ tipo }}';
-                const colCaja = (tipoActual === 'medidor') ? 3 : ((tipoActual === 'modem') ? 7 : -1);
-                if (colCaja >= 0) {
-                    dataTableInstance.column(colCaja).search(caja).draw();
-                }
-            }
-        }
-
-        if (tablaBuscar) {
-            tablaBuscar.addEventListener('input', function() {
-                aplicarBusqueda();
-            });
-        }
-
-        if (tablaBuscarCampo) {
-            tablaBuscarCampo.addEventListener('change', function() {
-                aplicarBusqueda();
-            });
-        }
-
-        if (filtroProyecto) {
-            filtroProyecto.addEventListener('change', function() {
-                aplicarBusqueda();
-            });
-        }
-
-        if (filtroTipoMedidor) {
-            filtroTipoMedidor.addEventListener('change', function() {
-                aplicarBusqueda();
-            });
-        }
-
-        if (filtroCaja) {
-            filtroCaja.addEventListener('input', function() {
-                aplicarBusqueda();
-            });
-        }
-
-        if (btnAplicarFiltroTabla) {
-            btnAplicarFiltroTabla.addEventListener('click', function() {
-                aplicarBusqueda();
-            });
-        }
-
-        if (btnLimpiarFiltroTabla) {
-            btnLimpiarFiltroTabla.addEventListener('click', function() {
-                if (tablaBuscar) tablaBuscar.value = '';
-                if (tablaBuscarCampo) tablaBuscarCampo.value = 'all';
-                if (filtroProyecto) filtroProyecto.value = '';
-                if (filtroTipoMedidor) filtroTipoMedidor.value = '';
-                if (filtroCaja) filtroCaja.value = '';
-                dataTableInstance.search('');
-                dataTableInstance.columns().search('');
-                dataTableInstance.draw();
-            });
-        }
-
-        if (tablaLength) {
-            tablaLength.value = String(dataTableInstance.page.len());
-            tablaLength.addEventListener('change', function() {
-                dataTableInstance.page.len(parseInt(this.value, 10)).draw();
-            });
-        }
 
         console.log('✓ DataTables cargado correctamente');
     } catch(e) {
