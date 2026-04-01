@@ -77,14 +77,12 @@
                                     <span class="badge bg-warning text-dark">{{ error.numero_fila }}</span>
                                 </td>
                                 <td>
-                                    <small class="text-danger" title="{{ error.motivo }}">
-                                        {{ error.motivo|truncatewords:15 }}
-                                    </small>
+                                    <div class="small text-danger" style="white-space: normal;">
+                                        {{ error.motivo }}
+                                    </div>
                                 </td>
                                 <td>
-                                    <code style="font-size: 0.80rem;">
-                                        {{ error.data_cruda|truncatewords:20 }}
-                                    </code>
+                                    <pre class="mb-0" style="font-size: 0.75rem; white-space: pre-wrap; word-break: break-word;">{{ error.data_cruda }}</pre>
                                 </td>
                                 <td>
                                     <button class="btn btn-sm btn-primary" 

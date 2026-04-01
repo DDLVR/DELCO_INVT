@@ -2,6 +2,7 @@
 Utilidades para importación desde Excel
 """
 
+import json
 import openpyxl
 import logging
 import unicodedata
@@ -26,6 +27,22 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
     Retorna: ImportacionExcel instance
     """
     from datetime import datetime
+
+    def error_columna(columna, mensaje, valor=None):
+        """Genera un mensaje homogéneo y legible para errores por columna."""
+        base = f'Columna "{columna}": {mensaje}'
+        if valor is not None and str(valor).strip() != '':
+            return f'{base}. Valor recibido: {valor}'
+        return base
+
+    def fila_a_texto(headers_fila, valores_fila):
+        """Convierte una fila en texto columna: valor para facilitar corrección."""
+        data = {}
+        for i, valor in enumerate(valores_fila):
+            nombre_columna = headers_fila[i] if i < len(headers_fila) else None
+            nombre_columna = str(nombre_columna).strip() if nombre_columna else f'Columna_{i + 1}'
+            data[nombre_columna] = valor
+        return json.dumps(data, ensure_ascii=False, default=str)
 
     def registrar_movimiento_importacion(equipo_obj, tipo_item, estado_obj_local, detalle, fila):
         try:
@@ -173,8 +190,17 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     cliente_numero = get_val('cliente')
 
                     # Validar campos obligatorios reales
-                    if not all([fecha_recepcion, serie, tipo_medidor]):
-                        raise ValueError('Faltan campos requeridos: fecha_recepcion, serie, tipo_medidor')
+                    faltantes = []
+                    if not fecha_recepcion:
+                        faltantes.append('Fecha Recepción')
+                    if not serie:
+                        faltantes.append('Medidor/Serie')
+                    if not tipo_medidor:
+                        faltantes.append('Tipo Medidor')
+                    if faltantes:
+                        raise ValueError(
+                            f'Faltan columnas requeridas: {", ".join(faltantes)}'
+                        )
 
                     # Convertir serie y caja a string (pero serie debe ser igual a columna Medidor)
                     serie = str(serie).strip() if serie else None
@@ -187,7 +213,13 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     elif tipo_medidor in ['I', 'IND', 'INDIRECTO']:
                         tipo_medidor = 'INDIRECTO'
                     else:
-                        raise ValueError('TIPO MEDIDOR inválido. Valores válidos: DIRECTO o INDIRECTO')
+                        raise ValueError(
+                            error_columna(
+                                'Tipo Medidor',
+                                'valor inválido. Valores válidos: DIRECTO o INDIRECTO',
+                                tipo_medidor,
+                            )
+                        )
 
                     # Convertir fecha de recepción de forma tolerante
                     from datetime import datetime, date
@@ -214,8 +246,13 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                             except Exception:
                                 continue
                         if not convertido:
-                            # Si no se pudo convertir, dejar como None (vacío)
-                            fecha_recepcion = None
+                            raise ValueError(
+                                error_columna(
+                                    'Fecha Recepción',
+                                    'formato no válido. Usa DD/MM/AAAA o DD-MM-AAAA',
+                                    fecha_recepcion,
+                                )
+                            )
 
                     # Convertir modulo desde texto SI/NO a booleano para el modelo
                     if isinstance(modulo, str):
@@ -233,7 +270,13 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
 
                     # Validar unicidad de serie
                     if Medidor.objects.filter(serie=serie).exists():
-                        raise ValueError(f'Medidor con serie {serie} ya existe')
+                        raise ValueError(
+                            error_columna(
+                                'Medidor/Serie',
+                                'ya existe en base de datos',
+                                serie,
+                            )
+                        )
 
                     # Buscar estado si viene
                     estado_obj = None
@@ -284,8 +327,13 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                                 except Exception:
                                     continue
                             if not convertido:
-                                # Si no se pudo convertir, dejar como None (vacío)
-                                fecha_entrega = None
+                                raise ValueError(
+                                    error_columna(
+                                        'Fecha Entrega',
+                                        'formato no válido. Usa DD/MM/AAAA o DD-MM-AAAA',
+                                        fecha_entrega,
+                                    )
+                                )
 
                     # Crear medidor
                     medidor = Medidor.objects.create(
@@ -343,15 +391,15 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     
                     # Validar campos obligatorios amarillos
                     if not imei:
-                        raise ValueError('Falta IMEI (columna A)')
+                        raise ValueError(error_columna('IMEI', 'valor obligatorio'))
                     if not operador:
-                        raise ValueError('Falta OPERADOR (columna B)')
+                        raise ValueError(error_columna('OPERADOR', 'valor obligatorio'))
                     if not abonado:
-                        raise ValueError('Falta ABONADO (columna C) - Verifica que la celda no esté vacía o con formato especial en Excel')
+                        raise ValueError(error_columna('ABONADO', 'valor obligatorio'))
                     if not apn:
-                        raise ValueError('Falta APN (columna E)')
+                        raise ValueError(error_columna('APN', 'valor obligatorio'))
                     if not fecha_recepcion:
-                        raise ValueError('Falta FECHA DE RECEPCIÓN (columna F)')
+                        raise ValueError(error_columna('FECHA RECEPCIÓN', 'valor obligatorio'))
                     
                     # Función helper para limpiar valores
                     def limpiar_valor(val):
@@ -380,7 +428,12 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     
                     # Verificar nuevamente después de limpiar
                     if not abonado or abonado == '':
-                        raise ValueError('ABONADO (columna C) está vacío después de limpieza. Copia el valor directamente como texto en Excel y guarda de nuevo.')
+                        raise ValueError(
+                            error_columna(
+                                'ABONADO',
+                                'quedó vacío después de limpieza. Guárdalo como texto en Excel',
+                            )
+                        )
                     
                     direccion_ip = limpiar_valor(direccion_ip) if direccion_ip else ''
                     apn = limpiar_valor(apn)
@@ -388,7 +441,13 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     
                     # Verificar duplicados
                     if SimCard.objects.filter(imei=imei).exists():
-                        raise ValueError(f'SIM con IMEI {imei} ya existe en base de datos')
+                        raise ValueError(
+                            error_columna(
+                                'IMEI',
+                                'ya existe en base de datos',
+                                imei,
+                            )
+                        )
                     
                     # Convertir fecha de recepción (Excel date o string)
                     try:
@@ -412,7 +471,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         else:
                             raise ValueError(f'Tipo de fecha no reconocido: {type(fecha_recepcion)}')
                     except Exception as e:
-                        raise ValueError(f'Error en FECHA DE RECEPCIÓN (columna F): {str(e)}')
+                            raise ValueError(error_columna('FECHA RECEPCIÓN', str(e), fecha_recepcion))
                     
                     # Convertir fecha de entrega si viene
                     if fecha_entrega:
@@ -530,9 +589,9 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     
                     # Validar campos obligatorios
                     if not marca:
-                        raise ValueError('Falta MARCA (columna A)')
+                        raise ValueError(error_columna('MARCA', 'valor obligatorio'))
                     if not serie:
-                        raise ValueError('Falta SERIE (columna D)')
+                        raise ValueError(error_columna('SERIE', 'valor obligatorio'))
                     
                     # Función helper para limpiar valores
                     def limpiar_valor(val):
@@ -556,7 +615,9 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     
                     # Verificar duplicados
                     if Modem.objects.filter(serie=serie).exists():
-                        raise ValueError(f'Modem con SERIE {serie} ya existe en base de datos')
+                        raise ValueError(error_columna('SERIE', 'ya existe en base de datos', serie))
+                    if imei and Modem.objects.filter(imei=imei).exists():
+                        raise ValueError(error_columna('IMEI', 'ya existe en base de datos', imei))
                     
                     # Convertir fechas
                     try:
@@ -657,7 +718,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     importacion=importacion,
                     numero_fila=idx,
                     motivo=str(e),
-                    data_cruda=str(valores)
+                    data_cruda=fila_a_texto(headers, valores)
                 )
         
         # Finalizar importación
@@ -689,10 +750,25 @@ def importar_clientes_excel(archivo, usuario):
         archivo_original=archivo.name if hasattr(archivo, 'name') else 'Upload',
         usuario=usuario,
     )
+
+    def error_columna(columna, mensaje, valor=None):
+        base = f'Columna "{columna}": {mensaje}'
+        if valor is not None and str(valor).strip() != '':
+            return f'{base}. Valor recibido: {valor}'
+        return base
+
+    def fila_a_texto(headers_fila, valores_fila):
+        data = {}
+        for i, valor in enumerate(valores_fila):
+            nombre_columna = headers_fila[i] if i < len(headers_fila) else None
+            nombre_columna = str(nombre_columna).strip() if nombre_columna else f'Columna_{i + 1}'
+            data[nombre_columna] = valor
+        return json.dumps(data, ensure_ascii=False, default=str)
     
     try:
         wb = openpyxl.load_workbook(archivo)
         ws = wb.active
+        headers = [cell.value for cell in ws[1]]
         
         contador_filas = 0
         exitosas = 0
@@ -708,12 +784,19 @@ def importar_clientes_excel(archivo, usuario):
                     continue
                 
                 numero, direccion, comuna, referencia = valores[0], valores[1], valores[2], valores[3]
-                
-                if not all([numero, direccion, comuna]):
-                    raise ValueError('Faltan campos: numero_cliente, direccion, comuna')
+
+                faltantes = []
+                if not numero:
+                    faltantes.append('Numero Cliente')
+                if not direccion:
+                    faltantes.append('Direccion')
+                if not comuna:
+                    faltantes.append('Comuna')
+                if faltantes:
+                    raise ValueError(f'Faltan columnas requeridas: {", ".join(faltantes)}')
                 
                 if Cliente.objects.filter(numero_cliente=numero).exists():
-                    raise ValueError(f'Cliente {numero} ya existe')
+                    raise ValueError(error_columna('Numero Cliente', 'ya existe en base de datos', numero))
                 
                 Cliente.objects.create(
                     numero_cliente=numero,
@@ -730,7 +813,7 @@ def importar_clientes_excel(archivo, usuario):
                     importacion=importacion,
                     numero_fila=idx,
                     motivo=str(e),
-                    data_cruda=str(valores)
+                    data_cruda=fila_a_texto(headers, valores)
                 )
         
         importacion.total_filas = contador_filas

@@ -391,29 +391,51 @@ def orden_crear_view(request):
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO'])
 def inventario_list_view(request):
     """Listado de equipos en inventario con filtros"""
+    from django.core.paginator import Paginator
     
     from usuarios.models import Usuario
     from clientes.models import Cliente
     
     tipo = request.GET.get('tipo', 'medidor')
+    page_num = request.GET.get('page', '1')
+    per_page_raw = request.GET.get('per_page', '100')
+    busqueda = request.GET.get('q', '').strip()
+    campo_busqueda = request.GET.get('campo', 'all').strip()
     estado_filtro = request.GET.get('estado', '')
     ubicacion_filtro = request.GET.get('ubicacion', '')
     proyecto_filtro = request.GET.get('proyecto', '').strip()
     caja_filtro = request.GET.get('caja', '').strip()
     tipo_medidor_filtro = request.GET.get('tipo_medidor', '').strip()
+
+    # Tamaño de página permitido (optimizado)
+    per_page_options = [10, 25, 50, 100]
+    try:
+        per_page = int(per_page_raw)
+    except (TypeError, ValueError):
+        per_page = 100
+    if per_page not in per_page_options:
+        per_page = 100
     
     # Obtener datos base
     if tipo == 'medidor':
-        equipos = Medidor.objects.all().order_by('-id')
+        equipos = Medidor.objects.select_related(
+            'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
+        ).all().order_by('-id')
         titulo = 'Medidores'
     elif tipo == 'sim':
-        equipos = SimCard.objects.all().order_by('-id')
+        equipos = SimCard.objects.select_related(
+            'estado_inventario', 'ubicacion_actual', 'cliente', 'en_custodia_de', 'medidor'
+        ).all().order_by('-id')
         titulo = 'SIM Cards'
     elif tipo == 'modem':
-        equipos = Modem.objects.all().order_by('-id')
+        equipos = Modem.objects.select_related(
+            'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
+        ).all().order_by('-id')
         titulo = 'Módems'
     else:
-        equipos = Medidor.objects.all().order_by('-id')
+        equipos = Medidor.objects.select_related(
+            'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
+        ).all().order_by('-id')
         titulo = 'Medidores'
         tipo = 'medidor'
     
@@ -441,6 +463,91 @@ def inventario_list_view(request):
 
     if tipo == 'medidor' and tipo_medidor_filtro:
         equipos = equipos.filter(tipo_medidor=tipo_medidor_filtro)
+
+    # Búsqueda global por servidor (evita filtrar solo el bloque cargado)
+    if busqueda:
+        if tipo == 'medidor':
+            campos_por_tipo = {
+                'serie': 'serie__icontains',
+                'marca': 'marca__icontains',
+                'caja': 'caja__icontains',
+                'modulo': 'modulo__icontains',
+                'tipo_medidor': 'tipo_medidor__icontains',
+                'entregado_a': 'entregado_a__nombre_interno__icontains',
+                'proyecto': 'proyecto__icontains',
+                'estado': 'estado_inventario__nombre__icontains',
+                'cliente': 'cliente__numero_cliente__icontains',
+            }
+            campos_all = [
+                'serie__icontains',
+                'marca__icontains',
+                'caja__icontains',
+                'modulo__icontains',
+                'tipo_medidor__icontains',
+                'entregado_a__nombre_interno__icontains',
+                'proyecto__icontains',
+                'estado_inventario__nombre__icontains',
+                'cliente__numero_cliente__icontains',
+            ]
+        elif tipo == 'sim':
+            campos_por_tipo = {
+                'imei': 'imei__icontains',
+                'operador': 'operador__icontains',
+                'abonado': 'abonado__icontains',
+                'entregado_a': 'entregado_a_nombre__icontains',
+                'proyecto': 'proyecto__icontains',
+                'estado': 'estado_inventario__nombre__icontains',
+                'cliente': 'cliente__numero_cliente__icontains',
+            }
+            campos_all = [
+                'imei__icontains',
+                'operador__icontains',
+                'abonado__icontains',
+                'entregado_a_nombre__icontains',
+                'proyecto__icontains',
+                'estado_inventario__nombre__icontains',
+                'cliente__numero_cliente__icontains',
+            ]
+        else:
+            campos_por_tipo = {
+                'marca': 'marca__icontains',
+                'modelo': 'modelo__icontains',
+                'imei': 'imei__icontains',
+                'serie': 'serie__icontains',
+                'caja': 'caja__icontains',
+                'tecnico': 'tecnico_responsable__icontains',
+                'estado': 'estado_inventario__nombre__icontains',
+                'cliente': 'cliente__numero_cliente__icontains',
+                'proyecto': 'proyecto__icontains',
+            }
+            campos_all = [
+                'marca__icontains',
+                'modelo__icontains',
+                'imei__icontains',
+                'serie__icontains',
+                'caja__icontains',
+                'tecnico_responsable__icontains',
+                'estado_inventario__nombre__icontains',
+                'cliente__numero_cliente__icontains',
+                'proyecto__icontains',
+            ]
+
+        if campo_busqueda in campos_por_tipo:
+            equipos = equipos.filter(**{campos_por_tipo[campo_busqueda]: busqueda})
+        else:
+            query = Q()
+            for lookup in campos_all:
+                query |= Q(**{lookup: busqueda})
+            equipos = equipos.filter(query)
+
+    total_filtrado = equipos.count()
+    paginador = Paginator(equipos, per_page)
+    page_obj = paginador.get_page(page_num)
+    equipos = page_obj.object_list
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    query_string = query_params.urlencode()
     
     # Obtener opciones para filtros (solo estados de negocio definidos)
     if tipo in ('medidor', 'modem'):
@@ -477,6 +584,13 @@ def inventario_list_view(request):
         'tipo_medidor_choices': Medidor.TIPO_MEDIDOR_CHOICES,
         'total_medidores_directos': Medidor.objects.filter(tipo_medidor='DIRECTO').count(),
         'total_medidores_indirectos': Medidor.objects.filter(tipo_medidor='INDIRECTO').count(),
+        'busqueda': busqueda,
+        'campo_busqueda': campo_busqueda,
+        'total_filtrado': total_filtrado,
+        'page_obj': page_obj,
+        'query_string': query_string,
+        'per_page': per_page,
+        'per_page_options': per_page_options,
     }
     return render(request, 'inventario/list.html', context)
 
@@ -1003,8 +1117,10 @@ def inventario_crear_view(request):
 @admin_or_administrativo
 @require_http_methods(["POST"])
 def inventario_modificar_masivo_view(request):
-    """Aplica cambios masivos a equipos del mismo tipo y registra trazabilidad."""
-
+    """
+    Edición múltiple unificada: combina cambios de campos (estado, cliente, proyecto,
+    tipo medidor, etc.) con trazabilidad completa.
+    """
     from usuarios.models import Usuario
 
     tipo = request.POST.get('tipo', 'medidor').strip().lower()
@@ -1018,7 +1134,7 @@ def inventario_modificar_masivo_view(request):
         ids = []
 
     if not ids:
-        return JsonResponse({'success': False, 'message': 'IDs inválidos para modificación masiva'})
+        return JsonResponse({'success': False, 'message': 'IDs inválidos para edición múltiple'})
 
     if tipo == 'medidor':
         queryset = Medidor.objects.filter(pk__in=ids)
@@ -1032,13 +1148,14 @@ def inventario_modificar_masivo_view(request):
     else:
         return JsonResponse({'success': False, 'message': 'Tipo de equipo no válido'})
 
+    # --- Campos de edición ---
     estado_id = request.POST.get('estado_id', '').strip()
     estado_obj = None
     if estado_id:
         try:
             estado_obj = EstadoInventario.objects.get(pk=int(estado_id))
         except (ValueError, TypeError, EstadoInventario.DoesNotExist):
-            estado_obj = None
+            pass
 
     cliente_texto = request.POST.get('cliente_texto', '').strip()
     cliente_id = request.POST.get('cliente_id', '').strip()
@@ -1046,6 +1163,7 @@ def inventario_modificar_masivo_view(request):
     medidor_id = request.POST.get('medidor_id', '').strip()
     proyecto = request.POST.get('proyecto', '').strip()
     tipo_medidor = request.POST.get('tipo_medidor', '').strip().upper()
+    observacion = request.POST.get('observacion', '').strip()
 
     cliente_obj = None
     if cliente_texto:
@@ -1060,21 +1178,21 @@ def inventario_modificar_masivo_view(request):
         try:
             cliente_obj = Cliente.objects.get(pk=int(cliente_id))
         except (ValueError, TypeError, Cliente.DoesNotExist):
-            cliente_obj = None
+            pass
 
     entregado_obj = None
     if entregado_a_id:
         try:
             entregado_obj = Usuario.objects.get(pk=int(entregado_a_id))
         except (ValueError, TypeError, Usuario.DoesNotExist):
-            entregado_obj = None
+            pass
 
     medidor_obj = None
     if medidor_id:
         try:
             medidor_obj = Medidor.objects.get(pk=int(medidor_id))
         except (ValueError, TypeError, Medidor.DoesNotExist):
-            medidor_obj = None
+            pass
 
     actualizados = 0
     sin_cambios = 0
@@ -1082,10 +1200,12 @@ def inventario_modificar_masivo_view(request):
     for equipo in queryset:
         campos = []
 
+        # Cambio de estado
         if estado_obj and getattr(equipo, 'estado_inventario_id', None) != estado_obj.id:
             equipo.estado_inventario = estado_obj
             campos.append('Estado')
 
+        # Cambios por tipo de equipo
         if tipo == 'medidor':
             if entregado_obj and equipo.entregado_a_id != entregado_obj.id:
                 equipo.entregado_a = entregado_obj
@@ -1135,11 +1255,10 @@ def inventario_modificar_masivo_view(request):
         else:
             identificador = equipo.serie
 
+        detalle = observacion or f'Edición múltiple {tipo_item}'
         _registrar_movimiento_inventario(
-            equipo,
-            tipo_item,
-            request.user,
-            f'Modificación masiva {tipo_item} {identificador}. Campos: {", ".join(campos)}'
+            equipo, tipo_item, request.user,
+            f'Edición múltiple {tipo_item} {identificador}. Campos: {", ".join(campos)}. {detalle}'
         )
         actualizados += 1
 
@@ -1148,116 +1267,6 @@ def inventario_modificar_masivo_view(request):
         'message': f'Actualizados: {actualizados} | Sin cambios: {sin_cambios}',
         'actualizados': actualizados,
         'sin_cambios': sin_cambios,
-    })
-
-
-@login_required
-@admin_or_administrativo
-@require_http_methods(["POST"])
-def inventario_custodia_masivo_view(request):
-    """Cambia custodia/ubicación de múltiples equipos y registra trazabilidad completa."""
-    from usuarios.models import Usuario
-
-    tipo = request.POST.get('tipo', 'medidor').strip().lower()
-    ids_raw = request.POST.get('ids', '').strip()
-    destino_ubicacion_id = request.POST.get('destino_ubicacion_id', '').strip()
-    tecnico_destino_id = request.POST.get('tecnico_destino_id', '').strip()
-    observacion = request.POST.get('observacion', '').strip()
-
-    if not ids_raw:
-        return JsonResponse({'success': False, 'message': 'Selecciona al menos un equipo'})
-    if not destino_ubicacion_id:
-        return JsonResponse({'success': False, 'message': 'Selecciona una ubicación destino'})
-
-    try:
-        ids = [int(x) for x in ids_raw.split(',') if x.strip().isdigit()]
-    except Exception:
-        ids = []
-
-    if not ids:
-        return JsonResponse({'success': False, 'message': 'IDs inválidos para cambio de custodia'})
-
-    try:
-        destino = Ubicacion.objects.get(pk=int(destino_ubicacion_id))
-    except (ValueError, TypeError, Ubicacion.DoesNotExist):
-        return JsonResponse({'success': False, 'message': 'Ubicación destino inválida'})
-
-    tecnico_destino = None
-    if tecnico_destino_id:
-        try:
-            tecnico_destino = Usuario.objects.get(pk=int(tecnico_destino_id))
-        except (ValueError, TypeError, Usuario.DoesNotExist):
-            tecnico_destino = None
-
-    if tipo == 'medidor':
-        queryset = Medidor.objects.filter(pk__in=ids)
-        tipo_item = 'MEDIDOR'
-    elif tipo == 'sim':
-        queryset = SimCard.objects.filter(pk__in=ids)
-        tipo_item = 'SIM'
-    elif tipo == 'modem':
-        queryset = Modem.objects.filter(pk__in=ids)
-        tipo_item = 'MODEM'
-    else:
-        return JsonResponse({'success': False, 'message': 'Tipo de equipo no válido'})
-
-    actualizados = 0
-
-    for equipo in queryset:
-        origen = getattr(equipo, 'ubicacion_actual', None)
-        if origen is None:
-            origen = Ubicacion.objects.filter(nombre__icontains='Bodega').first()
-        if origen is None:
-            origen = Ubicacion.objects.create(tipo='BODEGA_DELCO', nombre='Bodega Principal')
-
-        cambios = []
-        if getattr(equipo, 'ubicacion_actual_id', None) != destino.id:
-            equipo.ubicacion_actual = destino
-            cambios.append('Ubicación')
-
-        if tipo == 'sim':
-            nuevo_custodio_id = tecnico_destino.id if tecnico_destino else None
-            if equipo.en_custodia_de_id != nuevo_custodio_id:
-                equipo.en_custodia_de = tecnico_destino
-                cambios.append('Custodia')
-        else:
-            nuevo_custodio_id = tecnico_destino.id if tecnico_destino else None
-            if equipo.entregado_a_id != nuevo_custodio_id:
-                equipo.entregado_a = tecnico_destino
-                cambios.append('Entregado A')
-
-        if not cambios:
-            continue
-
-        equipo.save()
-
-        if tipo_item == 'MEDIDOR':
-            identificador = equipo.serie
-        elif tipo_item == 'SIM':
-            identificador = equipo.imei or equipo.abonado or str(equipo.pk)
-        else:
-            identificador = equipo.serie
-
-        detalle_obs = observacion or 'Cambio masivo de custodia'
-        _registrar_movimiento_inventario(
-            equipo,
-            tipo_item,
-            request.user,
-            (
-                f'Cambio custodia {tipo_item} {identificador}. '
-                f'Origen: {origen.nombre} -> Destino: {destino.nombre}. '
-                f'Cambios: {", ".join(cambios)}. {detalle_obs}'
-            ),
-            tipo_movimiento='ENTREGA',
-            origen=origen,
-            destino=destino,
-        )
-        actualizados += 1
-
-    return JsonResponse({
-        'success': True,
-        'message': f'Cambio de custodia aplicado a {actualizados} equipo(s).',
-        'actualizados': actualizados,
     })
 
 
