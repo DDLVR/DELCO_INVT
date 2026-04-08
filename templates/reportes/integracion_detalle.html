@@ -60,6 +60,419 @@
     <!-- Columna izquierda: datos clave -->
     <div class="col-lg-7">
 
+    {% if d.formulario_canonico == 'LECTURA' %}
+
+      <!-- LECTURA: Cliente + Suministro -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-person-fill"></i> Cliente</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Código</dt>
+            <dd class="col-sm-7">{{ d.cliente_codigo|default:"—" }}</dd>
+            <dt class="col-sm-5">Nombre</dt>
+            <dd class="col-sm-7">{{ d.cliente_nombre|default:"—" }}</dd>
+            <dt class="col-sm-5">Dirección de suministro</dt>
+            <dd class="col-sm-7">{{ d.cliente_direccion|default:"—" }}</dd>
+            <dt class="col-sm-5">Comuna</dt>
+            <dd class="col-sm-7">{{ d.cliente_comuna|default:"—" }}</dd>
+            <dt class="col-sm-5">Tipo suministro</dt>
+            <dd class="col-sm-7">{{ d.tipo_suministro|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- LECTURA: Medidor -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-speedometer2"></i> Medidor</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Serie (SC4I)</dt>
+            <dd class="col-sm-7">{{ d.serial_number|default:"—" }}</dd>
+            <dt class="col-sm-5">SN Fabricante</dt>
+            <dd class="col-sm-7">
+              {% with raw=registro.datos_recibidos %}
+                {{ raw.data.clienteParaMantenimiento.SNMANUFACTURER2|default:"—" }}
+              {% endwith %}
+            </dd>
+            <dt class="col-sm-5">Marca</dt>
+            <dd class="col-sm-7">{{ d.marca_medidor|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- LECTURA: Visita -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-secondary text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-clipboard2-check"></i> Visita</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Estado</dt>
+            <dd class="col-sm-7">{{ d.estado|default:"—" }}</dd>
+            <dt class="col-sm-5">Tipo de incidencia</dt>
+            <dd class="col-sm-7">{{ d.actividad|default:"—" }}</dd>
+            <dt class="col-sm-5">Formato CSV</dt>
+            <dd class="col-sm-7">{{ d.formato_csv|default:"—" }}</dd>
+            <dt class="col-sm-5">Fecha de la visita</dt>
+            <dd class="col-sm-7">{{ d.fecha_trabajo|default:"—" }}</dd>
+            {% if d.location %}
+            <dt class="col-sm-5">Ubicación</dt>
+            <dd class="col-sm-7"><span class="text-break">{{ d.location }}</span></dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+      <!-- LECTURA: Contacto en terreno (sólo si hay datos) -->
+      {% if d.contacto_nombre or d.contacto_telefono or d.contacto_correo %}
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-warning text-dark py-2">
+          <h6 class="mb-0"><i class="bi bi-telephone-fill"></i> Contacto en terreno</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Nombre</dt>
+            <dd class="col-sm-7">{{ d.contacto_nombre|default:"—" }}</dd>
+            <dt class="col-sm-5">Teléfono</dt>
+            <dd class="col-sm-7">{{ d.contacto_telefono|default:"—" }}</dd>
+            <dt class="col-sm-5">Correo</dt>
+            <dd class="col-sm-7">{{ d.contacto_correo|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- LECTURA: Técnico -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-info text-dark py-2">
+          <h6 class="mb-0"><i class="bi bi-person-badge"></i> Técnico responsable</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Nombre</dt>
+            <dd class="col-sm-7">{{ d.tecnico_responsable|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      {% if d.observacion %}
+      <div class="card shadow-sm mb-4">
+        <div class="card-header py-2">
+          <h6 class="mb-0"><i class="bi bi-chat-left-text"></i> Observación</h6>
+        </div>
+        <div class="card-body">
+          <p class="mb-0">{{ d.observacion }}</p>
+        </div>
+      </div>
+      {% endif %}
+
+    {% elif d.formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3' %}
+
+      <!-- MANTENIMIENTO: Cliente -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-person-fill"></i> Cliente</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Código</dt>
+            <dd class="col-sm-7">{{ d.cliente_codigo|default:"—" }}</dd>
+            <dt class="col-sm-5">Nro cliente</dt>
+            <dd class="col-sm-7">{{ d.nro_cliente|default:"—" }}</dd>
+            <dt class="col-sm-5">Nombre</dt>
+            <dd class="col-sm-7">{{ d.cliente_nombre|default:"—" }}</dd>
+            <dt class="col-sm-5">Dirección</dt>
+            <dd class="col-sm-7">{{ d.cliente_direccion|default:"—" }}</dd>
+            <dt class="col-sm-5">Comuna</dt>
+            <dd class="col-sm-7">{{ d.cliente_comuna|default:"—" }}</dd>
+            <dt class="col-sm-5">Sector</dt>
+            <dd class="col-sm-7">{{ d.sector|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- MANTENIMIENTO: Equipo / Empalme -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-cpu"></i> Equipo y Empalme</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Nro aparato</dt>
+            <dd class="col-sm-7">{{ d.nro_aparato|default:"—" }}</dd>
+            <dt class="col-sm-5">Marca aparato</dt>
+            <dd class="col-sm-7">{{ d.marca_aparato|default:"—" }}</dd>
+            <dt class="col-sm-5">Tipo modelo</dt>
+            <dd class="col-sm-7">{{ d.tipo_modelo|default:"—" }}</dd>
+            <dt class="col-sm-5">Descripción prop.</dt>
+            <dd class="col-sm-7">{{ d.descripcion_prop|default:"—" }}</dd>
+            <dt class="col-sm-5">Expr 1008</dt>
+            <dd class="col-sm-7">{{ d.expr_1008|default:"—" }}</dd>
+            <dt class="col-sm-5">COD Tarifa</dt>
+            <dd class="col-sm-7">{{ d.cod_tarifa|default:"—" }}</dd>
+            <dt class="col-sm-5">Proceso de lectura</dt>
+            <dd class="col-sm-7">{{ d.proceso_lectura|default:"—" }}</dd>
+            <dt class="col-sm-5">Amperes</dt>
+            <dd class="col-sm-7">{{ d.amperes|default:"—" }}</dd>
+            <dt class="col-sm-5">Protección empalme</dt>
+            <dd class="col-sm-7">{{ d.proteccion_empalme|default:"—" }}</dd>
+            <dt class="col-sm-5">Potencia contratada</dt>
+            <dd class="col-sm-7">{{ d.potencia_contratada|default:"—" }}</dd>
+            <dt class="col-sm-5">Tipo empalme</dt>
+            <dd class="col-sm-7">{{ d.tipo_empalme|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- MANTENIMIENTO: Diagnóstico / Trabajo -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-secondary text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-clipboard2-pulse"></i> Diagnóstico y Trabajo</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Estado</dt>
+            <dd class="col-sm-7">{{ d.estado|default:"—" }}</dd>
+            <dt class="col-sm-5">Tipo de incidencia</dt>
+            <dd class="col-sm-7">{{ d.actividad|default:"—" }}</dd>
+            <dt class="col-sm-5">Datos medidor correctos</dt>
+            <dd class="col-sm-7">{{ d.datos_medidor_correctos|default:"—" }}</dd>
+            <dt class="col-sm-5">Diagnóstico</dt>
+            <dd class="col-sm-7">{{ d.diagnostico|default:"—" }}</dd>
+            <dt class="col-sm-5">Trabajo principal</dt>
+            <dd class="col-sm-7">{{ d.trabajo_principal|default:"—" }}</dd>
+            <dt class="col-sm-5">Consumo no registrado</dt>
+            <dd class="col-sm-7">{{ d.cliente_consumo_no_registrado|default:"—" }}</dd>
+            <dt class="col-sm-5">Fecha de la visita</dt>
+            <dd class="col-sm-7">{{ d.fecha_trabajo|default:"—" }}</dd>
+            {% if d.location %}
+            <dt class="col-sm-5">Ubicación</dt>
+            <dd class="col-sm-7"><span class="text-break">{{ d.location }}</span></dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+      <!-- MANTENIMIENTO: Telemetría -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-success text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-router"></i> Telemetría</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Nro modem encontrado</dt>
+            <dd class="col-sm-7">{{ d.modem_encontrado|default:"—" }}</dd>
+            <dt class="col-sm-5">Nro modem dejado</dt>
+            <dd class="col-sm-7">{{ d.modem_dejado|default:"—" }}</dd>
+            <dt class="col-sm-5">Marca modem dejado</dt>
+            <dd class="col-sm-7">{{ d.marca_modem_dejado|default:"—" }}</dd>
+            <dt class="col-sm-5">IP dejada</dt>
+            <dd class="col-sm-7">{{ d.ip_dejada|default:"—" }}</dd>
+            <dt class="col-sm-5">Puerto dejado</dt>
+            <dd class="col-sm-7">{{ d.puerto_dejado|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- MANTENIMIENTO: Contacto -->
+      {% if d.contacto_nombre or d.contacto_telefono or d.contacto_correo or d.nombre_autoriza %}
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-warning text-dark py-2">
+          <h6 class="mb-0"><i class="bi bi-telephone-fill"></i> Contacto y Autorización</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Nombre contacto</dt>
+            <dd class="col-sm-7">{{ d.contacto_nombre|default:"—" }}</dd>
+            <dt class="col-sm-5">Teléfono</dt>
+            <dd class="col-sm-7">{{ d.contacto_telefono|default:"—" }}</dd>
+            <dt class="col-sm-5">Correo</dt>
+            <dd class="col-sm-7">{{ d.contacto_correo|default:"—" }}</dd>
+            <dt class="col-sm-5">Autoriza</dt>
+            <dd class="col-sm-7">{{ d.nombre_autoriza|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- MANTENIMIENTO: Técnicos -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-info text-dark py-2">
+          <h6 class="mb-0"><i class="bi bi-person-badge"></i> Técnicos</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Responsable</dt>
+            <dd class="col-sm-7">{{ d.tecnico_responsable|default:"—" }}</dd>
+            <dt class="col-sm-5">Asistente</dt>
+            <dd class="col-sm-7">{{ d.tecnico_asistente|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      {% if d.observacion %}
+      <div class="card shadow-sm mb-4">
+        <div class="card-header py-2">
+          <h6 class="mb-0"><i class="bi bi-chat-left-text"></i> Observación</h6>
+        </div>
+        <div class="card-body">
+          <p class="mb-0">{{ d.observacion }}</p>
+        </div>
+      </div>
+      {% endif %}
+
+    {% elif d.formulario_canonico == 'REGISTRO_MEDIDORES_TELEMETRIA_V3' %}
+
+      <!-- REGISTRO MEDIDORES: Cliente -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-primary text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-person-fill"></i> Datos de cliente</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Empresa</dt>
+            <dd class="col-sm-7">{{ d.empresa|default:"—" }}</dd>
+            <dt class="col-sm-5">Actividad</dt>
+            <dd class="col-sm-7">{{ d.actividad|default:"—" }}</dd>
+            <dt class="col-sm-5">Cliente</dt>
+            <dd class="col-sm-7">{{ d.cliente_codigo|default:"—" }}</dd>
+            <dt class="col-sm-5">Cliente1</dt>
+            <dd class="col-sm-7">{{ d.cliente_1|default:"—" }}</dd>
+            <dt class="col-sm-5">Nombre</dt>
+            <dd class="col-sm-7">{{ d.cliente_nombre|default:"—" }}</dd>
+            <dt class="col-sm-5">Dirección</dt>
+            <dd class="col-sm-7">{{ d.cliente_direccion|default:"—" }}</dd>
+            <dt class="col-sm-5">Comuna</dt>
+            <dd class="col-sm-7">{{ d.cliente_comuna|default:"—" }}</dd>
+            <dt class="col-sm-5">Nueva ruta</dt>
+            <dd class="col-sm-7">{{ d.nueva_ruta|default:"—" }}</dd>
+            <dt class="col-sm-5">Trabajo</dt>
+            <dd class="col-sm-7">{{ d.trabajo|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- REGISTRO MEDIDORES: Configuración -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-secondary text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-sliders"></i> Configuración de trabajo</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Estado</dt>
+            <dd class="col-sm-7">{{ d.estado|default:"—" }}</dd>
+            <dt class="col-sm-5">Con o sin SIM</dt>
+            <dd class="col-sm-7">{{ d.con_sim|default:"—" }}</dd>
+            <dt class="col-sm-5">Tipo de incidencia</dt>
+            <dd class="col-sm-7">{{ d.tipo_incidencia|default:"—" }}</dd>
+            <dt class="col-sm-5">Tipo telemetría</dt>
+            <dd class="col-sm-7">{{ d.tipo_telemetria|default:"—" }}</dd>
+            <dt class="col-sm-5">Fecha</dt>
+            <dd class="col-sm-7">{{ d.fecha_trabajo|default:"—" }}</dd>
+            {% if d.location %}
+            <dt class="col-sm-5">Ubicación</dt>
+            <dd class="col-sm-7"><span class="text-break">{{ d.location }}</span></dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+      <!-- REGISTRO MEDIDORES: Aparato y medición -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-dark text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-speedometer2"></i> Datos técnicos encontrados</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Marca aparato</dt>
+            <dd class="col-sm-7">{{ d.marca_aparato|default:"—" }}</dd>
+            <dt class="col-sm-5">Modelo aparato</dt>
+            <dd class="col-sm-7">{{ d.modelo_aparato|default:"—" }}</dd>
+            <dt class="col-sm-5">Nro medidor activo</dt>
+            <dd class="col-sm-7">{{ d.medidor_activo_numero|default:"—" }}</dd>
+            <dt class="col-sm-5">Lectura medidor activo</dt>
+            <dd class="col-sm-7">{{ d.medidor_activo_lectura|default:"—" }}</dd>
+            <dt class="col-sm-5">Nro medidor reactivo</dt>
+            <dd class="col-sm-7">{{ d.medidor_reactivo_numero|default:"—" }}</dd>
+            <dt class="col-sm-5">Lectura medidor reactivo</dt>
+            <dd class="col-sm-7">{{ d.medidor_reactivo_lectura|default:"—" }}</dd>
+            <dt class="col-sm-5">Demanda HP</dt>
+            <dd class="col-sm-7">{{ d.demanda_hp|default:"—" }}</dd>
+            <dt class="col-sm-5">Demanda FP</dt>
+            <dd class="col-sm-7">{{ d.demanda_fp|default:"—" }}</dd>
+            <dt class="col-sm-5">Múltiplo de lectura</dt>
+            <dd class="col-sm-7">{{ d.multiplo_lectura|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- REGISTRO MEDIDORES: Equipo dejado -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-success text-white py-2">
+          <h6 class="mb-0"><i class="bi bi-hdd-network"></i> Datos técnicos dejados</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Nro medidor dejado</dt>
+            <dd class="col-sm-7">{{ d.medidor_dejado_numero|default:"—" }}</dd>
+            <dt class="col-sm-5">Marca medidor dejado</dt>
+            <dd class="col-sm-7">{{ d.marca_medidor_dejado|default:"—" }}</dd>
+            <dt class="col-sm-5">Número de modem</dt>
+            <dd class="col-sm-7">{{ d.modem_numero|default:"—" }}</dd>
+            <dt class="col-sm-5">Puerto</dt>
+            <dd class="col-sm-7">{{ d.puerto_dejado|default:"—" }}</dd>
+            <dt class="col-sm-5">IP dejada</dt>
+            <dd class="col-sm-7">{{ d.ip_dejada|default:"—" }}</dd>
+            <dt class="col-sm-5">Proveedor de datos</dt>
+            <dd class="col-sm-7">{{ d.proveedor_datos|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      <!-- REGISTRO MEDIDORES: Contacto y técnicos -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header bg-info text-dark py-2">
+          <h6 class="mb-0"><i class="bi bi-people-fill"></i> Contacto y Técnicos</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Nombre contacto</dt>
+            <dd class="col-sm-7">{{ d.contacto_nombre|default:"—" }}</dd>
+            <dt class="col-sm-5">Teléfono</dt>
+            <dd class="col-sm-7">{{ d.contacto_telefono|default:"—" }}</dd>
+            <dt class="col-sm-5">Correo</dt>
+            <dd class="col-sm-7">{{ d.contacto_correo|default:"—" }}</dd>
+            <dt class="col-sm-5">Autoriza cambio</dt>
+            <dd class="col-sm-7">{{ d.nombre_autoriza|default:"—" }}</dd>
+            <dt class="col-sm-5">Técnico Delco</dt>
+            <dd class="col-sm-7">{{ d.tecnico_responsable|default:"—" }}</dd>
+            <dt class="col-sm-5">Técnico Certelec</dt>
+            <dd class="col-sm-7">{{ d.tecnico_certelec|default:"—" }}</dd>
+            <dt class="col-sm-5">Técnico asistente</dt>
+            <dd class="col-sm-7">{{ d.tecnico_asistente|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+
+      {% if d.observacion %}
+      <div class="card shadow-sm mb-4">
+        <div class="card-header py-2">
+          <h6 class="mb-0"><i class="bi bi-chat-left-text"></i> Observación del trabajo</h6>
+        </div>
+        <div class="card-body">
+          <p class="mb-0">{{ d.observacion }}</p>
+        </div>
+      </div>
+      {% endif %}
+
+    {% else %}
+
+      <!-- Vista genérica para otros formularios (Mantenimiento, Registro Medidores, etc.) -->
+
       <!-- Datos del cliente -->
       <div class="card shadow-sm mb-4">
         <div class="card-header bg-primary text-white py-2">
@@ -127,6 +540,8 @@
         </div>
       </div>
       {% endif %}
+
+    {% endif %}
 
     </div>
 
