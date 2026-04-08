@@ -68,7 +68,7 @@ from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from django.db.models import Q
+from django.db.models import Q, Count
 import json
 import ast
 import re
@@ -2726,13 +2726,15 @@ def reportes_moreapp_list(request):
         messages.error(request, 'No tienes permiso para acceder a Reportes.')
         return redirect('dashboard')
 
-    qs = IntegracionMoreApp.objects.all().order_by('-fecha_recepcion')
+    qs_base = IntegracionMoreApp.objects.all().order_by('-fecha_recepcion')
 
     # Filtros
     estado = request.GET.get('estado', '')
     alerta = request.GET.get('alerta', '')
     q = request.GET.get('q', '')
+    formulario = request.GET.get('formulario', '')
 
+    qs = qs_base
     if estado:
         qs = qs.filter(estado_sincronizacion=estado)
     if alerta == '1':
@@ -2745,11 +2747,22 @@ def reportes_moreapp_list(request):
             Q(datos_procesados__cliente_codigo__icontains=q)
         )
 
+    formularios = list(
+        qs.values('nombre_formulario')
+        .annotate(total=Count('id'))
+        .order_by('nombre_formulario')
+    )
+
+    if formulario:
+        qs = qs.filter(nombre_formulario=formulario)
+
     context = {
         'registros': qs,
         'estado_actual': estado,
         'alerta_actual': alerta,
         'q': q,
+        'formulario_actual': formulario,
+        'formularios': formularios,
         'total': qs.count(),
         'pendientes': IntegracionMoreApp.objects.filter(estado_sincronizacion='PENDIENTE').count(),
         'alertas': IntegracionMoreApp.objects.filter(alerta_doble_trabajo=True).count(),

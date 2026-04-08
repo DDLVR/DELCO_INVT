@@ -61,6 +61,29 @@
   <!-- Filtros -->
   <div class="card shadow-sm mb-4">
     <div class="card-body">
+      <div class="mb-3">
+        <label class="form-label mb-2 small fw-semibold">Formularios</label>
+        <form method="GET" class="d-flex flex-wrap gap-2">
+          <input type="hidden" name="q" value="{{ q }}">
+          <input type="hidden" name="estado" value="{{ estado_actual }}">
+          <input type="hidden" name="alerta" value="{{ alerta_actual }}">
+
+          <button type="submit"
+                  class="btn btn-sm {% if not formulario_actual %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            Todos
+          </button>
+          {% for f in formularios %}
+          <button type="submit"
+                  name="formulario"
+                  value="{{ f.nombre_formulario }}"
+                  class="btn btn-sm {% if formulario_actual == f.nombre_formulario %}btn-primary{% else %}btn-outline-primary{% endif %}">
+            {{ f.nombre_formulario|default:"(Sin nombre)" }}
+            <span class="badge bg-light text-dark ms-1">{{ f.total }}</span>
+          </button>
+          {% endfor %}
+        </form>
+      </div>
+
       <form method="GET" class="row g-2 align-items-end">
         <div class="col-md-4">
           <label class="form-label mb-1 small fw-semibold">Buscar</label>
@@ -83,6 +106,7 @@
             <option value="1" {% if alerta_actual == '1' %}selected{% endif %}>Solo con alerta</option>
           </select>
         </div>
+        <input type="hidden" name="formulario" value="{{ formulario_actual }}">
         <div class="col-md-auto">
           <button type="submit" class="btn btn-sm btn-primary">
             <i class="bi bi-search"></i> Filtrar
