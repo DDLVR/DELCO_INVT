@@ -104,6 +104,33 @@ def _resolver_estado_inventario(nombre_estado: str):
     return EstadoInventario.objects.filter(nombre__icontains=estado[:20]).first()
 
 
+def _obtener_estado_por_nombre(nombre_estado: str):
+    from inventario.models import EstadoInventario
+
+    if not nombre_estado:
+        return None
+    return EstadoInventario.objects.filter(nombre__iexact=nombre_estado).first()
+
+
+def _resolver_estado_desde_contexto(*textos):
+    texto = ' '.join(_as_text(valor) for valor in textos if _as_text(valor))
+    texto_norm = _normalizar_texto(texto)
+    if not texto_norm:
+        return None
+
+    if any(token in texto_norm for token in ('retiro', 'retirar', 'retirado', 'desinstal', 'baja')):
+        return _obtener_estado_por_nombre('Retirado') or _obtener_estado_por_nombre('Dado de baja')
+    if any(token in texto_norm for token in ('instal', 'instalacion', 'cambio', 'dejado', 'montaje')):
+        return _obtener_estado_por_nombre('Instalado')
+    if any(token in texto_norm for token in ('repar', 'mantencion', 'mantenimiento', 'servicio tecnico')):
+        return _obtener_estado_por_nombre('En reparación')
+    if 'peaje' in texto_norm:
+        return _obtener_estado_por_nombre('En peaje')
+    if 'bodega' in texto_norm:
+        return _obtener_estado_por_nombre('En bodega')
+    return _resolver_estado_inventario(texto)
+
+
 def _obtener_responsable_sistema():
     from usuarios.models import Usuario
 
@@ -174,6 +201,57 @@ def _registrar_movimiento_equipo(equipo, tipo_equipo: str, observacion: str, est
     MovimientoItem.objects.create(**kwargs_item)
 
 
+def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_obj, observacion: str,
+                                 registro, medidor_asociado=None, ip_dejada: str = '', puerto: str = ''):
+    cambios = []
+
+    if estado_obj and getattr(equipo, 'estado_inventario_id', None) != estado_obj.id:
+        equipo.estado_inventario = estado_obj
+        cambios.append('estado_inventario')
+
+    if cliente_obj and hasattr(equipo, 'cliente_id') and equipo.cliente_id != cliente_obj.id:
+        equipo.cliente = cliente_obj
+        cambios.append('cliente')
+
+    if tipo_equipo == 'SIM':
+        if medidor_asociado and equipo.medidor_id != medidor_asociado.id:
+            equipo.medidor = medidor_asociado
+            cambios.append('medidor')
+        if ip_dejada and getattr(equipo, 'direccion_ip', '') != ip_dejada:
+            equipo.direccion_ip = ip_dejada
+            cambios.append('direccion_ip')
+        if ip_dejada and getattr(equipo, 'ip_fija', None) != ip_dejada:
+            equipo.ip_fija = ip_dejada
+            cambios.append('ip_fija')
+
+    if tipo_equipo == 'MODEM':
+        if medidor_asociado and equipo.medidor_id != medidor_asociado.id:
+            equipo.medidor = medidor_asociado
+            cambios.append('medidor')
+        if ip_dejada and getattr(equipo, 'ip', '') != ip_dejada:
+            equipo.ip = ip_dejada
+            cambios.append('ip')
+        if puerto and getattr(equipo, 'puerto', '') != puerto:
+            equipo.puerto = puerto
+            cambios.append('puerto')
+
+    if tipo_equipo == 'MEDIDOR' and cliente_obj and cliente_obj.medidor_actual_id != equipo.id:
+        cliente_obj.medidor_actual = equipo
+        cliente_obj.save(update_fields=['medidor_actual'])
+
+    if cambios:
+        equipo.save(update_fields=cambios)
+        _registrar_movimiento_equipo(
+            equipo,
+            tipo_equipo,
+            observacion,
+            estado_obj.nombre if estado_obj else '',
+        )
+        registro.actualizo_equipos = True
+        return True
+    return False
+
+
 def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos_norm: Dict[str, Any], nombre_formulario: str):
     from clientes.models import Cliente
     from inventario.models import Medidor, Modem, SimCard
@@ -185,7 +263,15 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
 
     formulario_canonico = _resolver_formulario(nombre_formulario)
     estado_nombre = datos_norm.get('estado') or _valor_campo_fuentes(fuentes, ['estado'])
-    estado_obj = _resolver_estado_inventario(estado_nombre)
+    contexto_estado = ' '.join(filter(None, [
+        _as_text(estado_nombre),
+        _as_text(datos_norm.get('actividad')),
+        _as_text(datos_norm.get('trabajo')),
+        _as_text(datos_norm.get('tipo_incidencia')),
+        _as_text(datos_norm.get('trabajo_principal')),
+        _as_text(datos_norm.get('diagnostico')),
+    ]))
+    estado_obj = _resolver_estado_desde_contexto(contexto_estado)
 
     cliente_codigo = _as_text(datos_norm.get('cliente_codigo') or _valor_campo_fuentes(
         fuentes,
@@ -196,10 +282,13 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         fuentes,
         ['medidor', 'serie medidor', 'n serie medidor', 'numero medidor', 'serie', 'medidorsc4i'],
     ) or '')
-    modem_serie = _as_text(_valor_campo_fuentes(fuentes, ['serie modem', 'modem serie']))
-    modem_imei = _as_text(_valor_campo_fuentes(fuentes, ['imei modem', 'modem imei', 'imei']))
-    sim_imei = _as_text(_valor_campo_fuentes(fuentes, ['imei sim', 'sim imei']))
-    sim_abonado = _as_text(_valor_campo_fuentes(fuentes, ['abonado', 'numero abonado']))
+    medidor_activo_serie = _as_text(datos_norm.get('medidor_activo_numero'))
+    medidor_dejado_serie = _as_text(datos_norm.get('medidor_dejado_numero'))
+    modem_encontrado_serie = _as_text(datos_norm.get('modem_encontrado'))
+    modem_dejado_serie = _as_text(datos_norm.get('modem_dejado') or datos_norm.get('modem_numero'))
+    modem_serie = modem_dejado_serie or modem_encontrado_serie or _as_text(_valor_campo_fuentes(fuentes, ['serie modem', 'modem serie', 'numero modem']))
+    sim_ip = _as_text(datos_norm.get('ip_dejada') or _valor_campo_fuentes(fuentes, ['ip dejada', 'ip', 'direccion ip']))
+    puerto_dejado = _as_text(datos_norm.get('puerto_dejado') or _valor_campo_fuentes(fuentes, ['puerto dejado', 'puerto']))
 
     cliente_obj = None
     if cliente_codigo:
@@ -233,82 +322,144 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             cliente_obj.save(update_fields=cambios_cliente)
             registro.actualizo_cliente = True
 
-    if medidor_serie:
-        medidor = Medidor.objects.filter(serie__iexact=medidor_serie).first()
-        if medidor:
+    def _buscar_medidor(serie):
+        if not serie:
+            return None
+        return Medidor.objects.filter(serie__iexact=serie).first()
+
+    def _buscar_modem_por_serie(serie):
+        if not serie:
+            return None
+        return Modem.objects.filter(serie__iexact=serie).first()
+
+    def _buscar_sim_por_ip(ip):
+        if not ip:
+            return None
+        sim = SimCard.objects.filter(direccion_ip__iexact=ip).first()
+        if sim:
+            return sim
+        return SimCard.objects.filter(ip_fija__iexact=ip).first()
+
+    observacion_base = f'Actualización MoreApp ({formulario_canonico})'
+    medidor_principal = _buscar_medidor(medidor_serie)
+
+    if formulario_canonico == 'REGISTRO_MEDIDORES_TELEMETRIA_V3':
+        medidor_retirado = _buscar_medidor(medidor_activo_serie)
+        if medidor_retirado:
             resumen['medidor_encontrado'] = True
-            cambios = []
-            if estado_obj and medidor.estado_inventario_id != estado_obj.id:
-                medidor.estado_inventario = estado_obj
-                cambios.append('estado_inventario')
-            if cliente_obj and medidor.cliente_id != cliente_obj.id:
-                medidor.cliente = cliente_obj
-                cambios.append('cliente')
-                if cliente_obj.medidor_actual_id != medidor.id:
-                    cliente_obj.medidor_actual = medidor
-                    cliente_obj.save(update_fields=['medidor_actual'])
-            if cambios:
-                medidor.save(update_fields=cambios)
-                _registrar_movimiento_equipo(
-                    medidor,
-                    'MEDIDOR',
-                    f'Actualización MoreApp ({formulario_canonico})',
-                    estado_obj.nombre if estado_obj else estado_nombre,
-                )
-                registro.actualizo_equipos = True
-
-    modem = None
-    if modem_imei:
-        modem = Modem.objects.filter(imei__iexact=modem_imei).first()
-    if not modem and modem_serie:
-        modem = Modem.objects.filter(serie__iexact=modem_serie).first()
-    if modem:
-        resumen['modem_encontrado'] = True
-        cambios_modem = []
-        if estado_obj and modem.estado_inventario_id != estado_obj.id:
-            modem.estado_inventario = estado_obj
-            cambios_modem.append('estado_inventario')
-        if cliente_obj and modem.cliente_id != cliente_obj.id:
-            modem.cliente = cliente_obj
-            cambios_modem.append('cliente')
-        if cambios_modem:
-            modem.save(update_fields=cambios_modem)
-            _registrar_movimiento_equipo(
-                modem,
-                'MODEM',
-                f'Actualización MoreApp ({formulario_canonico})',
-                estado_obj.nombre if estado_obj else estado_nombre,
+            _actualizar_equipo_operativo(
+                medidor_retirado,
+                'MEDIDOR',
+                _obtener_estado_por_nombre('Retirado') or estado_obj,
+                cliente_obj,
+                f'{observacion_base} - retiro medidor por serie',
+                registro,
             )
-            registro.actualizo_equipos = True
 
-    sim = None
-    if sim_imei:
-        sim = SimCard.objects.filter(imei__iexact=sim_imei).first()
-    if not sim and sim_abonado:
-        sim = SimCard.objects.filter(abonado__iexact=sim_abonado).first()
+        medidor_instalado = _buscar_medidor(medidor_dejado_serie)
+        if medidor_instalado:
+            resumen['medidor_encontrado'] = True
+            _actualizar_equipo_operativo(
+                medidor_instalado,
+                'MEDIDOR',
+                _obtener_estado_por_nombre('Instalado') or estado_obj,
+                cliente_obj,
+                f'{observacion_base} - instalación medidor por serie',
+                registro,
+            )
+            medidor_principal = medidor_instalado
+
+        modem_instalado = _buscar_modem_por_serie(modem_dejado_serie)
+        if modem_instalado:
+            resumen['modem_encontrado'] = True
+            _actualizar_equipo_operativo(
+                modem_instalado,
+                'MODEM',
+                _obtener_estado_por_nombre('Instalado') or estado_obj,
+                cliente_obj,
+                f'{observacion_base} - instalación módem por serie',
+                registro,
+                medidor_asociado=medidor_principal,
+                ip_dejada=sim_ip,
+                puerto=puerto_dejado,
+            )
+
+        sim_instalada = _buscar_sim_por_ip(sim_ip)
+        if sim_instalada:
+            resumen['sim_encontrada'] = True
+            _actualizar_equipo_operativo(
+                sim_instalada,
+                'SIM',
+                _obtener_estado_por_nombre('Instalado') or estado_obj,
+                cliente_obj,
+                f'{observacion_base} - instalación SIM por IP',
+                registro,
+                medidor_asociado=medidor_principal,
+                ip_dejada=sim_ip,
+            )
+        return resumen
+
+    if medidor_principal:
+        resumen['medidor_encontrado'] = True
+        _actualizar_equipo_operativo(
+            medidor_principal,
+            'MEDIDOR',
+            estado_obj,
+            cliente_obj,
+            f'{observacion_base} - actualización medidor por serie',
+            registro,
+        )
+
+    modem_encontrado = None
+    if formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3' and modem_encontrado_serie and modem_dejado_serie:
+        modem_retirado = _buscar_modem_por_serie(modem_encontrado_serie)
+        if modem_retirado:
+            resumen['modem_encontrado'] = True
+            _actualizar_equipo_operativo(
+                modem_retirado,
+                'MODEM',
+                _obtener_estado_por_nombre('Retirado') or estado_obj,
+                cliente_obj,
+                f'{observacion_base} - retiro módem por serie',
+                registro,
+                medidor_asociado=medidor_principal,
+            )
+
+    if modem_serie:
+        modem_encontrado = _buscar_modem_por_serie(modem_serie)
+    if modem_encontrado:
+        resumen['modem_encontrado'] = True
+        estado_modem = estado_obj
+        if formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3' and modem_dejado_serie:
+            estado_modem = _obtener_estado_por_nombre('Instalado') or estado_obj
+        _actualizar_equipo_operativo(
+            modem_encontrado,
+            'MODEM',
+            estado_modem,
+            cliente_obj,
+            f'{observacion_base} - actualización módem por serie',
+            registro,
+            medidor_asociado=medidor_principal,
+            ip_dejada=sim_ip,
+            puerto=puerto_dejado,
+        )
+
+    sim = _buscar_sim_por_ip(sim_ip)
     if sim:
         resumen['sim_encontrada'] = True
-        cambios_sim = []
-        if estado_obj and sim.estado_inventario_id != estado_obj.id:
-            sim.estado_inventario = estado_obj
-            cambios_sim.append('estado_inventario')
-        if cliente_obj and sim.cliente_id != cliente_obj.id:
-            sim.cliente = cliente_obj
-            cambios_sim.append('cliente')
-        if medidor_serie:
-            medidor_asociado = Medidor.objects.filter(serie__iexact=medidor_serie).first()
-            if medidor_asociado and sim.medidor_id != medidor_asociado.id:
-                sim.medidor = medidor_asociado
-                cambios_sim.append('medidor')
-        if cambios_sim:
-            sim.save(update_fields=cambios_sim)
-            _registrar_movimiento_equipo(
-                sim,
-                'SIM',
-                f'Actualización MoreApp ({formulario_canonico})',
-                estado_obj.nombre if estado_obj else estado_nombre,
-            )
-            registro.actualizo_equipos = True
+        estado_sim = estado_obj
+        if formulario_canonico in ('MANTENIMIENTO_TELEMETRIA_V3', 'REGISTRO_MEDIDORES_TELEMETRIA_V3') and sim_ip:
+            estado_sim = _obtener_estado_por_nombre('Instalado') or estado_obj
+        _actualizar_equipo_operativo(
+            sim,
+            'SIM',
+            estado_sim,
+            cliente_obj,
+            f'{observacion_base} - actualización SIM por IP',
+            registro,
+            medidor_asociado=medidor_principal,
+            ip_dejada=sim_ip,
+        )
 
     return resumen
 

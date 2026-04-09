@@ -19,7 +19,7 @@
       <h1 class="mb-1"><i class="bi bi-file-earmark-text"></i> {{ registro.nombre_formulario|default:"—" }}</h1>
       <span class="text-muted small">ID: {{ registro.moreapp_submission_id }}</span>
     </div>
-    <div class="col-auto d-flex gap-2">
+    <div class="col-auto d-flex gap-2 align-items-start">
       {% if registro.alerta_doble_trabajo %}
       <span class="badge bg-warning text-dark fs-6 align-self-center">
         <i class="bi bi-exclamation-triangle-fill"></i> Alerta doble trabajo
@@ -35,6 +35,18 @@
         <span class="badge bg-warning text-dark fs-6 align-self-center">Revisión</span>
       {% else %}
         <span class="badge bg-light text-dark fs-6 align-self-center">{{ registro.estado_sincronizacion }}</span>
+      {% endif %}
+      {% if user.rol == 'ADMIN' %}
+      <form method="post"
+            action="{% url 'reportes_moreapp_eliminar' registro.pk %}"
+            class="form-eliminar-reporte-detalle"
+            data-reporte-id="{{ registro.moreapp_submission_id }}">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{% url 'reportes_moreapp_list' %}">
+        <button type="submit" class="btn btn-outline-danger btn-sm">
+          <i class="bi bi-trash"></i> Eliminar
+        </button>
+      </form>
       {% endif %}
     </div>
   </div>
@@ -600,4 +612,25 @@
 
 </div>
 {% endwith %}
+
+{% if user.rol == 'ADMIN' %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.querySelector('.form-eliminar-reporte-detalle');
+  if (!form) {
+    return;
+  }
+
+  form.addEventListener('submit', async function(event) {
+    event.preventDefault();
+    const reporteId = form.getAttribute('data-reporte-id') || '';
+    const mensaje = '¿Eliminar el registro MoreApp ' + reporteId + '? Esta acción se usará para limpiar reportes de prueba y no se puede deshacer.';
+    const confirmado = await window.showConfirm(mensaje, 'Eliminar reporte', 'Sí, eliminar', 'Cancelar');
+    if (confirmado) {
+      form.submit();
+    }
+  });
+});
+</script>
+{% endif %}
 {% endblock %}

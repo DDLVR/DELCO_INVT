@@ -134,7 +134,7 @@
               <th>Fecha registro</th>
               <th>Estado</th>
               <th>Alerta</th>
-              <th></th>
+              <th class="text-end">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -177,9 +177,23 @@
                 {% endif %}
               </td>
               <td class="text-end">
-                <a href="{% url 'reportes_moreapp_detalle' reg.pk %}" class="btn btn-xs btn-outline-primary btn-sm py-0 px-2">
-                  <i class="bi bi-eye"></i>
-                </a>
+                <div class="d-inline-flex gap-1">
+                  <a href="{% url 'reportes_moreapp_detalle' reg.pk %}" class="btn btn-xs btn-outline-primary btn-sm py-0 px-2">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                  {% if user.rol == 'ADMIN' %}
+                  <form method="post"
+                        action="{% url 'reportes_moreapp_eliminar' reg.pk %}"
+                        class="d-inline form-eliminar-reporte"
+                        data-reporte-id="{{ reg.moreapp_submission_id }}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    <button type="submit" class="btn btn-xs btn-outline-danger btn-sm py-0 px-2" title="Eliminar registro de prueba">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                  {% endif %}
+                </div>
               </td>
             </tr>
             {% endwith %}
@@ -203,4 +217,22 @@
   </div>
 
 </div>
+
+{% if user.rol == 'ADMIN' %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  document.querySelectorAll('.form-eliminar-reporte').forEach(function(form) {
+    form.addEventListener('submit', async function(event) {
+      event.preventDefault();
+      const reporteId = form.getAttribute('data-reporte-id') || '';
+      const mensaje = '¿Eliminar el registro MoreApp ' + reporteId + '? Esta acción se usará para limpiar reportes de prueba y no se puede deshacer.';
+      const confirmado = await window.showConfirm(mensaje, 'Eliminar reporte', 'Sí, eliminar', 'Cancelar');
+      if (confirmado) {
+        form.submit();
+      }
+    });
+  });
+});
+</script>
+{% endif %}
 {% endblock %}

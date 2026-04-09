@@ -2809,3 +2809,23 @@ def reportes_moreapp_sincronizar(request):
         f'Errores: {stats["errores"]}'
     )
     return redirect('reportes_moreapp_list')
+
+
+@login_required
+@role_required(['ADMIN'])
+def reportes_moreapp_eliminar(request, pk):
+    """Elimina un registro de reportes MoreApp. Uso exclusivo para limpieza de pruebas."""
+    from ordenes_trabajo.models import IntegracionMoreApp
+
+    if request.method != 'POST':
+        return redirect('reportes_moreapp_list')
+
+    registro = get_object_or_404(IntegracionMoreApp, pk=pk)
+    identificador = registro.moreapp_submission_id
+    registro.delete()
+    messages.success(request, f'Registro MoreApp {identificador} eliminado correctamente.')
+
+    destino = request.POST.get('next', '').strip()
+    if destino:
+        return redirect(destino)
+    return redirect('reportes_moreapp_list')
