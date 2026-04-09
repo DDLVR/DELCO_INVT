@@ -303,7 +303,29 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         'modem_encontrado': False,
         'sim_encontrada': False,
         'estado_aplicado': estado_obj.nombre if estado_obj else '',
+        'movimientos_generados': 0,
+        'pendientes_revision': [],
+        'identificadores_cruce': {
+            'medidor_serie': medidor_serie,
+            'medidor_activo_serie': medidor_activo_serie,
+            'medidor_dejado_serie': medidor_dejado_serie,
+            'modem_encontrado_serie': modem_encontrado_serie,
+            'modem_dejado_serie': modem_dejado_serie,
+            'modem_serie': modem_serie,
+            'sim_ip': sim_ip,
+            'puerto_dejado': puerto_dejado,
+        },
     }
+
+    def _agregar_pendiente(tipo_equipo: str, identificador: str, motivo: str):
+        ident = _as_text(identificador)
+        if not ident:
+            return
+        resumen['pendientes_revision'].append({
+            'tipo_equipo': tipo_equipo,
+            'identificador': ident,
+            'motivo': motivo,
+        })
 
     if cliente_obj:
         cambios_cliente = []
@@ -340,14 +362,17 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             return sim
         return SimCard.objects.filter(ip_fija__iexact=ip).first()
 
-    observacion_base = f'Actualización MoreApp ({formulario_canonico})'
+    observacion_base = (
+        f'Actualización MoreApp ({formulario_canonico}) '
+        f'| submission: {registro.moreapp_submission_id}'
+    )
     medidor_principal = _buscar_medidor(medidor_serie)
 
     if formulario_canonico == 'REGISTRO_MEDIDORES_TELEMETRIA_V3':
         medidor_retirado = _buscar_medidor(medidor_activo_serie)
         if medidor_retirado:
             resumen['medidor_encontrado'] = True
-            _actualizar_equipo_operativo(
+            actualizado = _actualizar_equipo_operativo(
                 medidor_retirado,
                 'MEDIDOR',
                 _obtener_estado_por_nombre('Retirado') or estado_obj,
@@ -355,11 +380,15 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 f'{observacion_base} - retiro medidor por serie',
                 registro,
             )
+            if actualizado:
+                resumen['movimientos_generados'] += 1
+        elif medidor_activo_serie:
+            _agregar_pendiente('MEDIDOR', medidor_activo_serie, 'Serie de medidor activo (retiro) no encontrada en inventario')
 
         medidor_instalado = _buscar_medidor(medidor_dejado_serie)
         if medidor_instalado:
             resumen['medidor_encontrado'] = True
-            _actualizar_equipo_operativo(
+            actualizado = _actualizar_equipo_operativo(
                 medidor_instalado,
                 'MEDIDOR',
                 _obtener_estado_por_nombre('Instalado') or estado_obj,
@@ -367,12 +396,16 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 f'{observacion_base} - instalación medidor por serie',
                 registro,
             )
+            if actualizado:
+                resumen['movimientos_generados'] += 1
             medidor_principal = medidor_instalado
+        elif medidor_dejado_serie:
+            _agregar_pendiente('MEDIDOR', medidor_dejado_serie, 'Serie de medidor dejado no encontrada en inventario')
 
         modem_instalado = _buscar_modem_por_serie(modem_dejado_serie)
         if modem_instalado:
             resumen['modem_encontrado'] = True
-            _actualizar_equipo_operativo(
+            actualizado = _actualizar_equipo_operativo(
                 modem_instalado,
                 'MODEM',
                 _obtener_estado_por_nombre('Instalado') or estado_obj,
@@ -383,11 +416,15 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 ip_dejada=sim_ip,
                 puerto=puerto_dejado,
             )
+            if actualizado:
+                resumen['movimientos_generados'] += 1
+        elif modem_dejado_serie:
+            _agregar_pendiente('MODEM', modem_dejado_serie, 'Serie de módem dejado no encontrada en inventario')
 
         sim_instalada = _buscar_sim_por_ip(sim_ip)
         if sim_instalada:
             resumen['sim_encontrada'] = True
-            _actualizar_equipo_operativo(
+            actualizado = _actualizar_equipo_operativo(
                 sim_instalada,
                 'SIM',
                 _obtener_estado_por_nombre('Instalado') or estado_obj,
@@ -397,11 +434,15 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 medidor_asociado=medidor_principal,
                 ip_dejada=sim_ip,
             )
+            if actualizado:
+                resumen['movimientos_generados'] += 1
+        elif sim_ip:
+            _agregar_pendiente('SIM', sim_ip, 'IP dejada de SIM no encontrada en inventario')
         return resumen
 
     if medidor_principal:
         resumen['medidor_encontrado'] = True
-        _actualizar_equipo_operativo(
+        actualizado = _actualizar_equipo_operativo(
             medidor_principal,
             'MEDIDOR',
             estado_obj,
@@ -409,13 +450,17 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             f'{observacion_base} - actualización medidor por serie',
             registro,
         )
+        if actualizado:
+            resumen['movimientos_generados'] += 1
+    elif medidor_serie:
+        _agregar_pendiente('MEDIDOR', medidor_serie, 'Serie de medidor no encontrada en inventario')
 
     modem_encontrado = None
     if formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3' and modem_encontrado_serie and modem_dejado_serie:
         modem_retirado = _buscar_modem_por_serie(modem_encontrado_serie)
         if modem_retirado:
             resumen['modem_encontrado'] = True
-            _actualizar_equipo_operativo(
+            actualizado = _actualizar_equipo_operativo(
                 modem_retirado,
                 'MODEM',
                 _obtener_estado_por_nombre('Retirado') or estado_obj,
@@ -424,6 +469,10 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 registro,
                 medidor_asociado=medidor_principal,
             )
+            if actualizado:
+                resumen['movimientos_generados'] += 1
+        else:
+            _agregar_pendiente('MODEM', modem_encontrado_serie, 'Serie de módem encontrado (retiro) no existe en inventario')
 
     if modem_serie:
         modem_encontrado = _buscar_modem_por_serie(modem_serie)
@@ -432,7 +481,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         estado_modem = estado_obj
         if formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3' and modem_dejado_serie:
             estado_modem = _obtener_estado_por_nombre('Instalado') or estado_obj
-        _actualizar_equipo_operativo(
+        actualizado = _actualizar_equipo_operativo(
             modem_encontrado,
             'MODEM',
             estado_modem,
@@ -443,6 +492,10 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             ip_dejada=sim_ip,
             puerto=puerto_dejado,
         )
+        if actualizado:
+            resumen['movimientos_generados'] += 1
+    elif modem_serie:
+        _agregar_pendiente('MODEM', modem_serie, 'Serie de módem no encontrada en inventario')
 
     sim = _buscar_sim_por_ip(sim_ip)
     if sim:
@@ -450,7 +503,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         estado_sim = estado_obj
         if formulario_canonico in ('MANTENIMIENTO_TELEMETRIA_V3', 'REGISTRO_MEDIDORES_TELEMETRIA_V3') and sim_ip:
             estado_sim = _obtener_estado_por_nombre('Instalado') or estado_obj
-        _actualizar_equipo_operativo(
+        actualizado = _actualizar_equipo_operativo(
             sim,
             'SIM',
             estado_sim,
@@ -460,6 +513,10 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             medidor_asociado=medidor_principal,
             ip_dejada=sim_ip,
         )
+        if actualizado:
+            resumen['movimientos_generados'] += 1
+    elif sim_ip:
+        _agregar_pendiente('SIM', sim_ip, 'IP de SIM no encontrada en inventario')
 
     return resumen
 

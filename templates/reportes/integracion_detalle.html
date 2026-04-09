@@ -602,6 +602,83 @@
         </div>
       </div>
 
+      {% if mostrar_panel_operativo %}
+      <div class="card shadow-sm mb-4 border-warning">
+        <div class="card-header py-2 bg-warning-subtle">
+          <h6 class="mb-0"><i class="bi bi-activity"></i> Panel operativo de integración (interno)</h6>
+        </div>
+        <div class="card-body small">
+          {% if resultado_operativo %}
+          <dl class="row mb-3">
+            <dt class="col-sm-6">Estado inventario aplicado</dt>
+            <dd class="col-sm-6">{{ resultado_operativo.estado_aplicado|default:"No determinado" }}</dd>
+            <dt class="col-sm-6">Cliente encontrado</dt>
+            <dd class="col-sm-6">{% if resultado_operativo.cliente_encontrado %}Sí{% else %}No{% endif %}</dd>
+            <dt class="col-sm-6">Medidor encontrado</dt>
+            <dd class="col-sm-6">{% if resultado_operativo.medidor_encontrado %}Sí{% else %}No{% endif %}</dd>
+            <dt class="col-sm-6">Módem encontrado</dt>
+            <dd class="col-sm-6">{% if resultado_operativo.modem_encontrado %}Sí{% else %}No{% endif %}</dd>
+            <dt class="col-sm-6">SIM encontrada</dt>
+            <dd class="col-sm-6">{% if resultado_operativo.sim_encontrada %}Sí{% else %}No{% endif %}</dd>
+            <dt class="col-sm-6">Movimientos generados</dt>
+            <dd class="col-sm-6">{{ resultado_operativo.movimientos_generados|default:0 }}</dd>
+          </dl>
+
+          {% if movimientos_operativos %}
+          <h6 class="mb-2">Movimientos de inventario creados</h6>
+          <div class="table-responsive mb-3">
+            <table class="table table-sm table-striped mb-0">
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Tipo</th>
+                  <th>Responsable</th>
+                  <th>Equipos</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for mov in movimientos_operativos %}
+                <tr>
+                  <td class="text-nowrap">{{ mov.fecha_hora|date:"d/m/Y H:i" }}</td>
+                  <td>{{ mov.get_tipo_display }}</td>
+                  <td>{{ mov.responsable.nombre_interno|default:mov.responsable }}</td>
+                  <td>{{ mov.detalle_items }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <div class="alert alert-light border mb-3">
+            No se encontraron movimientos trazables para este submission.
+          </div>
+          {% endif %}
+
+          {% if pendientes_revision %}
+          <h6 class="mb-2">Equipos no encontrados en base (revisión administrativa)</h6>
+          <div class="list-group">
+            {% for p in pendientes_revision %}
+            <div class="list-group-item">
+              <div class="fw-semibold">{{ p.tipo_equipo }}: {{ p.identificador }}</div>
+              <div class="text-muted mb-2">{{ p.motivo }}</div>
+              <a href="{{ p.inventario_url }}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-search"></i> Revisar en inventario
+              </a>
+            </div>
+            {% endfor %}
+          </div>
+          {% else %}
+          <div class="alert alert-success mb-0">
+            Todos los equipos detectados en el reporte se encontraron en la base de inventario.
+          </div>
+          {% endif %}
+          {% else %}
+          <div class="alert alert-light mb-0">No hay resumen operativo disponible para este registro.</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
     </div>
   </div>
 
