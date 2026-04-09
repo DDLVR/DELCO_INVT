@@ -76,6 +76,7 @@ import logging
 import traceback
 from io import BytesIO
 from datetime import datetime
+from urllib.parse import quote_plus
 from .decorators import role_required, admin_or_administrativo
 from ordenes_trabajo.models import OrdenTrabajo
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion
@@ -494,6 +495,7 @@ def inventario_list_view(request):
                 'imei': 'imei__icontains',
                 'operador': 'operador__icontains',
                 'abonado': 'abonado__icontains',
+                'direccion_ip': 'direccion_ip__icontains',
                 'entregado_a': 'entregado_a_nombre__icontains',
                 'proyecto': 'proyecto__icontains',
                 'estado': 'estado_inventario__nombre__icontains',
@@ -503,6 +505,8 @@ def inventario_list_view(request):
                 'imei__icontains',
                 'operador__icontains',
                 'abonado__icontains',
+                'direccion_ip__icontains',
+                'ip_fija__icontains',
                 'entregado_a_nombre__icontains',
                 'proyecto__icontains',
                 'estado_inventario__nombre__icontains',
@@ -2787,20 +2791,74 @@ def reportes_moreapp_list(request):
 def reportes_moreapp_detalle(request, pk):
     """Detalle de un registro MoreApp individual."""
     from ordenes_trabajo.models import IntegracionMoreApp
-    from integraciones.reader import leer_carpetas
+    from inventario.models import MovimientoInventario
 
     if request.user.rol not in ROLES_REPORTES:
         messages.error(request, 'No tienes permiso para acceder a Reportes.')
         return redirect('dashboard')
 
     registro = get_object_or_404(IntegracionMoreApp, pk=pk)
+    datos_procesados = registro.datos_procesados if isinstance(registro.datos_procesados, dict) else {}
+    resultado_operativo = datos_procesados.get('resultado_operativo', {}) if isinstance(datos_procesados, dict) else {}
+
+    pendientes_revision = []
+    if isinstance(resultado_operativo, dict):
+        for pendiente in resultado_operativo.get('pendientes_revision', []):
+            tipo_equipo = str(pendiente.get('tipo_equipo', '')).upper()
+            identificador = str(pendiente.get('identificador', '')).strip()
+            motivo = str(pendiente.get('motivo', '')).strip()
+            if not identificador:
+                continue
+
+            if tipo_equipo == 'MEDIDOR':
+                inventario_url = f'/inventario/?tipo=medidor&campo=serie&q={quote_plus(identificador)}'
+            elif tipo_equipo == 'MODEM':
+                inventario_url = f'/inventario/?tipo=modem&campo=serie&q={quote_plus(identificador)}'
+            else:
+                inventario_url = f'/inventario/?tipo=sim&campo=direccion_ip&q={quote_plus(identificador)}'
+
+            pendientes_revision.append({
+                'tipo_equipo': tipo_equipo,
+                'identificador': identificador,
+                'motivo': motivo,
+                'inventario_url': inventario_url,
+            })
+
+    movimientos_operativos = list(
+        MovimientoInventario.objects.filter(
+            observacion__icontains=f'submission: {registro.moreapp_submission_id}'
+        )
+        .select_related('origen', 'destino', 'responsable')
+        .prefetch_related('items__medidor', 'items__modem', 'items__simcard')
+        .order_by('-fecha_hora')[:30]
+    )
+
+    for mov in movimientos_operativos:
+        detalles = []
+        for item in mov.items.all():
+            if item.medidor:
+                detalles.append(f'MEDIDOR {item.medidor.serie}')
+            elif item.modem:
+                detalles.append(f'MODEM {item.modem.serie}')
+            elif item.simcard:
+                sim_ident = item.simcard.direccion_ip or item.simcard.ip_fija or item.simcard.imei or item.simcard.abonado or item.simcard.pk
+                detalles.append(f'SIM {sim_ident}')
+            else:
+                detalles.append(item.get_tipo_equipo_display())
+        mov.detalle_items = ', '.join(detalles) if detalles else '-'
+
     if request.user.rol == 'ADMIN':
         registro_delete_url = f'/reportes/moreapp/{registro.pk}/eliminar/'
     else:
         registro_delete_url = ''
+
     return render(request, 'reportes/integracion_detalle.html', {
         'registro': registro,
         'registro_delete_url': registro_delete_url,
+        'resultado_operativo': resultado_operativo,
+        'pendientes_revision': pendientes_revision,
+        'movimientos_operativos': movimientos_operativos,
+        'mostrar_panel_operativo': request.user.rol in ('ADMIN', 'ADMINISTRATIVO'),
     })
 
 
