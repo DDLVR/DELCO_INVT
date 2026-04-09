@@ -651,6 +651,7 @@ def inventario_obtener_datos_view(request, pk):
                 'apn': getattr(equipo, 'apn', '') or '',
                 'fecha_recepcion': equipo.fecha_recepcion.strftime('%Y-%m-%d') if equipo.fecha_recepcion else '',
                 'entregado_a_nombre': getattr(equipo, 'entregado_a_nombre', '') or '',
+                'en_custodia_de_id': getattr(equipo, 'en_custodia_de_id', '') or '',
                 'fecha_entrega': equipo.fecha_entrega.strftime('%Y-%m-%d') if equipo.fecha_entrega else '',
                 'estado_id': getattr(equipo, 'estado_inventario_id', '') or '',
                 'cliente_id': getattr(equipo, 'cliente_id', '') or '',
@@ -684,6 +685,7 @@ def inventario_obtener_datos_view(request, pk):
                 'serie_secundaria': getattr(equipo, 'serie_secundaria', '') or '',
                 'irregularidad': getattr(equipo, 'irregularidad', '') or '',
                 'proyecto': getattr(equipo, 'proyecto', '') or '',
+                'entregado_a_id': getattr(equipo, 'entregado_a_id', '') or '',
             }
         else:
             # Para Medidor
@@ -776,6 +778,7 @@ def inventario_modificar_view(request, pk):
             before = {
                 'fecha_entrega': equipo.fecha_entrega,
                 'estado_id': equipo.estado_inventario_id,
+                'en_custodia_de_id': equipo.en_custodia_de_id,
                 'cliente_id': equipo.cliente_id,
                 'medidor_id': equipo.medidor_id,
                 'proyecto': equipo.proyecto,
@@ -783,6 +786,7 @@ def inventario_modificar_view(request, pk):
         else:
             before = {
                 'estado_id': equipo.estado_inventario_id,
+                'entregado_a_id': equipo.entregado_a_id,
                 'cliente_id': equipo.cliente_id,
                 'medidor_id': equipo.medidor_id,
                 'ip': equipo.ip,
@@ -802,6 +806,7 @@ def inventario_modificar_view(request, pk):
             estado_id = request.POST.get('estado_sim', '').strip() or request.POST.get('estado', '').strip()
             cliente_texto = request.POST.get('cliente_texto', '').strip()
             cliente_id = request.POST.get('cliente', '').strip()
+            en_custodia_de_id = request.POST.get('entregado_a_id', '').strip()
             medidor_id = request.POST.get('medidor', '').strip()
             proyecto = request.POST.get('proyecto', '').strip()
             
@@ -836,6 +841,12 @@ def inventario_modificar_view(request, pk):
             else:
                 equipo.cliente = None
             
+            if en_custodia_de_id:
+                try:
+                    en_custodia_obj = Usuario.objects.get(pk=int(en_custodia_de_id))
+                    equipo.en_custodia_de = en_custodia_obj
+                except (ValueError, TypeError, Usuario.DoesNotExist):
+                    pass
             if medidor_id:
                 try:
                     equipo.medidor_id = int(medidor_id)
@@ -850,6 +861,7 @@ def inventario_modificar_view(request, pk):
             puerto = request.POST.get('puerto', '').strip()
             marca_secundaria = request.POST.get('marca_secundaria', '').strip()
             observaciones = request.POST.get('observaciones', '').strip()
+            entregado_a_id_modem = request.POST.get('entregado_a_id', '').strip()
             retirado = request.POST.get('retirado', '').strip()
             serie_secundaria = request.POST.get('serie_secundaria', '').strip()
             irregularidad = request.POST.get('irregularidad', '').strip()
@@ -874,6 +886,14 @@ def inventario_modificar_view(request, pk):
                 equipo.medidor_id = None
 
             # Campos azules editables
+            if entregado_a_id_modem:
+                try:
+                    entregado_a_obj_modem = Usuario.objects.get(pk=int(entregado_a_id_modem))
+                    equipo.entregado_a = entregado_a_obj_modem
+                except (ValueError, TypeError, Usuario.DoesNotExist):
+                    pass
+            else:
+                equipo.entregado_a = None
             equipo.ip = ip
             equipo.puerto = puerto
             equipo.marca_secundaria = marca_secundaria
@@ -963,6 +983,7 @@ def inventario_modificar_view(request, pk):
             after = {
                 'fecha_entrega': equipo.fecha_entrega,
                 'estado_id': equipo.estado_inventario_id,
+                'en_custodia_de_id': equipo.en_custodia_de_id,
                 'cliente_id': equipo.cliente_id,
                 'medidor_id': equipo.medidor_id,
                 'proyecto': equipo.proyecto,
@@ -970,6 +991,7 @@ def inventario_modificar_view(request, pk):
             etiquetas = {
                 'fecha_entrega': 'Fecha Entrega',
                 'estado_id': 'Estado',
+                'en_custodia_de_id': 'Entregado A',
                 'cliente_id': 'Cliente',
                 'medidor_id': 'Medidor',
                 'proyecto': 'Proyecto',
@@ -979,6 +1001,7 @@ def inventario_modificar_view(request, pk):
         else:
             after = {
                 'estado_id': equipo.estado_inventario_id,
+                'entregado_a_id': equipo.entregado_a_id,
                 'cliente_id': equipo.cliente_id,
                 'medidor_id': equipo.medidor_id,
                 'ip': equipo.ip,
@@ -992,6 +1015,7 @@ def inventario_modificar_view(request, pk):
             }
             etiquetas = {
                 'estado_id': 'Estado',
+                'entregado_a_id': 'Entregado A',
                 'cliente_id': 'Cliente',
                 'medidor_id': 'Medidor',
                 'ip': 'IP',
@@ -1164,6 +1188,7 @@ def inventario_modificar_masivo_view(request):
     cliente_texto = request.POST.get('cliente_texto', '').strip()
     cliente_id = request.POST.get('cliente_id', '').strip()
     entregado_a_id = request.POST.get('entregado_a_id', '').strip()
+    entregado_a_nombre_bulk = request.POST.get('entregado_a_nombre', '').strip()
     medidor_id = request.POST.get('medidor_id', '').strip()
     proyecto = request.POST.get('proyecto', '').strip()
     tipo_medidor = request.POST.get('tipo_medidor', '').strip().upper()
@@ -1225,6 +1250,9 @@ def inventario_modificar_masivo_view(request):
                 campos.append('Tipo Medidor')
 
         elif tipo == 'sim':
+            if entregado_obj and equipo.en_custodia_de_id != entregado_obj.id:
+                equipo.en_custodia_de = entregado_obj
+                campos.append('Entregado A')
             if cliente_obj and equipo.cliente_id != cliente_obj.id:
                 equipo.cliente = cliente_obj
                 campos.append('Cliente')
@@ -1236,6 +1264,9 @@ def inventario_modificar_masivo_view(request):
                 campos.append('Proyecto')
 
         elif tipo == 'modem':
+            if entregado_obj and equipo.entregado_a_id != entregado_obj.id:
+                equipo.entregado_a = entregado_obj
+                campos.append('Entregado A')
             if cliente_obj and equipo.cliente_id != cliente_obj.id:
                 equipo.cliente = cliente_obj
                 campos.append('Cliente')
