@@ -36,9 +36,9 @@
       {% else %}
         <span class="badge bg-light text-dark fs-6 align-self-center">{{ registro.estado_sincronizacion }}</span>
       {% endif %}
-      {% if user.rol == 'ADMIN' %}
+      {% if registro_delete_url %}
       <form method="post"
-            action="{% url 'reportes_moreapp_eliminar' registro.pk %}"
+        action="{{ registro_delete_url }}"
             class="form-eliminar-reporte-detalle"
             data-reporte-id="{{ registro.moreapp_submission_id }}">
         {% csrf_token %}
@@ -613,7 +613,7 @@
 </div>
 {% endwith %}
 
-{% if user.rol == 'ADMIN' %}
+{% if registro_delete_url %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   const form = document.querySelector('.form-eliminar-reporte-detalle');
