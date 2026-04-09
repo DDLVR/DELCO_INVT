@@ -612,6 +612,15 @@
                     </div>
                     {% elif tipo == 'sim' %}
                     <div class="mb-3">
+                        <label class="form-label">Entregado A / En Custodia De</label>
+                        <select class="form-select" name="entregado_a_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for usuario in usuarios %}
+                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">Cliente (número)</label>
                         <input type="text" class="form-control" name="cliente_texto" placeholder="-- No cambiar --">
                     </div>
@@ -629,6 +638,15 @@
                         <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
                     </div>
                     {% else %}
+                    <div class="mb-3">
+                        <label class="form-label">Entregado A</label>
+                        <select class="form-select" name="entregado_a_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for usuario in usuarios %}
+                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">Cliente</label>
                         <select class="form-select" name="cliente_id">
@@ -900,6 +918,19 @@
                                         <small class="text-muted">Medidor asociado a esta SIM (opcional)</small>
                                     </div>
                                     <div class="col-md-6 mb-3">
+                                        <label for="simEntregadoA" class="form-label">
+                                            <i class="bi bi-person-badge"></i>
+                                            Entregado A / En Custodia De
+                                        </label>
+                                        <select class="form-select" id="simEntregadoA" name="entregado_a_id">
+                                            <option value="">-- Sin asignar --</option>
+                                            {% for usuario in usuarios %}
+                                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <small class="text-muted">Técnico o responsable de la SIM</small>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
                                         <label for="simProyecto" class="form-label">
                                             <i class="bi bi-diagram-3"></i>
                                             Proyecto
@@ -975,6 +1006,19 @@
                             </div>
                             <div class="card-body">
                                 <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="modemEntregadoA" class="form-label">
+                                            <i class="bi bi-person-badge"></i>
+                                            Entregado A
+                                        </label>
+                                        <select class="form-select" id="modemEntregadoA" name="entregado_a_id">
+                                            <option value="">-- Sin asignar --</option>
+                                            {% for usuario in usuarios %}
+                                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <small class="text-muted">Técnico o responsable del módem</small>
+                                    </div>
                                     <div class="col-md-6 mb-3">
                                         <label for="modemCliente" class="form-label">
                                             <i class="bi bi-building"></i> 
@@ -1222,6 +1266,10 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 if (medidorSIM && equipoData.medidor_id) {
                     medidorSIM.value = equipoData.medidor_id;
                 }
+                const simEntregadoA = document.getElementById('simEntregadoA');
+                if (simEntregadoA && equipoData.en_custodia_de_id) {
+                    simEntregadoA.value = equipoData.en_custodia_de_id;
+                }
                 const simProyecto = document.getElementById('simProyecto');
                 if (simProyecto) {
                     simProyecto.value = equipoData.proyecto || '';
@@ -1251,6 +1299,10 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 
                 if (clienteModem && equipoData.cliente_id) {
                     clienteModem.value = equipoData.cliente_id;
+                }
+                const modemEntregadoA = document.getElementById('modemEntregadoA');
+                if (modemEntregadoA && equipoData.entregado_a_id) {
+                    modemEntregadoA.value = equipoData.entregado_a_id;
                 }
                 if (medidorModem && equipoData.medidor_id) {
                     medidorModem.value = equipoData.medidor_id;
@@ -1366,15 +1418,18 @@ if (btnGuardar) {
             const cliente = document.getElementById('simClienteTexto').value;
             const medidor = document.getElementById('simMedidor').value;
             const proyecto = document.getElementById('simProyecto')?.value || '';
+            const simEntregadoA = document.getElementById('simEntregadoA')?.value || '';
             
             formData.append('fecha_entrega', fechaEntrega);
             formData.append('estado_sim', estado);
             formData.append('cliente_texto', cliente);
             formData.append('medidor', medidor);
             formData.append('proyecto', proyecto);
+            formData.append('entregado_a_id', simEntregadoA);
         } else if (tipo === 'modem') {
             const cliente = document.getElementById('modemCliente').value;
             const medidor = document.getElementById('modemMedidor').value;
+            const modemEntregadoA = document.getElementById('modemEntregadoA')?.value || '';
             const ip = document.getElementById('modemIp').value;
             const puerto = document.getElementById('modemPuerto').value;
             const marcaSecundaria = document.getElementById('modemMarcaSecundaria').value;
@@ -1387,6 +1442,7 @@ if (btnGuardar) {
             const estadoModem = document.getElementById('modemEstado').value;
             formData.append('cliente', cliente);
             formData.append('medidor', medidor);
+            formData.append('entregado_a_id', modemEntregadoA);
             formData.append('estado_modem', estadoModem);
             formData.append('ip', ip);
             formData.append('puerto', puerto);
