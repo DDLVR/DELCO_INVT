@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
+from django.urls import reverse, NoReverseMatch
 from inventario.models import MovimientoInventario, MovimientoItem, Ubicacion
 from django.views.decorators.http import require_POST
 
@@ -2756,14 +2757,31 @@ def reportes_moreapp_list(request):
     if formulario:
         qs = qs.filter(nombre_formulario=formulario)
 
+    delete_route_available = False
+    if request.user.rol == 'ADMIN':
+        try:
+            reverse('reportes_moreapp_eliminar', args=[0])
+            delete_route_available = True
+        except NoReverseMatch:
+            delete_route_available = False
+
+    registros = list(qs)
+    if delete_route_available:
+        for reg in registros:
+            reg.delete_url = reverse('reportes_moreapp_eliminar', args=[reg.pk])
+    else:
+        for reg in registros:
+            reg.delete_url = ''
+
     context = {
-        'registros': qs,
+        'registros': registros,
         'estado_actual': estado,
         'alerta_actual': alerta,
         'q': q,
         'formulario_actual': formulario,
         'formularios': formularios,
         'total': qs.count(),
+        'puede_eliminar_reportes': request.user.rol == 'ADMIN' and delete_route_available,
         'pendientes': IntegracionMoreApp.objects.filter(estado_sincronizacion='PENDIENTE').count(),
         'alertas': IntegracionMoreApp.objects.filter(alerta_doble_trabajo=True).count(),
         'errores': IntegracionMoreApp.objects.filter(
@@ -2785,7 +2803,16 @@ def reportes_moreapp_detalle(request, pk):
         return redirect('dashboard')
 
     registro = get_object_or_404(IntegracionMoreApp, pk=pk)
-    return render(request, 'reportes/integracion_detalle.html', {'registro': registro})
+    registro_delete_url = ''
+    if request.user.rol == 'ADMIN':
+        try:
+            registro_delete_url = reverse('reportes_moreapp_eliminar', args=[registro.pk])
+        except NoReverseMatch:
+            registro_delete_url = ''
+    return render(request, 'reportes/integracion_detalle.html', {
+        'registro': registro,
+        'registro_delete_url': registro_delete_url,
+    })
 
 
 @login_required
