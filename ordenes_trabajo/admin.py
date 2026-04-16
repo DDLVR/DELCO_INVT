@@ -101,12 +101,21 @@ class IntegracionMoreAppAdmin(admin.ModelAdmin):
         'moreapp_submission_id',
         'orden',
         'estado_sincronizacion',
+        'estado_revision',
+        'alerta_doble_trabajo',
         'fecha_recepcion',
         'actualizo_cliente',
         'actualizo_equipos',
         'creo_adjuntos'
     )
-    list_filter = ('estado_sincronizacion', 'fecha_recepcion', 'actualizo_cliente', 'actualizo_equipos')
+    list_filter = (
+        'estado_sincronizacion',
+        'estado_revision',
+        'alerta_doble_trabajo',
+        'fecha_recepcion',
+        'actualizo_cliente',
+        'actualizo_equipos',
+    )
     search_fields = ('moreapp_submission_id', 'orden__titulo', 'mensaje_error')
     readonly_fields = ('fecha_recepcion', 'fecha_procesamiento')
     
@@ -115,7 +124,7 @@ class IntegracionMoreAppAdmin(admin.ModelAdmin):
             'fields': ('moreapp_submission_id', 'orden')
         }),
         ('Estado', {
-            'fields': ('estado_sincronizacion', 'mensaje_error')
+            'fields': ('estado_sincronizacion', 'estado_revision', 'alerta_doble_trabajo', 'descripcion_alerta', 'mensaje_error')
         }),
         ('Datos', {
             'fields': ('datos_recibidos', 'datos_procesados'),

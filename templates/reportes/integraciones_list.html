@@ -43,8 +43,8 @@
     <div class="col-6 col-md-3">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-body text-center">
-          <div class="fs-2 fw-bold text-danger">{{ alertas }}</div>
-          <div class="text-muted small">Alertas doble trabajo</div>
+          <div class="fs-2 fw-bold text-danger">{{ con_advertencia }}</div>
+          <div class="text-muted small">Con advertencia</div>
         </div>
       </div>
     </div>
@@ -67,6 +67,8 @@
           <input type="hidden" name="q" value="{{ q }}">
           <input type="hidden" name="estado" value="{{ estado_actual }}">
           <input type="hidden" name="alerta" value="{{ alerta_actual }}">
+          <input type="hidden" name="bloqueo" value="{{ bloqueo_actual }}">
+          <input type="hidden" name="revision" value="{{ revision_actual }}">
 
           <button type="submit"
                   class="btn btn-sm {% if not formulario_actual %}btn-primary{% else %}btn-outline-primary{% endif %}">
@@ -106,6 +108,22 @@
             <option value="1" {% if alerta_actual == '1' %}selected{% endif %}>Solo con alerta</option>
           </select>
         </div>
+        <div class="col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Bloqueo operativo</label>
+          <select name="bloqueo" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            <option value="1" {% if bloqueo_actual == '1' %}selected{% endif %}>Solo con bloqueo</option>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label mb-1 small fw-semibold">Revisión</label>
+          <select name="revision" class="form-select form-select-sm">
+            <option value="">Todas</option>
+            {% for codigo, nombre in revision_choices %}
+            <option value="{{ codigo }}" {% if revision_actual == codigo %}selected{% endif %}>{{ nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <input type="hidden" name="formulario" value="{{ formulario_actual }}">
         <div class="col-md-auto">
           <button type="submit" class="btn btn-sm btn-primary">
@@ -133,6 +151,7 @@
               <th>Técnico</th>
               <th>Fecha registro</th>
               <th>Estado</th>
+              <th>Revisión</th>
               <th>Alerta</th>
               <th class="text-end">Acciones</th>
             </tr>
@@ -171,9 +190,23 @@
                   <span class="badge bg-light text-dark">{{ reg.estado_sincronizacion }}</span>
                 {% endif %}
               </td>
+              <td>
+                {% if reg.estado_revision == 'REVISADO' %}
+                  <span class="badge bg-success">Revisado</span>
+                {% elif reg.estado_revision == 'CON_ADVERTENCIA' %}
+                  <span class="badge bg-warning text-dark">Con advertencia</span>
+                {% elif reg.estado_revision == 'DESCARTADO' %}
+                  <span class="badge bg-secondary">Descartado</span>
+                {% else %}
+                  <span class="badge bg-primary">Pendiente</span>
+                {% endif %}
+              </td>
               <td class="text-center">
                 {% if reg.alerta_doble_trabajo %}
                   <i class="bi bi-exclamation-triangle-fill text-warning" title="{{ reg.descripcion_alerta }}"></i>
+                {% endif %}
+                {% if reg.tiene_bloqueo_operativo %}
+                  <i class="bi bi-shield-exclamation text-danger ms-1" title="{{ reg.bloqueo_operativo_preview|truncatechars:120 }}"></i>
                 {% endif %}
               </td>
               <td class="text-end">
@@ -199,9 +232,9 @@
             {% endwith %}
             {% empty %}
             <tr>
-              <td colspan="9" class="text-center text-muted py-4">
+              <td colspan="10" class="text-center text-muted py-4">
                 <i class="bi bi-inbox fs-4 d-block mb-2"></i>
-                No hay registros{% if q or estado_actual or alerta_actual %} con los filtros aplicados{% endif %}.
+                No hay registros{% if q or estado_actual or alerta_actual or bloqueo_actual or revision_actual %} con los filtros aplicados{% endif %}.
               </td>
             </tr>
             {% endfor %}

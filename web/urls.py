@@ -1,13 +1,13 @@
 from django.urls import path
 from .views import (
     login_view, logout_view, dashboard_view,
-    ordenes_list_view, orden_detalle_view, orden_crear_view,
     inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, inventario_eliminar_view, inventario_crear_view, inventario_modificar_masivo_view, profile_view, update_profile_view,
     usuarios_list_view, usuario_crear_view, usuario_editar_view, usuario_reset_password_view, usuario_eliminar_view,
     clientes_list_view, cliente_crear_view, cliente_editar_view, cliente_eliminar_view,
     registro_errores_view, importacion_errores_view, importacion_corregir_fila_view,
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
     reportes_moreapp_list, reportes_moreapp_detalle, reportes_moreapp_sincronizar, reportes_moreapp_eliminar,
+    pendientes_operativos_view, moreapp_marcar_revision_view,
 )
 
 urlpatterns = [
@@ -22,11 +22,6 @@ urlpatterns = [
 
     # Dashboard
     path('dashboard/', dashboard_view, name='dashboard'),
-
-    # Órdenes de Trabajo
-    path('ordenes/', ordenes_list_view, name='ordenes_list'),
-    path('ordenes/<int:pk>/', orden_detalle_view, name='orden_detalle'),
-    path('ordenes/crear/', orden_crear_view, name='orden_crear'),
 
     # Inventario
     path('inventario/', inventario_list_view, name='inventario_list'),
@@ -68,6 +63,10 @@ urlpatterns = [
     path('reportes/moreapp/<int:pk>/', reportes_moreapp_detalle, name='reportes_moreapp_detalle'),
     path('reportes/moreapp/sincronizar/', reportes_moreapp_sincronizar, name='reportes_moreapp_sincronizar'),
     path('reportes/moreapp/<int:pk>/eliminar/', reportes_moreapp_eliminar, name='reportes_moreapp_eliminar'),
+
+    # Vistas operativas (Puntos 2, 8, 9, 11)
+    path('operacional/pendientes/', pendientes_operativos_view, name='pendientes_operativos'),
+    path('operacional/moreapp/<int:pk>/marcar-revision/', moreapp_marcar_revision_view, name='moreapp_marcar_revision'),
 
     # API Webhook MoreApp (tiempo real - sin autenticación Django)
     path('api/moreapp-webhook/', movimientos_importar_moreapp_webhook, name='movimientos_webhook_moreapp'),

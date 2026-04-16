@@ -1,94 +1,147 @@
 <div class="bg-white border-end h-100 p-0 d-flex flex-column">
   <!-- Header del Sidebar -->
-  <div class="p-3 border-bottom bg-white flex-shrink-0">
-    <div class="fw-semibold">📋 Menú</div>
+  <div class="p-3 border-bottom bg-white flex-shrink-0 sidebar-head">
+    <div class="fw-semibold"><i class="bi bi-clipboard2 me-1"></i> Menú</div>
     <small class="text-muted">{{ user.rol }}</small>
   </div>
 
   <!-- Contenido Scrolleable -->
   <div class="list-group list-group-flush flex-grow-1" style="overflow-y: auto;">
     <!-- Dashboard -->
-    <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'dashboard' %}active bg-primary text-white{% endif %}" href="{% url 'dashboard' %}">
-      <i class="bi bi-house"></i> 📊 Dashboard
+    <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'dashboard' %}active bg-primary text-white{% endif %}" href="{% url 'dashboard' %}">
+      <i class="bi bi-house me-2"></i> Dashboard
     </a>
 
-    <!-- Órdenes de Trabajo -->
-    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'TECNICO' or user.rol == 'SUPERVISOR' %}
-      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'ordenes_list' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
-        <i class="bi bi-list-check"></i> 📝 Órdenes de Trabajo
-      </a>
-    {% endif %}
+    <!-- Órdenes de Trabajo desactivado (fase 1) -->
 
     <!-- Inventario -->
     {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'TECNICO' or user.rol == 'SUPERVISOR' %}
-      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'inventario_list' %}active bg-primary text-white{% endif %}" href="{% url 'inventario_list' %}">
-        <i class="bi bi-box"></i> 📦 Inventario
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'inventario_list' %}active bg-primary text-white{% endif %}" href="{% url 'inventario_list' %}">
+        <i class="bi bi-box me-2"></i> Inventario
       </a>
     {% endif %}
 
     <!-- Movimientos -->
     {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
-      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'movimientos_list' or request.resolver_match.url_name == 'movimientos_detalle' or request.resolver_match.url_name == 'movimientos_historial_equipo' %}active bg-primary text-white{% endif %}" href="{% url 'movimientos_list' %}">
-        <i class="bi bi-arrow-left-right"></i> 🔄 Movimientos
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'movimientos_list' or request.resolver_match.url_name == 'movimientos_detalle' or request.resolver_match.url_name == 'movimientos_historial_equipo' %}active bg-primary text-white{% endif %}" href="{% url 'movimientos_list' %}">
+        <i class="bi bi-arrow-left-right me-2"></i> Movimientos
       </a>
     {% endif %}
 
     <!-- Reportes -->
     {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'SUPERVISOR' %}
-      <a class="list-group-item list-group-item-action {% if 'reportes_moreapp' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}"
+      <a class="list-group-item list-group-item-action app-nav-link {% if 'reportes_moreapp' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}"
          href="{% url 'reportes_moreapp_list' %}">
-        <i class="bi bi-cloud-download"></i> Reportes MoreApp
+        <i class="bi bi-cloud-download me-2"></i> Reportes MoreApp
       </a>
     {% endif %}
 
     <!-- Gestión de Usuarios (Solo Admin) -->
     {% if user.rol == 'ADMIN' %}
       <hr class="my-2">
-      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'usuarios_list' %}active bg-primary text-white{% endif %}" href="{% url 'usuarios_list' %}">
-        <i class="bi bi-people"></i> 👥 Usuarios
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'usuarios_list' %}active bg-primary text-white{% endif %}" href="{% url 'usuarios_list' %}">
+        <i class="bi bi-people me-2"></i> Usuarios
       </a>
     {% endif %}
 
     {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
-      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'registro_errores' or request.resolver_match.url_name == 'importacion_errores' %}active bg-primary text-white{% endif %}" href="{% url 'registro_errores' %}">
-        <i class="bi bi-exclamation-octagon"></i> Registro de Errores
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'registro_errores' or request.resolver_match.url_name == 'importacion_errores' %}active bg-primary text-white{% endif %}" href="{% url 'registro_errores' %}">
+        <i class="bi bi-exclamation-octagon me-2"></i> Registro de Errores
       </a>
     {% endif %}
 
     {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
       {% url 'clientes_list' as clientes_list_url %}
       {% if clientes_list_url %}
-      <a class="list-group-item list-group-item-action {% if request.resolver_match.url_name == 'clientes_list' or request.resolver_match.url_name == 'cliente_crear' or request.resolver_match.url_name == 'cliente_editar' %}active bg-primary text-white{% endif %}" href="{{ clientes_list_url }}">
-        <i class="bi bi-building"></i>
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'clientes_list' or request.resolver_match.url_name == 'cliente_crear' or request.resolver_match.url_name == 'cliente_editar' %}active bg-primary text-white{% endif %}" href="{{ clientes_list_url }}">
+        <i class="bi bi-building me-2"></i>
         {% if user.rol == 'ADMIN' %}
-          🏢 Gestion Clientes
+          Gestión Clientes
         {% else %}
-          🏢 Clientes (Lectura)
+          Clientes (Lectura)
         {% endif %}
       </a>
       {% endif %}
     {% endif %}
   </div>
+
+  {% if user.is_authenticated %}
+  <div class="sidebar-footer border-top bg-white p-2 flex-shrink-0">
+    <button
+      type="button"
+      class="btn btn-outline-primary w-100 mb-2 d-flex align-items-center justify-content-center gap-2 js-open-profile"
+      title="Ver perfil">
+      <i class="bi bi-person-circle"></i>
+      Ver perfil
+    </button>
+    <a class="btn btn-outline-danger w-100 d-flex align-items-center justify-content-center gap-2" href="{% url 'logout' %}">
+      <i class="bi bi-box-arrow-right"></i>
+      Cerrar sesión
+    </a>
+  </div>
+  {% endif %}
 </div>
 
 <style>
   .list-group-item {
     border: none;
     border-bottom: 1px solid #f0f0f0;
-    padding: 12px 15px;
+    padding: 12px 14px;
     color: #333;
     text-decoration: none;
-    transition: all 0.3s;
+    transition: all 0.18s ease;
   }
   
   .list-group-item:hover {
     background-color: #f8f9fa;
-    padding-left: 20px;
+    padding-left: 18px;
   }
   
   .list-group-item.active {
     background-color: #667eea !important;
     border-left: 4px solid #667eea;
     font-weight: 600;
+  }
+
+  .app-nav-link {
+    display: flex;
+    align-items: center;
+    min-height: 48px;
+    font-size: 0.98rem;
+  }
+
+  .app-nav-link i {
+    width: 1.15rem;
+    text-align: center;
+    flex: 0 0 1.15rem;
+  }
+
+  .sidebar-head {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+
+  .sidebar-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+  }
+
+  @media (max-width: 991.98px) {
+    .app-nav-link {
+      min-height: 52px;
+      font-size: 1rem;
+      padding-top: 0.7rem;
+      padding-bottom: 0.7rem;
+    }
+
+    .list-group-item:hover {
+      padding-left: 14px;
+    }
+
+    .sidebar-footer .btn {
+      min-height: 42px;
+    }
   }
 </style>

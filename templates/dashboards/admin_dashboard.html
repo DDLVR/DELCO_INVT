@@ -106,6 +106,7 @@
 
     <!-- KPIs Principales (DEBAJO de Inventario) -->
     <div class="row mb-4">
+        {% if ordenes_habilitadas %}
         <div class="col-lg-3 col-md-6 mb-3">
             <div class="card shadow-sm h-100" style="border-left: 4px solid #1a3a5c;">
                 <div class="card-body">
@@ -138,6 +139,7 @@
                 </div>
             </div>
         </div>
+        {% endif %}
         <div class="col-lg-3 col-md-6 mb-3">
             <div class="card border-info shadow-sm h-100">
                 <div class="card-body">
@@ -179,11 +181,13 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
+                        {% if ordenes_habilitadas %}
                         <div class="col-md-4 mb-2">
                             <a href="{% url 'ordenes_list' %}" class="btn w-100 text-white" style="background-color: #1a3a5c;">
                                 <i class="bi bi-clipboard-check"></i> Ver Órdenes
                             </a>
                         </div>
+                        {% endif %}
                         <div class="col-md-4 mb-2">
                             <a href="{% url 'inventario_list' %}" class="btn w-100 text-white" style="background-color: #2c5282;">
                                 <i class="bi bi-box-seam"></i> Inventario
@@ -334,6 +338,73 @@
         </div>
     </div>
 </div>
+
+{# ---- Panel operativo MoreApp (Puntos 6, 11) ---- #}
+{% if moreapp_pendientes or moreapp_con_advertencia or moreapp_envejecidos %}
+<div class="container-fluid pb-4">
+    <div class="row">
+        <div class="col-12">
+            <h4 class="mb-3"><i class="bi bi-exclamation-triangle-fill text-warning"></i> Alertas Operativas MoreApp</h4>
+        </div>
+    </div>
+    <div class="row mb-3">
+        {% if moreapp_envejecidos %}
+        <div class="col-md-4 mb-3">
+            <div class="card border-danger shadow-sm h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <i class="bi bi-hourglass-split text-danger" style="font-size:2rem;"></i>
+                    <div>
+                        <h3 class="mb-0 text-danger">{{ moreapp_envejecidos }}</h3>
+                        <small class="text-muted">Sin revisar &gt; 7 días</small>
+                    </div>
+                </div>
+                <div class="card-footer p-2">
+                    <a href="{% url 'pendientes_operativos' %}?estado=PENDIENTE" class="btn btn-sm btn-danger w-100">
+                        <i class="bi bi-arrow-right-circle"></i> Revisar ahora
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if moreapp_con_advertencia %}
+        <div class="col-md-4 mb-3">
+            <div class="card border-warning shadow-sm h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <i class="bi bi-exclamation-circle-fill text-warning" style="font-size:2rem;"></i>
+                    <div>
+                        <h3 class="mb-0 text-warning">{{ moreapp_con_advertencia }}</h3>
+                        <small class="text-muted">Con advertencias</small>
+                    </div>
+                </div>
+                <div class="card-footer p-2">
+                    <a href="{% url 'pendientes_operativos' %}?estado=CON_ADVERTENCIA" class="btn btn-sm btn-warning w-100">
+                        <i class="bi bi-arrow-right-circle"></i> Ver advertencias
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if moreapp_pendientes %}
+        <div class="col-md-4 mb-3">
+            <div class="card border-primary shadow-sm h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <i class="bi bi-clock-fill text-primary" style="font-size:2rem;"></i>
+                    <div>
+                        <h3 class="mb-0 text-primary">{{ moreapp_pendientes }}</h3>
+                        <small class="text-muted">Pendientes de revisión</small>
+                    </div>
+                </div>
+                <div class="card-footer p-2">
+                    <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm btn-primary w-100">
+                        <i class="bi bi-list-check"></i> Cola de pendientes
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -343,4 +414,3 @@ $(document).ready(function() {
 });
 </script>
 {% endblock %}
-

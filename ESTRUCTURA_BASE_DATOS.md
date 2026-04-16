@@ -1,259 +1,158 @@
-# 🗂️ ESTRUCTURA DE BASE DE DATOS
-# ======================================================
-# Diagrama de relaciones y tablas
+# ESTRUCTURA BASE DE DATOS - VERSION OPERATIVA
 
-"""
-════════════════════════════════════════════════════════════════════
-ARQUITECTURA DE BD: MYSQL
-════════════════════════════════════════════════════════════════════
+Documento resumido de entidades y relaciones vigentes en DELCO_INVT.
 
-NOMBRE BD: aplicacion_bonita
-USUARIO: root (o similar)
-HOST: localhost (o IP servidor)
-PUERTO: 3306 (default MySQL)
+## 1. Dominio usuarios
 
-════════════════════════════════════════════════════════════════════
-TABLAS PRINCIPALES
-════════════════════════════════════════════════════════════════════
-"""
+### usuarios_usuario
 
-"""
-┌─────────────────────────────────────────────────────────────────────┐
-│                        TABLA: usuarios_usuario                       │
-│                     (Usuarios y Autenticación)                       │
-├─────────────────────────────────────────────────────────────────────┤
-│ PK  id                    │ INT, AUTO_INCREMENT                      │
-│     rut                   │ VARCHAR(12), UNIQUE, NOT NULL            │
-│     email                 │ VARCHAR(254), UNIQUE, NOT NULL           │
-│     password              │ VARCHAR(128), NOT NULL (encriptado)      │
-│     nombre                │ VARCHAR(100), NOT NULL                   │
-│     apellido              │ VARCHAR(100), NOT NULL                   │
-│     nombre_interno        │ VARCHAR(100), NOT NULL                   │
-│     rol                   │ VARCHAR(20), NOT NULL (ADMIN|TECNICO...) │
-│     is_active             │ BOOLEAN, DEFAULT 1                       │
-│     is_staff              │ BOOLEAN, DEFAULT 0                       │
-│     is_superuser          │ BOOLEAN, DEFAULT 0                       │
-│     fecha_creacion        │ DATETIME, AUTO_NOW_ADD                   │
-│     last_login            │ DATETIME, NULL                           │
-├─────────────────────────────────────────────────────────────────────┤
-│ ÍNDICES:                                                             │
-│   - rut (UNIQUE)                                                     │
-│   - email (UNIQUE)                                                   │
-│   - rol (NORMAL)                                                     │
-├─────────────────────────────────────────────────────────────────────┤
-│ REGISTROS EJEMPLO:                                                   │
-│   1 | 12345678-9 | juan@empresa.cl    | ...pbkdf2... | Juan | ... │
-│   2 | 87654321-0 | maria@empresa.cl   | ...pbkdf2... | María| ... │
-│   3 | 55555555-5 | admin@empresa.cl   | ...pbkdf2... | Admin| ... │
-└─────────────────────────────────────────────────────────────────────┘
-"""
+Campos clave:
 
-"""
-┌─────────────────────────────────────────────────────────────────────┐
-│                 TABLA: ordenes_trabajo_ordentrabajo                  │
-│                    (Órdenes de Trabajo)                              │
-├─────────────────────────────────────────────────────────────────────┤
-│ PK  id                           │ INT, AUTO_INCREMENT                │
-│     titulo                       │ VARCHAR(200), NOT NULL             │
-│     descripcion                  │ LONGTEXT, NULLABLE                 │
-│     estado                       │ VARCHAR(20), NOT NULL              │
-│                                  │ (CREADA|ASIGNADA|EN_EJECUCION...) │
-│ FK  tecnico_responsable_id       │ INT, NOT NULL                      │
-│                                  │ → usuarios_usuario.id              │
-│ FK  creada_por_id               │ INT, NOT NULL                      │
-│                                  │ → usuarios_usuario.id              │
-│     fecha_creacion               │ DATETIME, AUTO_NOW_ADD             │
-│     fecha_cierre                 │ DATETIME, NULLABLE                 │
-│     tecnico_solicito_reasignacion│ BOOLEAN, DEFAULT 0                 │
-├─────────────────────────────────────────────────────────────────────┤
-│ ÍNDICES:                                                             │
-│   - estado (NORMAL)                                                  │
-│   - tecnico_responsable_id (FK)                                      │
-│   - creada_por_id (FK)                                               │
-│   - fecha_creacion (NORMAL)                                          │
-├─────────────────────────────────────────────────────────────────────┤
-│ REGISTROS EJEMPLO:                                                   │
-│ ID │ Título                    │ Estado       │ Tecnico │ Creada_por│
-│ 1  │ Instalar medidor site A   │ ASIGNADA     │ 2       │ 3         │
-│ 2  │ Mantenimiento subestación │ EN_EJECUCION│ 2       │ 3         │
-│ 3  │ Reparar transformador     │ FINALIZADA   │ 1       │ 3         │
-└─────────────────────────────────────────────────────────────────────┘
-"""
+- id
+- rut
+- email
+- nombre_interno
+- rol
+- is_active
 
-"""
-┌─────────────────────────────────────────────────────────────────────┐
-│        TABLA: ordenes_trabajo_ordentrabajo_tecnicos_equipo           │
-│                    (Relación M2M)                                    │
-├─────────────────────────────────────────────────────────────────────┤
-│ PK  id                       │ INT, AUTO_INCREMENT                    │
-│ FK  ordentrabajo_id          │ INT, NOT NULL                          │
-│                              │ → ordenes_trabajo_ordentrabajo.id     │
-│ FK  usuario_id               │ INT, NOT NULL                          │
-│                              │ → usuarios_usuario.id                 │
-├─────────────────────────────────────────────────────────────────────┤
-│ UNIQUE(ordentrabajo_id, usuario_id)  [Evita duplicados]             │
-├─────────────────────────────────────────────────────────────────────┤
-│ REGISTROS EJEMPLO:                                                   │
-│   1 | orden_id=1 | usuario_id=2 (técnico 2 en equipo orden 1)       │
-│   2 | orden_id=1 | usuario_id=4 (técnico 4 en equipo orden 1)       │
-│   3 | orden_id=2 | usuario_id=2 (técnico 2 en equipo orden 2)       │
-└─────────────────────────────────────────────────────────────────────┘
-"""
+Uso:
 
-"""
-┌─────────────────────────────────────────────────────────────────────┐
-│              TABLA: auth_group                                        │
-│          (Grupos de permisos - Django built-in)                      │
-├─────────────────────────────────────────────────────────────────────┤
-│ PK  id     │ INT, AUTO_INCREMENT                                    │
-│     name   │ VARCHAR(150), UNIQUE                                   │
-├─────────────────────────────────────────────────────────────────────┤
-│ REGISTROS EJEMPLO:                                                   │
-│   1 | "Técnicos"                                                     │
-│   2 | "Administrativos"                                              │
-│   3 | "Gerencia"                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-"""
+- autenticacion
+- autorizacion por rol
+- responsable de movimientos y acciones operativas
 
-"""
-════════════════════════════════════════════════════════════════════
-RELACIONES ENTRE TABLAS
-════════════════════════════════════════════════════════════════════
+## 2. Dominio ordenes
 
-usuarios_usuario (1) ─────< (N) ordenes_trabajo_ordentrabajo
-     ↑                              (tecnico_responsable_id)
-     └─────────────────────────────
+### ordenes_trabajo_ordentrabajo
 
-usuarios_usuario (1) ─────< (N) ordenes_trabajo_ordentrabajo
-     ↑                              (creada_por_id)
-     └─────────────────────────────
+Campos clave:
 
-usuarios_usuario (N) ────── (N) ordenes_trabajo_ordentrabajo
-         ↑                              ↑
-         └───── (JOIN TABLE) ──────────┘
-      ordenes_trabajo_ordentrabajo_tecnicos_equipo
-"""
+- id
+- titulo
+- estado
+- tecnico_responsable_id
+- cliente_id
+- fecha_creacion
 
-"""
-════════════════════════════════════════════════════════════════════
-MIGRACIONES DJANGO (Historial de cambios)
-════════════════════════════════════════════════════════════════════
+Relaciona ejecucion de terreno con cliente y equipos.
 
-Archivo: Backend/usuarios/migrations/0001_initial.py
-  → Crea tabla usuarios_usuario (1ª vez)
+## 3. Dominio inventario
 
-Archivo: Backend/ordenes_trabajo/migrations/0001_initial.py
-  → Crea tabla ordenes_trabajo_ordentrabajo
-  → Crea tabla ordenes_trabajo_ordentrabajo_tecnicos_equipo
+### inventario_estadoinventario
 
-Comandos:
-  python manage.py makemigrations   # Detecta cambios en models.py
-  python manage.py migrate          # Aplica migraciones a BD
-  python manage.py showmigrations   # Muestra estado
-"""
+Estados estandar:
 
-"""
-════════════════════════════════════════════════════════════════════
-TIPOS DE DATOS EN DJANGO → MYSQL
-════════════════════════════════════════════════════════════════════
+- En bodega
+- Instalado
+- Retirado
+- En reparacion
+- Dado de baja
+- En peaje
+- En custodia tecnico
+- En revision
 
-CharField(max_length=100)          → VARCHAR(100)
-TextField()                        → LONGTEXT
-IntegerField()                     → INT
-BigAutoField()                     → BIGINT AUTO_INCREMENT
-BooleanField(default=True)         → BOOLEAN (TINYINT)
-DateTimeField(auto_now_add=True)   → DATETIME
-ForeignKey(User, ...)              → INT + FOREIGN KEY
-ManyToManyField(User, ...)         → Tabla intermedia
-EmailField()                       → VARCHAR(254)
-"""
+### inventario_medidor
+### inventario_simcard
+### inventario_modem
 
-"""
-════════════════════════════════════════════════════════════════════
-CONFIGURACIÓN .ENV (NO HACER COMMIT)
-════════════════════════════════════════════════════════════════════
+Campos operativos relevantes (segun tipo):
 
-Archivo: Backend/.env
+- serie / identificadores
+- estado_inventario_id
+- cliente_id
+- medidor_id (asociaciones)
+- ubicacion_actual_id
+- entregado_a o en_custodia_de
 
-DB_NAME=aplicacion_bonita
-DB_USER=root
-DB_PASSWORD=tu_contraseña_segura
-DB_HOST=localhost
-DB_PORT=3306
+## 4. Trazabilidad de movimientos
 
-Django carga estas variables en settings.py:
-  os.getenv('DB_NAME')
-  os.getenv('DB_USER')
-  etc.
-"""
+### inventario_movimientoinventario
 
-"""
-════════════════════════════════════════════════════════════════════
-CICLO DE VIDA DE MIGRACIÓN
-════════════════════════════════════════════════════════════════════
+Campos clave:
 
-1. CAMBIAR models.py
-   Ejemplo: Agregar campo nuevo a Usuario
-   
-   class Usuario(AbstractBaseUser, ...):
-       # ... campos existentes ...
-       telefono = models.CharField(max_length=20, null=True)  ← NUEVO
+- id
+- fecha_hora
+- tipo
+- origen_sistema
+- origen_id
+- destino_id
+- responsable_id
+- observacion
+- orden_trabajo_id
 
-2. DETECTAR CAMBIOS
-   $ python manage.py makemigrations
-   
-   Salida:
-   Migrations for 'usuarios':
-     usuarios/migrations/0002_usuario_telefono.py
+Tipos principales:
 
-3. REVISAR MIGRACIÓN
-   $ cat usuarios/migrations/0002_usuario_telefono.py
-   
-   Contiene:
-   - operations.AddField('usuario', 'telefono', models.CharField(...))
+- IMPORTACION
+- ENTREGA
+- RECEPCION
+- DEVOLUCION
+- INSTALACION
+- RETIRO
+- ELIMINACION
+- AJUSTE
+- CORRECCION
+- MOREAPP
 
-4. APLICAR A BD
-   $ python manage.py migrate
-   
-   Ejecuta el SQL:
-   ALTER TABLE usuarios_usuario ADD COLUMN telefono VARCHAR(20);
+Origen del movimiento:
 
-5. CONFIRMAR
-   $ python manage.py showmigrations
-   
-   [X] usuarios.0001_initial
-   [X] usuarios.0002_usuario_telefono
-"""
+- MOREAPP
+- MANUAL
+- IMPORTACION
+- SISTEMA
 
-"""
-════════════════════════════════════════════════════════════════════
-CONSULTAS ÚTILES DESDE DJANGO ORM
-════════════════════════════════════════════════════════════════════
+### inventario_movimientoitem
 
-# Obtener usuario por RUT
-usuario = Usuario.objects.get(rut='12345678-9')
+Detalle por equipo movido:
 
-# Listar técnicos
-tecnicos = Usuario.objects.filter(rol='TECNICO')
+- tipo_equipo (MEDIDOR/SIM/MODEM)
+- medidor_id / simcard_id / modem_id
+- cantidad
 
-# Órdenes asignadas a un técnico
-ordenes = OrdenTrabajo.objects.filter(tecnico_responsable=usuario)
+## 5. Integracion MoreApp
 
-# Órdenes del último mes
-from django.utils import timezone
-from datetime import timedelta
+### ordenes_trabajo_integracionmoreapp
 
-hace_un_mes = timezone.now() - timedelta(days=30)
-ordenes = OrdenTrabajo.objects.filter(fecha_creacion__gte=hace_un_mes)
+Campos clave:
 
-# Estadísticas
-total_ordenes = OrdenTrabajo.objects.count()
-pendientes = OrdenTrabajo.objects.filter(estado='CREADA').count()
-finalizadas = OrdenTrabajo.objects.filter(estado='FINALIZADA').count()
+- moreapp_submission_id (unico)
+- estado_sincronizacion
+- estado_revision
+- alerta_doble_trabajo
+- descripcion_alerta
+- datos_recibidos (JSON)
+- datos_procesados (JSON)
+- fecha_recepcion
+- fecha_procesamiento
 
-# SQL raw (último recurso)
-from django.db import connection
-with connection.cursor() as cursor:
-    cursor.execute("SELECT * FROM usuarios_usuario WHERE rol=%s", ['TECNICO'])
-    resultados = cursor.fetchall()
-"""
+Estado de revision operativo:
+
+- PENDIENTE
+- CON_ADVERTENCIA
+- REVISADO
+- DESCARTADO
+
+## 6. Relaciones de negocio
+
+- Usuario 1:N MovimientoInventario (responsable)
+- Ubicacion 1:N MovimientoInventario (origen/destino)
+- MovimientoInventario 1:N MovimientoItem
+- IntegracionMoreApp puede actualizar cliente/equipos y generar movimientos
+- Cliente 1:N equipos (medidor/sim/modem segun asignacion)
+
+## 7. Migraciones relevantes recientes
+
+- inventario 0015:
+  - campo origen_sistema en MovimientoInventario
+  - indice por origen_sistema
+  - extension de tipos de movimiento
+
+- ordenes_trabajo 0006:
+  - campo estado_revision en IntegracionMoreApp
+  - indice por estado_revision
+
+## 8. Integridad y control
+
+- moreapp_submission_id evita duplicados funcionales.
+- indices en fecha/tipo/revision mejoran consulta operativa.
+- responsable en movimientos conserva trazabilidad auditada.
+- estado_revision separa resultado tecnico de cierre operativo.

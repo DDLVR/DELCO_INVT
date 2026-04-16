@@ -4,6 +4,13 @@
 
 {% block content %}
 <div class="container-fluid py-5">
+    {% if not ordenes_habilitadas %}
+    <div class="alert alert-warning" role="alert">
+        El módulo de órdenes de trabajo está deshabilitado para este entorno.
+    </div>
+    {% endif %}
+
+    {% if ordenes_habilitadas %}
     <div class="row mb-4">
         <div class="col-12">
             <h1>Dashboard Gerencial</h1>
@@ -45,5 +52,6 @@
             </div>
         </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}

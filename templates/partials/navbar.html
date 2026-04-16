@@ -6,28 +6,15 @@
       <span>DelcoLtda</span>
     </a>
 
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarTop">
+    <button class="navbar-toggler d-lg-none" type="button" data-bs-toggle="offcanvas" data-bs-target="#mobileSidebar" aria-controls="mobileSidebar" aria-label="Abrir menú lateral">
       <span class="navbar-toggler-icon"></span>
     </button>
 
-    <div class="collapse navbar-collapse" id="navbarTop">
+    <div class="navbar-collapse d-none d-lg-block" id="navbarTop">
       <ul class="navbar-nav ms-auto">
         {% if user.is_authenticated %}
-          <li class="nav-item">
-            <button 
-              class="nav-link btn btn-link text-white" 
-              data-bs-toggle="modal" 
-              data-bs-target="#profileModal"
-              title="Ver perfil"
-            >
-              👤 {{ user.nombre_interno }}
-            </button>
-          </li>
-          <li class="nav-item">
-            <span class="nav-link text-muted small">({{ user.rol }})</span>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{% url 'logout' %}" style="color: #ff6b6b !important;">Cerrar sesión</a>
+          <li class="nav-item d-flex align-items-center">
+            <span class="nav-link text-light small opacity-75">{{ user.nombre_interno }} ({{ user.rol }})</span>
           </li>
         {% else %}
           <li class="nav-item">

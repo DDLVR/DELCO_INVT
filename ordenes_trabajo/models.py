@@ -512,10 +512,25 @@ class IntegracionMoreApp(models.Model):
         blank=True,
         help_text='Descripción del motivo de la alerta de doble trabajo'
     )
-    
+
+    # --- Revisión operativa (Punto 8) ---
+    ESTADO_REVISION_CHOICES = [
+        ('PENDIENTE', 'Pendiente de revisión'),
+        ('CON_ADVERTENCIA', 'Con advertencia'),
+        ('REVISADO', 'Revisado OK'),
+        ('DESCARTADO', 'Descartado'),
+    ]
+    estado_revision = models.CharField(
+        max_length=20,
+        choices=ESTADO_REVISION_CHOICES,
+        default='PENDIENTE',
+        db_index=True,
+        help_text='Estado de revisión operativa del registro',
+    )
+
     def __str__(self):
         return f'MoreApp {self.moreapp_submission_id} - {self.estado_sincronizacion}'
-    
+
     class Meta:
         verbose_name = 'Integración MoreApp'
         verbose_name_plural = 'Integraciones MoreApp'
@@ -525,5 +540,6 @@ class IntegracionMoreApp(models.Model):
             models.Index(fields=['estado_sincronizacion']),
             models.Index(fields=['-fecha_recepcion']),
             models.Index(fields=['alerta_doble_trabajo']),
+            models.Index(fields=['estado_revision']),
         ]
 

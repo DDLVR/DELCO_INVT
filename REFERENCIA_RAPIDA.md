@@ -1,262 +1,95 @@
-# 🔧 REFERENCIA RÁPIDA - BACKEND
-# ======================================================
-# Archivo de consulta rápida para desarrollo diario
+# REFERENCIA RAPIDA - OPERACION CLIENTE
 
-## 📋 Archivo de Configuración (IMPORTANTE)
+Guia corta para operacion diaria del sistema DELCO_INVT.
 
-**Ubicación**: `Backend/.env` (NO commitear)
+## 1. URLs principales
 
-```
-# Base de Datos MySQL
-DB_NAME=aplicacion_bonita
-DB_USER=root
-DB_PASSWORD=tu_contraseña
-DB_HOST=localhost
-DB_PORT=3306
+- /login/
+- /dashboard/
+- /inventario/
+- /movimientos/
+- /reportes/moreapp/
+- /operacional/pendientes/
 
-# Django (opcional)
-SECRET_KEY=tu_secret_key_segura
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
-```
+## 2. Flujo diario recomendado
 
----
+1. Ingresar a /reportes/moreapp/ y sincronizar.
+2. Revisar /operacional/pendientes/.
+3. Resolver casos:
+   - REVISADO: caso validado.
+   - CON_ADVERTENCIA: requiere seguimiento.
+   - DESCARTADO: formulario no aplicable.
+4. Revisar dashboard por pendientes envejecidos (> 7 dias).
+5. Ejecutar control de calidad de datos.
 
-## 🗂️ Estructura de Carpetas
+## 3. Comandos clave
 
-```
-Backend/
-├── config/              # ⚙️ Configuración principal
-│   ├── settings.py      # Base de datos, apps, middleware
-│   ├── urls.py          # Enrutamiento principal
-│   ├── asgi.py          # Configuración ASGI
-│   ├── wsgi.py          # Configuración WSGI
-│   └── __pycache__/
-│
-├── usuarios/            # 👥 Usuarios y autenticación
-│   ├── models.py        # Usuario custom (RUT)
-│   ├── admin.py         # Admin panel
-│   ├── views.py         # (Vacío, usa web/views.py)
-│   ├── serializers.py   # Para API REST
-│   ├── urls.py          # (Vacío)
-│   └── migrations/
-│       └── 0001_initial.py
-│
-├── ordenes_trabajo/     # 📋 Órdenes de trabajo
-│   ├── models.py        # OrdenTrabajo + máquina de estados
-│   ├── admin.py         # Admin panel
-│   ├── views.py         # Por implementar (API)
-│   ├── serializers.py   # Para API REST
-│   ├── urls.py          # Rutas API
-│   └── migrations/
-│       └── 0001_initial.py
-│
-├── web/                 # 🌐 Frontend HTML tradicional
-│   ├── models.py        # (Vacío)
-│   ├── views.py         # login, logout, dashboard
-│   ├── urls.py          # Rutas HTML
-│   ├── admin.py         # (Vacío)
-│   └── migrations/
-│
-├── templates/           # 📄 Plantillas HTML
-│   ├── base.html        # Plantilla base (herencia)
-│   ├── dashboard.html   # Panel principal
-│   ├── auth/
-│   │   └── login.html   # Login
-│   └── partials/
-│       ├── navbar.html  # Barra superior
-│       └── sidebar.html # Menú lateral
-│
-├── static/              # 📦 CSS, JS, imágenes
-│   └── css/
-│       └── app.css
-│
-├── db.sqlite3           # (Temporal, será MySQL)
-├── manage.py            # 🛠️ CLI de Django
-└── requirements.txt     # 📚 Dependencias Python
-```
-
----
-
-## 💾 Comandos Django (Más Comunes)
-
-### Migraciones (Base de Datos)
+### Migraciones
 
 ```bash
-# Detectar cambios en models.py y crear archivo de migración
 python manage.py makemigrations
-
-# Ver estado de migraciones
-python manage.py showmigrations
-
-# Aplicar migraciones a BD
 python manage.py migrate
-
-# Ver SQL generado (sin ejecutar)
-python manage.py sqlmigrate usuarios 0001
+python manage.py showmigrations
 ```
 
-### Usuario y Autenticación
+### Verificaciones
 
 ```bash
-# Crear superusuario interactivamente
-python manage.py createsuperuser
-
-# Cambiar contraseña de usuario
-python manage.py changepassword nombre_usuario
-
-# Crear usuario desde shell
-python manage.py shell
-# >>> from usuarios.models import Usuario
-# >>> Usuario.objects.create_user(...)
+python manage.py check
+python manage.py verificar_calidad --solo-reporte
+python manage.py verificar_calidad
 ```
 
-### Servidor y Testing
+### Estados estandar inventario
 
 ```bash
-# Ejecutar servidor de desarrollo
-python manage.py runserver
-
-# Abrir consola Python interactiva (shell)
-python manage.py shell
-
-# Ejecutar tests
-python manage.py test
-
-# Tests con verbosidad
-python manage.py test --verbosity=2
+python manage.py inicializar_estados
 ```
 
-### Datos (Importar/Exportar)
+## 4. Estados operativos MoreApp
 
-```bash
-# Exportar datos a JSON (backup)
-python manage.py dumpdata > datos_backup.json
+### Estado de sincronizacion (tecnico)
 
-# Cargar datos desde JSON
-python manage.py loaddata datos_backup.json
+- PENDIENTE
+- PROCESANDO
+- PROCESADO
+- EXITOSO
+- ERROR / ERROR_JSON / ERROR_LECTURA
+- DUPLICADO
+- ALERTA_REVISION
 
-# Vaciar tabla específica
-python manage.py dumpdata usuarios > usuarios.json
-```
+### Estado de revision (operativo)
 
----
+- PENDIENTE
+- CON_ADVERTENCIA
+- REVISADO
+- DESCARTADO
 
-## 📊 Modelos Principales
+## 5. Inventario: trazabilidad
 
-### Usuario (`usuarios/models.py`)
+Cada movimiento registra:
 
-```python
-from usuarios.models import Usuario
+- tipo (incluye AJUSTE, CORRECCION, MOREAPP)
+- origen_sistema (MOREAPP, MANUAL, IMPORTACION, SISTEMA)
+- origen y destino
+- responsable
+- observacion
 
-# Crear usuario
-usuario = Usuario.objects.create_user(
-    rut='12345678-9',
-    email='juan@empresa.cl',
-    password='segura123',
-    nombre='Juan',
-    apellido='Pérez',
-    nombre_interno='JPérez',
-    rol='TECNICO'  # ADMIN|GERENCIA|ADMINISTRATIVO|TECNICO|AUDITOR
-)
+## 6. Roles y alcance
 
-# Buscar por RUT
-usuario = Usuario.objects.get(rut='12345678-9')
+- ADMIN: control total, elimina reportes MoreApp de prueba.
+- ADMINISTRATIVO: operacion, revision y gestion diaria.
+- SUPERVISOR: seguimiento y validacion operativa.
+- TECNICO: ejecucion de terreno.
+- GERENCIA / AUDITOR: monitoreo y control.
 
-# Listar técnicos
-tecnicos = Usuario.objects.filter(rol='TECNICO')
+## 7. Checklist rapido ante incidencias
 
-# Contar usuarios por rol
-admin_count = Usuario.objects.filter(rol='ADMIN').count()
-```
-
-### Orden de Trabajo (`ordenes_trabajo/models.py`)
-
-```python
-from ordenes_trabajo.models import OrdenTrabajo
-
-# Crear orden
-orden = OrdenTrabajo.objects.create(
-    titulo='Instalar medidor tensión',
-    descripcion='Detalles de la tarea...',
-    estado='CREADA',  # CREADA|ASIGNADA|EN_EJECUCION|FINALIZADA|...
-    tecnico_responsable=usuario_tecnico,
-    creada_por=usuario_admin
-)
-
-# Buscar órdenes por estado
-pendientes = OrdenTrabajo.objects.filter(estado='CREADA')
-
-# Órdenes asignadas a técnico
-mis_ordenes = OrdenTrabajo.objects.filter(tecnico_responsable=request.user)
-
-# Cambiar estado (con validación de permisos)
-resultado = orden.puede_cambiar_estado(usuario, 'FINALIZADA')
-if resultado:
-    orden.estado = 'FINALIZADA'
-    orden.save()
-
-# Asignar equipo
-orden.tecnicos_equipo.add(tecnico_2, tecnico_3)
-
-# Obtener equipo completo
-equipo = orden.get_equipo_completo()
-```
-
----
-
-## 🛣️ URLs y Vistas
-
-### Rutas (`config/urls.py`)
-
-```python
-urlpatterns = [
-    path('admin/', admin.site.urls),                    # Admin
-    path('', include('web.urls')),                      # HTML views
-    path('ordenes/', include('ordenes_trabajo.urls')),  # API
-]
-```
-
-### Vistas HTML (`web/urls.py`)
-
-```
-GET  /                  → home_view (redirección)
-GET  /login/            → login_view (formulario)
-POST /login/            → login_view (autenticación)
-GET  /logout/           → logout_view (cierre sesión)
-GET  /dashboard/        → dashboard_view (protegida)
-```
-
----
-
-## 🔒 Protección de Vistas
-
-### Decoradores
-
-```python
-from django.contrib.auth.decorators import login_required, permission_required
-from django.contrib.auth.mixins import LoginRequiredMixin
-
-# Verificar autenticación
-@login_required
-def my_view(request):
-    user = request.user
-    return render(request, 'template.html')
-
-# Verificar permiso específico
-@permission_required('ordenes_trabajo.add_ordentrabajo')
-def create_orden(request):
-    pass
-
-# Verificar rol
-@login_required
-def admin_only(request):
-    if request.user.rol != 'ADMIN':
-        return redirect('dashboard')
-    pass
-```
-
----
+1. Confirmar si el submission existe en /reportes/moreapp/.
+2. Revisar detalle del registro y pendientes de cruce.
+3. Ver trazabilidad en /movimientos/ filtrando origen_sistema=MOREAPP.
+4. Ajustar estado de revision en la cola operativa.
+5. Registrar observacion y escalar si hay conflicto de instalacion.
 
 ## 📝 Template Context (Variables disponibles)
 

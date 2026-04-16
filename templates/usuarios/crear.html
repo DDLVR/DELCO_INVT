@@ -87,19 +87,62 @@
 
         <div class="mb-3">
           <label class="form-label fw-semibold">Contraseña</label>
-          <input 
-            type="password" 
-            name="password" 
-            class="form-control" 
-            placeholder="Contraseña segura"
-            required
-          >
+          <div class="input-group">
+            <input 
+              type="password" 
+              name="password" 
+              id="password-input"
+              class="form-control" 
+              placeholder="Contraseña segura"
+              required
+            >
+            <button type="button" class="btn btn-outline-secondary" id="btn-toggle-password" aria-label="Mostrar u ocultar contraseña">
+              Mostrar
+            </button>
+          </div>
           <small class="text-muted">Se recomienda una contraseña fuerte</small>
         </div>
 
+        <div class="card border-0 bg-light mb-3">
+          <div class="card-body py-3">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+              <label class="form-label fw-semibold mb-0">Generador de contraseña aleatoria</label>
+              <button type="button" class="btn btn-sm btn-outline-primary" id="btn-generar-password">
+                <i class="bi bi-shuffle"></i> Generar
+              </button>
+            </div>
+
+            <div class="row g-2 align-items-end">
+              <div class="col-md-4">
+                <label class="form-label small mb-1">Largo</label>
+                <input type="number" class="form-control form-control-sm" id="password-length" min="8" max="64" value="14">
+              </div>
+              <div class="col-md-8">
+                <label class="form-label small mb-1 d-block">Incluir caracteres</label>
+                <div class="d-flex flex-wrap gap-3 small">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="opt-letras" checked>
+                    <label class="form-check-label" for="opt-letras">Letras</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="opt-numeros" checked>
+                    <label class="form-check-label" for="opt-numeros">Números</label>
+                  </div>
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="opt-simbolos" checked>
+                    <label class="form-check-label" for="opt-simbolos">Símbolos</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <small class="text-muted d-block mt-2">Puedes combinar una o más opciones.</small>
+          </div>
+        </div>
+
 <script>
-// Formateo automático de RUT en crear usuario
 document.addEventListener('DOMContentLoaded', function() {
+  // Formateo automático de RUT en crear usuario
   const rutInput = document.getElementById('crear-rut');
   rutInput.addEventListener('input', function() {
     let val = this.value.replace(/[^0-9Kk]/g, '').toUpperCase();
@@ -118,6 +161,65 @@ document.addEventListener('DOMContentLoaded', function() {
       formatted = val;
     }
     this.value = formatted;
+  });
+
+  // Generador de contraseña aleatoria configurable
+  const passwordInput = document.getElementById('password-input');
+  const btnTogglePassword = document.getElementById('btn-toggle-password');
+  const btnGenerar = document.getElementById('btn-generar-password');
+  const lengthInput = document.getElementById('password-length');
+  const optLetras = document.getElementById('opt-letras');
+  const optNumeros = document.getElementById('opt-numeros');
+  const optSimbolos = document.getElementById('opt-simbolos');
+
+  function setPasswordVisibility(visible) {
+    passwordInput.type = visible ? 'text' : 'password';
+    btnTogglePassword.textContent = visible ? 'Ocultar' : 'Mostrar';
+  }
+
+  function generarPasswordAleatoria() {
+    const letras = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const numeros = '0123456789';
+    const simbolos = '!@#$%^&*()-_=+[]{};:,.?/';
+
+    let pool = '';
+    if (optLetras.checked) pool += letras;
+    if (optNumeros.checked) pool += numeros;
+    if (optSimbolos.checked) pool += simbolos;
+
+    if (!pool) {
+      if (window.showToast) {
+        window.showToast('Selecciona al menos un tipo de carácter.', 'warning');
+      } else {
+        alert('Selecciona al menos un tipo de carácter.');
+      }
+      return;
+    }
+
+    let length = parseInt(lengthInput.value || '14', 10);
+    if (Number.isNaN(length)) length = 14;
+    length = Math.max(8, Math.min(64, length));
+    lengthInput.value = String(length);
+
+    const randomValues = new Uint32Array(length);
+    window.crypto.getRandomValues(randomValues);
+
+    let password = '';
+    for (let i = 0; i < length; i++) {
+      password += pool[randomValues[i] % pool.length];
+    }
+
+    passwordInput.value = password;
+    setPasswordVisibility(true);
+
+    if (window.showToast) {
+      window.showToast('Contraseña generada correctamente.', 'success');
+    }
+  }
+
+  btnGenerar.addEventListener('click', generarPasswordAleatoria);
+  btnTogglePassword.addEventListener('click', function() {
+    setPasswordVisibility(passwordInput.type === 'password');
   });
 });
 </script>

@@ -98,8 +98,8 @@ class MovimientoItemInline(admin.TabularInline):
 
 @admin.register(MovimientoInventario)
 class MovimientoInventarioAdmin(admin.ModelAdmin):
-    list_display = ('get_tipo_display', 'origen', 'destino', 'responsable', 'fecha_hora')
-    list_filter = ('tipo', 'fecha_hora', 'responsable')
+    list_display = ('get_tipo_display', 'origen_sistema', 'origen', 'destino', 'responsable', 'fecha_hora')
+    list_filter = ('tipo', 'origen_sistema', 'fecha_hora', 'responsable')
     search_fields = ('observacion',)
     readonly_fields = ('fecha_hora',)
     inlines = [MovimientoItemInline]

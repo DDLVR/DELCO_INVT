@@ -4,7 +4,7 @@ from .models import IntegracionMoreAppLog
 
 @admin.register(IntegracionMoreAppLog)
 class IntegracionMoreAppLogAdmin(admin.ModelAdmin):
-    list_display = ('estado', 'orden_asociada', 'adjunto_creado', 'fecha_hora')
+    list_display = ('estado', 'orden_asociada_ref', 'adjunto_creado_ref', 'fecha_hora')
     list_filter = ('estado', 'fecha_hora')
     search_fields = ('mensaje_error', 'payload_crudo')
     readonly_fields = ('fecha_hora', 'payload_crudo')
@@ -14,7 +14,7 @@ class IntegracionMoreAppLogAdmin(admin.ModelAdmin):
             'fields': ('estado', 'fecha_hora')
         }),
         ('Asociaciones', {
-            'fields': ('orden_asociada', 'adjunto_creado')
+            'fields': ('orden_asociada_ref', 'adjunto_creado_ref')
         }),
         ('Payload Recibido', {
             'fields': ('payload_crudo',)

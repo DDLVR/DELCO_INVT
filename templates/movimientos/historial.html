@@ -168,14 +168,12 @@
                                                 </div>
                                             </div>
 
-                                            {% if item.movimiento.orden_trabajo %}
+                                            {% if item.movimiento.referencia_ot %}
                                             <div class="row mt-2">
                                                 <div class="col-12">
                                                     <small>
                                                         <strong>Orden de Trabajo:</strong>
-                                                        <a href="{% url 'ordenes_detalle' item.movimiento.orden_trabajo.id %}" target="_blank">
-                                                            {{ item.movimiento.orden_trabajo.numero_ot }}
-                                                        </a>
+                                                        <span class="text-muted">{{ item.movimiento.referencia_ot }}</span>
                                                     </small>
                                                 </div>
                                             </div>
