@@ -2,12 +2,15 @@ from django.core.management.base import BaseCommand
 from inventario.models import EstadoInventario
 
 ESTADOS_ESTANDAR = [
-    ('En bodega',     'Equipo disponible en bodega, sin asignar'),
-    ('Instalado',     'Equipo instalado en cliente'),
-    ('Retirado',      'Equipo retirado de instalación'),
-    ('En reparación', 'Equipo en proceso de reparación'),
-    ('Dado de baja',  'Equipo dado de baja, fuera de servicio'),
-    ('En peaje',      'Equipo en peaje para gestión operativa'),
+    ('En bodega',          'Equipo disponible en bodega, sin asignar'),
+    ('Instalado',          'Equipo instalado en cliente'),
+    ('Retirado',           'Equipo retirado de instalación'),
+    ('En reparación',      'Equipo en proceso de reparación'),
+    ('Dado de baja',       'Equipo dado de baja, fuera de servicio'),
+    ('En peaje',           'Equipo en peaje para gestión operativa'),
+    # Nuevos estados operativos (Punto 3)
+    ('En custodia técnico', 'Equipo entregado a técnico, fuera de bodega'),
+    ('En revisión',         'Equipo pendiente de verificación operativa'),
 ]
 
 # Mapeo de nombres obsoletos → nombre estándar nuevo
@@ -19,12 +22,12 @@ MIGRACION_NOMBRES = {
 
 
 class Command(BaseCommand):
-    help = 'Crea los 6 estados estándar y migra registros con nombres obsoletos (BODEGA→En bodega, Disponible→En bodega, Entregado→Instalado)'
+    help = 'Crea los 8 estados estándar y migra registros con nombres obsoletos (BODEGA→En bodega, Disponible→En bodega, Entregado→Instalado)'
 
     def handle(self, *args, **options):
         from inventario.models import Medidor, SimCard, Modem
 
-        self.stdout.write(self.style.MIGRATE_HEADING('=== Inicializando estados de inventario ==='))
+        self.stdout.write(self.style.MIGRATE_HEADING('=== Inicializando estados de inventario (8 estados) ==='))
 
         # 1. Crear los 6 estados estándar si no existen
         for nombre, descripcion in ESTADOS_ESTANDAR:

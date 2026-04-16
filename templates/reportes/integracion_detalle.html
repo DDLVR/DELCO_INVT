@@ -48,6 +48,18 @@
         </button>
       </form>
       {% endif %}
+      {# Punto 9: acciones guiadas según estado_revision #}
+      {% if registro.estado_revision == 'PENDIENTE' or registro.estado_revision == 'CON_ADVERTENCIA' %}
+      <form method="post"
+            action="{% url 'moreapp_marcar_revision' registro.pk %}"
+            class="form-marcar-revision-detalle">
+        {% csrf_token %}
+        <input type="hidden" name="estado_revision" value="REVISADO">
+        <button type="submit" class="btn btn-success btn-sm">
+          <i class="bi bi-check2-circle"></i> Marcar revisado
+        </button>
+      </form>
+      {% endif %}
     </div>
   </div>
 
@@ -339,147 +351,134 @@
 
     {% elif d.formulario_canonico == 'REGISTRO_MEDIDORES_TELEMETRIA_V3' %}
 
-      <!-- REGISTRO MEDIDORES: Cliente -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-primary text-white py-2">
-          <h6 class="mb-0"><i class="bi bi-person-fill"></i> Datos de cliente</h6>
-        </div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-sm-5">Empresa</dt>
-            <dd class="col-sm-7">{{ d.empresa|default:"—" }}</dd>
-            <dt class="col-sm-5">Actividad</dt>
-            <dd class="col-sm-7">{{ d.actividad|default:"—" }}</dd>
-            <dt class="col-sm-5">Cliente</dt>
-            <dd class="col-sm-7">{{ d.cliente_codigo|default:"—" }}</dd>
-            <dt class="col-sm-5">Cliente1</dt>
-            <dd class="col-sm-7">{{ d.cliente_1|default:"—" }}</dd>
-            <dt class="col-sm-5">Nombre</dt>
-            <dd class="col-sm-7">{{ d.cliente_nombre|default:"—" }}</dd>
-            <dt class="col-sm-5">Dirección</dt>
-            <dd class="col-sm-7">{{ d.cliente_direccion|default:"—" }}</dd>
-            <dt class="col-sm-5">Comuna</dt>
-            <dd class="col-sm-7">{{ d.cliente_comuna|default:"—" }}</dd>
-            <dt class="col-sm-5">Nueva ruta</dt>
-            <dd class="col-sm-7">{{ d.nueva_ruta|default:"—" }}</dd>
-            <dt class="col-sm-5">Trabajo</dt>
-            <dd class="col-sm-7">{{ d.trabajo|default:"—" }}</dd>
-          </dl>
-        </div>
-      </div>
+      <div class="accordion mb-4" id="accordionRegistroMoreApp">
 
-      <!-- REGISTRO MEDIDORES: Configuración -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-secondary text-white py-2">
-          <h6 class="mb-0"><i class="bi bi-sliders"></i> Configuración de trabajo</h6>
+        <!-- CABECERA PRINCIPAL -->
+        <div class="accordion-item border-success">
+          <h2 class="accordion-header" id="headingTecnicosDejados">
+            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTecnicosDejados" aria-expanded="true" aria-controls="collapseTecnicosDejados">
+              <i class="bi bi-hdd-network me-2"></i> Datos técnicos dejados
+            </button>
+          </h2>
+          <div id="collapseTecnicosDejados" class="accordion-collapse collapse show" aria-labelledby="headingTecnicosDejados" data-bs-parent="#accordionRegistroMoreApp">
+            <div class="accordion-body p-0">
+              <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between"><span>Nro medidor dejado</span><strong>{{ d.medidor_dejado_numero|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Marca medidor dejado</span><strong>{{ d.marca_medidor_dejado|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Número de modem</span><strong>{{ d.modem_numero|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Puerto</span><strong>{{ d.puerto_dejado|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>IP dejada</span><strong>{{ d.ip_dejada|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Proveedor de datos</span><strong>{{ d.proveedor_datos|default:"—" }}</strong></li>
+              </ul>
+            </div>
+          </div>
         </div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-sm-5">Estado</dt>
-            <dd class="col-sm-7">{{ d.estado|default:"—" }}</dd>
-            <dt class="col-sm-5">Con o sin SIM</dt>
-            <dd class="col-sm-7">{{ d.con_sim|default:"—" }}</dd>
-            <dt class="col-sm-5">Tipo de incidencia</dt>
-            <dd class="col-sm-7">{{ d.tipo_incidencia|default:"—" }}</dd>
-            <dt class="col-sm-5">Tipo telemetría</dt>
-            <dd class="col-sm-7">{{ d.tipo_telemetria|default:"—" }}</dd>
-            <dt class="col-sm-5">Fecha</dt>
-            <dd class="col-sm-7">{{ d.fecha_trabajo|default:"—" }}</dd>
-            {% if d.location %}
-            <dt class="col-sm-5">Ubicación</dt>
-            <dd class="col-sm-7"><span class="text-break">{{ d.location }}</span></dd>
-            {% endif %}
-          </dl>
-        </div>
-      </div>
 
-      <!-- REGISTRO MEDIDORES: Aparato y medición -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-dark text-white py-2">
-          <h6 class="mb-0"><i class="bi bi-speedometer2"></i> Datos técnicos encontrados</h6>
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingTecnicosEncontrados">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTecnicosEncontrados" aria-expanded="false" aria-controls="collapseTecnicosEncontrados">
+              <i class="bi bi-speedometer2 me-2"></i> Datos técnicos encontrados
+            </button>
+          </h2>
+          <div id="collapseTecnicosEncontrados" class="accordion-collapse collapse" aria-labelledby="headingTecnicosEncontrados" data-bs-parent="#accordionRegistroMoreApp">
+            <div class="accordion-body p-0">
+              <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between"><span>Marca aparato</span><strong>{{ d.marca_aparato|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Modelo aparato</span><strong>{{ d.modelo_aparato|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Nro medidor activo</span><strong>{{ d.medidor_activo_numero|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Lectura medidor activo</span><strong>{{ d.medidor_activo_lectura|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Nro medidor reactivo</span><strong>{{ d.medidor_reactivo_numero|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Lectura medidor reactivo</span><strong>{{ d.medidor_reactivo_lectura|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Demanda HP</span><strong>{{ d.demanda_hp|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Demanda FP</span><strong>{{ d.demanda_fp|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Múltiplo de lectura</span><strong>{{ d.multiplo_lectura|default:"—" }}</strong></li>
+              </ul>
+            </div>
+          </div>
         </div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-sm-5">Marca aparato</dt>
-            <dd class="col-sm-7">{{ d.marca_aparato|default:"—" }}</dd>
-            <dt class="col-sm-5">Modelo aparato</dt>
-            <dd class="col-sm-7">{{ d.modelo_aparato|default:"—" }}</dd>
-            <dt class="col-sm-5">Nro medidor activo</dt>
-            <dd class="col-sm-7">{{ d.medidor_activo_numero|default:"—" }}</dd>
-            <dt class="col-sm-5">Lectura medidor activo</dt>
-            <dd class="col-sm-7">{{ d.medidor_activo_lectura|default:"—" }}</dd>
-            <dt class="col-sm-5">Nro medidor reactivo</dt>
-            <dd class="col-sm-7">{{ d.medidor_reactivo_numero|default:"—" }}</dd>
-            <dt class="col-sm-5">Lectura medidor reactivo</dt>
-            <dd class="col-sm-7">{{ d.medidor_reactivo_lectura|default:"—" }}</dd>
-            <dt class="col-sm-5">Demanda HP</dt>
-            <dd class="col-sm-7">{{ d.demanda_hp|default:"—" }}</dd>
-            <dt class="col-sm-5">Demanda FP</dt>
-            <dd class="col-sm-7">{{ d.demanda_fp|default:"—" }}</dd>
-            <dt class="col-sm-5">Múltiplo de lectura</dt>
-            <dd class="col-sm-7">{{ d.multiplo_lectura|default:"—" }}</dd>
-          </dl>
-        </div>
-      </div>
 
-      <!-- REGISTRO MEDIDORES: Equipo dejado -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-success text-white py-2">
-          <h6 class="mb-0"><i class="bi bi-hdd-network"></i> Datos técnicos dejados</h6>
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingClienteRegistro">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseClienteRegistro" aria-expanded="false" aria-controls="collapseClienteRegistro">
+              <i class="bi bi-person-fill me-2"></i> Datos de cliente
+            </button>
+          </h2>
+          <div id="collapseClienteRegistro" class="accordion-collapse collapse" aria-labelledby="headingClienteRegistro" data-bs-parent="#accordionRegistroMoreApp">
+            <div class="accordion-body p-0">
+              <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between"><span>Empresa</span><strong>{{ d.empresa|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Actividad</span><strong>{{ d.actividad|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Cliente</span><strong>{{ d.cliente_codigo|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Cliente1</span><strong>{{ d.cliente_1|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Nombre</span><strong>{{ d.cliente_nombre|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Dirección</span><strong>{{ d.cliente_direccion|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Comuna</span><strong>{{ d.cliente_comuna|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Nueva ruta</span><strong>{{ d.nueva_ruta|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Trabajo</span><strong>{{ d.trabajo|default:"—" }}</strong></li>
+              </ul>
+            </div>
+          </div>
         </div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-sm-5">Nro medidor dejado</dt>
-            <dd class="col-sm-7">{{ d.medidor_dejado_numero|default:"—" }}</dd>
-            <dt class="col-sm-5">Marca medidor dejado</dt>
-            <dd class="col-sm-7">{{ d.marca_medidor_dejado|default:"—" }}</dd>
-            <dt class="col-sm-5">Número de modem</dt>
-            <dd class="col-sm-7">{{ d.modem_numero|default:"—" }}</dd>
-            <dt class="col-sm-5">Puerto</dt>
-            <dd class="col-sm-7">{{ d.puerto_dejado|default:"—" }}</dd>
-            <dt class="col-sm-5">IP dejada</dt>
-            <dd class="col-sm-7">{{ d.ip_dejada|default:"—" }}</dd>
-            <dt class="col-sm-5">Proveedor de datos</dt>
-            <dd class="col-sm-7">{{ d.proveedor_datos|default:"—" }}</dd>
-          </dl>
-        </div>
-      </div>
 
-      <!-- REGISTRO MEDIDORES: Contacto y técnicos -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-info text-dark py-2">
-          <h6 class="mb-0"><i class="bi bi-people-fill"></i> Contacto y Técnicos</h6>
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingConfigRegistro">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseConfigRegistro" aria-expanded="false" aria-controls="collapseConfigRegistro">
+              <i class="bi bi-sliders me-2"></i> Configuración de trabajo
+            </button>
+          </h2>
+          <div id="collapseConfigRegistro" class="accordion-collapse collapse" aria-labelledby="headingConfigRegistro" data-bs-parent="#accordionRegistroMoreApp">
+            <div class="accordion-body p-0">
+              <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between"><span>Estado</span><strong>{{ d.estado|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Con o sin SIM</span><strong>{{ d.con_sim|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Tipo de incidencia</span><strong>{{ d.tipo_incidencia|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Tipo telemetría</span><strong>{{ d.tipo_telemetria|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Fecha</span><strong>{{ d.fecha_trabajo|default:"—" }}</strong></li>
+                {% if d.location %}
+                <li class="list-group-item"><span class="fw-semibold">Ubicación:</span> <span class="text-break">{{ d.location }}</span></li>
+                {% endif %}
+              </ul>
+            </div>
+          </div>
         </div>
-        <div class="card-body">
-          <dl class="row mb-0">
-            <dt class="col-sm-5">Nombre contacto</dt>
-            <dd class="col-sm-7">{{ d.contacto_nombre|default:"—" }}</dd>
-            <dt class="col-sm-5">Teléfono</dt>
-            <dd class="col-sm-7">{{ d.contacto_telefono|default:"—" }}</dd>
-            <dt class="col-sm-5">Correo</dt>
-            <dd class="col-sm-7">{{ d.contacto_correo|default:"—" }}</dd>
-            <dt class="col-sm-5">Autoriza cambio</dt>
-            <dd class="col-sm-7">{{ d.nombre_autoriza|default:"—" }}</dd>
-            <dt class="col-sm-5">Técnico Delco</dt>
-            <dd class="col-sm-7">{{ d.tecnico_responsable|default:"—" }}</dd>
-            <dt class="col-sm-5">Técnico Certelec</dt>
-            <dd class="col-sm-7">{{ d.tecnico_certelec|default:"—" }}</dd>
-            <dt class="col-sm-5">Técnico asistente</dt>
-            <dd class="col-sm-7">{{ d.tecnico_asistente|default:"—" }}</dd>
-          </dl>
-        </div>
-      </div>
 
-      {% if d.observacion %}
-      <div class="card shadow-sm mb-4">
-        <div class="card-header py-2">
-          <h6 class="mb-0"><i class="bi bi-chat-left-text"></i> Observación del trabajo</h6>
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingContactoRegistro">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseContactoRegistro" aria-expanded="false" aria-controls="collapseContactoRegistro">
+              <i class="bi bi-people-fill me-2"></i> Contacto y Técnicos
+            </button>
+          </h2>
+          <div id="collapseContactoRegistro" class="accordion-collapse collapse" aria-labelledby="headingContactoRegistro" data-bs-parent="#accordionRegistroMoreApp">
+            <div class="accordion-body p-0">
+              <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between"><span>Nombre contacto</span><strong>{{ d.contacto_nombre|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Teléfono</span><strong>{{ d.contacto_telefono|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Correo</span><strong>{{ d.contacto_correo|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Autoriza cambio</span><strong>{{ d.nombre_autoriza|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Técnico Delco</span><strong>{{ d.tecnico_responsable|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Técnico Certelec</span><strong>{{ d.tecnico_certelec|default:"—" }}</strong></li>
+                <li class="list-group-item d-flex justify-content-between"><span>Técnico asistente</span><strong>{{ d.tecnico_asistente|default:"—" }}</strong></li>
+              </ul>
+            </div>
+          </div>
         </div>
-        <div class="card-body">
-          <p class="mb-0">{{ d.observacion }}</p>
+
+        {% if d.observacion %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="headingObsRegistro">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseObsRegistro" aria-expanded="false" aria-controls="collapseObsRegistro">
+              <i class="bi bi-chat-left-text me-2"></i> Observación del trabajo
+            </button>
+          </h2>
+          <div id="collapseObsRegistro" class="accordion-collapse collapse" aria-labelledby="headingObsRegistro" data-bs-parent="#accordionRegistroMoreApp">
+            <div class="accordion-body">
+              <p class="mb-0">{{ d.observacion }}</p>
+            </div>
+          </div>
         </div>
+        {% endif %}
+
       </div>
-      {% endif %}
 
     {% else %}
 
@@ -651,6 +650,23 @@
           {% else %}
           <div class="alert alert-light border mb-3">
             No se encontraron movimientos trazables para este submission.
+          </div>
+          {% endif %}
+
+          {% if bloqueos_operativos %}
+          <h6 class="mb-2">Bloqueos operativos detectados</h6>
+          <div class="list-group mb-3">
+            {% for b in bloqueos_operativos %}
+            <div class="list-group-item list-group-item-danger">
+              <div class="fw-semibold">
+                <i class="bi bi-shield-exclamation"></i>
+                {% if b.tipo_equipo %}{{ b.tipo_equipo }}{% else %}Registro{% endif %}
+                {% if b.identificador %}- {{ b.identificador }}{% endif %}
+              </div>
+              <div class="small mb-1">{{ b.motivo }}</div>
+              <span class="badge bg-dark">Origen: {{ b.origen }}</span>
+            </div>
+            {% endfor %}
           </div>
           {% endif %}
 

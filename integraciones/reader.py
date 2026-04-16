@@ -141,6 +141,39 @@ def _obtener_responsable_sistema():
     )
 
 
+def _resolver_responsable_moreapp(nombre_tecnico: str):
+    """Intenta resolver el usuario técnico a partir del nombre recibido desde MoreApp."""
+    from usuarios.models import Usuario
+
+    nombre = _as_text(nombre_tecnico)
+    if not nombre:
+        return None
+
+    qs_tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True)
+
+    # Coincidencia directa por nombre interno.
+    exacto = qs_tecnicos.filter(nombre_interno__iexact=nombre).first()
+    if exacto:
+        return exacto
+
+    # Coincidencia parcial por nombre interno.
+    parcial_interno = qs_tecnicos.filter(nombre_interno__icontains=nombre).first()
+    if parcial_interno:
+        return parcial_interno
+
+    tokens = [t for t in nombre.lower().split() if len(t) >= 3]
+    if tokens:
+        for token in tokens:
+            candidato = qs_tecnicos.filter(nombre__icontains=token).first()
+            if candidato:
+                return candidato
+            candidato = qs_tecnicos.filter(apellido__icontains=token).first()
+            if candidato:
+                return candidato
+
+    return None
+
+
 def _obtener_o_crear_ubicacion(tipo: str, nombre: str):
     from inventario.models import Ubicacion
 
@@ -164,28 +197,43 @@ def _mapear_tipo_movimiento(estado_nombre: str) -> str:
     return 'ENTREGA'
 
 
-def _registrar_movimiento_equipo(equipo, tipo_equipo: str, observacion: str, estado_nombre: str):
+def _registrar_movimiento_equipo(
+    equipo, tipo_equipo: str, observacion: str, estado_nombre: str,
+    origen_sistema: str = 'MANUAL', tipo_override: str = '',
+    responsable_override=None,
+):
     from inventario.models import MovimientoInventario, MovimientoItem
 
-    responsable = _obtener_responsable_sistema()
+    responsable = responsable_override or _obtener_responsable_sistema()
     if not responsable:
         return
 
-    origen = getattr(equipo, 'ubicacion_actual', None) or _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
-    if 'instal' in _normalizar_texto(estado_nombre):
+    ubi_origen = getattr(equipo, 'ubicacion_actual', None)
+    origen = ubi_origen or _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+
+    estado_norm = _normalizar_texto(estado_nombre)
+    if 'instal' in estado_norm:
         destino = _obtener_o_crear_ubicacion('CLIENTE', 'Instalado en cliente')
-    elif 'repar' in _normalizar_texto(estado_nombre):
+    elif 'repar' in estado_norm:
         destino = _obtener_o_crear_ubicacion('PROVEEDOR', 'Proveedor/Reparación')
     else:
         destino = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
 
+    tipo_mov = tipo_override if tipo_override else _mapear_tipo_movimiento(estado_nombre)
+
     movimiento = MovimientoInventario.objects.create(
-        tipo=_mapear_tipo_movimiento(estado_nombre),
+        tipo=tipo_mov,
+        origen_sistema=origen_sistema,
         origen=origen,
         destino=destino,
         responsable=responsable,
         observacion=observacion,
     )
+
+    # Actualizar ubicacion_actual del equipo al destino (Punto 4)
+    if hasattr(equipo, 'ubicacion_actual'):
+        equipo.ubicacion_actual = destino
+        equipo.save(update_fields=['ubicacion_actual'])
 
     kwargs_item = {
         'movimiento': movimiento,
@@ -201,9 +249,190 @@ def _registrar_movimiento_equipo(equipo, tipo_equipo: str, observacion: str, est
     MovimientoItem.objects.create(**kwargs_item)
 
 
+def _validar_conflicto_instalacion(equipo, tipo_equipo: str, cliente_obj) -> Optional[str]:
+    """Punto 1: verifica si el equipo ya está instalado en un cliente diferente."""
+    if not cliente_obj:
+        return None
+    from inventario.models import EstadoInventario
+    estado_actual = getattr(equipo, 'estado_inventario', None)
+    if not estado_actual:
+        return None
+    if 'instal' not in _normalizar_texto(estado_actual.nombre):
+        return None
+    cliente_actual_id = getattr(equipo, 'cliente_id', None)
+    if cliente_actual_id and cliente_actual_id != cliente_obj.id:
+        return (
+            f'{tipo_equipo} {getattr(equipo, "serie", equipo.pk)} '
+            f'ya instalado en cliente #{cliente_actual_id}, '
+            f'se intentó actualizar a #{cliente_obj.id}'
+        )
+    return None
+
+
+def _es_estado_instalado(estado_obj) -> bool:
+    if not estado_obj:
+        return False
+    return 'instal' in _normalizar_texto(getattr(estado_obj, 'nombre', ''))
+
+
+def _identificador_equipo(equipo, tipo_equipo: str) -> str:
+    if tipo_equipo == 'MEDIDOR':
+        return _as_text(getattr(equipo, 'serie', '')) or _as_text(getattr(equipo, 'pk', ''))
+    if tipo_equipo == 'MODEM':
+        return (
+            _as_text(getattr(equipo, 'serie', ''))
+            or _as_text(getattr(equipo, 'imei', ''))
+            or _as_text(getattr(equipo, 'pk', ''))
+        )
+    return (
+        _as_text(getattr(equipo, 'direccion_ip', ''))
+        or _as_text(getattr(equipo, 'ip_fija', ''))
+        or _as_text(getattr(equipo, 'imei', ''))
+        or _as_text(getattr(equipo, 'abonado', ''))
+        or _as_text(getattr(equipo, 'pk', ''))
+    )
+
+
+def _tiene_custodio_previo(equipo, tipo_equipo: str) -> bool:
+    if tipo_equipo == 'SIM':
+        return bool(getattr(equipo, 'en_custodia_de_id', None))
+    if tipo_equipo == 'MODEM':
+        return bool(getattr(equipo, 'en_custodia_de_id', None) or getattr(equipo, 'entregado_a_id', None))
+    return bool(getattr(equipo, 'en_custodia_de_id', None) or getattr(equipo, 'entregado_a_id', None))
+
+
+def _ubicacion_valida_preinstalacion(equipo) -> bool:
+    ubicacion = getattr(equipo, 'ubicacion_actual', None)
+    if not ubicacion:
+        return False
+    return ubicacion.tipo in {'BODEGA_DELCO', 'BODEGA_CONTRATISTA', 'TECNICO', 'CLIENTE'}
+
+
+def _registrar_bloqueo_operativo(
+    registro,
+    tipo_equipo: str,
+    identificador: str,
+    motivo: str,
+    contexto: str = '',
+    registrar_pendiente=None,
+):
+    detalle = f'BLOQUEO_OPERATIVO | {tipo_equipo} {identificador}: {motivo}'
+    if contexto:
+        detalle += f' | CONTEXTO: {contexto}'
+    logger.warning('[MoreApp] Bloqueo operativo: %s', detalle)
+    registro.alerta_doble_trabajo = True
+    if registro.descripcion_alerta:
+        registro.descripcion_alerta += f' | {detalle}'
+    else:
+        registro.descripcion_alerta = detalle
+    if callable(registrar_pendiente):
+        registrar_pendiente(tipo_equipo, identificador, motivo)
+
+
+def _validar_reglas_operativas_previas(
+    equipo,
+    tipo_equipo: str,
+    estado_obj,
+    cliente_obj,
+    medidor_asociado,
+    registro,
+    observacion: str = '',
+    registrar_pendiente=None,
+) -> bool:
+    """Reglas operativas antes de aceptar cambios de estado/custodia."""
+    identificador = _identificador_equipo(equipo, tipo_equipo)
+
+    # Regla 1: no instalar sin custodio previo ni ubicación válida.
+    if _es_estado_instalado(estado_obj):
+        if not _tiene_custodio_previo(equipo, tipo_equipo):
+            _registrar_bloqueo_operativo(
+                registro,
+                tipo_equipo,
+                identificador,
+                'No se puede instalar sin custodio previo (entregado/en custodia).',
+                contexto=observacion,
+                registrar_pendiente=registrar_pendiente,
+            )
+            return False
+        if not _ubicacion_valida_preinstalacion(equipo):
+            _registrar_bloqueo_operativo(
+                registro,
+                tipo_equipo,
+                identificador,
+                'No se puede instalar desde una ubicación actual inválida o vacía.',
+                contexto=observacion,
+                registrar_pendiente=registrar_pendiente,
+            )
+            return False
+
+    # Regla 2: SIM no puede reasignarse si ya estaba instalada en otro cliente.
+    if tipo_equipo == 'SIM' and _es_estado_instalado(getattr(equipo, 'estado_inventario', None)):
+        if cliente_obj and getattr(equipo, 'cliente_id', None) and equipo.cliente_id != cliente_obj.id:
+            _registrar_bloqueo_operativo(
+                registro,
+                tipo_equipo,
+                identificador,
+                f'SIM instalada en otro cliente ({equipo.cliente_id}); no se reasigna automáticamente a {cliente_obj.id}.',
+                contexto=observacion,
+                registrar_pendiente=registrar_pendiente,
+            )
+            return False
+
+    # Regla 3: compatibilidad módem/medidor en instalación.
+    if tipo_equipo == 'MODEM' and _es_estado_instalado(estado_obj):
+        if not medidor_asociado:
+            _registrar_bloqueo_operativo(
+                registro,
+                tipo_equipo,
+                identificador,
+                'No se puede instalar módem sin medidor asociado.',
+                contexto=observacion,
+                registrar_pendiente=registrar_pendiente,
+            )
+            return False
+        if not _es_estado_instalado(getattr(medidor_asociado, 'estado_inventario', None)):
+            _registrar_bloqueo_operativo(
+                registro,
+                tipo_equipo,
+                identificador,
+                'Módem no puede quedar instalado con medidor no instalado.',
+                contexto=observacion,
+                registrar_pendiente=registrar_pendiente,
+            )
+            return False
+
+    return True
+
+
 def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_obj, observacion: str,
-                                 registro, medidor_asociado=None, ip_dejada: str = '', puerto: str = ''):
+                                 registro, medidor_asociado=None, ip_dejada: str = '', puerto: str = '',
+                                 registrar_pendiente=None, responsable_movimiento=None):
     cambios = []
+
+    if not _validar_reglas_operativas_previas(
+        equipo,
+        tipo_equipo,
+        estado_obj,
+        cliente_obj,
+        medidor_asociado,
+        registro,
+        observacion=observacion,
+        registrar_pendiente=registrar_pendiente,
+    ):
+        return False
+
+    # Punto 1: validación previa de conflicto
+    conflicto = _validar_conflicto_instalacion(equipo, tipo_equipo, cliente_obj)
+    if conflicto:
+        _registrar_bloqueo_operativo(
+            registro,
+            tipo_equipo,
+            _identificador_equipo(equipo, tipo_equipo),
+            conflicto,
+            contexto=observacion,
+            registrar_pendiente=registrar_pendiente,
+        )
+        return False
 
     if estado_obj and getattr(equipo, 'estado_inventario_id', None) != estado_obj.id:
         equipo.estado_inventario = estado_obj
@@ -241,11 +470,15 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
 
     if cambios:
         equipo.save(update_fields=cambios)
+        # Puntos 5 y 10: tipo MOREAPP, origen_sistema MOREAPP
         _registrar_movimiento_equipo(
             equipo,
             tipo_equipo,
             observacion,
             estado_obj.nombre if estado_obj else '',
+            origen_sistema='MOREAPP',
+            tipo_override='MOREAPP',
+            responsable_override=responsable_movimiento,
         )
         registro.actualizo_equipos = True
         return True
@@ -366,6 +599,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         f'Actualización MoreApp ({formulario_canonico}) '
         f'| submission: {registro.moreapp_submission_id}'
     )
+    tecnico_moreapp = _as_text(datos_norm.get('tecnico_responsable'))
+    responsable_movimiento = _resolver_responsable_moreapp(tecnico_moreapp) or _obtener_responsable_sistema()
     medidor_principal = _buscar_medidor(medidor_serie)
 
     if formulario_canonico == 'REGISTRO_MEDIDORES_TELEMETRIA_V3':
@@ -379,6 +614,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 cliente_obj,
                 f'{observacion_base} - retiro medidor por serie',
                 registro,
+                registrar_pendiente=_agregar_pendiente,
+                responsable_movimiento=responsable_movimiento,
             )
             if actualizado:
                 resumen['movimientos_generados'] += 1
@@ -395,6 +632,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 cliente_obj,
                 f'{observacion_base} - instalación medidor por serie',
                 registro,
+                registrar_pendiente=_agregar_pendiente,
+                responsable_movimiento=responsable_movimiento,
             )
             if actualizado:
                 resumen['movimientos_generados'] += 1
@@ -415,6 +654,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 medidor_asociado=medidor_principal,
                 ip_dejada=sim_ip,
                 puerto=puerto_dejado,
+                registrar_pendiente=_agregar_pendiente,
+                responsable_movimiento=responsable_movimiento,
             )
             if actualizado:
                 resumen['movimientos_generados'] += 1
@@ -433,11 +674,19 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 registro,
                 medidor_asociado=medidor_principal,
                 ip_dejada=sim_ip,
+                registrar_pendiente=_agregar_pendiente,
+                responsable_movimiento=responsable_movimiento,
             )
             if actualizado:
                 resumen['movimientos_generados'] += 1
         elif sim_ip:
             _agregar_pendiente('SIM', sim_ip, 'IP dejada de SIM no encontrada en inventario')
+
+        # Punto 8: estado_revision para el bloque REG_MEDIDORES
+        if resumen['pendientes_revision'] or registro.alerta_doble_trabajo:
+            registro.estado_revision = 'CON_ADVERTENCIA'
+        else:
+            registro.estado_revision = 'REVISADO'
         return resumen
 
     if medidor_principal:
@@ -449,6 +698,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             cliente_obj,
             f'{observacion_base} - actualización medidor por serie',
             registro,
+            registrar_pendiente=_agregar_pendiente,
+            responsable_movimiento=responsable_movimiento,
         )
         if actualizado:
             resumen['movimientos_generados'] += 1
@@ -468,6 +719,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 f'{observacion_base} - retiro módem por serie',
                 registro,
                 medidor_asociado=medidor_principal,
+                registrar_pendiente=_agregar_pendiente,
+                responsable_movimiento=responsable_movimiento,
             )
             if actualizado:
                 resumen['movimientos_generados'] += 1
@@ -491,6 +744,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             medidor_asociado=medidor_principal,
             ip_dejada=sim_ip,
             puerto=puerto_dejado,
+            registrar_pendiente=_agregar_pendiente,
+            responsable_movimiento=responsable_movimiento,
         )
         if actualizado:
             resumen['movimientos_generados'] += 1
@@ -512,11 +767,21 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             registro,
             medidor_asociado=medidor_principal,
             ip_dejada=sim_ip,
+            registrar_pendiente=_agregar_pendiente,
+            responsable_movimiento=responsable_movimiento,
         )
         if actualizado:
             resumen['movimientos_generados'] += 1
     elif sim_ip:
         _agregar_pendiente('SIM', sim_ip, 'IP de SIM no encontrada en inventario')
+
+    # Punto 8: establecer estado_revision según resultados
+    if resumen['pendientes_revision']:
+        registro.estado_revision = 'CON_ADVERTENCIA'
+    elif registro.alerta_doble_trabajo:
+        registro.estado_revision = 'CON_ADVERTENCIA'
+    else:
+        registro.estado_revision = 'REVISADO'
 
     return resumen
 
@@ -1015,10 +1280,18 @@ def _procesar_json(json_path: str, ruta_carpeta: str,
                 'fecha_procesamiento',
                 'actualizo_cliente',
                 'actualizo_equipos',
+                'estado_revision',
+                'alerta_doble_trabajo',
+                'descripcion_alerta',
             ]
         )
         resultado['resultado'] = 'duplicado'
-        resultado['mensaje'] = f'Ya existe registro con id={submission_id}'
+        resultado['alerta'] = bool(existente.alerta_doble_trabajo)
+        resultado['mensaje'] = (
+            existente.descripcion_alerta
+            if existente.alerta_doble_trabajo and existente.descripcion_alerta
+            else f'Ya existe registro con id={submission_id}'
+        )
         logger.info('Duplicado omitido: %s', submission_id)
         return resultado
 
@@ -1052,12 +1325,141 @@ def _procesar_json(json_path: str, ruta_carpeta: str,
             nombre_formulario=nombre_formulario,
         )
         registro.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
-        registro.save(update_fields=['datos_procesados', 'actualizo_cliente', 'actualizo_equipos'])
+        registro.save(
+            update_fields=[
+                'datos_procesados',
+                'actualizo_cliente',
+                'actualizo_equipos',
+                'estado_revision',
+                'alerta_doble_trabajo',
+                'descripcion_alerta',
+            ]
+        )
 
     resultado['resultado'] = 'nuevo'
-    resultado['alerta'] = tiene_alerta
-    resultado['mensaje'] = desc_alerta if tiene_alerta else 'OK'
+    resultado['alerta'] = bool(registro.alerta_doble_trabajo or resumen_operativo.get('pendientes_revision'))
+    if registro.descripcion_alerta:
+        resultado['mensaje'] = registro.descripcion_alerta
+    elif resumen_operativo.get('pendientes_revision'):
+        resultado['mensaje'] = f'Pendientes operativos detectados: {len(resumen_operativo.get("pendientes_revision", []))}'
+    else:
+        resultado['mensaje'] = desc_alerta if tiene_alerta else 'OK'
     logger.info('Registrado: %s (alerta=%s)', submission_id, tiene_alerta)
+    return resultado
+
+
+def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webhook') -> Dict[str, Any]:
+    """
+    Procesa un payload de MoreApp en tiempo real (sin archivo intermedio).
+    """
+    from ordenes_trabajo.models import IntegracionMoreApp
+
+    resultado = {
+        'json_path': f'({ruta_context})',
+        'ruta_carpeta': ruta_context,
+        'correlativo': None,
+        'resultado': 'error',
+        'submission_id': None,
+        'alerta': False,
+        'mensaje': '',
+    }
+
+    data = payload if isinstance(payload, dict) else {}
+    if not data:
+        resultado['mensaje'] = 'Payload vacío o inválido'
+        return resultado
+
+    for campo in CAMPOS_MINIMOS:
+        if campo not in data:
+            resultado['mensaje'] = f'Campo mínimo faltante: {campo}'
+            resultado['resultado'] = 'error'
+            _guardar_error('', ruta_context, None, 'ERROR_JSON', resultado['mensaje'], data)
+            return resultado
+
+    submission_id = data.get('id', '')
+    resultado['submission_id'] = submission_id
+    nombre_formulario = data.get('info', {}).get('formName', '')
+
+    existente = IntegracionMoreApp.objects.filter(moreapp_submission_id=submission_id).first()
+    if existente:
+        datos_norm = _extraer_datos_normalizados(data)
+        resumen_operativo = _aplicar_actualizaciones_operativas(
+            registro=existente,
+            payload=data,
+            datos_norm=datos_norm,
+            nombre_formulario=nombre_formulario,
+        )
+        existente.datos_recibidos = data
+        existente.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
+        existente.nombre_formulario = nombre_formulario
+        existente.ruta_carpeta = ruta_context
+        existente.fecha_procesamiento = timezone.now()
+        existente.save(
+            update_fields=[
+                'datos_recibidos',
+                'datos_procesados',
+                'nombre_formulario',
+                'ruta_carpeta',
+                'fecha_procesamiento',
+                'actualizo_cliente',
+                'actualizo_equipos',
+                'estado_revision',
+                'alerta_doble_trabajo',
+                'descripcion_alerta',
+            ]
+        )
+        resultado['resultado'] = 'duplicado'
+        resultado['alerta'] = bool(existente.alerta_doble_trabajo)
+        resultado['mensaje'] = (
+            existente.descripcion_alerta
+            if existente.alerta_doble_trabajo and existente.descripcion_alerta
+            else f'Ya existe registro con id={submission_id}'
+        )
+        return resultado
+
+    datos_norm = _extraer_datos_normalizados(data)
+    tiene_alerta, desc_alerta = _detectar_alerta_doble_trabajo(submission_id, datos_norm)
+
+    with transaction.atomic():
+        estado = 'ALERTA_REVISION' if tiene_alerta else 'PROCESADO'
+        registro = IntegracionMoreApp.objects.create(
+            moreapp_submission_id=submission_id,
+            nombre_formulario=nombre_formulario,
+            ruta_carpeta=ruta_context,
+            datos_recibidos=data,
+            datos_procesados=datos_norm,
+            estado_sincronizacion=estado,
+            alerta_doble_trabajo=tiene_alerta,
+            descripcion_alerta=desc_alerta,
+            fecha_procesamiento=timezone.now(),
+        )
+
+        resumen_operativo = _aplicar_actualizaciones_operativas(
+            registro=registro,
+            payload=data,
+            datos_norm=datos_norm,
+            nombre_formulario=nombre_formulario,
+        )
+        registro.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
+        registro.save(
+            update_fields=[
+                'datos_procesados',
+                'actualizo_cliente',
+                'actualizo_equipos',
+                'estado_revision',
+                'alerta_doble_trabajo',
+                'descripcion_alerta',
+            ]
+        )
+
+    resultado['resultado'] = 'nuevo'
+    resultado['alerta'] = bool(registro.alerta_doble_trabajo or resumen_operativo.get('pendientes_revision'))
+    if registro.descripcion_alerta:
+        resultado['mensaje'] = registro.descripcion_alerta
+    elif resumen_operativo.get('pendientes_revision'):
+        resultado['mensaje'] = f'Pendientes operativos detectados: {len(resumen_operativo.get("pendientes_revision", []))}'
+    else:
+        resultado['mensaje'] = desc_alerta if tiene_alerta else 'OK'
     return resultado
 
 

@@ -1,0 +1,215 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Cola de Pendientes Operativos{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <h3 class="mb-0">
+            <i class="bi bi-list-check"></i> Pendientes Operativos MoreApp
+        </h3>
+        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Dashboard
+        </a>
+    </div>
+
+    {# ── Filtros rápidos con contadores (Punto 6) ─────────────────── #}
+    <div class="row mb-4 g-2">
+        <div class="col-auto">
+            <a href="?estado=PENDIENTE"
+               class="btn btn-sm {% if estado_filtro == 'PENDIENTE' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                <i class="bi bi-clock"></i> Pendientes
+                <span class="badge bg-light text-primary ms-1">{{ contadores.PENDIENTE }}</span>
+            </a>
+        </div>
+        <div class="col-auto">
+            <a href="?estado=CON_ADVERTENCIA"
+               class="btn btn-sm {% if estado_filtro == 'CON_ADVERTENCIA' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                <i class="bi bi-exclamation-triangle"></i> Con advertencia
+                <span class="badge bg-light text-warning ms-1">{{ contadores.CON_ADVERTENCIA }}</span>
+            </a>
+        </div>
+        <div class="col-auto">
+            <a href="?estado=REVISADO"
+               class="btn btn-sm {% if estado_filtro == 'REVISADO' %}btn-success{% else %}btn-outline-success{% endif %}">
+                <i class="bi bi-check-circle"></i> Revisados
+                <span class="badge bg-light text-success ms-1">{{ contadores.REVISADO }}</span>
+            </a>
+        </div>
+        <div class="col-auto">
+            <a href="?estado=DESCARTADO"
+               class="btn btn-sm {% if estado_filtro == 'DESCARTADO' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                <i class="bi bi-x-circle"></i> Descartados
+                <span class="badge bg-light text-secondary ms-1">{{ contadores.DESCARTADO }}</span>
+            </a>
+        </div>
+        <div class="col-auto">
+            <a href="?estado=TODOS" class="btn btn-sm {% if estado_filtro == 'TODOS' %}btn-dark{% else %}btn-outline-dark{% endif %}">
+                <i class="bi bi-grid"></i> Todos
+            </a>
+        </div>
+        {% if contadores.envejecidos %}
+        <div class="col-auto ms-auto">
+            <span class="badge bg-danger fs-6 align-self-center">
+                <i class="bi bi-hourglass-split"></i> {{ contadores.envejecidos }} sin revisar &gt;7 días
+            </span>
+        </div>
+        {% endif %}
+    </div>
+
+    {# ── Tabla de registros ───────────────────────────────────────── #}
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped mb-0 align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>Formulario</th>
+                            <th>Submission</th>
+                            <th>Recibido</th>
+                            <th>Antigüedad</th>
+                            <th>Estado sincr.</th>
+                            <th>Revisión</th>
+                            <th>Bloqueo</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for reg in registros %}
+                        {% with dias_ant=reg.fecha_recepcion|timesince %}
+                        <tr id="fila-{{ reg.pk }}"
+                            {% if reg.estado_revision == 'CON_ADVERTENCIA' %}class="table-warning"
+                            {% elif reg.fecha_recepcion < umbral_7d and reg.estado_revision == 'PENDIENTE' %}class="table-danger"
+                            {% endif %}>
+                            <td class="fw-bold">{{ reg.pk }}</td>
+                            <td><small>{{ reg.nombre_formulario|truncatechars:35 }}</small></td>
+                            <td><code class="small">{{ reg.moreapp_submission_id|truncatechars:20 }}</code></td>
+                            <td><small>{{ reg.fecha_recepcion|date:"d/m/Y H:i" }}</small></td>
+                            {# Punto 11: indicador de envejecimiento #}
+                            <td>
+                                {% if reg.fecha_recepcion < umbral_7d and reg.estado_revision == 'PENDIENTE' %}
+                                    <span class="badge bg-danger">
+                                        <i class="bi bi-hourglass-split"></i> {{ dias_ant }}
+                                    </span>
+                                {% else %}
+                                    <small class="text-muted">{{ dias_ant }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span class="badge
+                                    {% if reg.estado_sincronizacion == 'EXITOSO' %}bg-success
+                                    {% elif reg.estado_sincronizacion in 'ERROR,ERROR_JSON,ERROR_LECTURA' %}bg-danger
+                                    {% elif reg.estado_sincronizacion == 'ALERTA_REVISION' %}bg-warning text-dark
+                                    {% else %}bg-secondary{% endif %}">
+                                    {{ reg.get_estado_sincronizacion_display|default:reg.estado_sincronizacion }}
+                                </span>
+                            </td>
+                            <td>
+                                <span id="badge-revision-{{ reg.pk }}" class="badge
+                                    {% if reg.estado_revision == 'REVISADO' %}bg-success
+                                    {% elif reg.estado_revision == 'CON_ADVERTENCIA' %}bg-warning text-dark
+                                    {% elif reg.estado_revision == 'DESCARTADO' %}bg-secondary
+                                    {% else %}bg-primary{% endif %}">
+                                    {{ reg.get_estado_revision_display }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if reg.bloqueos_operativos %}
+                                    <span class="badge bg-danger" title="{{ reg.bloqueo_operativo_preview|truncatechars:140 }}">
+                                        <i class="bi bi-shield-exclamation"></i> {{ reg.bloqueos_operativos|length }}
+                                    </span>
+                                {% else %}
+                                    <span class="text-muted small">-</span>
+                                {% endif %}
+                            </td>
+                            {# Punto 9: acciones guiadas contextuales #}
+                            <td>
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{% url 'reportes_moreapp_detalle' reg.pk %}"
+                                       class="btn btn-outline-primary" title="Ver detalle">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    {% if reg.estado_revision != 'REVISADO' %}
+                                    <button type="button"
+                                            class="btn btn-outline-success btn-marcar"
+                                            data-pk="{{ reg.pk }}"
+                                            data-nuevo-estado="REVISADO"
+                                            title="Marcar como revisado">
+                                        <i class="bi bi-check-lg"></i>
+                                    </button>
+                                    {% endif %}
+                                    {% if reg.estado_revision != 'DESCARTADO' %}
+                                    <button type="button"
+                                            class="btn btn-outline-secondary btn-marcar"
+                                            data-pk="{{ reg.pk }}"
+                                            data-nuevo-estado="DESCARTADO"
+                                            title="Descartar">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endwith %}
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">
+                                <i class="bi bi-check2-all fs-3 d-block mb-2"></i>
+                                Sin registros con este filtro.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRFTOKEN = '{{ csrf_token }}';
+
+document.querySelectorAll('.btn-marcar').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        const pk = this.dataset.pk;
+        const nuevoEstado = this.dataset.nuevoEstado;
+
+        fetch(`/operacional/moreapp/${pk}/marcar-revision/`, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': CSRFTOKEN,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `estado_revision=${nuevoEstado}`,
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const badge = document.getElementById(`badge-revision-${pk}`);
+                if (badge) {
+                    badge.textContent = data.estado_revision_display;
+                    badge.className = 'badge ' + {
+                        'REVISADO': 'bg-success',
+                        'CON_ADVERTENCIA': 'bg-warning text-dark',
+                        'DESCARTADO': 'bg-secondary',
+                        'PENDIENTE': 'bg-primary',
+                    }[data.estado_revision] || 'bg-secondary';
+                }
+                // Deshabilitar el botón que acaba de usarse
+                this.disabled = true;
+            } else {
+                alert('Error al actualizar: ' + (data.error || 'desconocido'));
+            }
+        })
+        .catch(() => alert('Error de red al actualizar el estado.'));
+    });
+});
+</script>
+{% endblock %}

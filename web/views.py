@@ -6,6 +6,7 @@ from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
 from inventario.models import MovimientoInventario, MovimientoItem, Ubicacion
 from django.views.decorators.http import require_POST
+from django.conf import settings
 
 @login_required
 @require_POST
@@ -74,17 +75,22 @@ import ast
 import re
 import logging
 import traceback
+import hmac
 from io import BytesIO
 from datetime import datetime
 from urllib.parse import quote_plus
 from .decorators import role_required, admin_or_administrativo
-from ordenes_trabajo.models import OrdenTrabajo
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion
 from clientes.models import Cliente
 from importaciones.utils import importar_equipos_excel, exportar_equipos_excel
 from importaciones.models import ImportacionExcel, ImportacionExcelError
 
 logger = logging.getLogger(__name__)
+
+
+def _ordenes_trabajo_habilitadas():
+    # Retiro definitivo en capa web: no habilitar aunque exista variable de entorno.
+    return False
 
 
 def _tipo_movimiento_desde_estado(estado_nombre):
@@ -172,6 +178,9 @@ def login_view(request):
                 user = authenticate(request, username=usuario.rut, password=password)
                 if user is not None:
                     login(request, user)
+                    request.session.cycle_key()
+                    request.session['auth_login_ts'] = int(datetime.now().timestamp())
+                    request.session.set_expiry(int(getattr(settings, 'ABSOLUTE_SESSION_TIMEOUT_SECONDS', 28800)))
                     messages.success(request, f"Bienvenido {usuario.nombre_interno}!")
                     return redirect('dashboard')
                 else:
@@ -196,21 +205,16 @@ def dashboard_view(request):
     context = {
         'rol': rol,
         'usuario': request.user,
+        'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
     }
     
     # ADMIN y ADMINISTRATIVO: Vista general de todo
     if rol in ['ADMIN', 'ADMINISTRATIVO']:
-        # Órdenes de trabajo
-        context['total_ordenes'] = OrdenTrabajo.objects.count()
-        context['ordenes_pendientes'] = OrdenTrabajo.objects.filter(
-            estado__in=['CREADA', 'ASIGNADA', 'EN_EJECUCION']
-        ).count()
-        context['ordenes_completadas'] = OrdenTrabajo.objects.filter(
-            estado='COMPLETADA'
-        ).count()
-        context['ordenes_canceladas'] = OrdenTrabajo.objects.filter(
-            estado='CANCELADA'
-        ).count()
+        # Órdenes retiradas del flujo web (fase de eliminación)
+        context['total_ordenes'] = 0
+        context['ordenes_pendientes'] = 0
+        context['ordenes_completadas'] = 0
+        context['ordenes_canceladas'] = 0
         
         # Usuarios
         context['usuarios_activos'] = request.user.__class__.objects.filter(is_active=True).count()
@@ -286,105 +290,161 @@ def dashboard_view(request):
         context['movimientos_hoy'] = MovimientoInventario.objects.filter(
             fecha_hora__date=datetime.now().date()
         ).count()
-        
+
+        # Indicadores operativos (Puntos 6 y 11)
+        try:
+            from ordenes_trabajo.models import IntegracionMoreApp
+            from django.utils import timezone
+            ahora = timezone.now()
+            context['moreapp_pendientes'] = IntegracionMoreApp.objects.filter(
+                estado_revision='PENDIENTE'
+            ).count()
+            context['moreapp_con_advertencia'] = IntegracionMoreApp.objects.filter(
+                estado_revision='CON_ADVERTENCIA'
+            ).count()
+            # Envejecimiento: registros con revisión pendiente > 7 días (Punto 11)
+            umbral_7d = ahora - timedelta(days=7)
+            context['moreapp_envejecidos'] = IntegracionMoreApp.objects.filter(
+                estado_revision='PENDIENTE',
+                fecha_recepcion__lt=umbral_7d,
+            ).count()
+        except Exception:
+            context['moreapp_pendientes'] = 0
+            context['moreapp_con_advertencia'] = 0
+            context['moreapp_envejecidos'] = 0
+
         return render(request, 'dashboards/admin_dashboard.html', context)
     elif rol == 'TECNICO':
-        context['mis_ordenes'] = OrdenTrabajo.objects.filter(
-            tecnico_responsable=request.user
-        ).order_by('-fecha_creacion')
-        context['en_ejecucion'] = context['mis_ordenes'].filter(
-            estado='EN_EJECUCION'
-        ).count()
-        context['finalizadas'] = context['mis_ordenes'].filter(
-            estado='FINALIZADA'
-        ).count()
+        context['mis_ordenes'] = []
+        context['en_ejecucion'] = 0
+        context['finalizadas'] = 0
         return render(request, 'dashboards/tecnico_dashboard.html', context)
     
     # SUPERVISOR: Validaciones pendientes
     elif rol == 'SUPERVISOR':
-        context['pendientes_validacion'] = OrdenTrabajo.objects.filter(
-            estado='PENDIENTE_VALIDACION'
-        )
-        context['observadas'] = OrdenTrabajo.objects.filter(
-            estado='OBSERVADA'
-        ).count()
+        context['pendientes_validacion'] = []
+        context['observadas'] = 0
         return render(request, 'dashboards/supervisor_dashboard.html', context)
     
     # GERENCIA: KPIs y reportes
     elif rol == 'GERENCIA':
-        context['ordenes_finalizadas'] = OrdenTrabajo.objects.filter(
-            estado='FINALIZADA'
-        ).count()
+        context['ordenes_finalizadas'] = 0
         context['tasa_cumplimiento'] = '95%'  # Placeholder
         return render(request, 'dashboards/gerencia_dashboard.html', context)
     
     # AUDITOR: Auditoría y logs
     elif rol == 'AUDITOR':
-        context['ultimas_ordenes'] = OrdenTrabajo.objects.order_by('-fecha_creacion')[:20]
+        context['ultimas_ordenes'] = []
         return render(request, 'dashboards/auditor_dashboard.html', context)
     
     # Default
     return render(request, 'dashboard.html', context)
 
 
+# ========== VISTAS OPERATIVAS (Puntos 2, 8, 9, 11) ==========
+
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'SUPERVISOR'])
+def pendientes_operativos_view(request):
+    """
+    Punto 2: Cola formal de operaciones pendientes de revisión (MoreApp).
+    Incluye indicadores de envejecimiento (Punto 11).
+    """
+    from ordenes_trabajo.models import IntegracionMoreApp
+    from django.utils import timezone
+    from datetime import timedelta
+
+    estado = request.GET.get('estado', 'PENDIENTE')
+    if estado not in ('PENDIENTE', 'CON_ADVERTENCIA', 'REVISADO', 'DESCARTADO', 'TODOS'):
+        estado = 'PENDIENTE'
+
+    qs = IntegracionMoreApp.objects.select_related('procesado_por').order_by('-fecha_recepcion')
+    if estado != 'TODOS':
+        qs = qs.filter(estado_revision=estado)
+
+    ahora = timezone.now()
+    umbral_7d = ahora - timedelta(days=7)
+
+    # Contadores para filtros rápidos (Punto 6)
+    contadores = {
+        'PENDIENTE': IntegracionMoreApp.objects.filter(estado_revision='PENDIENTE').count(),
+        'CON_ADVERTENCIA': IntegracionMoreApp.objects.filter(estado_revision='CON_ADVERTENCIA').count(),
+        'REVISADO': IntegracionMoreApp.objects.filter(estado_revision='REVISADO').count(),
+        'DESCARTADO': IntegracionMoreApp.objects.filter(estado_revision='DESCARTADO').count(),
+        'envejecidos': IntegracionMoreApp.objects.filter(
+            estado_revision='PENDIENTE', fecha_recepcion__lt=umbral_7d
+        ).count(),
+    }
+
+    registros = list(qs[:200])
+    for reg in registros:
+        bloqueos = _extraer_bloqueos_operativos_registro(reg)
+        reg.bloqueos_operativos = bloqueos
+        reg.bloqueo_operativo_preview = bloqueos[0]['motivo'] if bloqueos else ''
+
+    context = {
+        'registros': registros,
+        'estado_filtro': estado,
+        'contadores': contadores,
+        'ahora': ahora,
+        'umbral_7d': umbral_7d,
+    }
+    return render(request, 'operacional/pendientes.html', context)
+
+
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'SUPERVISOR'])
+@require_POST
+def moreapp_marcar_revision_view(request, pk):
+    """
+    Punto 8 y 9: Marca un registro MoreApp con un nuevo estado de revisión.
+    Acepta: REVISADO, DESCARTADO, CON_ADVERTENCIA.
+    """
+    from ordenes_trabajo.models import IntegracionMoreApp
+
+    ESTADOS_VALIDOS = {'REVISADO', 'DESCARTADO', 'CON_ADVERTENCIA', 'PENDIENTE'}
+    nuevo_estado = request.POST.get('estado_revision', '').strip().upper()
+    es_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    if nuevo_estado not in ESTADOS_VALIDOS:
+        if es_ajax:
+            return JsonResponse({'success': False, 'error': 'Estado no válido'}, status=400)
+        messages.error(request, 'Estado de revisión no válido')
+        return redirect('reportes_moreapp_detalle', pk=pk)
+
+    registro = get_object_or_404(IntegracionMoreApp, pk=pk)
+    registro.estado_revision = nuevo_estado
+    registro.save(update_fields=['estado_revision'])
+
+    if not es_ajax:
+        messages.success(request, f'Estado de revisión actualizado a: {registro.get_estado_revision_display()}')
+        return redirect('reportes_moreapp_detalle', pk=pk)
+
+    return JsonResponse({
+        'success': True,
+        'estado_revision': nuevo_estado,
+        'estado_revision_display': dict(IntegracionMoreApp.ESTADO_REVISION_CHOICES).get(nuevo_estado, nuevo_estado),
+    })
+
+
 # ========== VISTAS DE ÓRDENES DE TRABAJO ==========
 
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO'])
 def ordenes_list_view(request):
-    """Listado de órdenes (Admin/Administrativo pueden ver todas, TECNICO solo las suyas)"""
-    ordenes = OrdenTrabajo.objects.all().order_by('-fecha_creacion')
-    
-    # Si es TECNICO, filtrar solo sus órdenes asignadas
-    if request.user.rol == 'TECNICO':
-        ordenes = ordenes.filter(tecnico_responsable=request.user) | ordenes.filter(tecnicos_equipo=request.user)
-        ordenes = ordenes.distinct()
-    
-    # Filtro por estado si se proporciona
-    estado = request.GET.get('estado')
-    if estado:
-        ordenes = ordenes.filter(estado=estado)
-    
-    context = {
-        'ordenes': ordenes,
-        'estados': OrdenTrabajo.ESTADO_CHOICES,
-        'estado_filtro': estado,
-    }
-    return render(request, 'ordenes/list.html', context)
+    """Módulo retirado."""
+    messages.warning(request, 'El módulo de órdenes de trabajo fue retirado del sistema.')
+    return redirect('dashboard')
 
 
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO', 'SUPERVISOR'])
 def orden_detalle_view(request, pk):
-    """Detalle de una orden específica"""
-    orden = OrdenTrabajo.objects.get(pk=pk)
-    
-    # Validar acceso
-    tiene_acceso = (
-        request.user.rol in ['ADMIN', 'ADMINISTRATIVO', 'SUPERVISOR'] or
-        request.user == orden.tecnico_responsable or
-        request.user in orden.tecnicos_equipo.all()
-    )
-    
-    if not tiene_acceso:
-        messages.error(request, 'No tienes acceso a esta orden')
-        return redirect('login')
-    
-    context = {
-        'orden': orden,
-        'puede_cambiar_estado': orden.puede_cambiar_estado(request.user, None),
-        'adjuntos': orden.adjuntos.all(),
-    }
-    return render(request, 'ordenes/detalle.html', context)
+    """Módulo retirado."""
+    messages.warning(request, 'El módulo de órdenes de trabajo fue retirado del sistema.')
+    return redirect('dashboard')
 
 
 @admin_or_administrativo
 def orden_crear_view(request):
-    """Crear nueva orden"""
-    if request.method == 'POST':
-        # TODO: Implementar formulario y lógica de creación
-        pass
-    
-    context = {}
-    return render(request, 'ordenes/crear.html', context)
+    """Módulo retirado."""
+    messages.warning(request, 'El módulo de órdenes de trabajo fue retirado del sistema.')
+    return redirect('dashboard')
 
 
 # ========== VISTAS DE INVENTARIO ==========
@@ -2311,11 +2371,12 @@ def movimientos_list_view(request):
     responsable_id = request.GET.get('responsable', '')
     origen_id = request.GET.get('origen', '')
     destino_id = request.GET.get('destino', '')
+    origen_sistema = request.GET.get('origen_sistema', '')
     busqueda = request.GET.get('q', '')
     
     # Query base
     movimientos = MovimientoInventario.objects.all().select_related(
-        'origen', 'destino', 'responsable', 'orden_trabajo'
+        'origen', 'destino', 'responsable'
     ).prefetch_related('items').order_by('-fecha_hora')
     
     # Aplicar filtros
@@ -2344,11 +2405,14 @@ def movimientos_list_view(request):
     
     if destino_id:
         movimientos = movimientos.filter(destino_id=destino_id)
+
+    if origen_sistema:
+        movimientos = movimientos.filter(origen_sistema=origen_sistema)
     
     if busqueda:
         movimientos = movimientos.filter(
             Q(observacion__icontains=busqueda) |
-            Q(orden_trabajo__numero_ot__icontains=busqueda) |
+            Q(referencia_ot__icontains=busqueda) |
             Q(responsable__nombre_interno__icontains=busqueda)
         )
     
@@ -2400,8 +2464,11 @@ def movimientos_list_view(request):
         'responsable_id': responsable_id,
         'origen_id': origen_id,
         'destino_id': destino_id,
+        'origen_sistema': origen_sistema,
         'busqueda': busqueda,
         'tipos_movimiento': MovimientoInventario.TIPO_CHOICES,
+        'origen_sistema_choices': MovimientoInventario.ORIGEN_SISTEMA_CHOICES,
+        'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
     }
     
     return render(request, 'movimientos/list.html', context)
@@ -2419,7 +2486,7 @@ def movimientos_detalle_view(request, movimiento_id):
     
     movimiento = get_object_or_404(
         MovimientoInventario.objects.select_related(
-            'origen', 'destino', 'responsable', 'orden_trabajo'
+            'origen', 'destino', 'responsable'
         ).prefetch_related('items'),
         id=movimiento_id
     )
@@ -2439,6 +2506,7 @@ def movimientos_detalle_view(request, movimiento_id):
         'items_sims': items_sims,
         'items_modems': items_modems,
         'total_items': items.count(),
+        'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
     }
     
     return render(request, 'movimientos/detalle.html', context)
@@ -2490,8 +2558,7 @@ def movimientos_historial_equipo_view(request):
     items = items.select_related(
         'movimiento__origen',
         'movimiento__destino',
-        'movimiento__responsable',
-        'movimiento__orden_trabajo'
+        'movimiento__responsable'
     ).order_by('-movimiento__fecha_hora')
     
     context = {
@@ -2500,6 +2567,7 @@ def movimientos_historial_equipo_view(request):
         'tipo_equipo': tipo_equipo,
         'items': items,
         'total_movimientos': items.count(),
+        'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
     }
     
     return render(request, 'movimientos/historial.html', context)
@@ -2521,8 +2589,19 @@ def movimientos_importar_moreapp_webhook(request):
     """
     from inventario.models import MovimientoInventario, MovimientoItem, VerificacionMedidor
     from django.conf import settings
+    from django.db.models import Q
     
     try:
+        # Seguridad webhook: validar secreto compartido
+        expected_secret = str(getattr(settings, 'MOREAPP_WEBHOOK_SECRET', '') or '').strip()
+        if expected_secret:
+            provided_secret = (request.headers.get('X-MoreApp-Secret', '') or '').strip()
+            auth_header = (request.headers.get('Authorization', '') or '').strip()
+            if not provided_secret and auth_header.lower().startswith('bearer '):
+                provided_secret = auth_header[7:].strip()
+            if not provided_secret or not hmac.compare_digest(provided_secret, expected_secret):
+                return JsonResponse({'success': False, 'error': 'Webhook no autorizado'}, status=403)
+
         # MODO DEBUG: Loguear todo lo que llega
         logger.info("="*80)
         logger.info("WEBHOOK RECIBIDO DE MOREAPP")
@@ -2534,6 +2613,26 @@ def movimientos_importar_moreapp_webhook(request):
         data = json.loads(request.body)
         form_name = data.get('form_name', data.get('formName', ''))
         submission_id = data.get('registrationId', data.get('submission_id', ''))
+
+        # Modo principal: procesamiento en tiempo real del payload oficial MoreApp.
+        if getattr(settings, 'MOREAPP_WEBHOOK_REALTIME_ENABLED', True):
+            required_keys = {'id', 'info', 'meta', 'data'}
+            if isinstance(data, dict) and required_keys.issubset(set(data.keys())):
+                from integraciones.reader import procesar_payload_moreapp
+
+                res = procesar_payload_moreapp(data, ruta_context='webhook')
+                ok = res.get('resultado') in ('nuevo', 'duplicado')
+                status = 200 if ok else 400
+                return JsonResponse(
+                    {
+                        'success': ok,
+                        'resultado': res.get('resultado'),
+                        'submission_id': res.get('submission_id'),
+                        'alerta': bool(res.get('alerta')),
+                        'message': res.get('mensaje', ''),
+                    },
+                    status=status,
+                )
         
         logger.info(f"Formulario: {form_name}")
         logger.info(f"Submission ID: {submission_id}")
@@ -2572,6 +2671,13 @@ def movimientos_importar_moreapp_webhook(request):
         tipo_trabajo = data.get('tipo', 'ENTREGA')
         fecha_str = data.get('fecha', datetime.now().isoformat())
         responsable_rut = data.get('tecnico_rut', '')
+        tecnico_nombre = (
+            data.get('tecnico_nombre')
+            or data.get('tecnico')
+            or data.get('tecnico_responsable')
+            or data.get('tecnicoResponsable')
+            or ''
+        )
         observacion = data.get('observaciones', '')
         ot_numero = data.get('numero_ot', '')
         origen_nombre = data.get('origen', 'BODEGA')
@@ -2593,6 +2699,22 @@ def movimientos_importar_moreapp_webhook(request):
                 responsable = Usuario.objects.get(rut=responsable_rut)
             except Usuario.DoesNotExist:
                 logger.warning(f"RUT no encontrado: {responsable_rut}")
+
+        # Fallback por nombre técnico recibido en registro MoreApp
+        if not responsable and tecnico_nombre:
+            nombre_norm = str(tecnico_nombre).strip()
+            responsable = Usuario.objects.filter(rol='TECNICO', is_active=True, nombre_interno__iexact=nombre_norm).first()
+            if not responsable:
+                responsable = Usuario.objects.filter(rol='TECNICO', is_active=True, nombre_interno__icontains=nombre_norm).first()
+            if not responsable:
+                tokens = [t for t in nombre_norm.split() if len(t) >= 3]
+                for token in tokens:
+                    responsable = Usuario.objects.filter(rol='TECNICO', is_active=True, nombre__icontains=token).first()
+                    if responsable:
+                        break
+                    responsable = Usuario.objects.filter(rol='TECNICO', is_active=True, apellido__icontains=token).first()
+                    if responsable:
+                        break
         
         # Si no hay responsable, usar el primero disponible o crear uno genérico
         if not responsable:
@@ -2606,13 +2728,7 @@ def movimientos_importar_moreapp_webhook(request):
                     'error': 'No se encontró ningún usuario válido en el sistema'
                 }, status=500)
         
-        # Buscar orden de trabajo si existe
-        orden = None
-        if ot_numero:
-            try:
-                orden = OrdenTrabajo.objects.get(numero_ot=ot_numero)
-            except:
-                logger.warning(f"Orden de trabajo no encontrada: {ot_numero}")
+        referencia_ot = str(ot_numero or '').strip()
         
         # Crear/obtener ubicaciones
         origen, _ = Ubicacion.objects.get_or_create(
@@ -2627,10 +2743,11 @@ def movimientos_importar_moreapp_webhook(request):
         # Crear movimiento
         movimiento = MovimientoInventario.objects.create(
             tipo=tipo_trabajo,
+            origen_sistema='MOREAPP',
             origen=origen,
             destino=destino,
             responsable=responsable,
-            orden_trabajo=orden,
+            referencia_ot=referencia_ot,
             observacion=f"Registrado desde MoreApp (webhook)\n{observacion}"
         )
 
@@ -2651,20 +2768,34 @@ def movimientos_importar_moreapp_webhook(request):
             
             if tipo_eq == 'MEDIDOR':
                 try:
-                    equipo_obj = Medidor.objects.get(numero_serie=identificador)
-                except Medidor.DoesNotExist:
+                    equipo_obj = Medidor.objects.filter(serie__iexact=identificador).first()
+                    if not equipo_obj:
+                        raise Medidor.DoesNotExist
+                except (Medidor.DoesNotExist, Exception):
                     errores_equipos.append(f"Medidor {identificador} no encontrado")
                     continue
             elif tipo_eq == 'SIM':
                 try:
-                    equipo_obj = SimCard.objects.get(iccid=identificador)
-                except SimCard.DoesNotExist:
+                    equipo_obj = SimCard.objects.filter(
+                        Q(imei__iexact=identificador)
+                        | Q(abonado__iexact=identificador)
+                        | Q(direccion_ip__iexact=identificador)
+                        | Q(ip_fija__iexact=identificador)
+                    ).first()
+                    if not equipo_obj:
+                        raise SimCard.DoesNotExist
+                except (SimCard.DoesNotExist, Exception):
                     errores_equipos.append(f"SIM {identificador} no encontrada")
                     continue
             elif tipo_eq == 'MODEM':
                 try:
-                    equipo_obj = Modem.objects.get(imei=identificador)
-                except Modem.DoesNotExist:
+                    equipo_obj = Modem.objects.filter(
+                        Q(serie__iexact=identificador)
+                        | Q(imei__iexact=identificador)
+                    ).first()
+                    if not equipo_obj:
+                        raise Modem.DoesNotExist
+                except (Modem.DoesNotExist, Exception):
                     errores_equipos.append(f"Módem {identificador} no encontrado")
                     continue
             
@@ -2689,13 +2820,16 @@ def movimientos_importar_moreapp_webhook(request):
         # Respuesta exitosa
         logger.info(f"Movimiento #{movimiento.id} creado con {items_creados} items")
         
-        return JsonResponse({
+        payload = {
             'success': True,
             'movimiento_id': movimiento.id,
             'items_creados': items_creados,
             'errores': errores_equipos if errores_equipos else None,
             'message': 'Movimiento registrado exitosamente'
-        })
+        }
+        if errores_equipos:
+            payload['message'] = f'Movimiento registrado con observaciones: {len(errores_equipos)} equipo(s) no encontrado(s)'
+        return JsonResponse(payload)
         
     except json.JSONDecodeError:
         logger.error("Error al parsear JSON del webhook MoreApp")
@@ -2752,6 +2886,49 @@ def usuario_eliminar_view(request, pk):
 ROLES_REPORTES = ('ADMIN', 'ADMINISTRATIVO', 'SUPERVISOR')
 
 
+def _extraer_bloqueos_operativos_registro(registro):
+    """Devuelve lista normalizada de bloqueos/alertas operativas (incluye históricos)."""
+    bloqueos = []
+
+    datos = registro.datos_procesados if isinstance(registro.datos_procesados, dict) else {}
+    resultado_operativo = datos.get('resultado_operativo', {}) if isinstance(datos, dict) else {}
+    pendientes = resultado_operativo.get('pendientes_revision', []) if isinstance(resultado_operativo, dict) else []
+
+    for p in pendientes:
+        if not isinstance(p, dict):
+            continue
+        motivo = str(p.get('motivo', '')).strip()
+        if not motivo:
+            continue
+        bloqueos.append({
+            'origen': 'pendiente_revision',
+            'tipo_equipo': str(p.get('tipo_equipo', '')).upper().strip(),
+            'identificador': str(p.get('identificador', '')).strip(),
+            'motivo': motivo,
+        })
+
+    descripcion = str(registro.descripcion_alerta or '').strip()
+    if descripcion:
+        for parte in [x.strip() for x in descripcion.split('|') if x.strip()]:
+            bloqueos.append({
+                'origen': 'descripcion_alerta',
+                'tipo_equipo': '',
+                'identificador': '',
+                'motivo': parte,
+            })
+
+    # Deduplicar por texto de motivo
+    vistos = set()
+    resultado = []
+    for item in bloqueos:
+        key = item.get('motivo', '')
+        if not key or key in vistos:
+            continue
+        vistos.add(key)
+        resultado.append(item)
+    return resultado
+
+
 @login_required
 def reportes_moreapp_list(request):
     """Lista de registros sincronizados desde carpetas de MoreApp."""
@@ -2766,6 +2943,8 @@ def reportes_moreapp_list(request):
     # Filtros
     estado = request.GET.get('estado', '')
     alerta = request.GET.get('alerta', '')
+    bloqueo = request.GET.get('bloqueo', '')
+    revision = request.GET.get('revision', '')
     q = request.GET.get('q', '')
     formulario = request.GET.get('formulario', '')
 
@@ -2774,6 +2953,8 @@ def reportes_moreapp_list(request):
         qs = qs.filter(estado_sincronizacion=estado)
     if alerta == '1':
         qs = qs.filter(alerta_doble_trabajo=True)
+    if revision:
+        qs = qs.filter(estado_revision=revision)
     if q:
         qs = qs.filter(
             Q(nombre_formulario__icontains=q) |
@@ -2792,6 +2973,17 @@ def reportes_moreapp_list(request):
         qs = qs.filter(nombre_formulario=formulario)
 
     registros = list(qs)
+    registros_filtrados = []
+    for reg in registros:
+        bloqueos = _extraer_bloqueos_operativos_registro(reg)
+        reg.bloqueos_operativos = bloqueos
+        reg.tiene_bloqueo_operativo = len(bloqueos) > 0
+        reg.bloqueo_operativo_preview = bloqueos[0]['motivo'] if bloqueos else ''
+        if bloqueo == '1' and not reg.tiene_bloqueo_operativo:
+            continue
+        registros_filtrados.append(reg)
+    registros = registros_filtrados
+
     if request.user.rol == 'ADMIN':
         for reg in registros:
             reg.delete_url = f'/reportes/moreapp/{reg.pk}/eliminar/'
@@ -2803,17 +2995,21 @@ def reportes_moreapp_list(request):
         'registros': registros,
         'estado_actual': estado,
         'alerta_actual': alerta,
+        'bloqueo_actual': bloqueo,
+        'revision_actual': revision,
         'q': q,
         'formulario_actual': formulario,
         'formularios': formularios,
-        'total': qs.count(),
+        'total': len(registros),
         'puede_eliminar_reportes': request.user.rol == 'ADMIN',
-        'pendientes': IntegracionMoreApp.objects.filter(estado_sincronizacion='PENDIENTE').count(),
+        'pendientes': IntegracionMoreApp.objects.filter(estado_revision='PENDIENTE').count(),
+        'con_advertencia': IntegracionMoreApp.objects.filter(estado_revision='CON_ADVERTENCIA').count(),
         'alertas': IntegracionMoreApp.objects.filter(alerta_doble_trabajo=True).count(),
         'errores': IntegracionMoreApp.objects.filter(
             estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR')
         ).count(),
         'estados_choices': IntegracionMoreApp.ESTADO_CHOICES,
+        'revision_choices': IntegracionMoreApp.ESTADO_REVISION_CHOICES,
     }
     return render(request, 'reportes/integraciones_list.html', context)
 
@@ -2883,11 +3079,14 @@ def reportes_moreapp_detalle(request, pk):
     else:
         registro_delete_url = ''
 
+    bloqueos_operativos = _extraer_bloqueos_operativos_registro(registro)
+
     return render(request, 'reportes/integracion_detalle.html', {
         'registro': registro,
         'registro_delete_url': registro_delete_url,
         'resultado_operativo': resultado_operativo,
         'pendientes_revision': pendientes_revision,
+        'bloqueos_operativos': bloqueos_operativos,
         'movimientos_operativos': movimientos_operativos,
         'mostrar_panel_operativo': request.user.rol in ('ADMIN', 'ADMINISTRATIVO'),
     })
@@ -2906,6 +3105,13 @@ def reportes_moreapp_sincronizar(request):
         return redirect('reportes_moreapp_list')
 
     stats = leer_carpetas()
+    detalle = stats.get('detalle', []) if isinstance(stats, dict) else []
+    errores_detalle = [d for d in detalle if str(d.get('resultado', '')).lower() == 'error']
+    bloqueos_detalle = [
+        d for d in detalle
+        if 'BLOQUEO_OPERATIVO' in str(d.get('mensaje', '')) or 'pendientes operativos' in str(d.get('mensaje', '')).lower()
+    ]
+
     messages.success(
         request,
         f'Sincronización completada — Nuevos: {stats["nuevos"]} | '
@@ -2913,6 +3119,21 @@ def reportes_moreapp_sincronizar(request):
         f'Alertas: {stats["alertas"]} | '
         f'Errores: {stats["errores"]}'
     )
+
+    if errores_detalle:
+        mensajes_error = '; '.join(str(e.get('mensaje', 'Error sin detalle')) for e in errores_detalle[:3])
+        messages.error(
+            request,
+            f'Se detectaron errores en sincronización MoreApp ({len(errores_detalle)}). {mensajes_error}'
+        )
+
+    if bloqueos_detalle:
+        mensajes_bloqueo = '; '.join(str(b.get('mensaje', 'Bloqueo operativo')) for b in bloqueos_detalle[:3])
+        messages.warning(
+            request,
+            f'Se detectaron bloqueos operativos ({len(bloqueos_detalle)}). {mensajes_bloqueo}'
+        )
+
     return redirect('reportes_moreapp_list')
 
 

@@ -19,21 +19,9 @@ class IntegracionMoreAppLog(models.Model):
     
     mensaje_error = models.TextField(blank=True)
     
-    orden_asociada = models.ForeignKey(
-        'ordenes_trabajo.OrdenTrabajo',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='integraciones_moreapp'
-    )
-    
-    adjunto_creado = models.ForeignKey(
-        'ordenes_trabajo.AdjuntoOrden',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='integracion_origen'
-    )
+    orden_asociada_ref = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
+
+    adjunto_creado_ref = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
     
     def __str__(self):
         return f'MoreApp {self.get_estado_display()} - {self.fecha_hora.strftime("%d/%m/%Y %H:%M")}'

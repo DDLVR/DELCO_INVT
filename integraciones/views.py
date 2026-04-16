@@ -3,7 +3,6 @@ import hashlib
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt
-from ordenes_trabajo.models import OrdenTrabajo, AdjuntoOrden
 from .models import IntegracionMoreAppLog
 
 
@@ -11,7 +10,7 @@ from .models import IntegracionMoreAppLog
 @require_http_methods(["POST"])
 def webhook_moreapp(request):
     """
-    Endpoint para recibir archivos FPT desde MoreApp.
+    Endpoint legacy de MoreApp (compatibilidad).
     
     Formato esperado del payload:
     {
@@ -49,58 +48,37 @@ def webhook_moreapp(request):
         archivo_nombre = payload.get('archivo_nombre') or archivo_info.get('nombre')
         archivo_url = archivo_info.get('url')
         tipo_adjunto = payload.get('tipo', 'FPT')
-        
-        # Validar que exista la orden
+
         if not orden_id:
             raise ValueError('orden_id requerido')
-        
-        orden = OrdenTrabajo.objects.get(pk=orden_id)
-        log.orden_asociada = orden
-        
-        # Crear adjunto (versión simple)
-        # En producción, descargar el archivo desde URL si viene
-        adjunto = AdjuntoOrden.objects.create(
-            orden=orden,
-            tipo=tipo_adjunto,
-            nombre_archivo=archivo_nombre or f'adjunto_{orden_id}_{log.id}',
-            url_externa=archivo_url,
-            metadata={
-                'origen': 'MoreApp',
-                'payload_original': payload
-            }
-        )
-        
-        # Calcular hash si se proporciona archivo base64
+
+        # Módulo de órdenes retirado: conservar referencia histórica sin FK.
+        log.orden_asociada_ref = int(orden_id)
+        log.adjunto_creado_ref = None
+
+        # Hash del archivo si existe (solo trazabilidad en log)
         archivo_base64 = payload.get('archivo_base64')
+        archivo_hash = ''
         if archivo_base64:
-            # En versión real, decodificar y guardar el archivo
-            # Por ahora solo registrar
-            adjunto.hash_archivo = hashlib.sha256(
-                archivo_base64.encode()
-            ).hexdigest()
-            adjunto.save()
-        
+            archivo_hash = hashlib.sha256(archivo_base64.encode()).hexdigest()
+
+        payload_ext = dict(payload)
+        payload_ext['archivo_nombre_resuelto'] = archivo_nombre
+        payload_ext['archivo_url'] = archivo_url
+        payload_ext['tipo_adjunto'] = tipo_adjunto
+        payload_ext['archivo_hash'] = archivo_hash
+        log.payload_crudo = payload_ext
+
         # Actualizar log
         log.estado = 'PROCESADO'
-        log.adjunto_creado = adjunto
         log.save()
         
         return JsonResponse({
             'success': True,
-            'mensaje': f'Adjunto recibido para OT #{orden_id}',
-            'adjunto_id': adjunto.id,
+            'mensaje': f'Registro legacy recibido para OT #{orden_id}',
+            'adjunto_id': None,
             'log_id': log.id
         }, status=201)
-    
-    except OrdenTrabajo.DoesNotExist:
-        log.estado = 'ERROR'
-        log.mensaje_error = f'Orden #{orden_id} no existe'
-        log.save()
-        
-        return JsonResponse({
-            'success': False,
-            'error': 'Orden no encontrada'
-        }, status=404)
     
     except json.JSONDecodeError:
         return JsonResponse({

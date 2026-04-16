@@ -75,6 +75,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'web.middleware.AbsoluteSessionTimeoutMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
@@ -181,6 +182,19 @@ AUTH_USER_MODEL = 'usuarios.Usuario'
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'dashboard'
 LOGOUT_REDIRECT_URL = 'login'
+
+# Sesion de seguridad: expiracion absoluta a 8 horas.
+SESSION_COOKIE_AGE = int(os.getenv('SESSION_COOKIE_AGE', '28800'))
+ABSOLUTE_SESSION_TIMEOUT_SECONDS = int(os.getenv('ABSOLUTE_SESSION_TIMEOUT_SECONDS', '28800'))
+SESSION_SAVE_EVERY_REQUEST = False
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_HTTPONLY = True
+
+# Modo de integracion MoreApp
+MOREAPP_WEBHOOK_REALTIME_ENABLED = os.getenv('MOREAPP_WEBHOOK_REALTIME_ENABLED', 'true').strip().lower() == 'true'
+
+# Modulo de ordenes de trabajo (fase de desactivacion segura)
+ORDENES_TRABAJO_ENABLED = os.getenv('ORDENES_TRABAJO_ENABLED', 'false').strip().lower() == 'true'
 
 # Configuracion API para integracion con MoreApp (Webhooks)
 # Token de seguridad para validar solicitudes de MoreApp

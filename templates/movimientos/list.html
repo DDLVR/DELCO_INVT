@@ -76,9 +76,18 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label">Búsqueda</label>
                         <input type="text" name="q" class="form-control" placeholder="OT, observación..." value="{{ busqueda }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Origen Sistema</label>
+                        <select name="origen_sistema" class="form-select">
+                            <option value="">Todos</option>
+                            {% for codigo, nombre in origen_sistema_choices %}
+                            <option value="{{ codigo }}" {% if origen_sistema == codigo %}selected{% endif %}>{{ nombre }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
                 <div class="row mt-3">
@@ -139,6 +148,9 @@
                                 {% else %}
                                 <span class="badge bg-secondary">{{ mov.get_tipo_display }}</span>
                                 {% endif %}
+                                <div class="mt-1">
+                                    <span class="badge bg-light text-dark border">{{ mov.get_origen_sistema_display }}</span>
+                                </div>
                             </td>
                             <td>
                                 <div><strong>{{ mov.item_origen_display }}</strong></div>
@@ -148,10 +160,8 @@
                             <td>{{ mov.responsable.nombre_interno }}</td>
                             <td><span class="badge bg-secondary">{{ mov.total_items }}</span></td>
                             <td>
-                                {% if mov.orden_trabajo %}
-                                <a href="{% url 'ordenes_detalle' mov.orden_trabajo.id %}" target="_blank">
-                                    {{ mov.orden_trabajo.numero_ot }}
-                                </a>
+                                {% if mov.referencia_ot %}
+                                <span class="text-muted">{{ mov.referencia_ot }}</span>
                                 {% else %}
                                 -
                                 {% endif %}

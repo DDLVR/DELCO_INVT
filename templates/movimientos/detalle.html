@@ -64,13 +64,11 @@
                         </div>
                     </div>
 
-                    {% if movimiento.orden_trabajo %}
+                    {% if movimiento.referencia_ot %}
                     <div class="row mb-3">
                         <div class="col-12">
                             <strong>Orden de Trabajo:</strong><br>
-                            <a href="{% url 'ordenes_detalle' movimiento.orden_trabajo.id %}" target="_blank" class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-file-earmark-text"></i> {{ movimiento.orden_trabajo.numero_ot }}
-                            </a>
+                            <span class="badge bg-secondary">{{ movimiento.referencia_ot }}</span>
                         </div>
                     </div>
                     {% endif %}

@@ -522,10 +522,27 @@ class MovimientoInventario(models.Model):
         ('INSTALACION', 'Instalación en cliente'),
         ('RETIRO', 'Retiro de cliente'),
         ('ELIMINACION', 'Eliminación de registro'),
+        # Tipos operativos nuevos
+        ('AJUSTE', 'Ajuste manual'),
+        ('CORRECCION', 'Corrección de datos'),
+        ('MOREAPP', 'Actualización MoreApp'),
     ]
-    
+
+    ORIGEN_SISTEMA_CHOICES = [
+        ('MOREAPP', 'MoreApp (automático)'),
+        ('MANUAL', 'Manual (usuario)'),
+        ('IMPORTACION', 'Importación masiva'),
+        ('SISTEMA', 'Sistema interno'),
+    ]
+
     fecha_hora = models.DateTimeField(auto_now_add=True)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
+    origen_sistema = models.CharField(
+        max_length=15,
+        choices=ORIGEN_SISTEMA_CHOICES,
+        default='MANUAL',
+        help_text='Qué proceso generó este movimiento',
+    )
     
     origen = models.ForeignKey(
         Ubicacion,
@@ -547,22 +564,23 @@ class MovimientoInventario(models.Model):
     
     observacion = models.TextField(blank=True)
     
-    orden_trabajo = models.ForeignKey(
-        'ordenes_trabajo.OrdenTrabajo',
-        on_delete=models.SET_NULL,
-        null=True,
+    referencia_ot = models.CharField(
+        max_length=80,
         blank=True,
-        related_name='movimientos_inventario'
+        default='',
+        db_index=True,
+        help_text='Referencia textual de orden histórica (sin FK activa)'
     )
     
     def __str__(self):
         return f'{self.get_tipo_display()} - {self.fecha_hora}'
-    
+
     class Meta:
         ordering = ['-fecha_hora']
         indexes = [
             models.Index(fields=['-fecha_hora']),
             models.Index(fields=['tipo']),
+            models.Index(fields=['origen_sistema']),
         ]
 
 

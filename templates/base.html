@@ -34,7 +34,7 @@
     body {
       display: flex;
       flex-direction: column;
-      height: 100vh;
+      min-height: 100dvh;
     }
 
     nav {
@@ -44,12 +44,15 @@
     .main-container {
       display: flex;
       flex: 1;
-      overflow: hidden;
+      min-height: 0;
     }
 
     .sidebar {
       flex-shrink: 0;
       overflow-y: auto;
+      width: 250px;
+      display: flex;
+      flex-direction: column;
     }
 
     main {
@@ -58,12 +61,17 @@
       padding: 20px;
     }
 
-    @media (max-width: 768px) {
-      .sidebar {
-        display: none;
+    @media (max-width: 991.98px) {
+      .desktop-sidebar {
+        display: none !important;
+      }
+      .main-container {
+        display: block;
       }
       main {
         width: 100%;
+        padding: 12px;
+        overflow-x: hidden;
       }
     }
   </style>
@@ -74,9 +82,20 @@
   <!-- Navbar -->
   {% include "partials/navbar.html" %}
 
+  <!-- Sidebar móvil (offcanvas) -->
+  <div class="offcanvas offcanvas-start d-lg-none" tabindex="-1" id="mobileSidebar" aria-labelledby="mobileSidebarLabel">
+    <div class="offcanvas-header border-bottom">
+      <h5 class="offcanvas-title" id="mobileSidebarLabel">Menú</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
+    </div>
+    <div class="offcanvas-body p-0">
+      {% include "partials/sidebar.html" %}
+    </div>
+  </div>
+
   <div class="main-container">
     <!-- Sidebar -->
-    <div class="sidebar" style="width: 250px; display: flex; flex-direction: column;">
+    <div class="sidebar desktop-sidebar">
       {% include "partials/sidebar.html" %}
     </div>
 
@@ -105,7 +124,7 @@
   ════════════════════════════════════════════ -->
   <div id="delco-toast-container"
        class="toast-container position-fixed top-0 end-0 p-3"
-       style="z-index:1100; min-width:320px;"></div>
+      style="z-index:1100;"></div>
 
   <!-- Confirmación global (reemplaza confirm() del navegador) -->
   <div class="modal fade" id="delcoConfirmModal" tabindex="-1" aria-hidden="true">
@@ -238,6 +257,47 @@
 
   // Auto-mostrar mensajes Django como toasts al cargar la página
   document.addEventListener('DOMContentLoaded', function () {
+    // UX móvil: al navegar desde el menú offcanvas, cerrar automáticamente.
+    var mobileSidebarEl = document.getElementById('mobileSidebar');
+    var profileModalEl = document.getElementById('profileModal');
+
+    function openProfileModalSafe() {
+      if (!profileModalEl || typeof bootstrap === 'undefined') return;
+      var modal = bootstrap.Modal.getOrCreateInstance(profileModalEl);
+      modal.show();
+    }
+
+    document.querySelectorAll('.js-open-profile').forEach(function (btn) {
+      btn.addEventListener('click', function (ev) {
+        ev.preventDefault();
+        if (!mobileSidebarEl || !mobileSidebarEl.classList.contains('show')) {
+          openProfileModalSafe();
+          return;
+        }
+
+        var opened = false;
+        var onHidden = function () {
+          if (opened) return;
+          opened = true;
+          mobileSidebarEl.removeEventListener('hidden.bs.offcanvas', onHidden);
+          openProfileModalSafe();
+        };
+
+        mobileSidebarEl.addEventListener('hidden.bs.offcanvas', onHidden);
+        var instance = bootstrap.Offcanvas.getOrCreateInstance(mobileSidebarEl);
+        instance.hide();
+      });
+    });
+
+    if (mobileSidebarEl) {
+      mobileSidebarEl.querySelectorAll('a[href]').forEach(function (link) {
+        link.addEventListener('click', function () {
+          var instance = bootstrap.Offcanvas.getInstance(mobileSidebarEl);
+          if (instance) instance.hide();
+        });
+      });
+    }
+
     {% for message in messages %}
     showToast(
       "{{ message|escapejs }}",
