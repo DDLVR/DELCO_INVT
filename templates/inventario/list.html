@@ -290,14 +290,6 @@
                 <div class="card-footer bg-white">
                     <nav aria-label="Paginación inventario">
                         <ul class="pagination pagination-sm mb-0 justify-content-center">
-                            {% if page_obj.number == 1 %}
-                            <li class="page-item disabled"><span class="page-link">Inicio</span></li>
-                            {% else %}
-                            <li class="page-item">
-                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page=1">Inicio</a>
-                            </li>
-                            {% endif %}
-
                             {% if page_obj.has_previous %}
                             <li class="page-item">
                                 <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
@@ -338,14 +330,6 @@
                             </li>
                             {% else %}
                             <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
-                            {% endif %}
-
-                            {% if page_obj.number == page_obj.paginator.num_pages %}
-                            <li class="page-item disabled"><span class="page-link">Fin</span></li>
-                            {% else %}
-                            <li class="page-item">
-                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.paginator.num_pages }}">Fin</a>
-                            </li>
                             {% endif %}
                         </ul>
                     </nav>

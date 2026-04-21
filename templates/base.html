@@ -45,6 +45,7 @@
       display: flex;
       flex: 1;
       min-height: 0;
+      min-width: 1080px;
     }
 
     .sidebar {
@@ -61,18 +62,10 @@
       padding: 20px;
     }
 
-    @media (max-width: 991.98px) {
-      .desktop-sidebar {
-        display: none !important;
-      }
-      .main-container {
-        display: block;
-      }
-      main {
-        width: 100%;
-        padding: 12px;
-        overflow-x: hidden;
-      }
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: calc(100dvh - 56px);
     }
   </style>
 </head>
@@ -82,20 +75,9 @@
   <!-- Navbar -->
   {% include "partials/navbar.html" %}
 
-  <!-- Sidebar móvil (offcanvas) -->
-  <div class="offcanvas offcanvas-start d-lg-none" tabindex="-1" id="mobileSidebar" aria-labelledby="mobileSidebarLabel">
-    <div class="offcanvas-header border-bottom">
-      <h5 class="offcanvas-title" id="mobileSidebarLabel">Menú</h5>
-      <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
-    </div>
-    <div class="offcanvas-body p-0">
-      {% include "partials/sidebar.html" %}
-    </div>
-  </div>
-
   <div class="main-container">
     <!-- Sidebar -->
-    <div class="sidebar desktop-sidebar">
+    <div class="sidebar">
       {% include "partials/sidebar.html" %}
     </div>
 
@@ -257,8 +239,6 @@
 
   // Auto-mostrar mensajes Django como toasts al cargar la página
   document.addEventListener('DOMContentLoaded', function () {
-    // UX móvil: al navegar desde el menú offcanvas, cerrar automáticamente.
-    var mobileSidebarEl = document.getElementById('mobileSidebar');
     var profileModalEl = document.getElementById('profileModal');
 
     function openProfileModalSafe() {
@@ -270,33 +250,9 @@
     document.querySelectorAll('.js-open-profile').forEach(function (btn) {
       btn.addEventListener('click', function (ev) {
         ev.preventDefault();
-        if (!mobileSidebarEl || !mobileSidebarEl.classList.contains('show')) {
-          openProfileModalSafe();
-          return;
-        }
-
-        var opened = false;
-        var onHidden = function () {
-          if (opened) return;
-          opened = true;
-          mobileSidebarEl.removeEventListener('hidden.bs.offcanvas', onHidden);
-          openProfileModalSafe();
-        };
-
-        mobileSidebarEl.addEventListener('hidden.bs.offcanvas', onHidden);
-        var instance = bootstrap.Offcanvas.getOrCreateInstance(mobileSidebarEl);
-        instance.hide();
+        openProfileModalSafe();
       });
     });
-
-    if (mobileSidebarEl) {
-      mobileSidebarEl.querySelectorAll('a[href]').forEach(function (link) {
-        link.addEventListener('click', function () {
-          var instance = bootstrap.Offcanvas.getInstance(mobileSidebarEl);
-          if (instance) instance.hide();
-        });
-      });
-    }
 
     {% for message in messages %}
     showToast(

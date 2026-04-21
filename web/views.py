@@ -278,9 +278,20 @@ def dashboard_view(request):
             .annotate(cantidad=Count('id'))
             .order_by('-cantidad')[:5]
         )
+
+        # Desglose global de movimientos para panel consolidado de gráficos
+        context['movimientos_tipo_breakdown'] = list(
+            MovimientoInventario.objects.values('tipo')
+            .annotate(c=Count('id'))
+            .order_by('-c')
+        )
+        context['movimientos_origen_breakdown'] = list(
+            MovimientoInventario.objects.values('origen_sistema')
+            .annotate(c=Count('id'))
+            .order_by('-c')
+        )
         
         # Movimientos de inventario (últimos 7 días)
-        from inventario.models import MovimientoInventario
         from datetime import timedelta
         fecha_hace_7_dias = datetime.now() - timedelta(days=7)
         
@@ -308,10 +319,24 @@ def dashboard_view(request):
                 estado_revision='PENDIENTE',
                 fecha_recepcion__lt=umbral_7d,
             ).count()
+            context['moreapp_sinc_breakdown'] = list(
+                IntegracionMoreApp.objects.values('estado_sincronizacion')
+                .annotate(c=Count('id'))
+                .order_by('-c')
+            )
+            context['moreapp_formulario_breakdown'] = list(
+                IntegracionMoreApp.objects.values('nombre_formulario')
+                .annotate(c=Count('id'))
+                .order_by('-c')
+            )
+            context['moreapp_adv_breakdown'] = _calcular_adv_breakdown(IntegracionMoreApp)
         except Exception:
             context['moreapp_pendientes'] = 0
             context['moreapp_con_advertencia'] = 0
             context['moreapp_envejecidos'] = 0
+            context['moreapp_sinc_breakdown'] = []
+            context['moreapp_formulario_breakdown'] = []
+            context['moreapp_adv_breakdown'] = []
 
         return render(request, 'dashboards/admin_dashboard.html', context)
     elif rol == 'TECNICO':
@@ -2475,6 +2500,18 @@ def movimientos_list_view(request):
         'tipos_movimiento': MovimientoInventario.TIPO_CHOICES,
         'origen_sistema_choices': MovimientoInventario.ORIGEN_SISTEMA_CHOICES,
         'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
+        # Datos para gráfico (sobre TODOS los registros, no filtrados)
+        'tipo_breakdown': list(
+            MovimientoInventario.objects.values('tipo')
+            .annotate(c=Count('id'))
+            .order_by('-c')
+        ),
+        'origen_sistema_breakdown': list(
+            MovimientoInventario.objects.values('origen_sistema')
+            .annotate(c=Count('id'))
+            .order_by('-c')
+        ),
+        'total_global': MovimientoInventario.objects.count(),
     }
     
     return render(request, 'movimientos/list.html', context)
@@ -2892,6 +2929,45 @@ def usuario_eliminar_view(request, pk):
 ROLES_REPORTES = ('ADMIN', 'ADMINISTRATIVO', 'SUPERVISOR')
 
 
+def _categorias_advertencia_registro(registro):
+    """Devuelve categorías de advertencia normalizadas para un registro MoreApp."""
+    categorias = set()
+    for bloqueo in _extraer_bloqueos_operativos_registro(registro):
+        motivo = bloqueo.get('motivo', '').lower()
+        if 'no encontrada' in motivo or 'no encontrado' in motivo:
+            categorias.add('equipo')
+        elif 'no se puede instalar' in motivo:
+            categorias.add('regla')
+        elif 'doble trabajo' in motivo or 'ya instalado' in motivo:
+            categorias.add('doble')
+
+    if registro.alerta_doble_trabajo:
+        categorias.add('doble')
+
+    return categorias
+
+
+def _calcular_adv_breakdown(model_class):
+    """Cuenta registros con advertencia agrupados en 3 categorías operativas."""
+    from django.db.models import Q as _Q
+    adv_equipo = 0
+    adv_regla = 0
+    adv_doble = 0
+    qs = model_class.objects.filter(
+        _Q(estado_revision='CON_ADVERTENCIA') | _Q(alerta_doble_trabajo=True)
+    ).only('datos_procesados', 'descripcion_alerta', 'alerta_doble_trabajo')
+    for reg in qs:
+        cats = _categorias_advertencia_registro(reg)
+        adv_equipo += int('equipo' in cats)
+        adv_regla += int('regla' in cats)
+        adv_doble += int('doble' in cats)
+    return [
+        {'categoria': 'Sin equipo en inventario', 'count': adv_equipo},
+        {'categoria': 'Bloqueo de regla operativa', 'count': adv_regla},
+        {'categoria': 'Doble trabajo / conflicto', 'count': adv_doble},
+    ]
+
+
 def _extraer_bloqueos_operativos_registro(registro):
     """Devuelve lista normalizada de bloqueos/alertas operativas (incluye históricos)."""
     bloqueos = []
@@ -2953,6 +3029,7 @@ def reportes_moreapp_list(request):
     revision = request.GET.get('revision', '')
     q = request.GET.get('q', '')
     formulario = request.GET.get('formulario', '')
+    kpi = request.GET.get('kpi', '')
 
     qs = qs_base
     if estado:
@@ -2961,6 +3038,8 @@ def reportes_moreapp_list(request):
         qs = qs.filter(alerta_doble_trabajo=True)
     if revision:
         qs = qs.filter(estado_revision=revision)
+    if kpi == 'advertencia':
+        qs = qs.filter(estado_revision='CON_ADVERTENCIA')
     if q:
         qs = qs.filter(
             Q(nombre_formulario__icontains=q) |
@@ -2982,13 +3061,28 @@ def reportes_moreapp_list(request):
     registros_filtrados = []
     for reg in registros:
         bloqueos = _extraer_bloqueos_operativos_registro(reg)
+        categorias_advertencia = _categorias_advertencia_registro(reg)
         reg.bloqueos_operativos = bloqueos
+        reg.categorias_advertencia = categorias_advertencia
         reg.tiene_bloqueo_operativo = len(bloqueos) > 0
         reg.bloqueo_operativo_preview = bloqueos[0]['motivo'] if bloqueos else ''
         if bloqueo == '1' and not reg.tiene_bloqueo_operativo:
             continue
+        if kpi == 'adv_equipo' and 'equipo' not in categorias_advertencia:
+            continue
+        if kpi == 'adv_regla' and 'regla' not in categorias_advertencia:
+            continue
+        if kpi == 'adv_doble' and 'doble' not in categorias_advertencia:
+            continue
         registros_filtrados.append(reg)
     registros = registros_filtrados
+
+    adv_breakdown = _calcular_adv_breakdown(IntegracionMoreApp)
+    adv_counts = {
+        'equipo': next((x['count'] for x in adv_breakdown if x['categoria'] == 'Sin equipo en inventario'), 0),
+        'regla': next((x['count'] for x in adv_breakdown if x['categoria'] == 'Bloqueo de regla operativa'), 0),
+        'doble': next((x['count'] for x in adv_breakdown if x['categoria'] == 'Doble trabajo / conflicto'), 0),
+    }
 
     if request.user.rol == 'ADMIN':
         for reg in registros:
@@ -3005,9 +3099,11 @@ def reportes_moreapp_list(request):
         'revision_actual': revision,
         'q': q,
         'formulario_actual': formulario,
+        'kpi_actual': kpi,
         'formularios': formularios,
         'total': len(registros),
         'puede_eliminar_reportes': request.user.rol == 'ADMIN',
+        'adv_counts': adv_counts,
         'pendientes': IntegracionMoreApp.objects.filter(estado_revision='PENDIENTE').count(),
         'con_advertencia': IntegracionMoreApp.objects.filter(estado_revision='CON_ADVERTENCIA').count(),
         'alertas': IntegracionMoreApp.objects.filter(alerta_doble_trabajo=True).count(),
@@ -3016,6 +3112,19 @@ def reportes_moreapp_list(request):
         ).count(),
         'estados_choices': IntegracionMoreApp.ESTADO_CHOICES,
         'revision_choices': IntegracionMoreApp.ESTADO_REVISION_CHOICES,
+        # Datos para gráficos
+        'sinc_breakdown': list(
+            IntegracionMoreApp.objects.values('estado_sincronizacion')
+            .annotate(c=Count('id'))
+            .order_by('-c')
+        ),
+        'formula_breakdown': list(
+            IntegracionMoreApp.objects.values('nombre_formulario')
+            .annotate(c=Count('id'))
+            .order_by('-c')
+        ),
+        # Desglose de advertencias por categoría (iterar en Python sobre los afectados)
+        'adv_breakdown': adv_breakdown,
     }
     return render(request, 'reportes/integraciones_list.html', context)
 
