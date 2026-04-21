@@ -944,6 +944,95 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
     return wb
 
 
+def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
+    """Exporta todos los campos reales del modelo y columnas legibles de apoyo."""
+    from datetime import date, datetime
+    from decimal import Decimal
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    def normalizar_valor(valor):
+        if valor is None:
+            return ''
+        if isinstance(valor, bool):
+            return 'SI' if valor else 'NO'
+        if isinstance(valor, datetime):
+            return valor.strftime('%d-%m-%Y %H:%M:%S')
+        if isinstance(valor, date):
+            return valor.strftime('%d-%m-%Y')
+        if isinstance(valor, Decimal):
+            return float(valor)
+        return str(valor)
+
+    def etiqueta_relacion(campo, relacionado):
+        if relacionado is None:
+            return ''
+
+        if campo.name == 'cliente':
+            return getattr(relacionado, 'numero_cliente', '') or str(relacionado)
+        if campo.name in ('entregado_a', 'en_custodia_de'):
+            return getattr(relacionado, 'nombre_interno', '') or getattr(relacionado, 'username', '') or str(relacionado)
+        if campo.name == 'estado_inventario':
+            return getattr(relacionado, 'nombre', '') or str(relacionado)
+        if campo.name == 'ubicacion_actual':
+            return str(relacionado)
+        if campo.name == 'medidor':
+            return getattr(relacionado, 'serie', '') or str(relacionado)
+        return str(relacionado)
+
+    model = getattr(equipos, 'model', None)
+    if model is None:
+        raise ValueError('El exportador completo requiere un QuerySet del modelo')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f'{tipo_equipo}_COMPLETO'
+
+    header_fill = PatternFill(start_color='7F6000', end_color='7F6000', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    columnas = []
+    headers = []
+
+    for campo in model._meta.concrete_fields:
+        if campo.is_relation:
+            headers.append(f'{campo.name}_id')
+            columnas.append((f'{campo.name}_id', lambda obj, nombre=campo.attname: normalizar_valor(getattr(obj, nombre, None))))
+            headers.append(f'{campo.name}_label')
+            columnas.append((
+                f'{campo.name}_label',
+                lambda obj, campo_rel=campo: normalizar_valor(etiqueta_relacion(campo_rel, getattr(obj, campo_rel.name, None)))
+            ))
+        else:
+            headers.append(campo.name)
+            if getattr(campo, 'choices', None):
+                columnas.append((campo.name, lambda obj, nombre=campo.name: normalizar_valor(getattr(obj, nombre, None))))
+                headers.append(f'{campo.name}_display')
+                columnas.append((
+                    f'{campo.name}_display',
+                    lambda obj, nombre=campo.name: normalizar_valor(getattr(obj, f'get_{nombre}_display')()) if getattr(obj, nombre, None) not in (None, '') else ''
+                ))
+            else:
+                columnas.append((campo.name, lambda obj, nombre=campo.name: normalizar_valor(getattr(obj, nombre, None))))
+
+    ws.append(headers)
+
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_alignment
+
+    for equipo in equipos:
+        ws.append([funcion(equipo) for _, funcion in columnas])
+
+    for indice, header in enumerate(headers, start=1):
+        largo = max(len(header), 14)
+        ws.column_dimensions[openpyxl.utils.get_column_letter(indice)].width = min(largo + 4, 36)
+
+    ws.freeze_panes = 'A2'
+    return wb
+
+
 def generar_plantilla_modem():
     """
     Genera archivo Excel plantilla para importar módems.
