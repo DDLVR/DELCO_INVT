@@ -7,54 +7,125 @@
 <div class="container-fluid py-4">
 
   <!-- Header -->
-  <div class="row mb-4 align-items-center">
+  <div class="row mb-3 align-items-center">
     <div class="col">
       <h1 class="mb-1"><i class="bi bi-cloud-download"></i> Reportes MoreApp</h1>
       <p class="text-muted mb-0">Registros sincronizados desde carpetas locales</p>
     </div>
-    <div class="col-auto">
+    <div class="col-auto d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1"
+              type="button"
+              data-bs-toggle="collapse"
+              data-bs-target="#panelGraficos"
+              aria-expanded="false"
+              aria-controls="panelGraficos">
+        <i class="bi bi-bar-chart-line"></i>
+        <span>Gráficos</span>
+        <i class="bi bi-chevron-down small icono-chevron" style="transition: transform 0.2s;"></i>
+      </button>
       <form method="post" action="{% url 'reportes_moreapp_sincronizar' %}" class="d-inline">
         {% csrf_token %}
-        <button type="submit" class="btn btn-primary">
+        <button type="submit" class="btn btn-primary btn-sm">
           <i class="bi bi-arrow-repeat"></i> Sincronizar ahora
         </button>
       </form>
     </div>
   </div>
 
+  <!-- Gráficos (colapsable) -->
+  {{ sinc_breakdown|json_script:"datos-sinc" }}
+  {{ formula_breakdown|json_script:"datos-formula" }}
+  {{ adv_breakdown|json_script:"datos-adv" }}
+  <div class="collapse mb-3" id="panelGraficos">
+    <div class="row g-2">
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-transparent border-bottom py-1 small fw-semibold">
+            <i class="bi bi-pie-chart-fill me-1 text-primary"></i> Estado de sincronización
+          </div>
+          <div class="card-body d-flex align-items-center justify-content-center py-2">
+            <canvas id="graficaEstado" style="max-height:200px;"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-transparent border-bottom py-1 small fw-semibold">
+            <i class="bi bi-pie-chart-fill me-1 text-success"></i> Tipo de formulario / trabajo
+          </div>
+          <div class="card-body d-flex align-items-center justify-content-center py-2">
+            <canvas id="graficaFormularios" style="max-height:200px;"></canvas>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-transparent border-bottom py-1 small fw-semibold">
+            <i class="bi bi-pie-chart-fill me-1 text-warning"></i> Desglose de advertencias
+          </div>
+          <div class="card-body d-flex align-items-center justify-content-center py-2">
+            <canvas id="graficaAdvertencias" style="max-height:200px;"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- KPIs -->
+  <style>
+    .card-kpi-reporte {
+      transition: transform .15s ease, box-shadow .15s ease;
+      cursor: pointer;
+    }
+    .card-kpi-reporte:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .08) !important;
+    }
+    .ring-active {
+      outline: 2px solid #0d6efd;
+      outline-offset: 1px;
+    }
+  </style>
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm h-100">
+      <a href="{% url 'reportes_moreapp_list' %}" class="text-decoration-none text-reset d-block h-100">
+      <div class="card card-kpi-reporte border-0 shadow-sm h-100 {% if not kpi_actual %}ring-active{% endif %}">
         <div class="card-body text-center">
           <div class="fs-2 fw-bold text-primary">{{ total }}</div>
           <div class="text-muted small">Total registros</div>
         </div>
       </div>
+      </a>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm h-100">
+      <a href="{% url 'reportes_moreapp_list' %}?kpi=adv_equipo" class="text-decoration-none text-reset d-block h-100">
+      <div class="card card-kpi-reporte border-0 shadow-sm h-100 {% if kpi_actual == 'adv_equipo' %}ring-active{% endif %}">
         <div class="card-body text-center">
-          <div class="fs-2 fw-bold text-warning">{{ pendientes }}</div>
-          <div class="text-muted small">Pendientes</div>
+          <div class="fs-2 fw-bold text-warning">{{ adv_counts.equipo }}</div>
+          <div class="text-muted small">Sin equipo en inventario</div>
         </div>
       </div>
+      </a>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm h-100">
+      <a href="{% url 'reportes_moreapp_list' %}?kpi=adv_regla" class="text-decoration-none text-reset d-block h-100">
+      <div class="card card-kpi-reporte border-0 shadow-sm h-100 {% if kpi_actual == 'adv_regla' %}ring-active{% endif %}">
         <div class="card-body text-center">
-          <div class="fs-2 fw-bold text-danger">{{ con_advertencia }}</div>
-          <div class="text-muted small">Con advertencia</div>
+          <div class="fs-2 fw-bold text-danger">{{ adv_counts.regla }}</div>
+          <div class="text-muted small">Bloqueo de regla operativa</div>
         </div>
       </div>
+      </a>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card border-0 shadow-sm h-100">
+      <a href="{% url 'reportes_moreapp_list' %}?kpi=adv_doble" class="text-decoration-none text-reset d-block h-100">
+      <div class="card card-kpi-reporte border-0 shadow-sm h-100 {% if kpi_actual == 'adv_doble' %}ring-active{% endif %}">
         <div class="card-body text-center">
-          <div class="fs-2 fw-bold text-dark">{{ errores }}</div>
-          <div class="text-muted small">Con errores</div>
+          <div class="fs-2 fw-bold text-dark">{{ adv_counts.doble }}</div>
+          <div class="text-muted small">Doble trabajo / conflicto</div>
         </div>
       </div>
+      </a>
     </div>
   </div>
 
@@ -69,6 +140,7 @@
           <input type="hidden" name="alerta" value="{{ alerta_actual }}">
           <input type="hidden" name="bloqueo" value="{{ bloqueo_actual }}">
           <input type="hidden" name="revision" value="{{ revision_actual }}">
+          <input type="hidden" name="kpi" value="{{ kpi_actual }}">
 
           <button type="submit"
                   class="btn btn-sm {% if not formulario_actual %}btn-primary{% else %}btn-outline-primary{% endif %}">
@@ -125,6 +197,7 @@
           </select>
         </div>
         <input type="hidden" name="formulario" value="{{ formulario_actual }}">
+        <input type="hidden" name="kpi" value="{{ kpi_actual }}">
         <div class="col-md-auto">
           <button type="submit" class="btn btn-sm btn-primary">
             <i class="bi bi-search"></i> Filtrar
@@ -234,7 +307,7 @@
             <tr>
               <td colspan="10" class="text-center text-muted py-4">
                 <i class="bi bi-inbox fs-4 d-block mb-2"></i>
-                No hay registros{% if q or estado_actual or alerta_actual or bloqueo_actual or revision_actual %} con los filtros aplicados{% endif %}.
+                No hay registros{% if q or estado_actual or alerta_actual or bloqueo_actual or revision_actual or formulario_actual or kpi_actual %} con los filtros aplicados{% endif %}.
               </td>
             </tr>
             {% endfor %}
@@ -250,6 +323,204 @@
   </div>
 
 </div>
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script>
+(function() {
+  const COLORES_ESTADO = {
+    'PROCESADO':       '#198754',
+    'ALERTA_REVISION': '#ffc107',
+    'DUPLICADO':       '#6c757d',
+    'ERROR_JSON':      '#dc3545',
+    'ERROR_LECTURA':   '#fd7e14',
+    'PENDIENTE':       '#0dcaf0',
+    'ERROR':           '#b02a37',
+  };
+  const LABELS_ESTADO = {
+    'PROCESADO':       'Procesado',
+    'ALERTA_REVISION': 'Alerta revisión',
+    'DUPLICADO':       'Duplicado',
+    'ERROR_JSON':      'Error JSON',
+    'ERROR_LECTURA':   'Error lectura',
+    'PENDIENTE':       'Pendiente',
+    'ERROR':           'Error',
+  };
+  const PALETTE = [
+    '#0d6efd','#6610f2','#6f42c1','#d63384','#dc3545',
+    '#fd7e14','#ffc107','#198754','#20c997','#0dcaf0',
+    '#adb5bd','#343a40',
+  ];
+
+  document.addEventListener('DOMContentLoaded', function() {
+    // Rotar chevron al expandir/colapsar
+    const panelGraficos = document.getElementById('panelGraficos');
+    if (panelGraficos) {
+      panelGraficos.addEventListener('show.bs.collapse', function() {
+        document.querySelectorAll('[data-bs-target="#panelGraficos"] .icono-chevron')
+          .forEach(el => el.style.transform = 'rotate(180deg)');
+      });
+      panelGraficos.addEventListener('hide.bs.collapse', function() {
+        document.querySelectorAll('[data-bs-target="#panelGraficos"] .icono-chevron')
+          .forEach(el => el.style.transform = 'rotate(0deg)');
+      });
+    }
+
+    // --- Gráfica 1: Estado de sincronización ---
+    const rawEstado = JSON.parse(document.getElementById('datos-sinc').textContent);
+    if (rawEstado.length > 0) {
+      const totalEstado = rawEstado.reduce((s, d) => s + d.c, 0);
+      new Chart(document.getElementById('graficaEstado'), {
+        type: 'doughnut',
+        data: {
+          labels: rawEstado.map(d => LABELS_ESTADO[d.estado_sincronizacion] || d.estado_sincronizacion),
+          datasets: [{
+            data: rawEstado.map(d => d.c),
+            backgroundColor: rawEstado.map(d => COLORES_ESTADO[d.estado_sincronizacion] || '#dee2e6'),
+            borderWidth: 2,
+            borderColor: '#ffffff',
+            hoverOffset: 8,
+          }]
+        },
+        options: {
+          responsive: true,
+          cutout: '58%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { font: { size: 11 }, padding: 12, boxWidth: 14 }
+            },
+            tooltip: {
+              callbacks: {
+                title: function(ctx) {
+                  return ctx[0].label;
+                },
+                label: function(ctx) {
+                  const pct = totalEstado > 0 ? ((ctx.parsed / totalEstado) * 100).toFixed(1) : '0.0';
+                  return '  Registros: ' + ctx.parsed + '  (' + pct + '% del total)';
+                },
+                afterLabel: function(ctx) {
+                  const estado = rawEstado[ctx.dataIndex].estado_sincronizacion;
+                  const desgloses = {
+                    'PROCESADO':       '  → Sincronización completada sin errores',
+                    'ALERTA_REVISION': '  → Requiere revisión operativa',
+                    'DUPLICADO':       '  → Registro ya procesado anteriormente',
+                    'ERROR_JSON':      '  → Fallo al parsear el archivo JSON',
+                    'ERROR_LECTURA':   '  → Fallo al leer el archivo de origen',
+                    'PENDIENTE':       '  → En cola, aún no procesado',
+                    'ERROR':           '  → Error general de sincronización',
+                  };
+                  return desgloses[estado] || '';
+                }
+              }
+            }
+          }
+        }
+      });
+    } else {
+      document.getElementById('graficaEstado').closest('.card-body')
+        .innerHTML = '<p class="text-muted small mb-0">Sin datos</p>';
+    }
+
+    // --- Gráfica 2: Tipo de formulario ---
+    const rawFormula = JSON.parse(document.getElementById('datos-formula').textContent);
+    if (rawFormula.length > 0) {
+      const totalForm = rawFormula.reduce((s, d) => s + d.c, 0);
+      new Chart(document.getElementById('graficaFormularios'), {
+        type: 'doughnut',
+        data: {
+          labels: rawFormula.map(d => d.nombre_formulario || '(Sin nombre)'),
+          datasets: [{
+            data: rawFormula.map(d => d.c),
+            backgroundColor: rawFormula.map((_, i) => PALETTE[i % PALETTE.length]),
+            borderWidth: 2,
+            borderColor: '#ffffff',
+            hoverOffset: 8,
+          }]
+        },
+        options: {
+          responsive: true,
+          cutout: '58%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { font: { size: 11 }, padding: 12, boxWidth: 14 }
+            },
+            tooltip: {
+              callbacks: {
+                title: function(ctx) {
+                  return ctx[0].label || '(Sin nombre)';
+                },
+                label: function(ctx) {
+                  const pct = totalForm > 0 ? ((ctx.parsed / totalForm) * 100).toFixed(1) : '0.0';
+                  return '  Registros: ' + ctx.parsed + '  (' + pct + '% del total)';
+                },
+                afterLabel: function(ctx) {
+                  return '  → Haz clic en filtros para ver solo este formulario';
+                }
+              }
+            }
+          }
+        }
+      });
+    } else {
+      document.getElementById('graficaFormularios').closest('.card-body')
+        .innerHTML = '<p class="text-muted small mb-0">Sin datos</p>';
+    }
+
+    // --- Gráfica 3: Desglose de advertencias ---
+    const rawAdv = JSON.parse(document.getElementById('datos-adv').textContent);
+    const totalAdv = rawAdv.reduce((s, d) => s + d.count, 0);
+    const COLORES_ADV = ['#fd7e14', '#dc3545', '#ffc107'];
+    const DESCRIPCIONES_ADV = {
+      'Sin equipo en inventario':    '→ Serie de medidor, módem o IP de SIM no registrada',
+      'Bloqueo de regla operativa':  '→ Sin custodio previo, ubicación inválida o módem sin medidor',
+      'Doble trabajo / conflicto':   '→ Equipo reportado por otro técnico o ya instalado en otro cliente',
+    };
+    if (totalAdv > 0) {
+      new Chart(document.getElementById('graficaAdvertencias'), {
+        type: 'doughnut',
+        data: {
+          labels: rawAdv.map(d => d.categoria),
+          datasets: [{
+            data: rawAdv.map(d => d.count),
+            backgroundColor: COLORES_ADV,
+            borderWidth: 2,
+            borderColor: '#ffffff',
+            hoverOffset: 8,
+          }]
+        },
+        options: {
+          responsive: true,
+          cutout: '58%',
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: { font: { size: 11 }, padding: 12, boxWidth: 14 }
+            },
+            tooltip: {
+              callbacks: {
+                title: function(ctx) { return ctx[0].label; },
+                label: function(ctx) {
+                  const pct = totalAdv > 0 ? ((ctx.parsed / totalAdv) * 100).toFixed(1) : '0.0';
+                  return '  Registros: ' + ctx.parsed + '  (' + pct + '% de advertencias)';
+                },
+                afterLabel: function(ctx) {
+                  return '  ' + (DESCRIPCIONES_ADV[ctx.label] || '');
+                }
+              }
+            }
+          }
+        }
+      });
+    } else {
+      document.getElementById('graficaAdvertencias').closest('.card-body')
+        .innerHTML = '<p class="text-muted small mb-0 text-center">Sin advertencias registradas</p>';
+    }
+  });
+})();
+</script>
+{% endblock %}
 
 {% if puede_eliminar_reportes %}
 <script>

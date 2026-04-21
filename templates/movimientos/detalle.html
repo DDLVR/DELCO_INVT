@@ -1,272 +1,251 @@
 {% extends 'base.html' %}
 {% load static %}
 
-{% block title %}Detalle de Movimiento{% endblock %}
+{% block title %}Detalle de Movimiento #{{ movimiento.id }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-    <!-- Header -->
-    <div class="row mb-4">
-        <div class="col-md-12">
-            <nav aria-label="breadcrumb">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{% url 'movimientos_list' %}">Movimientos</a></li>
-                    <li class="breadcrumb-item active">Detalle #{{ movimiento.id }}</li>
-                </ol>
-            </nav>
-            <h1><i class="bi bi-file-text"></i> Detalle de Movimiento</h1>
+
+  <!-- Header -->
+  <div class="row mb-3 align-items-center">
+    <div class="col">
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-1">
+          <li class="breadcrumb-item"><a href="{% url 'movimientos_list' %}">Movimientos</a></li>
+          <li class="breadcrumb-item active">Detalle #{{ movimiento.id }}</li>
+        </ol>
+      </nav>
+      <h1 class="mb-0"><i class="bi bi-file-text"></i> Detalle de Movimiento</h1>
+    </div>
+    <div class="col-auto">
+      <a href="{% url 'movimientos_list' %}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left"></i> Volver
+      </a>
+    </div>
+  </div>
+
+  <!-- Info general + resumen -->
+  <div class="row g-3 mb-4">
+    <div class="col-lg-8">
+      <div class="card shadow-sm h-100">
+        <div class="card-header text-white small fw-semibold" style="background:linear-gradient(135deg,#1a3a5c,#2c5282);">
+          <i class="bi bi-info-circle me-1"></i> Información General
         </div>
+        <div class="card-body">
+          <div class="row g-3">
+            <div class="col-sm-4">
+              <div class="text-muted small mb-1">Tipo</div>
+              {% if movimiento.tipo == 'ENTREGA' %}<span class="badge bg-success fs-6">{{ movimiento.get_tipo_display }}</span>
+              {% elif movimiento.tipo == 'RECEPCION' %}<span class="badge bg-info text-dark fs-6">{{ movimiento.get_tipo_display }}</span>
+              {% elif movimiento.tipo == 'INSTALACION' %}<span class="badge bg-primary fs-6">{{ movimiento.get_tipo_display }}</span>
+              {% elif movimiento.tipo == 'RETIRO' %}<span class="badge bg-warning text-dark fs-6">{{ movimiento.get_tipo_display }}</span>
+              {% elif movimiento.tipo == 'DEVOLUCION' %}<span class="badge bg-danger fs-6">{{ movimiento.get_tipo_display }}</span>
+              {% elif movimiento.tipo == 'IMPORTACION' %}<span class="badge fs-6" style="background:#5b5bd6;">{{ movimiento.get_tipo_display }}</span>
+              {% else %}<span class="badge bg-secondary fs-6">{{ movimiento.get_tipo_display }}</span>{% endif %}
+            </div>
+            <div class="col-sm-4">
+              <div class="text-muted small mb-1">Fecha y Hora</div>
+              <div><i class="bi bi-calendar3 me-1"></i>{{ movimiento.fecha_hora|date:"d/m/Y H:i" }}</div>
+            </div>
+            <div class="col-sm-4">
+              <div class="text-muted small mb-1">Responsable</div>
+              <div><i class="bi bi-person me-1"></i>{{ movimiento.responsable.nombre_interno }}</div>
+            </div>
+            <div class="col-sm-4">
+              <div class="text-muted small mb-1">Origen</div>
+              <div><i class="bi bi-box-arrow-right me-1 text-muted"></i>{{ movimiento.origen.nombre|default:"—" }}
+                <span class="text-muted small">({{ movimiento.origen.get_tipo_display }})</span>
+              </div>
+            </div>
+            <div class="col-sm-4">
+              <div class="text-muted small mb-1">Destino</div>
+              <div><i class="bi bi-box-arrow-in-left me-1 text-muted"></i>{{ movimiento.destino.nombre|default:"—" }}
+                <span class="text-muted small">({{ movimiento.destino.get_tipo_display }})</span>
+              </div>
+            </div>
+            <div class="col-sm-4">
+              <div class="text-muted small mb-1">Origen sistema</div>
+              <span class="badge bg-light text-dark border">{{ movimiento.get_origen_sistema_display }}</span>
+            </div>
+            {% if movimiento.referencia_ot %}
+            <div class="col-12">
+              <div class="text-muted small mb-1">Orden de Trabajo</div>
+              <span class="badge bg-secondary">{{ movimiento.referencia_ot }}</span>
+            </div>
+            {% endif %}
+            {% if movimiento.observacion %}
+            <div class="col-12">
+              <div class="text-muted small mb-1">Observaciones</div>
+              <div class="alert alert-light py-2 mb-0 small">{{ movimiento.observacion|linebreaks }}</div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- Información General -->
-    <div class="row mb-4">
-        <div class="col-lg-8">
-            <div class="card shadow-sm">
-                <div class="card-header text-white" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);">
-                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> Información General</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row mb-3">
-                        <div class="col-md-4">
-                            <strong>Tipo de Movimiento:</strong><br>
-                            {% if movimiento.tipo == 'ENTREGA' %}
-                            <span class="badge bg-success fs-6">{{ movimiento.get_tipo_display }}</span>
-                            {% elif movimiento.tipo == 'RECEPCION' %}
-                            <span class="badge bg-info fs-6">{{ movimiento.get_tipo_display }}</span>
-                            {% elif movimiento.tipo == 'INSTALACION' %}
-                            <span class="badge bg-primary fs-6">{{ movimiento.get_tipo_display }}</span>
-                            {% elif movimiento.tipo == 'RETIRO' %}
-                            <span class="badge bg-warning fs-6">{{ movimiento.get_tipo_display }}</span>
-                            {% elif movimiento.tipo == 'DEVOLUCION' %}
-                            <span class="badge bg-danger fs-6">{{ movimiento.get_tipo_display }}</span>
-                            {% endif %}
-                        </div>
-                        <div class="col-md-4">
-                            <strong>Fecha y Hora:</strong><br>
-                            <i class="bi bi-calendar3"></i> {{ movimiento.fecha_hora|date:"d/m/Y H:i" }}
-                        </div>
-                        <div class="col-md-4">
-                            <strong>Responsable:</strong><br>
-                            <i class="bi bi-person"></i> {{ movimiento.responsable.nombre_interno }}
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <strong>Origen:</strong><br>
-                            <i class="bi bi-box-arrow-right"></i> {{ movimiento.origen.nombre|default:"-" }}
-                            <small class="text-muted">({{ movimiento.origen.get_tipo_display }})</small>
-                        </div>
-                        <div class="col-md-6">
-                            <strong>Destino:</strong><br>
-                            <i class="bi bi-box-arrow-in-left"></i> {{ movimiento.destino.nombre|default:"-" }}
-                            <small class="text-muted">({{ movimiento.destino.get_tipo_display }})</small>
-                        </div>
-                    </div>
-
-                    {% if movimiento.referencia_ot %}
-                    <div class="row mb-3">
-                        <div class="col-12">
-                            <strong>Orden de Trabajo:</strong><br>
-                            <span class="badge bg-secondary">{{ movimiento.referencia_ot }}</span>
-                        </div>
-                    </div>
-                    {% endif %}
-
-                    {% if movimiento.observacion %}
-                    <div class="row">
-                        <div class="col-12">
-                            <strong>Observaciones:</strong><br>
-                            <div class="alert alert-light">
-                                {{ movimiento.observacion|linebreaks }}
-                            </div>
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
+    <div class="col-lg-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-header bg-primary text-white small fw-semibold">
+          <i class="bi bi-bar-chart me-1"></i> Resumen de ítems
         </div>
-
-        <div class="col-lg-4">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">
-                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Resumen</h5>
-                </div>
-                <div class="card-body">
-                    <div class="text-center mb-3">
-                        <h2 class="text-primary">{{ total_items }}</h2>
-                        <small class="text-muted">Total de Items</small>
-                    </div>
-                    <hr>
-                    <ul class="list-unstyled">
-                        <li class="mb-2">
-                            <i class="bi bi-speedometer text-primary"></i>
-                            <strong>Medidores:</strong> {{ items_medidores.count }}
-                        </li>
-                        <li class="mb-2">
-                            <i class="bi bi-sim text-info"></i>
-                            <strong>SIM Cards:</strong> {{ items_sims.count }}
-                        </li>
-                        <li class="mb-2">
-                            <i class="bi bi-router text-secondary"></i>
-                            <strong>Módems:</strong> {{ items_modems.count }}
-                        </li>
-                    </ul>
-                </div>
+        <div class="card-body text-center">
+          <div class="fs-1 fw-bold text-primary">{{ total_items }}</div>
+          <div class="text-muted small mb-3">Total de ítems</div>
+          <hr>
+          <div class="row g-2 text-start">
+            <div class="col-12">
+              <i class="bi bi-speedometer text-primary me-2"></i>
+              <strong>Medidores:</strong> {{ items_medidores.count }}
             </div>
+            <div class="col-12">
+              <i class="bi bi-sim text-info me-2"></i>
+              <strong>SIM Cards:</strong> {{ items_sims.count }}
+            </div>
+            <div class="col-12">
+              <i class="bi bi-router text-secondary me-2"></i>
+              <strong>Módems:</strong> {{ items_modems.count }}
+            </div>
+          </div>
         </div>
+      </div>
     </div>
+  </div>
 
-    <!-- Items Involucrados -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="bi bi-box-seam"></i> Equipos Involucrados</h5>
-                </div>
-                <div class="card-body">
-                    <!-- Tabs -->
-                    <ul class="nav nav-tabs mb-3" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="medidores-tab" data-bs-toggle="tab" 
-                                    data-bs-target="#medidores" type="button" role="tab">
-                                <i class="bi bi-speedometer"></i> Medidores ({{ items_medidores.count }})
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="sims-tab" data-bs-toggle="tab" 
-                                    data-bs-target="#sims" type="button" role="tab">
-                                <i class="bi bi-sim"></i> SIM Cards ({{ items_sims.count }})
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="modems-tab" data-bs-toggle="tab" 
-                                    data-bs-target="#modems" type="button" role="tab">
-                                <i class="bi bi-router"></i> Módems ({{ items_modems.count }})
-                            </button>
-                        </li>
-                    </ul>
-
-                    <!-- Tab Content -->
-                    <div class="tab-content">
-                        <!-- Medidores -->
-                        <div class="tab-pane fade show active" id="medidores" role="tabpanel">
-                            {% if items_medidores %}
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>Número Serie</th>
-                                            <th>Marca</th>
-                                            <th>Modelo</th>
-                                            <th>Cliente</th>
-                                            <th>Estado</th>
-                                            <th>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for item in items_medidores %}
-                                        <tr>
-                                            <td>{{ item.medidor.numero_serie }}</td>
-                                            <td>{{ item.medidor.marca|default:"-" }}</td>
-                                            <td>{{ item.medidor.modelo|default:"-" }}</td>
-                                            <td>{{ item.medidor.cliente.razon_social|default:"-" }}</td>
-                                            <td>{{ item.medidor.estado_inventario.nombre|default:"-" }}</td>
-                                            <td>
-                                                <a href="{% url 'movimientos_historial_equipo' %}?tipo=MEDIDOR&id={{ item.medidor.id }}" 
-                                                   class="btn btn-sm btn-outline-info" title="Ver Historial">
-                                                    <i class="bi bi-clock-history"></i>
-                                                </a>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {% else %}
-                            <p class="text-muted text-center">No hay medidores en este movimiento</p>
-                            {% endif %}
-                        </div>
-
-                        <!-- SIM Cards -->
-                        <div class="tab-pane fade" id="sims" role="tabpanel">
-                            {% if items_sims %}
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>ICCID</th>
-                                            <th>Número</th>
-                                            <th>Operador</th>
-                                            <th>Estado</th>
-                                            <th>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for item in items_sims %}
-                                        <tr>
-                                            <td>{{ item.simcard.iccid }}</td>
-                                            <td>{{ item.simcard.numero|default:"-" }}</td>
-                                            <td>{{ item.simcard.operador|default:"-" }}</td>
-                                            <td>{{ item.simcard.estado_inventario.nombre|default:"-" }}</td>
-                                            <td>
-                                                <a href="{% url 'movimientos_historial_equipo' %}?tipo=SIM&id={{ item.simcard.id }}" 
-                                                   class="btn btn-sm btn-outline-info" title="Ver Historial">
-                                                    <i class="bi bi-clock-history"></i>
-                                                </a>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {% else %}
-                            <p class="text-muted text-center">No hay SIM cards en este movimiento</p>
-                            {% endif %}
-                        </div>
-
-                        <!-- Módems -->
-                        <div class="tab-pane fade" id="modems" role="tabpanel">
-                            {% if items_modems %}
-                            <div class="table-responsive">
-                                <table class="table table-hover">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th>IMEI</th>
-                                            <th>Marca</th>
-                                            <th>Modelo</th>
-                                            <th>Serie</th>
-                                            <th>Estado</th>
-                                            <th>Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for item in items_modems %}
-                                        <tr>
-                                            <td>{{ item.modem.imei }}</td>
-                                            <td>{{ item.modem.marca|default:"-" }}</td>
-                                            <td>{{ item.modem.modelo|default:"-" }}</td>
-                                            <td>{{ item.modem.serie|default:"-" }}</td>
-                                            <td>{{ item.modem.estado_inventario.nombre|default:"-" }}</td>
-                                            <td>
-                                                <a href="{% url 'movimientos_historial_equipo' %}?tipo=MODEM&id={{ item.modem.id }}" 
-                                                   class="btn btn-sm btn-outline-info" title="Ver Historial">
-                                                    <i class="bi bi-clock-history"></i>
-                                                </a>
-                                            </td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                            </div>
-                            {% else %}
-                            <p class="text-muted text-center">No hay módems en este movimiento</p>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+  <!-- Equipos involucrados (tabs) -->
+  <div class="card shadow-sm">
+    <div class="card-header py-2">
+      <ul class="nav nav-tabs card-header-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active small" id="tab-medidores" data-bs-toggle="tab"
+                  data-bs-target="#pane-medidores" type="button" role="tab">
+            <i class="bi bi-speedometer me-1"></i>Medidores
+            <span class="badge bg-primary ms-1">{{ items_medidores.count }}</span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link small" id="tab-sims" data-bs-toggle="tab"
+                  data-bs-target="#pane-sims" type="button" role="tab">
+            <i class="bi bi-sim me-1"></i>SIM Cards
+            <span class="badge bg-info text-dark ms-1">{{ items_sims.count }}</span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link small" id="tab-modems" data-bs-toggle="tab"
+                  data-bs-target="#pane-modems" type="button" role="tab">
+            <i class="bi bi-router me-1"></i>Módems
+            <span class="badge bg-secondary ms-1">{{ items_modems.count }}</span>
+          </button>
+        </li>
+      </ul>
     </div>
+    <div class="card-body p-0">
+      <div class="tab-content">
+
+        <!-- Medidores -->
+        <div class="tab-pane fade show active" id="pane-medidores" role="tabpanel">
+          {% if items_medidores %}
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>Serie</th><th>Marca</th><th>Modelo</th><th>Cliente</th><th>Estado</th><th class="text-end">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in items_medidores %}
+                <tr>
+                  <td class="small fw-semibold">{{ item.medidor.numero_serie }}</td>
+                  <td class="small">{{ item.medidor.marca|default:"—" }}</td>
+                  <td class="small">{{ item.medidor.modelo|default:"—" }}</td>
+                  <td class="small">{{ item.medidor.cliente.razon_social|default:"—" }}</td>
+                  <td class="small">{{ item.medidor.estado_inventario.nombre|default:"—" }}</td>
+                  <td class="text-end">
+                    <a href="{% url 'movimientos_historial_equipo' %}?tipo=MEDIDOR&id={{ item.medidor.id }}"
+                       class="btn btn-sm btn-outline-info py-0 px-2" title="Ver historial">
+                      <i class="bi bi-clock-history"></i>
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted text-center py-4 mb-0"><i class="bi bi-inbox d-block fs-4 mb-1"></i>Sin medidores</p>
+          {% endif %}
+        </div>
+
+        <!-- SIM Cards -->
+        <div class="tab-pane fade" id="pane-sims" role="tabpanel">
+          {% if items_sims %}
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>ICCID</th><th>Número</th><th>Operador</th><th>Estado</th><th class="text-end">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in items_sims %}
+                <tr>
+                  <td class="small fw-semibold">{{ item.simcard.iccid }}</td>
+                  <td class="small">{{ item.simcard.numero|default:"—" }}</td>
+                  <td class="small">{{ item.simcard.operador|default:"—" }}</td>
+                  <td class="small">{{ item.simcard.estado_inventario.nombre|default:"—" }}</td>
+                  <td class="text-end">
+                    <a href="{% url 'movimientos_historial_equipo' %}?tipo=SIM&id={{ item.simcard.id }}"
+                       class="btn btn-sm btn-outline-info py-0 px-2" title="Ver historial">
+                      <i class="bi bi-clock-history"></i>
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted text-center py-4 mb-0"><i class="bi bi-inbox d-block fs-4 mb-1"></i>Sin SIM cards</p>
+          {% endif %}
+        </div>
+
+        <!-- Módems -->
+        <div class="tab-pane fade" id="pane-modems" role="tabpanel">
+          {% if items_modems %}
+          <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                  <th>IMEI</th><th>Marca</th><th>Modelo</th><th>Serie</th><th>Estado</th><th class="text-end">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in items_modems %}
+                <tr>
+                  <td class="small fw-semibold">{{ item.modem.imei }}</td>
+                  <td class="small">{{ item.modem.marca|default:"—" }}</td>
+                  <td class="small">{{ item.modem.modelo|default:"—" }}</td>
+                  <td class="small">{{ item.modem.serie|default:"—" }}</td>
+                  <td class="small">{{ item.modem.estado_inventario.nombre|default:"—" }}</td>
+                  <td class="text-end">
+                    <a href="{% url 'movimientos_historial_equipo' %}?tipo=MODEM&id={{ item.modem.id }}"
+                       class="btn btn-sm btn-outline-info py-0 px-2" title="Ver historial">
+                      <i class="bi bi-clock-history"></i>
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+          <p class="text-muted text-center py-4 mb-0"><i class="bi bi-inbox d-block fs-4 mb-1"></i>Sin módems</p>
+          {% endif %}
+        </div>
+
+      </div>
+    </div>
+  </div>
+
 </div>
 {% endblock %}

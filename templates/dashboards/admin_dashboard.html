@@ -5,7 +5,86 @@
 
 {% block content %}
 <div class="container-fluid py-5">
-    <!-- Inventario (PRIMERO) -->
+    {{ medidores_por_estado|json_script:"datos-medidores-estado" }}
+    {{ sims_por_estado|json_script:"datos-sims-estado" }}
+    {{ modems_por_estado|json_script:"datos-modems-estado" }}
+    {{ movimientos_tipo_breakdown|json_script:"datos-mov-tipo" }}
+    {{ movimientos_origen_breakdown|json_script:"datos-mov-origen" }}
+    {{ moreapp_sinc_breakdown|json_script:"datos-moreapp-sinc" }}
+    {{ moreapp_formulario_breakdown|json_script:"datos-moreapp-formulario" }}
+    {{ moreapp_adv_breakdown|json_script:"datos-moreapp-adv" }}
+
+    <!-- Panel de gráficos consolidado (SUPERIOR) -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm" style="background: linear-gradient(120deg, #0b2342 0%, #124b79 55%, #0f7173 100%);">
+                <div class="card-body text-white py-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div>
+                            <h4 class="mb-1"><i class="bi bi-graph-up-arrow"></i> Dashboard Gráfico Consolidado</h4>
+                            <p class="mb-0 text-white-50 small">Inventario, movimientos y MoreApp en una sola vista operativa.</p>
+                        </div>
+                        <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm btn-light">
+                            <i class="bi bi-cloud-download"></i> Ver reportes detallados
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header text-white" style="background: linear-gradient(120deg, #1f6feb 0%, #58a6ff 100%);">Inventario Medidores</div>
+                <div class="card-body py-2"><canvas id="graficaMedidoresEstado" style="max-height:190px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header text-white" style="background: linear-gradient(120deg, #0e7490 0%, #06b6d4 100%);">Inventario SIM</div>
+                <div class="card-body py-2"><canvas id="graficaSimsEstado" style="max-height:190px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header text-white" style="background: linear-gradient(120deg, #6d28d9 0%, #8b5cf6 100%);">Inventario Módems</div>
+                <div class="card-body py-2"><canvas id="graficaModemsEstado" style="max-height:190px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header text-white" style="background: linear-gradient(120deg, #0f766e 0%, #14b8a6 100%);">Movimientos por Tipo</div>
+                <div class="card-body py-2"><canvas id="graficaMovTipo" style="max-height:190px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header text-white" style="background: linear-gradient(120deg, #b45309 0%, #f59e0b 100%);">Movimientos por Origen</div>
+                <div class="card-body py-2"><canvas id="graficaMovOrigen" style="max-height:190px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header text-white" style="background: linear-gradient(120deg, #be123c 0%, #f43f5e 100%);">MoreApp Sincronización</div>
+                <div class="card-body py-2"><canvas id="graficaMoreappSinc" style="max-height:190px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header text-white" style="background: linear-gradient(120deg, #1d4ed8 0%, #3b82f6 100%);">MoreApp Formularios</div>
+                <div class="card-body py-2"><canvas id="graficaMoreappForm" style="max-height:190px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header text-white" style="background: linear-gradient(120deg, #b91c1c 0%, #ef4444 100%);">MoreApp Advertencias</div>
+                <div class="card-body py-2"><canvas id="graficaMoreappAdv" style="max-height:190px;"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Inventario (RESUMEN) -->
     <div class="row mb-4">
         <div class="col-12">
             <h4 class="mb-3"><i class="bi bi-box-seam"></i> Resumen de Inventario</h4>
@@ -260,83 +339,6 @@
         </div>
     </div>
 
-    <!-- Estados de Inventario -->
-    <div class="row">
-        <div class="col-12">
-            <h4 class="mb-3"><i class="bi bi-bar-chart-fill"></i> Distribución por Estados</h4>
-        </div>
-    </div>
-
-    <div class="row">
-        <!-- Medidores por Estado -->
-        <div class="col-lg-4 mb-3">
-            <div class="card shadow-sm">
-                <div class="card-header">
-                    <h6 class="mb-0">Medidores por Estado</h6>
-                </div>
-                <div class="card-body">
-                    {% if medidores_por_estado %}
-                    <ul class="list-group list-group-flush">
-                        {% for item in medidores_por_estado %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            {{ item.estado_inventario__nombre|default:"Sin estado" }}
-                            <span class="badge bg-primary rounded-pill">{{ item.cantidad }}</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <p class="text-muted text-center mb-0">No hay medidores registrados</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- SIM Cards por Estado -->
-        <div class="col-lg-4 mb-3">
-            <div class="card shadow-sm">
-                <div class="card-header">
-                    <h6 class="mb-0">SIM Cards por Estado</h6>
-                </div>
-                <div class="card-body">
-                    {% if sims_por_estado %}
-                    <ul class="list-group list-group-flush">
-                        {% for item in sims_por_estado %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            {{ item.estado_inventario__nombre|default:"Sin estado" }}
-                            <span class="badge bg-info rounded-pill">{{ item.cantidad }}</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <p class="text-muted text-center mb-0">No hay SIM cards registradas</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-
-        <!-- Módems por Estado -->
-        <div class="col-lg-4 mb-3">
-            <div class="card shadow-sm">
-                <div class="card-header">
-                    <h6 class="mb-0">Módems por Estado</h6>
-                </div>
-                <div class="card-body">
-                    {% if modems_por_estado %}
-                    <ul class="list-group list-group-flush">
-                        {% for item in modems_por_estado %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            {{ item.estado_inventario__nombre|default:"Sin estado" }}
-                            <span class="badge bg-secondary rounded-pill">{{ item.cantidad }}</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <p class="text-muted text-center mb-0">No hay módems registrados</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
 </div>
 
 {# ---- Panel operativo MoreApp (Puntos 6, 11) ---- #}
@@ -408,9 +410,163 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
-$(document).ready(function() {
-    // Dashboard admin - sin scripts adicionales necesarios
+document.addEventListener('DOMContentLoaded', function() {
+    const ESTADO_SYNC_LABELS = {
+        'PROCESADO': 'Procesado',
+        'ALERTA_REVISION': 'Alerta revisión',
+        'DUPLICADO': 'Duplicado',
+        'ERROR_JSON': 'Error JSON',
+        'ERROR_LECTURA': 'Error lectura',
+        'PENDIENTE': 'Pendiente',
+        'ERROR': 'Error',
+    };
+    const ESTADO_SYNC_COLORS = {
+        'PROCESADO': '#16a34a',
+        'ALERTA_REVISION': '#f59e0b',
+        'DUPLICADO': '#64748b',
+        'ERROR_JSON': '#dc2626',
+        'ERROR_LECTURA': '#ef4444',
+        'PENDIENTE': '#0ea5e9',
+        'ERROR': '#991b1b',
+    };
+    const MOV_TIPO_LABELS = {
+        'ENTREGA': 'Entrega',
+        'RECEPCION': 'Recepción',
+        'INSTALACION': 'Instalación',
+        'RETIRO': 'Retiro',
+        'DEVOLUCION': 'Devolución',
+        'ELIMINACION': 'Eliminación',
+    };
+    const MOV_TIPO_COLORS = {
+        'ENTREGA': '#22c55e',
+        'RECEPCION': '#0ea5e9',
+        'INSTALACION': '#2563eb',
+        'RETIRO': '#f59e0b',
+        'DEVOLUCION': '#ef4444',
+        'ELIMINACION': '#7c3aed',
+    };
+    const ADV_COLORS = {
+        'Sin equipo en inventario': '#f97316',
+        'Bloqueo de regla operativa': '#e11d48',
+        'Doble trabajo / conflicto': '#facc15',
+    };
+    const PALETTE_BASE = ['#1d4ed8', '#0ea5e9', '#14b8a6', '#22c55e', '#eab308', '#f97316', '#ef4444', '#a855f7', '#64748b'];
+
+    function crearDonut({ canvasId, jsonId, emptyMessage, labelGetter, valueGetter, colorGetter, legendBottom=true }) {
+        const canvas = document.getElementById(canvasId);
+        const dataScript = document.getElementById(jsonId);
+        if (!canvas || !dataScript) {
+            return;
+        }
+
+        const raw = JSON.parse(dataScript.textContent || '[]');
+        if (!raw.length) {
+            canvas.closest('.card-body').innerHTML = '<p class="text-muted text-center mb-0">' + emptyMessage + '</p>';
+            return;
+        }
+
+        const values = raw.map(valueGetter);
+        const total = values.reduce((sum, value) => sum + (value || 0), 0);
+        new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: raw.map(labelGetter),
+                datasets: [{
+                    data: values,
+                    backgroundColor: raw.map((item, idx) => colorGetter(item, idx)),
+                    borderColor: '#ffffff',
+                    borderWidth: 2,
+                    hoverOffset: 8,
+                }],
+            },
+            options: {
+                responsive: true,
+                cutout: '58%',
+                plugins: {
+                    legend: {
+                        position: legendBottom ? 'bottom' : 'right',
+                        labels: { font: { size: 11 }, padding: 12, boxWidth: 14 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const valor = ctx.parsed || 0;
+                                const pct = total > 0 ? ((valor / total) * 100).toFixed(1) : '0.0';
+                                return '  ' + valor + ' registros (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    crearDonut({
+        canvasId: 'graficaMedidoresEstado',
+        jsonId: 'datos-medidores-estado',
+        emptyMessage: 'No hay medidores registrados',
+        labelGetter: item => item.estado_inventario__nombre || 'Sin estado',
+        valueGetter: item => item.cantidad || 0,
+        colorGetter: (_, idx) => PALETTE_BASE[idx % PALETTE_BASE.length],
+    });
+    crearDonut({
+        canvasId: 'graficaSimsEstado',
+        jsonId: 'datos-sims-estado',
+        emptyMessage: 'No hay SIM cards registradas',
+        labelGetter: item => item.estado_inventario__nombre || 'Sin estado',
+        valueGetter: item => item.cantidad || 0,
+        colorGetter: (_, idx) => PALETTE_BASE[(idx + 2) % PALETTE_BASE.length],
+    });
+    crearDonut({
+        canvasId: 'graficaModemsEstado',
+        jsonId: 'datos-modems-estado',
+        emptyMessage: 'No hay módems registrados',
+        labelGetter: item => item.estado_inventario__nombre || 'Sin estado',
+        valueGetter: item => item.cantidad || 0,
+        colorGetter: (_, idx) => PALETTE_BASE[(idx + 4) % PALETTE_BASE.length],
+    });
+    crearDonut({
+        canvasId: 'graficaMovTipo',
+        jsonId: 'datos-mov-tipo',
+        emptyMessage: 'Sin movimientos registrados',
+        labelGetter: item => MOV_TIPO_LABELS[item.tipo] || item.tipo || 'Sin tipo',
+        valueGetter: item => item.c || 0,
+        colorGetter: item => MOV_TIPO_COLORS[item.tipo] || '#64748b',
+    });
+    crearDonut({
+        canvasId: 'graficaMovOrigen',
+        jsonId: 'datos-mov-origen',
+        emptyMessage: 'Sin origen de sistema',
+        labelGetter: item => item.origen_sistema || 'No informado',
+        valueGetter: item => item.c || 0,
+        colorGetter: (_, idx) => PALETTE_BASE[(idx + 1) % PALETTE_BASE.length],
+    });
+    crearDonut({
+        canvasId: 'graficaMoreappSinc',
+        jsonId: 'datos-moreapp-sinc',
+        emptyMessage: 'Sin datos de sincronización',
+        labelGetter: item => ESTADO_SYNC_LABELS[item.estado_sincronizacion] || item.estado_sincronizacion || 'Sin estado',
+        valueGetter: item => item.c || 0,
+        colorGetter: item => ESTADO_SYNC_COLORS[item.estado_sincronizacion] || '#64748b',
+    });
+    crearDonut({
+        canvasId: 'graficaMoreappForm',
+        jsonId: 'datos-moreapp-formulario',
+        emptyMessage: 'Sin formularios sincronizados',
+        labelGetter: item => item.nombre_formulario || '(Sin nombre)',
+        valueGetter: item => item.c || 0,
+        colorGetter: (_, idx) => PALETTE_BASE[(idx + 3) % PALETTE_BASE.length],
+    });
+    crearDonut({
+        canvasId: 'graficaMoreappAdv',
+        jsonId: 'datos-moreapp-adv',
+        emptyMessage: 'Sin advertencias registradas',
+        labelGetter: item => item.categoria || 'Sin categoría',
+        valueGetter: item => item.count || 0,
+        colorGetter: item => ADV_COLORS[item.categoria] || '#64748b',
+    });
 });
 </script>
 {% endblock %}
