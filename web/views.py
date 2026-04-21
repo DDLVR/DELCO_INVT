@@ -82,7 +82,7 @@ from urllib.parse import quote_plus
 from .decorators import role_required, admin_or_administrativo
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion
 from clientes.models import Cliente
-from importaciones.utils import importar_equipos_excel, exportar_equipos_excel
+from importaciones.utils import importar_equipos_excel, exportar_equipos_excel, exportar_equipos_excel_completo
 from importaciones.models import ImportacionExcel, ImportacionExcelError
 
 logger = logging.getLogger(__name__)
@@ -1372,6 +1372,7 @@ def inventario_exportar_view(request):
     """Exporta equipos a archivo Excel"""
     
     tipo = request.GET.get('tipo', 'medidor')
+    modo = (request.GET.get('modo') or 'resumen').strip().lower()
     search = (request.GET.get('search') or '').strip()
     search_field = (request.GET.get('search_field') or 'all').strip()
     limit_raw = (request.GET.get('limit') or '-1').strip()
@@ -1381,19 +1382,19 @@ def inventario_exportar_view(request):
     
     # Obtener datos base
     if tipo == 'medidor':
-        equipos = Medidor.objects.all()
+        equipos = Medidor.objects.select_related('entregado_a', 'estado_inventario', 'cliente', 'en_custodia_de', 'ubicacion_actual')
         tipo_nombre = 'MEDIDORES'
         nombre_seccion = 'Medidores'
     elif tipo == 'sim':
-        equipos = SimCard.objects.all()
+        equipos = SimCard.objects.select_related('estado_inventario', 'cliente', 'medidor', 'ubicacion_actual', 'en_custodia_de')
         tipo_nombre = 'SIM'
         nombre_seccion = 'SIM-Cards'
     elif tipo == 'modem':
-        equipos = Modem.objects.all()
+        equipos = Modem.objects.select_related('cliente', 'medidor', 'entregado_a', 'estado_inventario', 'en_custodia_de', 'ubicacion_actual')
         tipo_nombre = 'MODEMS'
         nombre_seccion = 'Modems'
     else:
-        equipos = Medidor.objects.all()
+        equipos = Medidor.objects.select_related('entregado_a', 'estado_inventario', 'cliente', 'en_custodia_de', 'ubicacion_actual')
         tipo_nombre = 'MEDIDORES'
         nombre_seccion = 'Medidores'
     
@@ -1507,14 +1508,19 @@ def inventario_exportar_view(request):
         equipos = equipos[:limit]
     
     # Generar archivo Excel
-    wb = exportar_equipos_excel(equipos, tipo_nombre)
+    if modo == 'completo':
+        wb = exportar_equipos_excel_completo(equipos, tipo_nombre)
+        sufijo_archivo = 'completo'
+    else:
+        wb = exportar_equipos_excel(equipos, tipo_nombre)
+        sufijo_archivo = 'resumen'
     
     # Preparar respuesta HTTP
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
     timestamp = datetime.now().strftime("%d-%m-%Y")
-    response['Content-Disposition'] = f'attachment; filename="{nombre_seccion}-{timestamp}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="{nombre_seccion}-{sufijo_archivo}-{timestamp}.xlsx"'
     
     wb.save(response)
     return response

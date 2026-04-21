@@ -31,6 +31,9 @@
                 <button type="button" class="btn btn-info" id="btnExportar">
                     <i class="bi bi-download"></i> Exportar Excel
                 </button>
+                <button type="button" class="btn btn-warning" id="btnExportarCompleto" title="Exportación temporal con todos los campos del inventario">
+                    <i class="bi bi-file-earmark-zip"></i> Exportar completo
+                </button>
                 <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAyudaFormato" title="Ver formato de importación">
                     <i class="bi bi-info-circle"></i> Formato
                 </button>
@@ -287,6 +290,14 @@
                 <div class="card-footer bg-white">
                     <nav aria-label="Paginación inventario">
                         <ul class="pagination pagination-sm mb-0 justify-content-center">
+                            {% if page_obj.number == 1 %}
+                            <li class="page-item disabled"><span class="page-link">Inicio</span></li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page=1">Inicio</a>
+                            </li>
+                            {% endif %}
+
                             {% if page_obj.has_previous %}
                             <li class="page-item">
                                 <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
@@ -295,15 +306,31 @@
                             <li class="page-item disabled"><span class="page-link">Anterior</span></li>
                             {% endif %}
 
+                            {% if page_obj.number > 4 %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page=1">1</a>
+                            </li>
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+
                             {% for num in page_obj.paginator.page_range %}
-                                {% if num == page_obj.number %}
-                                <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                                {% elif num >= page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %}
-                                <li class="page-item">
-                                    <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ num }}">{{ num }}</a>
-                                </li>
+                                {% if num >= page_obj.number|add:'-2' and num <= page_obj.number|add:'2' %}
+                                    {% if num == page_obj.number %}
+                                    <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+                                    {% else %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ num }}">{{ num }}</a>
+                                    </li>
+                                    {% endif %}
                                 {% endif %}
                             {% endfor %}
+
+                            {% if page_obj.number|add:'3' < page_obj.paginator.num_pages %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.paginator.num_pages }}">{{ page_obj.paginator.num_pages }}</a>
+                            </li>
+                            {% endif %}
 
                             {% if page_obj.has_next %}
                             <li class="page-item">
@@ -311,6 +338,14 @@
                             </li>
                             {% else %}
                             <li class="page-item disabled"><span class="page-link">Siguiente</span></li>
+                            {% endif %}
+
+                            {% if page_obj.number == page_obj.paginator.num_pages %}
+                            <li class="page-item disabled"><span class="page-link">Fin</span></li>
+                            {% else %}
+                            <li class="page-item">
+                                <a class="page-link" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.paginator.num_pages }}">Fin</a>
+                            </li>
                             {% endif %}
                         </ul>
                     </nav>
@@ -1577,27 +1612,34 @@ if (formAgregarEquipo) {
 
 {% block extra_js %}
 <script>
-// Exportar Excel
-document.getElementById('btnExportar').addEventListener('click', function() {
+function construirUrlExportacionInventario(modo) {
     const url = new URL("{% url 'inventario_exportar' %}", window.location.origin);
     url.searchParams.append('tipo', '{{ tipo }}');
 
-    // Exportar según filtros visibles actuales
     const search = document.getElementById('tablaBuscar')?.value || '';
     const searchField = document.getElementById('tablaBuscarCampo')?.value || 'all';
-    const limit = document.getElementById('tablaLength')?.value || '25';
     const proyecto = document.getElementById('filtroProyecto')?.value || '';
     const caja = document.getElementById('filtroCaja')?.value || '';
     const tipoMedidor = document.getElementById('filtroTipoMedidor')?.value || '';
 
     if (search) url.searchParams.append('search', search);
     url.searchParams.append('search_field', searchField);
-    url.searchParams.append('limit', limit);
+    url.searchParams.append('limit', '-1');
+    url.searchParams.append('modo', modo);
     if (proyecto) url.searchParams.append('proyecto', proyecto);
     if (caja) url.searchParams.append('caja', caja);
     if (tipoMedidor) url.searchParams.append('tipo_medidor', tipoMedidor);
-    
-    window.location.href = url.toString();
+
+    return url;
+}
+
+// Exportar Excel
+document.getElementById('btnExportar').addEventListener('click', function() {
+    window.location.href = construirUrlExportacionInventario('resumen').toString();
+});
+
+document.getElementById('btnExportarCompleto').addEventListener('click', function() {
+    window.location.href = construirUrlExportacionInventario('completo').toString();
 });
 
 // Importar Excel
