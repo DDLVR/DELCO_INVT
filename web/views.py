@@ -206,10 +206,13 @@ def dashboard_view(request):
         'rol': rol,
         'usuario': request.user,
         'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
+        'moreapp_auto_refresh_seconds': int(getattr(settings, 'MOREAPP_AUTO_REFRESH_SECONDS', 300) or 300),
     }
     
     # ADMIN y ADMINISTRATIVO: Vista general de todo
     if rol in ['ADMIN', 'ADMINISTRATIVO']:
+        _ejecutar_autosync_moreapp_si_corresponde()
+
         # Órdenes retiradas del flujo web (fase de eliminación)
         context['total_ordenes'] = 0
         context['ordenes_pendientes'] = 0
@@ -2929,6 +2932,33 @@ def usuario_eliminar_view(request, pk):
 ROLES_REPORTES = ('ADMIN', 'ADMINISTRATIVO', 'SUPERVISOR')
 
 
+def _ejecutar_autosync_moreapp_si_corresponde():
+    """Ejecuta lectura automática MoreApp en intervalos para evitar depender solo del botón manual."""
+    if not getattr(settings, 'MOREAPP_AUTO_SYNC_ENABLED', True):
+        return
+
+    from django.core.cache import cache
+    from django.utils import timezone
+    from integraciones.reader import leer_carpetas
+
+    intervalo = int(getattr(settings, 'MOREAPP_AUTO_SYNC_INTERVAL_SECONDS', 300) or 300)
+    if intervalo < 30:
+        intervalo = 30
+
+    key = 'moreapp:last_auto_sync_ts'
+    ahora_ts = timezone.now().timestamp()
+    ultimo_ts = cache.get(key)
+    if ultimo_ts and (ahora_ts - float(ultimo_ts)) < intervalo:
+        return
+
+    # Throttle simple para evitar múltiples ejecuciones simultáneas entre requests.
+    cache.set(key, ahora_ts, timeout=intervalo)
+    try:
+        leer_carpetas()
+    except Exception:
+        logger.exception('Fallo en autosincronización MoreApp')
+
+
 def _categorias_advertencia_registro(registro):
     """Devuelve categorías de advertencia normalizadas para un registro MoreApp."""
     categorias = set()
@@ -3019,6 +3049,8 @@ def reportes_moreapp_list(request):
     if request.user.rol not in ROLES_REPORTES:
         messages.error(request, 'No tienes permiso para acceder a Reportes.')
         return redirect('dashboard')
+
+    _ejecutar_autosync_moreapp_si_corresponde()
 
     qs_base = IntegracionMoreApp.objects.all().order_by('-fecha_recepcion')
 
@@ -3112,6 +3144,7 @@ def reportes_moreapp_list(request):
         ).count(),
         'estados_choices': IntegracionMoreApp.ESTADO_CHOICES,
         'revision_choices': IntegracionMoreApp.ESTADO_REVISION_CHOICES,
+        'moreapp_auto_refresh_seconds': int(getattr(settings, 'MOREAPP_AUTO_REFRESH_SECONDS', 300) or 300),
         # Datos para gráficos
         'sinc_breakdown': list(
             IntegracionMoreApp.objects.values('estado_sincronizacion')
