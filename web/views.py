@@ -2977,6 +2977,62 @@ def _categorias_advertencia_registro(registro):
     return categorias
 
 
+def _fecha_desde_json_moreapp(registro):
+    """Obtiene fecha/hora preferente desde JSON MoreApp (campo `date`), con fallback seguro."""
+    datos_recibidos = registro.datos_recibidos if isinstance(registro.datos_recibidos, dict) else {}
+    bloque_data = datos_recibidos.get('data', {}) if isinstance(datos_recibidos, dict) else {}
+    bloque_meta = datos_recibidos.get('meta', {}) if isinstance(datos_recibidos, dict) else {}
+    datos_procesados = registro.datos_procesados if isinstance(registro.datos_procesados, dict) else {}
+
+    candidatas = [
+        str(datos_recibidos.get('date', '')).strip(),
+        str(bloque_data.get('date', '')).strip() if isinstance(bloque_data, dict) else '',
+        str(bloque_meta.get('registrationDate', '')).strip() if isinstance(bloque_meta, dict) else '',
+        str(datos_procesados.get('fecha_registro', '')).strip(),
+        str(bloque_data.get('fecha', '')).strip() if isinstance(bloque_data, dict) else '',
+        str(datos_procesados.get('fecha_trabajo', '')).strip(),
+    ]
+
+    from django.utils import timezone
+
+    primer_dt_sin_hora = None
+
+    for candidata in candidatas:
+        if not candidata:
+            continue
+
+        for valor in (candidata, candidata.replace('Z', '+00:00')):
+            try:
+                dt = datetime.fromisoformat(valor)
+                if timezone.is_naive(dt):
+                    dt = timezone.make_aware(dt, timezone.get_current_timezone())
+                else:
+                    dt = timezone.localtime(dt)
+
+                if dt.hour != 0 or dt.minute != 0 or dt.second != 0 or dt.microsecond != 0:
+                    return dt
+                if primer_dt_sin_hora is None:
+                    primer_dt_sin_hora = dt
+            except ValueError:
+                continue
+
+        for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d %H:%M', '%Y-%m-%d', '%d/%m/%Y %H:%M', '%d/%m/%Y'):
+            try:
+                dt = datetime.strptime(candidata, fmt)
+                dt = timezone.make_aware(dt, timezone.get_current_timezone())
+                if dt.hour != 0 or dt.minute != 0:
+                    return dt
+                if primer_dt_sin_hora is None:
+                    primer_dt_sin_hora = dt
+            except ValueError:
+                continue
+
+    if primer_dt_sin_hora is not None:
+        return primer_dt_sin_hora
+
+    return registro.fecha_recepcion
+
+
 def _calcular_adv_breakdown(model_class):
     """Cuenta registros con advertencia agrupados en 3 categorías operativas."""
     from django.db.models import Q as _Q
@@ -3096,6 +3152,7 @@ def reportes_moreapp_list(request):
         categorias_advertencia = _categorias_advertencia_registro(reg)
         reg.bloqueos_operativos = bloqueos
         reg.categorias_advertencia = categorias_advertencia
+        reg.fecha_visible = _fecha_desde_json_moreapp(reg)
         reg.tiene_bloqueo_operativo = len(bloqueos) > 0
         reg.bloqueo_operativo_preview = bloqueos[0]['motivo'] if bloqueos else ''
         if bloqueo == '1' and not reg.tiene_bloqueo_operativo:

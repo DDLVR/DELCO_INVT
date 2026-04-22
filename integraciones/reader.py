@@ -38,6 +38,42 @@ FORMULARIOS_SOPORTADOS = {
     'registro de medidores y telemetria v3': 'REGISTRO_MEDIDORES_TELEMETRIA_V3',
 }
 
+SYNC_STATE_FILENAME = '.moreapp_sync_state.json'
+
+
+def _cargar_estado_sync(base_dir: str) -> Dict[str, Any]:
+    """Carga el estado incremental desde disco; si no existe, retorna estructura vacía."""
+    path = os.path.join(base_dir, SYNC_STATE_FILENAME)
+    if not os.path.isfile(path):
+        return {'version': 1, 'forms': {}}
+
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            data = json.load(fh)
+        if not isinstance(data, dict):
+            return {'version': 1, 'forms': {}}
+        forms = data.get('forms')
+        if not isinstance(forms, dict):
+            forms = {}
+        return {'version': 1, 'forms': forms}
+    except Exception:
+        logger.exception('No se pudo leer estado incremental MoreApp; se usará escaneo completo')
+        return {'version': 1, 'forms': {}}
+
+
+def _guardar_estado_sync(base_dir: str, estado: Dict[str, Any]) -> None:
+    """Guarda el estado incremental de forma atómica."""
+    path = os.path.join(base_dir, SYNC_STATE_FILENAME)
+    tmp_path = f'{path}.tmp'
+    payload = {'version': 1, 'forms': estado.get('forms', {})}
+    with open(tmp_path, 'w', encoding='utf-8') as fh:
+        json.dump(payload, fh, ensure_ascii=True, indent=2)
+    os.replace(tmp_path, path)
+
+
+def _clave_estado_form(customer_id: str, form_name: str) -> str:
+    return f'{customer_id}/{form_name}'
+
 
 def _normalizar_texto(texto: Any) -> str:
     valor = str(texto or '').strip().lower().replace('_', ' ').replace('-', ' ')
@@ -1140,14 +1176,20 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
     from ordenes_trabajo.models import IntegracionMoreApp
 
     base = base_dir or getattr(settings, 'MOREAPP_REGISTROS_DIR', DEFAULT_REGISTROS_BASE)
+    incremental_enabled = bool(getattr(settings, 'MOREAPP_INCREMENTAL_SCAN_ENABLED', True)) and not dry_run
+    lookback = int(getattr(settings, 'MOREAPP_INCREMENTAL_LOOKBACK', 2) or 2)
+    if lookback < 0:
+        lookback = 0
 
     stats = {
         'base_dir': base,
+        'modo': 'incremental' if incremental_enabled else 'full',
         'nuevos': 0,
         'duplicados': 0,
         'alertas': 0,
         'errores': 0,
         'omitidos': 0,
+        'carpetas_revisadas': 0,
         'detalle': [],
     }
 
@@ -1155,6 +1197,8 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
         logger.warning('Directorio base no encontrado: %s', base)
         stats['detalle'].append({'error': f'Directorio no encontrado: {base}'})
         return stats
+
+    estado_sync = _cargar_estado_sync(base) if incremental_enabled else {'version': 1, 'forms': {}}
 
     # Recorrer: base / customerId / formName / correlativo /
     for customer_id in os.listdir(base):
@@ -1167,13 +1211,32 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
             if not os.path.isdir(form_path):
                 continue
 
-            for correlativo in sorted(os.listdir(form_path), key=lambda x: int(x) if x.isdigit() else 0):
+            clave_form = _clave_estado_form(customer_id, form_name)
+            ultimo_correlativo = None
+            if incremental_enabled:
+                info_form = estado_sync.get('forms', {}).get(clave_form, {})
+                if isinstance(info_form, dict):
+                    ultimo_correlativo = info_form.get('last_correlativo')
+
+            correlativos = sorted(os.listdir(form_path), key=lambda x: int(x) if x.isdigit() else 0)
+            if incremental_enabled and isinstance(ultimo_correlativo, int):
+                umbral = max(1, ultimo_correlativo - lookback + 1)
+                correlativos = [
+                    c for c in correlativos
+                    if (not c.isdigit()) or int(c) >= umbral
+                ]
+
+            max_exitoso_form = ultimo_correlativo if isinstance(ultimo_correlativo, int) else None
+
+            for correlativo in correlativos:
                 correlativo_path = os.path.join(form_path, correlativo)
                 json_path = os.path.join(correlativo_path, 'registration.json')
 
                 if not os.path.isfile(json_path):
                     stats['omitidos'] += 1
                     continue
+
+                stats['carpetas_revisadas'] += 1
 
                 resultado = _procesar_json(
                     json_path=json_path,
@@ -1192,9 +1255,24 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
                 elif resultado['resultado'] == 'error':
                     stats['errores'] += 1
 
+                if correlativo.isdigit() and resultado['resultado'] in ('nuevo', 'duplicado'):
+                    c_num = int(correlativo)
+                    max_exitoso_form = c_num if max_exitoso_form is None else max(max_exitoso_form, c_num)
+
+            if incremental_enabled and isinstance(max_exitoso_form, int):
+                estado_sync.setdefault('forms', {})[clave_form] = {
+                    'last_correlativo': max_exitoso_form,
+                }
+
+    if incremental_enabled:
+        try:
+            _guardar_estado_sync(base, estado_sync)
+        except Exception:
+            logger.exception('No se pudo guardar estado incremental MoreApp')
+
     logger.info(
-        'Lectura completada — nuevos=%d duplicados=%d alertas=%d errores=%d',
-        stats['nuevos'], stats['duplicados'], stats['alertas'], stats['errores'],
+        'Lectura completada (%s) — revisadas=%d nuevos=%d duplicados=%d alertas=%d errores=%d',
+        stats['modo'], stats['carpetas_revisadas'], stats['nuevos'], stats['duplicados'], stats['alertas'], stats['errores'],
     )
     return stats
 
