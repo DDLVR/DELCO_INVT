@@ -361,7 +361,7 @@
                     </div>
                 </div>
                 <div class="card-footer p-2">
-                    <a href="{% url 'pendientes_operativos' %}?estado=PENDIENTE" class="btn btn-sm btn-danger w-100">
+                    <a href="{% url 'reportes_moreapp_list' %}?revision=PENDIENTE" class="btn btn-sm btn-danger w-100">
                         <i class="bi bi-arrow-right-circle"></i> Revisar ahora
                     </a>
                 </div>
@@ -379,7 +379,7 @@
                     </div>
                 </div>
                 <div class="card-footer p-2">
-                    <a href="{% url 'pendientes_operativos' %}?estado=CON_ADVERTENCIA" class="btn btn-sm btn-warning w-100">
+                    <a href="{% url 'reportes_moreapp_list' %}?revision=CON_ADVERTENCIA" class="btn btn-sm btn-warning w-100">
                         <i class="bi bi-arrow-right-circle"></i> Ver advertencias
                     </a>
                 </div>
@@ -397,7 +397,7 @@
                     </div>
                 </div>
                 <div class="card-footer p-2">
-                    <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm btn-primary w-100">
+                    <a href="{% url 'reportes_moreapp_list' %}?revision=PENDIENTE" class="btn btn-sm btn-primary w-100">
                         <i class="bi bi-list-check"></i> Cola de pendientes
                     </a>
                 </div>
@@ -413,6 +413,13 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const autoRefreshSeconds = Number('{{ moreapp_auto_refresh_seconds|default:300 }}') || 300;
+    if (autoRefreshSeconds >= 60) {
+        window.setInterval(function() {
+            window.location.reload();
+        }, autoRefreshSeconds * 1000);
+    }
+
     const ESTADO_SYNC_LABELS = {
         'PROCESADO': 'Procesado',
         'ALERTA_REVISION': 'Alerta revisión',

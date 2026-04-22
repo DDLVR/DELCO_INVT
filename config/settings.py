@@ -192,6 +192,9 @@ SESSION_COOKIE_HTTPONLY = True
 
 # Modo de integracion MoreApp
 MOREAPP_WEBHOOK_REALTIME_ENABLED = os.getenv('MOREAPP_WEBHOOK_REALTIME_ENABLED', 'true').strip().lower() == 'true'
+MOREAPP_AUTO_SYNC_ENABLED = os.getenv('MOREAPP_AUTO_SYNC_ENABLED', 'true').strip().lower() == 'true'
+MOREAPP_AUTO_SYNC_INTERVAL_SECONDS = int(os.getenv('MOREAPP_AUTO_SYNC_INTERVAL_SECONDS', '300'))
+MOREAPP_AUTO_REFRESH_SECONDS = int(os.getenv('MOREAPP_AUTO_REFRESH_SECONDS', '300'))
 
 # Modulo de ordenes de trabajo (fase de desactivacion segura)
 ORDENES_TRABAJO_ENABLED = os.getenv('ORDENES_TRABAJO_ENABLED', 'false').strip().lower() == 'true'

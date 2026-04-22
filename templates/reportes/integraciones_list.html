@@ -222,7 +222,7 @@
               <th>Cliente</th>
               <th>Trabajo / Actividad</th>
               <th>Técnico</th>
-              <th>Fecha registro</th>
+              <th>Fecha carga BD</th>
               <th>Estado</th>
               <th>Revisión</th>
               <th>Alerta</th>
@@ -353,6 +353,13 @@
   ];
 
   document.addEventListener('DOMContentLoaded', function() {
+    const autoRefreshSeconds = Number('{{ moreapp_auto_refresh_seconds|default:300 }}') || 300;
+    if (autoRefreshSeconds >= 60) {
+      window.setInterval(function() {
+        window.location.reload();
+      }, autoRefreshSeconds * 1000);
+    }
+
     // Rotar chevron al expandir/colapsar
     const panelGraficos = document.getElementById('panelGraficos');
     if (panelGraficos) {
