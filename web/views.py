@@ -767,6 +767,47 @@ def inventario_list_view(request):
     page_obj = paginador.get_page(page_num)
     equipos = page_obj.object_list
 
+    # Compatibilidad: evitar que el template acceda a atributos que aun no existen
+    # en algunas bases/productivos donde no se aplicaron migraciones recientes.
+    if tipo != 'todos':
+        for equipo in equipos:
+            if tipo == 'medidor':
+                equipo.tecnico_display = (
+                    getattr(getattr(equipo, 'entregado_a', None), 'nombre_interno', '')
+                    or getattr(equipo, 'entregado_a_otro', '')
+                    or getattr(equipo, 'entregado_a_info', '')
+                    or ''
+                )
+                equipo.cliente_display = (
+                    getattr(getattr(equipo, 'cliente', None), 'numero_cliente', '')
+                    or getattr(equipo, 'cliente_otro', '')
+                    or ''
+                )
+            elif tipo == 'sim':
+                equipo.tecnico_display = (
+                    getattr(getattr(equipo, 'en_custodia_de', None), 'nombre_interno', '')
+                    or getattr(equipo, 'entregado_a_otro', '')
+                    or getattr(equipo, 'entregado_a_nombre', '')
+                    or ''
+                )
+                equipo.cliente_display = (
+                    getattr(getattr(equipo, 'cliente', None), 'numero_cliente', '')
+                    or getattr(equipo, 'cliente_otro', '')
+                    or ''
+                )
+            else:
+                equipo.tecnico_display = (
+                    getattr(getattr(equipo, 'entregado_a', None), 'nombre_interno', '')
+                    or getattr(equipo, 'entregado_a_otro', '')
+                    or getattr(equipo, 'tecnico_responsable', '')
+                    or ''
+                )
+                equipo.cliente_display = (
+                    getattr(getattr(equipo, 'cliente', None), 'numero_cliente', '')
+                    or getattr(equipo, 'cliente_otro', '')
+                    or ''
+                )
+
     query_params = request.GET.copy()
     query_params.pop('page', None)
     query_string = query_params.urlencode()
