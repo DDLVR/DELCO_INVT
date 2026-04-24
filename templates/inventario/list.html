@@ -271,7 +271,7 @@
                                 </td>
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
-                                <td>{{ equipo.entregado_a.nombre_interno|default:equipo.entregado_a_otro|default:"-" }}</td>
+                                <td>{{ equipo.tecnico_display|default:"-" }}</td>
                                 <td>{{ equipo.proyecto|default:"-" }}</td>
                                 {% elif tipo == 'sim' %}
                                 <td><strong>{{ equipo.imei|default:"-" }}</strong></td>
@@ -280,7 +280,7 @@
                                 <td>{{ equipo.direccion_ip|default:"-" }}</td>
                                 <td>{{ equipo.apn|default:"-" }}</td>
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
-                                <td>{{ equipo.en_custodia_de.nombre_interno|default:equipo.entregado_a_otro|default:equipo.entregado_a_nombre|default:"-" }}</td>
+                                <td>{{ equipo.tecnico_display|default:"-" }}</td>
                                 <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.proyecto|default:"-" }}</td>
                                 {% elif tipo == 'modem' %}
@@ -291,14 +291,14 @@
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.caja|default:"-" }}</td>
-                                <td>{{ equipo.entregado_a.nombre_interno|default:equipo.entregado_a_otro|default:equipo.tecnico_responsable|default:"-" }}</td>
+                                <td>{{ equipo.tecnico_display|default:"-" }}</td>
                                 {% endif %}
                                 <td>
                                     <span class="badge bg-{% if equipo.estado_inventario %}{% if equipo.estado_inventario.nombre == 'Instalado' %}success{% elif equipo.estado_inventario.nombre == 'En Trayecto' %}primary{% elif equipo.estado_inventario.nombre == 'Retirado' %}warning{% elif equipo.estado_inventario.nombre == 'En reparación' %}info{% elif equipo.estado_inventario.nombre == 'Dado de baja' %}danger{% elif equipo.estado_inventario.nombre == 'En peaje' %}dark{% else %}secondary{% endif %}{% else %}secondary{% endif %}">
                                         {% if tipo == 'todos' %}{{ equipo.estado_nombre|default:"-" }}{% else %}{{ equipo.estado_inventario.nombre|default:"-" }}{% endif %}
                                     </span>
                                 </td>
-                                <td>{% if tipo == 'todos' %}{{ equipo.cliente_numero|default:"-" }}{% else %}{{ equipo.cliente.numero_cliente|default:equipo.cliente_otro|default:"-" }}{% endif %}</td>
+                                <td>{% if tipo == 'todos' %}{{ equipo.cliente_numero|default:"-" }}{% else %}{{ equipo.cliente_display|default:"-" }}{% endif %}</td>
                                 {% if tipo == 'modem' %}
                                 <td>{{ equipo.proyecto|default:"-" }}</td>
                                 {% endif %}
