@@ -12,6 +12,7 @@ y detección de alertas de doble trabajo.
 import json
 import logging
 import os
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, Tuple, Optional
@@ -80,6 +81,63 @@ def _normalizar_texto(texto: Any) -> str:
     valor = unicodedata.normalize('NFKD', valor)
     valor = ''.join(c for c in valor if not unicodedata.combining(c))
     return ' '.join(valor.split())
+
+
+IDENTIFICADORES_DESCARTADOS = {
+    '',
+    '-',
+    '--',
+    'n a',
+    'na',
+    'n/d',
+    'nd',
+    'id',
+    'sin modem',
+    'sin modem ',
+    'sin modems',
+    'sin medidor',
+    'sin sim',
+    'robado',
+    'retirado',
+    'en base',
+    'no habia modem',
+    'no hay modem',
+    'prueba fco',
+    'teltonika',
+}
+
+
+def _limpiar_identificador_operativo(valor: Any, modo: str = 'general') -> str:
+    identificador = _as_text(valor)
+    if not identificador:
+        return ''
+
+    identificador = identificador.replace(',', ' ').strip()
+    if modo == 'ip':
+        identificador = re.sub(r'\s+', '', identificador)
+    else:
+        identificador = re.sub(r'\s+', ' ', identificador)
+    return identificador.strip()
+
+
+def _identificador_operativo_util(valor: Any, modo: str = 'general') -> str:
+    identificador = _limpiar_identificador_operativo(valor, modo=modo)
+    if not identificador:
+        return ''
+
+    normalizado = _normalizar_texto(identificador)
+    if normalizado in IDENTIFICADORES_DESCARTADOS or normalizado.startswith('sin '):
+        return ''
+
+    if modo == 'ip':
+        if not re.fullmatch(r'[0-9.]+', identificador):
+            return ''
+        if identificador.count('.') < 3:
+            return ''
+    elif not any(ch.isdigit() for ch in identificador):
+        return ''
+
+    return identificador
 
 
 def _as_text(valor: Any) -> str:
@@ -378,24 +436,17 @@ def _validar_reglas_operativas_previas(
     """Reglas operativas antes de aceptar cambios de estado/custodia."""
     identificador = _identificador_equipo(equipo, tipo_equipo)
 
-    # Regla 1: no instalar sin custodio previo ni ubicación válida.
+    # Regla 1: permitir instalar si existe trazabilidad mínima previa
+    # por custodio o por ubicación actual válida en inventario.
     if _es_estado_instalado(estado_obj):
-        if not _tiene_custodio_previo(equipo, tipo_equipo):
+        tiene_custodio = _tiene_custodio_previo(equipo, tipo_equipo)
+        ubicacion_valida = _ubicacion_valida_preinstalacion(equipo)
+        if not tiene_custodio and not ubicacion_valida:
             _registrar_bloqueo_operativo(
                 registro,
                 tipo_equipo,
                 identificador,
-                'No se puede instalar sin custodio previo (entregado/en custodia).',
-                contexto=observacion,
-                registrar_pendiente=registrar_pendiente,
-            )
-            return False
-        if not _ubicacion_valida_preinstalacion(equipo):
-            _registrar_bloqueo_operativo(
-                registro,
-                tipo_equipo,
-                identificador,
-                'No se puede instalar desde una ubicación actual inválida o vacía.',
+                'No se puede instalar sin trazabilidad previa: sin custodio y sin ubicación válida.',
                 contexto=observacion,
                 registrar_pendiente=registrar_pendiente,
             )
@@ -547,17 +598,26 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         ['cliente', 'cliente1', 'numero cliente', 'num cliente', 'id cliente'],
     ) or '')
 
-    medidor_serie = _as_text(datos_norm.get('serial_number') or _valor_campo_fuentes(
+    medidor_serie = _identificador_operativo_util(datos_norm.get('serial_number') or _valor_campo_fuentes(
         fuentes,
         ['medidor', 'serie medidor', 'n serie medidor', 'numero medidor', 'serie', 'medidorsc4i'],
     ) or '')
-    medidor_activo_serie = _as_text(datos_norm.get('medidor_activo_numero'))
-    medidor_dejado_serie = _as_text(datos_norm.get('medidor_dejado_numero'))
-    modem_encontrado_serie = _as_text(datos_norm.get('modem_encontrado'))
-    modem_dejado_serie = _as_text(datos_norm.get('modem_dejado') or datos_norm.get('modem_numero'))
-    modem_serie = modem_dejado_serie or modem_encontrado_serie or _as_text(_valor_campo_fuentes(fuentes, ['serie modem', 'modem serie', 'numero modem']))
-    sim_ip = _as_text(datos_norm.get('ip_dejada') or _valor_campo_fuentes(fuentes, ['ip dejada', 'ip', 'direccion ip']))
-    puerto_dejado = _as_text(datos_norm.get('puerto_dejado') or _valor_campo_fuentes(fuentes, ['puerto dejado', 'puerto']))
+    medidor_activo_serie = _identificador_operativo_util(datos_norm.get('medidor_activo_numero'))
+    medidor_dejado_serie = _identificador_operativo_util(datos_norm.get('medidor_dejado_numero'))
+    modem_encontrado_serie = _identificador_operativo_util(datos_norm.get('modem_encontrado'))
+    modem_dejado_serie = _identificador_operativo_util(datos_norm.get('modem_dejado') or datos_norm.get('modem_numero'))
+    modem_serie = (
+        modem_dejado_serie
+        or modem_encontrado_serie
+        or _identificador_operativo_util(_valor_campo_fuentes(fuentes, ['serie modem', 'modem serie', 'numero modem']))
+    )
+    sim_ip = _identificador_operativo_util(
+        datos_norm.get('ip_dejada') or _valor_campo_fuentes(fuentes, ['ip dejada', 'ip', 'direccion ip']),
+        modo='ip',
+    )
+    puerto_dejado = _limpiar_identificador_operativo(
+        datos_norm.get('puerto_dejado') or _valor_campo_fuentes(fuentes, ['puerto dejado', 'puerto'])
+    )
 
     cliente_obj = None
     if cliente_codigo:
@@ -587,7 +647,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
     }
 
     def _agregar_pendiente(tipo_equipo: str, identificador: str, motivo: str):
-        ident = _as_text(identificador)
+        modo = 'ip' if tipo_equipo == 'SIM' and 'ip' in _normalizar_texto(motivo) else 'general'
+        ident = _identificador_operativo_util(identificador, modo=modo)
         if not ident:
             return
         resumen['pendientes_revision'].append({
@@ -614,16 +675,29 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             registro.actualizo_cliente = True
 
     def _buscar_medidor(serie):
+        serie = _identificador_operativo_util(serie)
         if not serie:
             return None
         return Medidor.objects.filter(serie__iexact=serie).first()
 
-    def _buscar_modem_por_serie(serie):
+    def _buscar_modem(serie):
+        serie = _identificador_operativo_util(serie)
         if not serie:
             return None
-        return Modem.objects.filter(serie__iexact=serie).first()
+        modem = Modem.objects.filter(serie__iexact=serie).first()
+        if modem:
+            return modem
+
+        serie_compacta = _limpiar_identificador_operativo(serie)
+        if serie_compacta and serie_compacta != serie:
+            modem = Modem.objects.filter(serie__iexact=serie_compacta).first()
+            if modem:
+                return modem
+
+        return Modem.objects.filter(imei__iexact=serie_compacta or serie).first()
 
     def _buscar_sim_por_ip(ip):
+        ip = _identificador_operativo_util(ip, modo='ip')
         if not ip:
             return None
         sim = SimCard.objects.filter(direccion_ip__iexact=ip).first()
@@ -677,7 +751,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         elif medidor_dejado_serie:
             _agregar_pendiente('MEDIDOR', medidor_dejado_serie, 'Serie de medidor dejado no encontrada en inventario')
 
-        modem_instalado = _buscar_modem_por_serie(modem_dejado_serie)
+        modem_instalado = _buscar_modem(modem_dejado_serie)
         if modem_instalado:
             resumen['modem_encontrado'] = True
             actualizado = _actualizar_equipo_operativo(
@@ -744,7 +818,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
 
     modem_encontrado = None
     if formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3' and modem_encontrado_serie and modem_dejado_serie:
-        modem_retirado = _buscar_modem_por_serie(modem_encontrado_serie)
+        modem_retirado = _buscar_modem(modem_encontrado_serie)
         if modem_retirado:
             resumen['modem_encontrado'] = True
             actualizado = _actualizar_equipo_operativo(
@@ -764,7 +838,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             _agregar_pendiente('MODEM', modem_encontrado_serie, 'Serie de módem encontrado (retiro) no existe en inventario')
 
     if modem_serie:
-        modem_encontrado = _buscar_modem_por_serie(modem_serie)
+        modem_encontrado = _buscar_modem(modem_serie)
     if modem_encontrado:
         resumen['modem_encontrado'] = True
         estado_modem = estado_obj

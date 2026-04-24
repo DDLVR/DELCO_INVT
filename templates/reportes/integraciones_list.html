@@ -244,7 +244,7 @@
                 {% endif %}
               </td>
               <td class="small">{{ d.actividad|default:d.trabajo|default:"—" }}</td>
-              <td class="small">{{ d.tecnico_responsable|default:"—" }}</td>
+              <td class="small">{{ reg.tecnico_visible|default:"—" }}</td>
               <td class="small text-nowrap">{{ reg.fecha_visible|date:"d/m/Y H:i" }}</td>
               <td>
                 {% if reg.estado_sincronizacion == 'PROCESADO' %}
