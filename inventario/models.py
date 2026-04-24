@@ -99,6 +99,12 @@ class Medidor(models.Model):
         related_name='medidores_entregados',
         help_text='Usuario a quien se entregó (editable)'
     )
+    entregado_a_otro = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Responsable manual cuando no existe como usuario'
+    )
     estado_inventario = models.ForeignKey(
         EstadoInventario,
         on_delete=models.PROTECT,
@@ -114,6 +120,12 @@ class Medidor(models.Model):
         blank=True,
         related_name='medidores_asignados',
         help_text='Cliente (editable)'
+    )
+    cliente_otro = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Cliente manual cuando no existe en la base'
     )
     proyecto = models.CharField(
         max_length=255,
@@ -238,6 +250,12 @@ class SimCard(models.Model):
         related_name='simcards_asignadas',
         help_text='Cliente al que está asignada la SIM'
     )
+    cliente_otro = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Cliente manual cuando no existe en la base'
+    )
     
     medidor = models.ForeignKey(
         'inventario.Medidor',
@@ -246,6 +264,18 @@ class SimCard(models.Model):
         blank=True,
         related_name='simcards_asociadas',
         help_text='Medidor asociado a esta SIM'
+    )
+    medidor_otro = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text='Número de medidor manual cuando no existe en la base'
+    )
+    entregado_a_otro = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Responsable manual cuando no existe como usuario'
     )
     proyecto = models.CharField(
         max_length=255,
@@ -386,6 +416,12 @@ class Modem(models.Model):
         related_name='modems_asignados',
         help_text='Cliente al que está asignado el módem'
     )
+    cliente_otro = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Cliente manual cuando no existe en la base'
+    )
     
     medidor = models.ForeignKey(
         'inventario.Medidor',
@@ -394,6 +430,12 @@ class Modem(models.Model):
         blank=True,
         related_name='modems_asociados',
         help_text='Medidor asociado a este módem'
+    )
+    medidor_otro = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text='Número de medidor manual cuando no existe en la base'
     )
     
     observaciones = models.TextField(
@@ -471,6 +513,12 @@ class Modem(models.Model):
         blank=True,
         related_name='modems_entregados',
         help_text='Usuario a quien se entregó (legacy - usar tecnico_responsable)'
+    )
+    entregado_a_otro = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Responsable manual cuando no existe como usuario'
     )
     
     estado_inventario = models.ForeignKey(

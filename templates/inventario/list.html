@@ -14,9 +14,22 @@
                     <span class="badge bg-secondary">Directos: {{ total_medidores_directos }}</span>
                     <span class="badge bg-primary">Indirectos: {{ total_medidores_indirectos }}</span>
                 </div>
+                {% elif tipo == 'todos' %}
+                <div class="text-muted small">Vista consolidada de medidores, SIM y módems en una sola lista.</div>
                 {% endif %}
             </div>
             <div class="btn-group" role="group">
+                {% if tipo == 'todos' %}
+                <a href="{% url 'inventario_list' %}?tipo=medidor" class="btn btn-outline-primary">
+                    <i class="bi bi-speedometer2"></i> Gestionar medidores
+                </a>
+                <a href="{% url 'inventario_list' %}?tipo=sim" class="btn btn-outline-info">
+                    <i class="bi bi-sim"></i> Gestionar SIM
+                </a>
+                <a href="{% url 'inventario_list' %}?tipo=modem" class="btn btn-outline-secondary">
+                    <i class="bi bi-router"></i> Gestionar módems
+                </a>
+                {% else %}
                 {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarEquipo">
                     <i class="bi bi-plus-circle"></i> Agregar equipo
@@ -37,6 +50,7 @@
                 <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAyudaFormato" title="Ver formato de importación">
                     <i class="bi bi-info-circle"></i> Formato
                 </button>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -89,7 +103,15 @@
                             <label for="tablaBuscarCampo" class="form-label mb-1">Buscar en</label>
                             <select id="tablaBuscarCampo" name="campo" class="form-select form-select-sm">
                                 <option value="all" {% if campo_busqueda == 'all' %}selected{% endif %}>Todos los campos</option>
-                                {% if tipo == 'medidor' %}
+                                {% if tipo == 'todos' %}
+                                <option value="tipo" {% if campo_busqueda == 'tipo' %}selected{% endif %}>Tipo</option>
+                                <option value="identificador" {% if campo_busqueda == 'identificador' %}selected{% endif %}>Identificador</option>
+                                <option value="descripcion" {% if campo_busqueda == 'descripcion' %}selected{% endif %}>Descripción</option>
+                                <option value="tecnico" {% if campo_busqueda == 'tecnico' %}selected{% endif %}>Técnico</option>
+                                <option value="estado" {% if campo_busqueda == 'estado' %}selected{% endif %}>Estado</option>
+                                <option value="cliente" {% if campo_busqueda == 'cliente' %}selected{% endif %}>Cliente</option>
+                                <option value="proyecto" {% if campo_busqueda == 'proyecto' %}selected{% endif %}>Proyecto</option>
+                                {% elif tipo == 'medidor' %}
                                 <option value="serie" {% if campo_busqueda == 'serie' %}selected{% endif %}>Serie</option>
                                 <option value="marca" {% if campo_busqueda == 'marca' %}selected{% endif %}>Marca</option>
                                 <option value="caja" {% if campo_busqueda == 'caja' %}selected{% endif %}>Caja</option>
@@ -134,7 +156,7 @@
                                 {% endfor %}
                             </select>
                         </div>
-                        {% if tipo == 'medidor' %}
+                        {% if tipo == 'medidor' or tipo == 'todos' %}
                         <div class="col-md-2">
                             <label for="filtroTipoMedidor" class="form-label mb-1">Tipo Medidor</label>
                             <select id="filtroTipoMedidor" name="tipo_medidor" class="form-select form-select-sm">
@@ -172,7 +194,14 @@
                         <thead class="table-dark">
                             <tr>
                                 <th>#</th>
-                                {% if tipo == 'medidor' %}
+                                {% if tipo == 'todos' %}
+                                <th>Tipo</th>
+                                <th>Identificador</th>
+                                <th>Descripción</th>
+                                <th>Técnico</th>
+                                <th>Proyecto</th>
+                                <th>Fecha Recepción</th>
+                                {% elif tipo == 'medidor' %}
                                 <th>Serie</th>
                                 <th>Marca</th>
                                 <th>Caja</th>
@@ -219,7 +248,18 @@
                             {% for equipo in equipos %}
                             <tr>
                                 <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
-                                {% if tipo == 'medidor' %}
+                                {% if tipo == 'todos' %}
+                                <td>
+                                    <span class="badge {% if equipo.tipo == 'medidor' %}bg-primary{% elif equipo.tipo == 'sim' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                                        {{ equipo.tipo_label }}
+                                    </span>
+                                </td>
+                                <td><strong>{{ equipo.identificador|default:"-" }}</strong></td>
+                                <td>{{ equipo.descripcion|default:"-" }}</td>
+                                <td>{{ equipo.tecnico_display|default:"-" }}</td>
+                                <td>{{ equipo.proyecto|default:"-" }}</td>
+                                <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
+                                {% elif tipo == 'medidor' %}
                                 <td>{{ equipo.serie }}</td>
                                 <td>{{ equipo.marca|default:"-" }}</td>
                                 <td>{{ equipo.caja|default:"-" }}</td>
@@ -231,7 +271,7 @@
                                 </td>
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
-                                <td>{{ equipo.entregado_a.nombre_interno|default:"-" }}</td>
+                                <td>{{ equipo.entregado_a.nombre_interno|default:equipo.entregado_a_otro|default:"-" }}</td>
                                 <td>{{ equipo.proyecto|default:"-" }}</td>
                                 {% elif tipo == 'sim' %}
                                 <td><strong>{{ equipo.imei|default:"-" }}</strong></td>
@@ -240,7 +280,7 @@
                                 <td>{{ equipo.direccion_ip|default:"-" }}</td>
                                 <td>{{ equipo.apn|default:"-" }}</td>
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
-                                <td>{{ equipo.entregado_a_nombre|default:"-" }}</td>
+                                <td>{{ equipo.en_custodia_de.nombre_interno|default:equipo.entregado_a_otro|default:equipo.entregado_a_nombre|default:"-" }}</td>
                                 <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.proyecto|default:"-" }}</td>
                                 {% elif tipo == 'modem' %}
@@ -251,20 +291,20 @@
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
                                 <td>{{ equipo.caja|default:"-" }}</td>
-                                <td>{{ equipo.tecnico_responsable|default:"-" }}</td>
+                                <td>{{ equipo.entregado_a.nombre_interno|default:equipo.entregado_a_otro|default:equipo.tecnico_responsable|default:"-" }}</td>
                                 {% endif %}
                                 <td>
-                                    <span class="badge bg-{% if equipo.estado_inventario %}{% if equipo.estado_inventario.nombre == 'Instalado' %}success{% elif equipo.estado_inventario.nombre == 'Retirado' %}warning{% elif equipo.estado_inventario.nombre == 'En reparación' %}info{% elif equipo.estado_inventario.nombre == 'Dado de baja' %}danger{% elif equipo.estado_inventario.nombre == 'En peaje' %}dark{% else %}secondary{% endif %}{% else %}secondary{% endif %}">
-                                        {{ equipo.estado_inventario.nombre|default:"-" }}
+                                    <span class="badge bg-{% if equipo.estado_inventario %}{% if equipo.estado_inventario.nombre == 'Instalado' %}success{% elif equipo.estado_inventario.nombre == 'En Trayecto' %}primary{% elif equipo.estado_inventario.nombre == 'Retirado' %}warning{% elif equipo.estado_inventario.nombre == 'En reparación' %}info{% elif equipo.estado_inventario.nombre == 'Dado de baja' %}danger{% elif equipo.estado_inventario.nombre == 'En peaje' %}dark{% else %}secondary{% endif %}{% else %}secondary{% endif %}">
+                                        {% if tipo == 'todos' %}{{ equipo.estado_nombre|default:"-" }}{% else %}{{ equipo.estado_inventario.nombre|default:"-" }}{% endif %}
                                     </span>
                                 </td>
-                                <td>{{ equipo.cliente.numero_cliente|default:"-" }}</td>
+                                <td>{% if tipo == 'todos' %}{{ equipo.cliente_numero|default:"-" }}{% else %}{{ equipo.cliente.numero_cliente|default:equipo.cliente_otro|default:"-" }}{% endif %}</td>
                                 {% if tipo == 'modem' %}
                                 <td>{{ equipo.proyecto|default:"-" }}</td>
                                 {% endif %}
                                 {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
                                 <td class="text-center">
-                                    <input type="checkbox" class="equipo-checkbox" value="{{ equipo.id }}" data-tipo="{{ tipo }}">
+                                    <input type="checkbox" class="equipo-checkbox" value="{{ equipo.id }}" data-tipo="{% if tipo == 'todos' %}{{ equipo.tipo }}{% else %}{{ tipo }}{% endif %}">
                                 </td>
                                 {% endif %}
                                 <td>
@@ -272,13 +312,13 @@
                                             data-bs-toggle="modal" 
                                             data-bs-target="#modalModificar"
                                             data-equipo-id="{{ equipo.id }}"
-                                            data-equipo-tipo="{{ tipo }}">
+                                            data-equipo-tipo="{% if tipo == 'todos' %}{{ equipo.tipo }}{% else %}{{ tipo }}{% endif %}">
                                         <i class="bi bi-pencil-square"></i> Modificar
                                     </button>
                                 </td>
                             {% empty %}
                             <tr>
-                                <td colspan="{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}{% if tipo == 'medidor' %}14{% elif tipo == 'sim' %}14{% else %}14{% endif %}{% else %}{% if tipo == 'medidor' %}13{% elif tipo == 'sim' %}13{% else %}13{% endif %}{% endif %}" class="text-center text-muted py-4">
+                                <td colspan="{% if tipo == 'todos' %}{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}11{% else %}10{% endif %}{% else %}{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}{% if tipo == 'medidor' %}14{% elif tipo == 'sim' %}14{% else %}14{% endif %}{% else %}{% if tipo == 'medidor' %}13{% elif tipo == 'sim' %}13{% else %}13{% endif %}{% endif %}{% endif %}" class="text-center text-muted py-4">
                                     No hay equipos registrados
                                 </td>
                             </tr>
@@ -521,32 +561,57 @@
                     {% elif tipo == 'sim' %}
                     <div class="mb-3">
                         <label class="form-label">IMEI *</label>
-                        <input type="text" class="form-control" name="imei" required>
+                        <input type="text" class="form-control" name="imei" required placeholder="Ej: 123456789012345">
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Operador</label>
-                        <input type="text" class="form-control" name="operador">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Operador</label>
+                            <input type="text" class="form-control" name="operador" placeholder="Ej: ENTEL, CLARO">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Abonado</label>
+                            <input type="text" class="form-control" name="abonado" placeholder="Número abonado">
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Abonado</label>
-                        <input type="text" class="form-control" name="abonado">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Dirección IP</label>
+                            <input type="text" class="form-control" name="direccion_ip" placeholder="Ej: 192.168.1.1">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">APN</label>
+                            <input type="text" class="form-control" name="apn" placeholder="Ej: internet.entel.cl">
+                        </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
                         <input type="text" class="form-control" name="proyecto" placeholder="Proyecto asociado">
                     </div>
                     {% else %}
-                    <div class="mb-3">
-                        <label class="form-label">Serie *</label>
-                        <input type="text" class="form-control" name="serie" required>
+                    {# Módems #}
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Serie *</label>
+                            <input type="text" class="form-control" name="serie" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Caja</label>
+                            <input type="text" class="form-control" name="caja" placeholder="Nº de caja">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Marca</label>
+                            <input type="text" class="form-control" name="marca">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Modelo</label>
+                            <input type="text" class="form-control" name="modelo">
+                        </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Marca</label>
-                        <input type="text" class="form-control" name="marca">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Modelo</label>
-                        <input type="text" class="form-control" name="modelo">
+                        <label class="form-label">IMEI</label>
+                        <input type="text" class="form-control" name="imei" placeholder="Ej: 123456789012345">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
@@ -804,15 +869,25 @@
                                     <label for="entregadoA" class="form-label">Técnico/Entregado A</label>
                                     <select class="form-select" id="entregadoA" name="entregado_a">
                                         <option value="">-- Seleccionar técnico --</option>
+                                        <option value="CERTELEC">Certelec</option>
                                         {% for usuario in usuarios %}
                                         <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
                                 <div class="col-md-6 mb-3">
-                                    <label for="clienteTexto" class="form-label">Cliente (número)</label>
-                                    <input type="text" class="form-control" id="clienteTexto" name="cliente_texto" placeholder="Ej: 579549">
-                                    <small class="text-muted">Campo digitable. Se guarda por número de cliente.</small>
+                                    <label for="clienteMedidor" class="form-label">Cliente</label>
+                                    <select class="form-select selector-con-otro" id="clienteMedidor" name="cliente" data-otro-target="clienteMedidorOtroWrapper">
+                                        <option value="">-- Sin cliente --</option>
+                                        <option value="OTRO">Otro</option>
+                                        {% for cliente in clientes %}
+                                        <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="mt-2 d-none" id="clienteMedidorOtroWrapper">
+                                        <input type="text" class="form-control" id="clienteTexto" name="cliente_otro" placeholder="Ingrese cliente manual">
+                                        <small class="text-muted">Se guarda como texto, sin crear cliente en la base.</small>
+                                    </div>
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="medidorProyecto" class="form-label">Proyecto</label>
@@ -916,24 +991,37 @@
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <label for="simClienteTexto" class="form-label">
+                                        <label for="simCliente" class="form-label">
                                             <i class="bi bi-building"></i> 
-                                            Cliente (número)
+                                            Cliente
                                         </label>
-                                        <input type="text" class="form-control" id="simClienteTexto" name="cliente_texto" placeholder="Ej: 579549">
-                                        <small class="text-muted">Campo digitable. Aún sin lista de clientes.</small>
+                                        <select class="form-select selector-con-otro" id="simCliente" name="cliente" data-otro-target="simClienteOtroWrapper">
+                                            <option value="">-- Sin cliente --</option>
+                                            <option value="OTRO">Otro</option>
+                                            {% for cliente in clientes %}
+                                            <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <div class="mt-2 d-none" id="simClienteOtroWrapper">
+                                            <input type="text" class="form-control" id="simClienteTexto" name="cliente_otro" placeholder="Ingrese cliente manual">
+                                            <small class="text-muted">Se guarda como texto, sin crear cliente en la base.</small>
+                                        </div>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label for="simMedidor" class="form-label">
                                             <i class="bi bi-speedometer"></i> 
                                             Medidor
                                         </label>
-                                        <select class="form-select" id="simMedidor" name="medidor">
-                                            <option value="">-- Seleccionar medidor --</option>
+                                        <select class="form-select selector-con-otro" id="simMedidor" name="medidor" data-otro-target="simMedidorOtroWrapper">
+                                            <option value="">-- Sin medidor --</option>
+                                            <option value="OTRO">Otro</option>
                                             {% for medidor in medidores %}
                                             <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
                                             {% endfor %}
                                         </select>
+                                        <div class="mt-2 d-none" id="simMedidorOtroWrapper">
+                                            <input type="text" class="form-control" id="simMedidorOtro" name="medidor_otro" placeholder="Ingrese número de medidor manual">
+                                        </div>
                                         <small class="text-muted">Medidor asociado a esta SIM (opcional)</small>
                                     </div>
                                     <div class="col-md-6 mb-3">
@@ -943,6 +1031,7 @@
                                         </label>
                                         <select class="form-select" id="simEntregadoA" name="entregado_a_id">
                                             <option value="">-- Sin asignar --</option>
+                                            <option value="CERTELEC">Certelec</option>
                                             {% for usuario in usuarios %}
                                             <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
                                             {% endfor %}
@@ -1032,6 +1121,7 @@
                                         </label>
                                         <select class="form-select" id="modemEntregadoA" name="entregado_a_id">
                                             <option value="">-- Sin asignar --</option>
+                                            <option value="CERTELEC">Certelec</option>
                                             {% for usuario in usuarios %}
                                             <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
                                             {% endfor %}
@@ -1043,12 +1133,16 @@
                                             <i class="bi bi-building"></i> 
                                             Cliente
                                         </label>
-                                        <select class="form-select" id="modemCliente" name="cliente">
-                                            <option value="">-- Seleccionar cliente --</option>
+                                        <select class="form-select selector-con-otro" id="modemCliente" name="cliente" data-otro-target="modemClienteOtroWrapper">
+                                            <option value="">-- Sin cliente --</option>
+                                            <option value="OTRO">Otro</option>
                                             {% for cliente in clientes %}
                                             <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
                                             {% endfor %}
                                         </select>
+                                        <div class="mt-2 d-none" id="modemClienteOtroWrapper">
+                                            <input type="text" class="form-control" id="modemClienteOtro" name="cliente_otro" placeholder="Ingrese cliente manual">
+                                        </div>
                                     </div>
                                     <div class="col-md-6 mb-3">
                                         <label for="modemEstado" class="form-label">
@@ -1067,12 +1161,16 @@
                                             <i class="bi bi-speedometer"></i> 
                                             Medidor
                                         </label>
-                                        <select class="form-select" id="modemMedidor" name="medidor">
-                                            <option value="">-- Seleccionar medidor --</option>
+                                        <select class="form-select selector-con-otro" id="modemMedidor" name="medidor" data-otro-target="modemMedidorOtroWrapper">
+                                            <option value="">-- Sin medidor --</option>
+                                            <option value="OTRO">Otro</option>
                                             {% for medidor in medidores %}
                                             <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
                                             {% endfor %}
                                         </select>
+                                        <div class="mt-2 d-none" id="modemMedidorOtroWrapper">
+                                            <input type="text" class="form-control" id="modemMedidorOtro" name="medidor_otro" placeholder="Ingrese número de medidor manual">
+                                        </div>
                                         <small class="text-muted">Medidor asociado a este módem (opcional)</small>
                                     </div>
                                 </div>
@@ -1203,6 +1301,35 @@ function obtenerFechaHoy() {
     return `${year}-${mes}-${dia}`;
 }
 
+function actualizarCampoOtro(selectElement) {
+    if (!selectElement) {
+        return;
+    }
+    const wrapperId = selectElement.dataset.otroTarget;
+    if (!wrapperId) {
+        return;
+    }
+    const wrapper = document.getElementById(wrapperId);
+    if (!wrapper) {
+        return;
+    }
+    const mostrar = selectElement.value === 'OTRO';
+    wrapper.classList.toggle('d-none', !mostrar);
+    if (!mostrar) {
+        const input = wrapper.querySelector('input');
+        if (input) {
+            input.value = '';
+        }
+    }
+}
+
+document.querySelectorAll('.selector-con-otro').forEach(selectElement => {
+    selectElement.addEventListener('change', function() {
+        actualizarCampoOtro(this);
+    });
+    actualizarCampoOtro(selectElement);
+});
+
 // Mostrar/ocultar campos por tipo
 function mostrarCamposPorTipo(tipo) {
     const camposMedidorSoloEntrega = document.getElementById('camposMedidorSoloEntrega');
@@ -1270,8 +1397,10 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 // Cargar campos verdes (modificables)
                 const fechaEntregaSim = document.getElementById('simFechaEntrega');
                 const estadoSIM = document.getElementById('estadoSIM');
-                const clienteSIM = document.getElementById('simClienteTexto');
+                const clienteSIM = document.getElementById('simCliente');
+                const clienteSIMOtro = document.getElementById('simClienteTexto');
                 const medidorSIM = document.getElementById('simMedidor');
+                const medidorSIMOtro = document.getElementById('simMedidorOtro');
                 
                 if (fechaEntregaSim) {
                     fechaEntregaSim.value = equipoData.fecha_entrega || '';
@@ -1280,14 +1409,26 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                     estadoSIM.value = equipoData.estado_id;
                 }
                 if (clienteSIM) {
-                    clienteSIM.value = equipoData.cliente_numero || '';
+                    clienteSIM.value = equipoData.cliente_id || (equipoData.cliente_otro ? 'OTRO' : '');
+                    actualizarCampoOtro(clienteSIM);
+                }
+                if (clienteSIMOtro) {
+                    clienteSIMOtro.value = equipoData.cliente_otro || '';
                 }
                 if (medidorSIM && equipoData.medidor_id) {
                     medidorSIM.value = equipoData.medidor_id;
+                } else if (medidorSIM) {
+                    medidorSIM.value = equipoData.medidor_otro ? 'OTRO' : '';
+                }
+                if (medidorSIM) {
+                    actualizarCampoOtro(medidorSIM);
+                }
+                if (medidorSIMOtro) {
+                    medidorSIMOtro.value = equipoData.medidor_otro || '';
                 }
                 const simEntregadoA = document.getElementById('simEntregadoA');
-                if (simEntregadoA && equipoData.en_custodia_de_id) {
-                    simEntregadoA.value = equipoData.en_custodia_de_id;
+                if (simEntregadoA) {
+                    simEntregadoA.value = equipoData.entregado_a_valor || equipoData.en_custodia_de_id || '';
                 }
                 const simProyecto = document.getElementById('simProyecto');
                 if (simProyecto) {
@@ -1306,7 +1447,9 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 
                 // Cargar campos amarillos (modificables)
                 const clienteModem = document.getElementById('modemCliente');
+                const clienteModemOtro = document.getElementById('modemClienteOtro');
                 const medidorModem = document.getElementById('modemMedidor');
+                const medidorModemOtro = document.getElementById('modemMedidorOtro');
                 const modemIp = document.getElementById('modemIp');
                 const modemPuerto = document.getElementById('modemPuerto');
                 const modemMarcaSecundaria = document.getElementById('modemMarcaSecundaria');
@@ -1316,15 +1459,23 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 const modemIrregularidad = document.getElementById('modemIrregularidad');
                 const modemProyecto = document.getElementById('modemProyecto');
                 
-                if (clienteModem && equipoData.cliente_id) {
-                    clienteModem.value = equipoData.cliente_id;
+                if (clienteModem) {
+                    clienteModem.value = equipoData.cliente_id || (equipoData.cliente_otro ? 'OTRO' : '');
+                    actualizarCampoOtro(clienteModem);
+                }
+                if (clienteModemOtro) {
+                    clienteModemOtro.value = equipoData.cliente_otro || '';
                 }
                 const modemEntregadoA = document.getElementById('modemEntregadoA');
-                if (modemEntregadoA && equipoData.entregado_a_id) {
-                    modemEntregadoA.value = equipoData.entregado_a_id;
+                if (modemEntregadoA) {
+                    modemEntregadoA.value = equipoData.entregado_a_valor || equipoData.entregado_a_id || '';
                 }
-                if (medidorModem && equipoData.medidor_id) {
-                    medidorModem.value = equipoData.medidor_id;
+                if (medidorModem) {
+                    medidorModem.value = equipoData.medidor_id || (equipoData.medidor_otro ? 'OTRO' : '');
+                    actualizarCampoOtro(medidorModem);
+                }
+                if (medidorModemOtro) {
+                    medidorModemOtro.value = equipoData.medidor_otro || '';
                 }
                 const modemEstado = document.getElementById('modemEstado');
                 if (modemEstado && equipoData.estado_id) {
@@ -1343,6 +1494,7 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 const fechaInput = document.getElementById('fechaEntrega');
                 const estadoSelect = document.getElementById('estado');
                 const entregadoSelect = document.getElementById('entregadoA');
+                const clienteSelect = document.getElementById('clienteMedidor');
                 const clienteTexto = document.getElementById('clienteTexto');
 
                 // Campos solo lectura (planilla)
@@ -1370,11 +1522,15 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 if (estadoSelect && equipoData.estado_id) {
                     estadoSelect.value = equipoData.estado_id;
                 }
-                if (entregadoSelect && equipoData.entregado_a_id) {
-                    entregadoSelect.value = equipoData.entregado_a_id;
+                if (entregadoSelect) {
+                    entregadoSelect.value = equipoData.entregado_a_valor || equipoData.entregado_a_id || '';
+                }
+                if (clienteSelect) {
+                    clienteSelect.value = equipoData.cliente_id || (equipoData.cliente_otro ? 'OTRO' : '');
+                    actualizarCampoOtro(clienteSelect);
                 }
                 if (clienteTexto) {
-                    clienteTexto.value = equipoData.cliente_numero || '';
+                    clienteTexto.value = equipoData.cliente_otro || equipoData.cliente_numero || '';
                 }
                 const medidorProyecto = document.getElementById('medidorProyecto');
                 if (medidorProyecto) {
@@ -1416,6 +1572,7 @@ if (btnGuardar) {
             const fechaEntrega = document.getElementById('fechaEntrega').value;
             const estado = document.getElementById('estado').value;
             const entregadoA = document.getElementById('entregadoA').value;
+            const cliente = document.getElementById('clienteMedidor').value;
             const clienteTexto = document.getElementById('clienteTexto').value;
             const proyecto = document.getElementById('medidorProyecto')?.value || '';
             const tipoMedidor = document.getElementById('medidorTipoMedidor')?.value || '';
@@ -1428,26 +1585,33 @@ if (btnGuardar) {
             formData.append('fecha_entrega', fechaEntrega);
             formData.append('estado_medidor', estado);
             formData.append('entregado_a', entregadoA);
-            formData.append('cliente_texto', clienteTexto);
+            formData.append('cliente', cliente);
+            formData.append('cliente_otro', clienteTexto);
             formData.append('proyecto', proyecto);
             formData.append('tipo_medidor', tipoMedidor);
         } else if (tipo === 'sim') {
             const fechaEntrega = document.getElementById('simFechaEntrega').value;
             const estado = document.getElementById('estadoSIM').value;
-            const cliente = document.getElementById('simClienteTexto').value;
+            const cliente = document.getElementById('simCliente').value;
+            const clienteOtro = document.getElementById('simClienteTexto').value;
             const medidor = document.getElementById('simMedidor').value;
+            const medidorOtro = document.getElementById('simMedidorOtro').value;
             const proyecto = document.getElementById('simProyecto')?.value || '';
             const simEntregadoA = document.getElementById('simEntregadoA')?.value || '';
             
             formData.append('fecha_entrega', fechaEntrega);
             formData.append('estado_sim', estado);
-            formData.append('cliente_texto', cliente);
+            formData.append('cliente', cliente);
+            formData.append('cliente_otro', clienteOtro);
             formData.append('medidor', medidor);
+            formData.append('medidor_otro', medidorOtro);
             formData.append('proyecto', proyecto);
             formData.append('entregado_a_id', simEntregadoA);
         } else if (tipo === 'modem') {
             const cliente = document.getElementById('modemCliente').value;
+            const clienteOtro = document.getElementById('modemClienteOtro').value;
             const medidor = document.getElementById('modemMedidor').value;
+            const medidorOtro = document.getElementById('modemMedidorOtro').value;
             const modemEntregadoA = document.getElementById('modemEntregadoA')?.value || '';
             const ip = document.getElementById('modemIp').value;
             const puerto = document.getElementById('modemPuerto').value;
@@ -1460,7 +1624,9 @@ if (btnGuardar) {
             
             const estadoModem = document.getElementById('modemEstado').value;
             formData.append('cliente', cliente);
+            formData.append('cliente_otro', clienteOtro);
             formData.append('medidor', medidor);
+            formData.append('medidor_otro', medidorOtro);
             formData.append('entregado_a_id', modemEntregadoA);
             formData.append('estado_modem', estadoModem);
             formData.append('ip', ip);
@@ -1618,13 +1784,19 @@ function construirUrlExportacionInventario(modo) {
 }
 
 // Exportar Excel
-document.getElementById('btnExportar').addEventListener('click', function() {
-    window.location.href = construirUrlExportacionInventario('resumen').toString();
-});
+const btnExportar = document.getElementById('btnExportar');
+if (btnExportar) {
+    btnExportar.addEventListener('click', function() {
+        window.location.href = construirUrlExportacionInventario('resumen').toString();
+    });
+}
 
-document.getElementById('btnExportarCompleto').addEventListener('click', function() {
-    window.location.href = construirUrlExportacionInventario('completo').toString();
-});
+const btnExportarCompleto = document.getElementById('btnExportarCompleto');
+if (btnExportarCompleto) {
+    btnExportarCompleto.addEventListener('click', function() {
+        window.location.href = construirUrlExportacionInventario('completo').toString();
+    });
+}
 
 // Importar Excel
 document.getElementById('btnImportarSubmit').addEventListener('click', function() {

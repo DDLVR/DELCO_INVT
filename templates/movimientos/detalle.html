@@ -96,15 +96,15 @@
           <div class="row g-2 text-start">
             <div class="col-12">
               <i class="bi bi-speedometer text-primary me-2"></i>
-              <strong>Medidores:</strong> {{ items_medidores.count }}
+              <strong>Medidores:</strong> {{ items_medidores_count }}
             </div>
             <div class="col-12">
               <i class="bi bi-sim text-info me-2"></i>
-              <strong>SIM Cards:</strong> {{ items_sims.count }}
+              <strong>SIM Cards:</strong> {{ items_sims_count }}
             </div>
             <div class="col-12">
               <i class="bi bi-router text-secondary me-2"></i>
-              <strong>Módems:</strong> {{ items_modems.count }}
+              <strong>Módems:</strong> {{ items_modems_count }}
             </div>
           </div>
         </div>
@@ -112,138 +112,51 @@
     </div>
   </div>
 
-  <!-- Equipos involucrados (tabs) -->
+  <!-- Equipos involucrados -->
   <div class="card shadow-sm">
-    <div class="card-header py-2">
-      <ul class="nav nav-tabs card-header-tabs" role="tablist">
-        <li class="nav-item" role="presentation">
-          <button class="nav-link active small" id="tab-medidores" data-bs-toggle="tab"
-                  data-bs-target="#pane-medidores" type="button" role="tab">
-            <i class="bi bi-speedometer me-1"></i>Medidores
-            <span class="badge bg-primary ms-1">{{ items_medidores.count }}</span>
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link small" id="tab-sims" data-bs-toggle="tab"
-                  data-bs-target="#pane-sims" type="button" role="tab">
-            <i class="bi bi-sim me-1"></i>SIM Cards
-            <span class="badge bg-info text-dark ms-1">{{ items_sims.count }}</span>
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
-          <button class="nav-link small" id="tab-modems" data-bs-toggle="tab"
-                  data-bs-target="#pane-modems" type="button" role="tab">
-            <i class="bi bi-router me-1"></i>Módems
-            <span class="badge bg-secondary ms-1">{{ items_modems.count }}</span>
-          </button>
-        </li>
-      </ul>
+    <div class="card-header text-white small fw-semibold" style="background:linear-gradient(135deg,#19324d,#325d88);">
+      <i class="bi bi-diagram-3 me-1"></i> Equipos involucrados en el movimiento
     </div>
     <div class="card-body p-0">
-      <div class="tab-content">
-
-        <!-- Medidores -->
-        <div class="tab-pane fade show active" id="pane-medidores" role="tabpanel">
-          {% if items_medidores %}
-          <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>Serie</th><th>Marca</th><th>Modelo</th><th>Cliente</th><th>Estado</th><th class="text-end">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in items_medidores %}
-                <tr>
-                  <td class="small fw-semibold">{{ item.medidor.numero_serie }}</td>
-                  <td class="small">{{ item.medidor.marca|default:"—" }}</td>
-                  <td class="small">{{ item.medidor.modelo|default:"—" }}</td>
-                  <td class="small">{{ item.medidor.cliente.razon_social|default:"—" }}</td>
-                  <td class="small">{{ item.medidor.estado_inventario.nombre|default:"—" }}</td>
-                  <td class="text-end">
-                    <a href="{% url 'movimientos_historial_equipo' %}?tipo=MEDIDOR&id={{ item.medidor.id }}"
-                       class="btn btn-sm btn-outline-info py-0 px-2" title="Ver historial">
-                      <i class="bi bi-clock-history"></i>
-                    </a>
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          {% else %}
-          <p class="text-muted text-center py-4 mb-0"><i class="bi bi-inbox d-block fs-4 mb-1"></i>Sin medidores</p>
-          {% endif %}
-        </div>
-
-        <!-- SIM Cards -->
-        <div class="tab-pane fade" id="pane-sims" role="tabpanel">
-          {% if items_sims %}
-          <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>ICCID</th><th>Número</th><th>Operador</th><th>Estado</th><th class="text-end">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in items_sims %}
-                <tr>
-                  <td class="small fw-semibold">{{ item.simcard.iccid }}</td>
-                  <td class="small">{{ item.simcard.numero|default:"—" }}</td>
-                  <td class="small">{{ item.simcard.operador|default:"—" }}</td>
-                  <td class="small">{{ item.simcard.estado_inventario.nombre|default:"—" }}</td>
-                  <td class="text-end">
-                    <a href="{% url 'movimientos_historial_equipo' %}?tipo=SIM&id={{ item.simcard.id }}"
-                       class="btn btn-sm btn-outline-info py-0 px-2" title="Ver historial">
-                      <i class="bi bi-clock-history"></i>
-                    </a>
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          {% else %}
-          <p class="text-muted text-center py-4 mb-0"><i class="bi bi-inbox d-block fs-4 mb-1"></i>Sin SIM cards</p>
-          {% endif %}
-        </div>
-
-        <!-- Módems -->
-        <div class="tab-pane fade" id="pane-modems" role="tabpanel">
-          {% if items_modems %}
-          <div class="table-responsive">
-            <table class="table table-hover table-sm mb-0">
-              <thead class="table-light">
-                <tr>
-                  <th>IMEI</th><th>Marca</th><th>Modelo</th><th>Serie</th><th>Estado</th><th class="text-end">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in items_modems %}
-                <tr>
-                  <td class="small fw-semibold">{{ item.modem.imei }}</td>
-                  <td class="small">{{ item.modem.marca|default:"—" }}</td>
-                  <td class="small">{{ item.modem.modelo|default:"—" }}</td>
-                  <td class="small">{{ item.modem.serie|default:"—" }}</td>
-                  <td class="small">{{ item.modem.estado_inventario.nombre|default:"—" }}</td>
-                  <td class="text-end">
-                    <a href="{% url 'movimientos_historial_equipo' %}?tipo=MODEM&id={{ item.modem.id }}"
-                       class="btn btn-sm btn-outline-info py-0 px-2" title="Ver historial">
-                      <i class="bi bi-clock-history"></i>
-                    </a>
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          {% else %}
-          <p class="text-muted text-center py-4 mb-0"><i class="bi bi-inbox d-block fs-4 mb-1"></i>Sin módems</p>
-          {% endif %}
-        </div>
-
+      {% if items_detalle %}
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Tipo</th>
+              <th>Identificador</th>
+              <th>Descripción</th>
+              <th>Cliente</th>
+              <th>Estado</th>
+              <th class="text-end">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items_detalle %}
+            <tr>
+              <td class="small fw-semibold">{{ item.tipo }}</td>
+              <td class="small">{{ item.identificador|default:"—" }}</td>
+              <td class="small">{{ item.descripcion|default:"—" }}</td>
+              <td class="small">{{ item.cliente|default:"—" }}</td>
+              <td class="small">{{ item.estado|default:"—" }}</td>
+              <td class="text-end">
+                {% if item.historial_tipo and item.historial_id %}
+                <a href="{% url 'movimientos_historial_equipo' %}?tipo={{ item.historial_tipo }}&id={{ item.historial_id }}"
+                   class="btn btn-sm btn-outline-info py-0 px-2" title="Ver historial">
+                  <i class="bi bi-clock-history"></i>
+                </a>
+                {% else %}
+                <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
+      {% else %}
+      <p class="text-muted text-center py-4 mb-0"><i class="bi bi-inbox d-block fs-4 mb-1"></i>Sin equipos asociados</p>
+      {% endif %}
     </div>
   </div>
 

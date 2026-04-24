@@ -36,7 +36,7 @@
           {% if tipo_equipo == 'MEDIDOR' %}
           <ul class="list-unstyled small mb-0">
             <li class="mb-1"><span class="text-muted">Tipo:</span> <span class="badge bg-primary">Medidor</span></li>
-            <li class="mb-1"><span class="text-muted">Serie:</span> <strong>{{ equipo.numero_serie }}</strong></li>
+            <li class="mb-1"><span class="text-muted">Serie:</span> <strong>{{ equipo.serie }}</strong></li>
             <li class="mb-1"><span class="text-muted">Marca:</span> {{ equipo.marca|default:"—" }}</li>
             <li class="mb-1"><span class="text-muted">Modelo:</span> {{ equipo.modelo|default:"—" }}</li>
             <li class="mb-1"><span class="text-muted">Cliente:</span> {{ equipo.cliente.razon_social|default:"—" }}</li>
@@ -45,8 +45,8 @@
           {% elif tipo_equipo == 'SIM' %}
           <ul class="list-unstyled small mb-0">
             <li class="mb-1"><span class="text-muted">Tipo:</span> <span class="badge bg-info text-dark">SIM Card</span></li>
-            <li class="mb-1"><span class="text-muted">ICCID:</span> <strong>{{ equipo.iccid }}</strong></li>
-            <li class="mb-1"><span class="text-muted">Número:</span> {{ equipo.numero|default:"—" }}</li>
+            <li class="mb-1"><span class="text-muted">ICCID:</span> <strong>{{ equipo.imei|default:"—" }}</strong></li>
+            <li class="mb-1"><span class="text-muted">Número:</span> {{ equipo.abonado|default:"—" }}</li>
             <li class="mb-1"><span class="text-muted">Operador:</span> {{ equipo.operador|default:"—" }}</li>
             <li class="mb-1"><span class="text-muted">Estado:</span> {{ equipo.estado_inventario.nombre|default:"—" }}</li>
           </ul>
@@ -116,13 +116,22 @@
                         {% elif item.movimiento.tipo == 'RETIRO' %}<span class="badge bg-warning text-dark">{{ item.movimiento.get_tipo_display }}</span>
                         {% elif item.movimiento.tipo == 'DEVOLUCION' %}<span class="badge bg-danger">{{ item.movimiento.get_tipo_display }}</span>
                         {% elif item.movimiento.tipo == 'IMPORTACION' %}<span class="badge" style="background:#5b5bd6;">{{ item.movimiento.get_tipo_display }}</span>
+                        {% elif item.movimiento.tipo == 'MOREAPP' %}<span class="badge" style="background:#0891b2;">{{ item.movimiento.get_tipo_display }}</span>
                         {% else %}<span class="badge bg-secondary">{{ item.movimiento.get_tipo_display }}</span>{% endif %}
                         <span class="text-muted small ms-2"><i class="bi bi-calendar3 me-1"></i>{{ item.movimiento.fecha_hora|date:"d/m/Y H:i" }}</span>
                       </div>
-                      <a href="{% url 'movimientos_detalle' item.movimiento.id %}"
-                         class="btn btn-sm btn-outline-primary py-0 px-2" title="Ver detalle">
-                        <i class="bi bi-eye"></i>
-                      </a>
+                      <div class="d-flex gap-1">
+                        {% if item.reporte_moreapp %}
+                        <a href="{% url 'reportes_moreapp_detalle' item.reporte_moreapp.id %}"
+                           class="btn btn-sm btn-outline-info py-0 px-2" title="Ver reporte MoreApp asociado" target="_blank">
+                          <i class="bi bi-file-earmark-text"></i> Reporte
+                        </a>
+                        {% endif %}
+                        <a href="{% url 'movimientos_detalle' item.movimiento.id %}"
+                           class="btn btn-sm btn-outline-primary py-0 px-2" title="Ver detalle">
+                          <i class="bi bi-eye"></i>
+                        </a>
+                      </div>
                     </div>
                     <div class="row g-2 mt-1 small">
                       <div class="col-sm-4">
@@ -144,6 +153,34 @@
                       {% if item.movimiento.observacion %}
                       <div class="col-12 text-muted fst-italic">
                         {{ item.movimiento.observacion|truncatewords:20 }}
+                      </div>
+                      {% endif %}
+                      {% if item.reporte_moreapp %}
+                      <div class="col-12 mt-1">
+                        <div class="border rounded p-2 bg-white" style="border-color:#0891b2 !important;">
+                          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                            <div class="small">
+                              <i class="bi bi-link-45deg text-info me-1"></i>
+                              <strong>Reporte MoreApp asociado</strong>
+                              <span class="text-muted ms-1">— submission: {{ item.reporte_moreapp.moreapp_submission_id|truncatechars:16 }}</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                              {% if item.reporte_moreapp.estado_revision == 'REVISADO' %}
+                                <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Revisado</span>
+                              {% elif item.reporte_moreapp.estado_revision == 'CON_ADVERTENCIA' %}
+                                <span class="badge bg-warning text-dark"><i class="bi bi-exclamation-triangle me-1"></i>Con advertencia</span>
+                              {% elif item.reporte_moreapp.estado_revision == 'DESCARTADO' %}
+                                <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>Descartado</span>
+                              {% else %}
+                                <span class="badge bg-light text-dark border"><i class="bi bi-clock me-1"></i>Pendiente</span>
+                              {% endif %}
+                              <a href="{% url 'reportes_moreapp_detalle' item.reporte_moreapp.id %}"
+                                 class="btn btn-sm btn-info text-white py-0 px-2" target="_blank">
+                                <i class="bi bi-box-arrow-up-right me-1"></i>Ver reporte completo
+                              </a>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       {% endif %}
                     </div>

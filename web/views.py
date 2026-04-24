@@ -107,6 +107,14 @@ def _tipo_movimiento_desde_estado(estado_nombre):
     return 'ENTREGA'
 
 
+def _obtener_estado_inventario(nombre, descripcion=''):
+    estado, _ = EstadoInventario.objects.get_or_create(
+        nombre=nombre,
+        defaults={'descripcion': descripcion},
+    )
+    return estado
+
+
 def _registrar_movimiento_inventario(
     equipo,
     tipo_item,
@@ -481,11 +489,14 @@ def orden_crear_view(request):
 def inventario_list_view(request):
     """Listado de equipos en inventario con filtros"""
     from django.core.paginator import Paginator
+    from types import SimpleNamespace
     
     from usuarios.models import Usuario
     from clientes.models import Cliente
     
     tipo = request.GET.get('tipo', 'medidor')
+    if tipo == 'todos':
+        tipo = 'medidor'
     page_num = request.GET.get('page', '1')
     per_page_raw = request.GET.get('per_page', '100')
     busqueda = request.GET.get('q', '').strip()
@@ -505,6 +516,62 @@ def inventario_list_view(request):
     if per_page not in per_page_options:
         per_page = 100
     
+    def _equipo_contiene_valor(equipo_row, valor: str) -> bool:
+        return valor in ' '.join([
+            str(getattr(equipo_row, 'tipo_label', '') or ''),
+            str(getattr(equipo_row, 'identificador', '') or ''),
+            str(getattr(equipo_row, 'descripcion', '') or ''),
+            str(getattr(equipo_row, 'tecnico_display', '') or ''),
+            str(getattr(equipo_row, 'estado_nombre', '') or ''),
+            str(getattr(equipo_row, 'cliente_numero', '') or ''),
+            str(getattr(equipo_row, 'proyecto', '') or ''),
+        ]).lower()
+
+    def _normalizar_equipo(tipo_equipo, equipo):
+        if tipo_equipo == 'medidor':
+            return SimpleNamespace(
+                id=equipo.id,
+                tipo='medidor',
+                tipo_label='Medidor',
+                identificador=equipo.serie,
+                descripcion=' | '.join(filter(None, [equipo.marca, equipo.caja, equipo.get_tipo_medidor_display()])),
+                tecnico_display=getattr(getattr(equipo, 'entregado_a', None), 'nombre_interno', '') or getattr(equipo, 'entregado_a_otro', '') or '',
+                estado_nombre=getattr(getattr(equipo, 'estado_inventario', None), 'nombre', '') or '',
+                estado_inventario=getattr(equipo, 'estado_inventario', None),
+                cliente_numero=getattr(getattr(equipo, 'cliente', None), 'numero_cliente', '') or getattr(equipo, 'cliente_otro', '') or '',
+                proyecto=getattr(equipo, 'proyecto', '') or '',
+                fecha_recepcion=equipo.fecha_recepcion,
+            )
+
+        if tipo_equipo == 'sim':
+            return SimpleNamespace(
+                id=equipo.id,
+                tipo='sim',
+                tipo_label='SIM',
+                identificador=equipo.imei or '-',
+                descripcion=' | '.join(filter(None, [equipo.operador, equipo.abonado, equipo.direccion_ip, equipo.apn])),
+                tecnico_display=getattr(getattr(equipo, 'en_custodia_de', None), 'nombre_interno', '') or getattr(equipo, 'entregado_a_otro', '') or getattr(equipo, 'entregado_a_nombre', '') or '',
+                estado_nombre=getattr(getattr(equipo, 'estado_inventario', None), 'nombre', '') or '',
+                estado_inventario=getattr(equipo, 'estado_inventario', None),
+                cliente_numero=getattr(getattr(equipo, 'cliente', None), 'numero_cliente', '') or getattr(equipo, 'cliente_otro', '') or '',
+                proyecto=getattr(equipo, 'proyecto', '') or '',
+                fecha_recepcion=equipo.fecha_recepcion,
+            )
+
+        return SimpleNamespace(
+            id=equipo.id,
+            tipo='modem',
+            tipo_label='Módem',
+            identificador=equipo.serie,
+            descripcion=' | '.join(filter(None, [equipo.marca, equipo.modelo, equipo.imei, equipo.caja])),
+            tecnico_display=getattr(getattr(equipo, 'entregado_a', None), 'nombre_interno', '') or getattr(equipo, 'entregado_a_otro', '') or getattr(equipo, 'tecnico_responsable', '') or '',
+            estado_nombre=getattr(getattr(equipo, 'estado_inventario', None), 'nombre', '') or '',
+            estado_inventario=getattr(equipo, 'estado_inventario', None),
+            cliente_numero=getattr(getattr(equipo, 'cliente', None), 'numero_cliente', '') or getattr(equipo, 'cliente_otro', '') or '',
+            proyecto=getattr(equipo, 'proyecto', '') or '',
+            fecha_recepcion=equipo.fecha_recepcion,
+        )
+
     # Obtener datos base
     if tipo == 'medidor':
         equipos = Medidor.objects.select_related(
@@ -521,6 +588,17 @@ def inventario_list_view(request):
             'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
         ).all().order_by('-id')
         titulo = 'Módems'
+    elif tipo == 'todos':
+        medidores_qs = Medidor.objects.select_related(
+            'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
+        ).all().order_by('-id')
+        sims_qs = SimCard.objects.select_related(
+            'estado_inventario', 'ubicacion_actual', 'cliente', 'en_custodia_de', 'medidor'
+        ).all().order_by('-id')
+        modems_qs = Modem.objects.select_related(
+            'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
+        ).all().order_by('-id')
+        titulo = 'Inventario Consolidado'
     else:
         equipos = Medidor.objects.select_related(
             'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
@@ -533,18 +611,22 @@ def inventario_list_view(request):
         if tipo == 'sim':
             # SimCard usa 'en_custodia_de' en lugar de 'entregado_a'
             equipos = equipos.filter(en_custodia_de=request.user)
+        elif tipo == 'todos':
+            medidores_qs = medidores_qs.filter(entregado_a=request.user)
+            sims_qs = sims_qs.filter(en_custodia_de=request.user)
+            modems_qs = modems_qs.filter(entregado_a=request.user)
         else:
             # Medidor y Modem usan 'entregado_a'
             equipos = equipos.filter(entregado_a=request.user)
     
     # Aplicar filtros
-    if estado_filtro:
+    if estado_filtro and tipo != 'todos':
         equipos = equipos.filter(estado_inventario_id=estado_filtro)
     
-    if ubicacion_filtro:
+    if ubicacion_filtro and tipo != 'todos':
         equipos = equipos.filter(ubicacion_actual_id=ubicacion_filtro)
 
-    if proyecto_filtro:
+    if proyecto_filtro and tipo != 'todos':
         equipos = equipos.filter(proyecto__icontains=proyecto_filtro)
 
     if caja_filtro and tipo in ('medidor', 'modem'):
@@ -553,9 +635,57 @@ def inventario_list_view(request):
     if tipo == 'medidor' and tipo_medidor_filtro:
         equipos = equipos.filter(tipo_medidor=tipo_medidor_filtro)
 
+    if tipo == 'todos':
+        if estado_filtro:
+            medidores_qs = medidores_qs.filter(estado_inventario_id=estado_filtro)
+            sims_qs = sims_qs.filter(estado_inventario_id=estado_filtro)
+            modems_qs = modems_qs.filter(estado_inventario_id=estado_filtro)
+
+        if ubicacion_filtro:
+            medidores_qs = medidores_qs.filter(ubicacion_actual_id=ubicacion_filtro)
+            sims_qs = sims_qs.filter(ubicacion_actual_id=ubicacion_filtro)
+            modems_qs = modems_qs.filter(ubicacion_actual_id=ubicacion_filtro)
+
+        if proyecto_filtro:
+            medidores_qs = medidores_qs.filter(proyecto__icontains=proyecto_filtro)
+            sims_qs = sims_qs.filter(proyecto__icontains=proyecto_filtro)
+            modems_qs = modems_qs.filter(proyecto__icontains=proyecto_filtro)
+
+        if caja_filtro:
+            medidores_qs = medidores_qs.filter(caja__icontains=caja_filtro)
+            modems_qs = modems_qs.filter(caja__icontains=caja_filtro)
+
+        if tipo_medidor_filtro:
+            medidores_qs = medidores_qs.filter(tipo_medidor=tipo_medidor_filtro)
+
+        equipos = [
+            *(_normalizar_equipo('medidor', equipo) for equipo in medidores_qs),
+            *(_normalizar_equipo('sim', equipo) for equipo in sims_qs),
+            *(_normalizar_equipo('modem', equipo) for equipo in modems_qs),
+        ]
+        equipos.sort(key=lambda item: item.id, reverse=True)
+
     # Búsqueda global por servidor (evita filtrar solo el bloque cargado)
     if busqueda:
-        if tipo == 'medidor':
+        if tipo == 'todos':
+            filtro = busqueda.lower()
+            if campo_busqueda == 'tipo':
+                equipos = [equipo for equipo in equipos if filtro in (equipo.tipo_label or '').lower()]
+            elif campo_busqueda == 'identificador':
+                equipos = [equipo for equipo in equipos if filtro in (equipo.identificador or '').lower()]
+            elif campo_busqueda == 'descripcion':
+                equipos = [equipo for equipo in equipos if filtro in (equipo.descripcion or '').lower()]
+            elif campo_busqueda == 'tecnico':
+                equipos = [equipo for equipo in equipos if filtro in (equipo.tecnico_display or '').lower()]
+            elif campo_busqueda == 'estado':
+                equipos = [equipo for equipo in equipos if filtro in (equipo.estado_nombre or '').lower()]
+            elif campo_busqueda == 'cliente':
+                equipos = [equipo for equipo in equipos if filtro in (equipo.cliente_numero or '').lower()]
+            elif campo_busqueda == 'proyecto':
+                equipos = [equipo for equipo in equipos if filtro in (equipo.proyecto or '').lower()]
+            else:
+                equipos = [equipo for equipo in equipos if _equipo_contiene_valor(equipo, filtro)]
+        elif tipo == 'medidor':
             campos_por_tipo = {
                 'serie': 'serie__icontains',
                 'marca': 'marca__icontains',
@@ -632,7 +762,7 @@ def inventario_list_view(request):
                 query |= Q(**{lookup: busqueda})
             equipos = equipos.filter(query)
 
-    total_filtrado = equipos.count()
+    total_filtrado = len(equipos)
     paginador = Paginator(equipos, per_page)
     page_obj = paginador.get_page(page_num)
     equipos = page_obj.object_list
@@ -643,9 +773,9 @@ def inventario_list_view(request):
     
     # Obtener opciones para filtros (solo estados de negocio definidos)
     if tipo in ('medidor', 'modem'):
-        estados_permitidos = ['En bodega', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja', 'En peaje']
+        estados_permitidos = ['En bodega', 'En Trayecto', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja', 'En peaje']
     else:
-        estados_permitidos = ['En bodega', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja']
+        estados_permitidos = ['En bodega', 'En Trayecto', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja']
     estados_disponibles = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
     estados_disponibles.sort(key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99)
     ubicaciones_disponibles = Ubicacion.objects.all()
@@ -740,11 +870,14 @@ def inventario_obtener_datos_view(request, pk):
                 'fecha_recepcion': equipo.fecha_recepcion.strftime('%Y-%m-%d') if equipo.fecha_recepcion else '',
                 'entregado_a_nombre': getattr(equipo, 'entregado_a_nombre', '') or '',
                 'en_custodia_de_id': getattr(equipo, 'en_custodia_de_id', '') or '',
+                'entregado_a_valor': str(getattr(equipo, 'en_custodia_de_id', '') or '') or ('CERTELEC' if getattr(equipo, 'entregado_a_otro', '') == 'Certelec' else ''),
                 'fecha_entrega': equipo.fecha_entrega.strftime('%Y-%m-%d') if equipo.fecha_entrega else '',
                 'estado_id': getattr(equipo, 'estado_inventario_id', '') or '',
                 'cliente_id': getattr(equipo, 'cliente_id', '') or '',
                 'cliente_numero': equipo.cliente.numero_cliente if getattr(equipo, 'cliente', None) else '',
+                'cliente_otro': getattr(equipo, 'cliente_otro', '') or '',
                 'medidor_id': getattr(equipo, 'medidor_id', '') or '',
+                'medidor_otro': getattr(equipo, 'medidor_otro', '') or '',
                 'proyecto': getattr(equipo, 'proyecto', '') or '',
             }
         elif tipo == 'modem':
@@ -766,7 +899,9 @@ def inventario_obtener_datos_view(request, pk):
                 # AMARILLO (editables)
                 'estado_id': getattr(equipo, 'estado_inventario_id', '') or '',
                 'cliente_id': getattr(equipo, 'cliente_id', '') or '',
+                'cliente_otro': getattr(equipo, 'cliente_otro', '') or '',
                 'medidor_id': getattr(equipo, 'medidor_id', '') or '',
+                'medidor_otro': getattr(equipo, 'medidor_otro', '') or '',
                 'observaciones': getattr(equipo, 'observaciones', '') or '',
                 'marca_secundaria': getattr(equipo, 'marca_secundaria', '') or '',
                 'retirado': getattr(equipo, 'retirado', '') or '',
@@ -774,6 +909,7 @@ def inventario_obtener_datos_view(request, pk):
                 'irregularidad': getattr(equipo, 'irregularidad', '') or '',
                 'proyecto': getattr(equipo, 'proyecto', '') or '',
                 'entregado_a_id': getattr(equipo, 'entregado_a_id', '') or '',
+                'entregado_a_valor': str(getattr(equipo, 'entregado_a_id', '') or '') or ('CERTELEC' if getattr(equipo, 'entregado_a_otro', '') == 'Certelec' else ''),
             }
         else:
             # Para Medidor
@@ -789,9 +925,11 @@ def inventario_obtener_datos_view(request, pk):
                 'entregado_a_info': getattr(equipo, 'entregado_a_info', '') or '',
                 'observaciones': getattr(equipo, 'observaciones', '') or '',
                 'cliente_numero': equipo.cliente.numero_cliente if getattr(equipo, 'cliente', None) else '',
+                'cliente_otro': getattr(equipo, 'cliente_otro', '') or '',
                 'fecha_entrega': equipo.fecha_entrega.strftime('%Y-%m-%d') if equipo.fecha_entrega else '',
                 'estado_id': getattr(equipo, 'estado_inventario_id', '') or '',
                 'entregado_a_id': getattr(equipo, 'entregado_a_id', '') or '',
+                'entregado_a_valor': str(getattr(equipo, 'entregado_a_id', '') or '') or ('CERTELEC' if getattr(equipo, 'entregado_a_otro', '') == 'Certelec' else ''),
                 'cliente_id': getattr(equipo, 'cliente_id', '') or '',
                 'proyecto': getattr(equipo, 'proyecto', '') or '',
                 'tipo_medidor': getattr(equipo, 'tipo_medidor', '') or '',
@@ -852,13 +990,50 @@ def inventario_modificar_view(request, pk):
                         'message': 'No tienes permiso para modificar este equipo'
                     }, status=403)
 
+        def _resolver_cliente(valor_selector, valor_otro):
+            valor_selector = (valor_selector or '').strip()
+            valor_otro = (valor_otro or '').strip()
+            if valor_selector == 'OTRO':
+                return None, valor_otro
+            if valor_selector:
+                try:
+                    return Cliente.objects.get(pk=int(valor_selector)), ''
+                except (ValueError, TypeError, Cliente.DoesNotExist):
+                    return None, valor_otro
+            return None, valor_otro
+
+        def _resolver_medidor(valor_selector, valor_otro):
+            valor_selector = (valor_selector or '').strip()
+            valor_otro = (valor_otro or '').strip()
+            if valor_selector == 'OTRO':
+                return None, valor_otro
+            if valor_selector:
+                try:
+                    return Medidor.objects.get(pk=int(valor_selector)), ''
+                except (ValueError, TypeError, Medidor.DoesNotExist):
+                    return None, valor_otro
+            return None, valor_otro
+
+        def _resolver_responsable(valor_selector):
+            valor_selector = (valor_selector or '').strip()
+            if valor_selector == 'CERTELEC':
+                return None, 'Certelec'
+            if valor_selector:
+                try:
+                    return Usuario.objects.get(pk=int(valor_selector)), ''
+                except (ValueError, TypeError, Usuario.DoesNotExist):
+                    return None, ''
+            return None, ''
+
         # Snapshot para detectar qué cambió
         if tipo == 'medidor':
             before = {
                 'fecha_entrega': equipo.fecha_entrega,
                 'estado_id': equipo.estado_inventario_id,
                 'entregado_a_id': equipo.entregado_a_id,
+                'entregado_a_otro': equipo.entregado_a_otro,
                 'cliente_id': equipo.cliente_id,
+                'cliente_otro': equipo.cliente_otro,
                 'proyecto': equipo.proyecto,
                 'tipo_medidor': equipo.tipo_medidor,
             }
@@ -867,16 +1042,22 @@ def inventario_modificar_view(request, pk):
                 'fecha_entrega': equipo.fecha_entrega,
                 'estado_id': equipo.estado_inventario_id,
                 'en_custodia_de_id': equipo.en_custodia_de_id,
+                'entregado_a_otro': equipo.entregado_a_otro,
                 'cliente_id': equipo.cliente_id,
+                'cliente_otro': equipo.cliente_otro,
                 'medidor_id': equipo.medidor_id,
+                'medidor_otro': equipo.medidor_otro,
                 'proyecto': equipo.proyecto,
             }
         else:
             before = {
                 'estado_id': equipo.estado_inventario_id,
                 'entregado_a_id': equipo.entregado_a_id,
+                'entregado_a_otro': equipo.entregado_a_otro,
                 'cliente_id': equipo.cliente_id,
+                'cliente_otro': equipo.cliente_otro,
                 'medidor_id': equipo.medidor_id,
+                'medidor_otro': equipo.medidor_otro,
                 'ip': equipo.ip,
                 'puerto': equipo.puerto,
                 'marca_secundaria': equipo.marca_secundaria,
@@ -892,15 +1073,15 @@ def inventario_modificar_view(request, pk):
             # Para SIM Card - campos verdes que puede modificar el administrativo
             fecha_entrega = request.POST.get('fecha_entrega', '').strip()
             estado_id = request.POST.get('estado_sim', '').strip() or request.POST.get('estado', '').strip()
-            cliente_texto = request.POST.get('cliente_texto', '').strip()
             cliente_id = request.POST.get('cliente', '').strip()
+            cliente_texto = request.POST.get('cliente_otro', '').strip() or request.POST.get('cliente_texto', '').strip()
             en_custodia_de_id = request.POST.get('entregado_a_id', '').strip()
             medidor_id = request.POST.get('medidor', '').strip()
+            medidor_otro = request.POST.get('medidor_otro', '').strip()
             proyecto = request.POST.get('proyecto', '').strip()
-            
-            # Debug
-            print(f'[DEBUG SIMCARD] fecha_entrega={fecha_entrega} | estado_id={estado_id}')
-            print(f'[DEBUG SIMCARD] cliente_texto={cliente_texto} | cliente_id={cliente_id} | medidor_id={medidor_id}')
+            cliente_obj, cliente_manual = _resolver_cliente(cliente_id, cliente_texto)
+            medidor_obj, medidor_manual = _resolver_medidor(medidor_id, medidor_otro)
+            custodia_obj, custodia_manual = _resolver_responsable(en_custodia_de_id)
             
             if fecha_entrega:
                 equipo.fecha_entrega = fecha_entrega
@@ -912,39 +1093,39 @@ def inventario_modificar_view(request, pk):
                 except (ValueError, TypeError, EstadoInventario.DoesNotExist):
                     pass
             
-            if cliente_texto:
-                cliente_obj = Cliente.objects.filter(numero_cliente=cliente_texto).first()
-                if not cliente_obj:
-                    cliente_obj = Cliente.objects.create(
-                        numero_cliente=cliente_texto,
-                        direccion=f'Cliente {cliente_texto}',
-                        comuna='Por definir'
-                    )
+            if cliente_obj or cliente_manual or cliente_id == 'OTRO':
                 equipo.cliente = cliente_obj
-            elif cliente_id:
-                try:
-                    equipo.cliente_id = int(cliente_id)
-                except (ValueError, TypeError):
-                    pass
+                equipo.cliente_otro = cliente_manual
             else:
                 equipo.cliente = None
+                equipo.cliente_otro = ''
             
             if en_custodia_de_id:
-                try:
-                    en_custodia_obj = Usuario.objects.get(pk=int(en_custodia_de_id))
-                    equipo.en_custodia_de = en_custodia_obj
-                except (ValueError, TypeError, Usuario.DoesNotExist):
-                    pass
-            if medidor_id:
-                try:
-                    equipo.medidor_id = int(medidor_id)
-                except (ValueError, TypeError):
-                    pass
+                equipo.en_custodia_de = custodia_obj
+                equipo.entregado_a_otro = custodia_manual
+            else:
+                equipo.en_custodia_de = None
+                equipo.entregado_a_otro = ''
+
+            if medidor_obj or medidor_manual or medidor_id == 'OTRO':
+                equipo.medidor = medidor_obj
+                equipo.medidor_otro = medidor_manual
+            else:
+                equipo.medidor = None
+                equipo.medidor_otro = ''
+
+            if custodia_obj or custodia_manual:
+                equipo.estado_inventario = _obtener_estado_inventario(
+                    'En Trayecto',
+                    'Equipo entregado a tecnico o tercero y en traslado operativo',
+                )
             equipo.proyecto = proyecto
         elif tipo == 'modem':
             # Para Módems - solo campos AMARILLO (editables por administrativo)
             cliente_id = request.POST.get('cliente', '').strip()
+            cliente_otro = request.POST.get('cliente_otro', '').strip()
             medidor_id = request.POST.get('medidor', '').strip()
+            medidor_otro = request.POST.get('medidor_otro', '').strip()
             ip = request.POST.get('ip', '').strip()
             puerto = request.POST.get('puerto', '').strip()
             marca_secundaria = request.POST.get('marca_secundaria', '').strip()
@@ -954,34 +1135,31 @@ def inventario_modificar_view(request, pk):
             serie_secundaria = request.POST.get('serie_secundaria', '').strip()
             irregularidad = request.POST.get('irregularidad', '').strip()
             proyecto = request.POST.get('proyecto', '').strip()
+            cliente_obj, cliente_manual = _resolver_cliente(cliente_id, cliente_otro)
+            medidor_obj, medidor_manual = _resolver_medidor(medidor_id, medidor_otro)
+            entregado_a_obj_modem, entregado_a_manual_modem = _resolver_responsable(entregado_a_id_modem)
             
-            print(f'[DEBUG MODEM] cliente_id={cliente_id} | medidor_id={medidor_id}')
-            
-            if cliente_id:
-                try:
-                    equipo.cliente_id = int(cliente_id)
-                except (ValueError, TypeError):
-                    equipo.cliente_id = None
+            if cliente_obj or cliente_manual or cliente_id == 'OTRO':
+                equipo.cliente = cliente_obj
+                equipo.cliente_otro = cliente_manual
             else:
-                equipo.cliente_id = None
+                equipo.cliente = None
+                equipo.cliente_otro = ''
             
-            if medidor_id:
-                try:
-                    equipo.medidor_id = int(medidor_id)
-                except (ValueError, TypeError):
-                    equipo.medidor_id = None
+            if medidor_obj or medidor_manual or medidor_id == 'OTRO':
+                equipo.medidor = medidor_obj
+                equipo.medidor_otro = medidor_manual
             else:
-                equipo.medidor_id = None
+                equipo.medidor = None
+                equipo.medidor_otro = ''
 
             # Campos azules editables
             if entregado_a_id_modem:
-                try:
-                    entregado_a_obj_modem = Usuario.objects.get(pk=int(entregado_a_id_modem))
-                    equipo.entregado_a = entregado_a_obj_modem
-                except (ValueError, TypeError, Usuario.DoesNotExist):
-                    pass
+                equipo.entregado_a = entregado_a_obj_modem
+                equipo.entregado_a_otro = entregado_a_manual_modem
             else:
                 equipo.entregado_a = None
+                equipo.entregado_a_otro = ''
             equipo.ip = ip
             equipo.puerto = puerto
             equipo.marca_secundaria = marca_secundaria
@@ -998,14 +1176,22 @@ def inventario_modificar_view(request, pk):
                     equipo.estado_inventario = estado_obj
                 except (ValueError, TypeError, EstadoInventario.DoesNotExist):
                     pass
+            if entregado_a_obj_modem or entregado_a_manual_modem:
+                equipo.estado_inventario = _obtener_estado_inventario(
+                    'En Trayecto',
+                    'Equipo entregado a tecnico o tercero y en traslado operativo',
+                )
         else:
             # Para Medidor - todos los campos editables
             fecha_entrega = request.POST.get('fecha_entrega', '').strip()
             estado_id = request.POST.get('estado_medidor', '').strip()
             entregado_a_id = request.POST.get('entregado_a', '').strip()
-            cliente_texto = request.POST.get('cliente_texto', '').strip()
+            cliente_id = request.POST.get('cliente', '').strip()
+            cliente_texto = request.POST.get('cliente_otro', '').strip() or request.POST.get('cliente_texto', '').strip()
             proyecto = request.POST.get('proyecto', '').strip()
             tipo_medidor = request.POST.get('tipo_medidor', '').strip().upper()
+            cliente_obj, cliente_manual = _resolver_cliente(cliente_id, cliente_texto)
+            entregado_a_obj, entregado_a_manual = _resolver_responsable(entregado_a_id)
 
             if tipo_medidor not in {'DIRECTO', 'INDIRECTO'}:
                 return JsonResponse({
@@ -1024,23 +1210,23 @@ def inventario_modificar_view(request, pk):
                     pass
             
             if entregado_a_id:
-                try:
-                    entregado_a_obj = Usuario.objects.get(pk=int(entregado_a_id))
-                    equipo.entregado_a = entregado_a_obj
-                except (ValueError, TypeError, Usuario.DoesNotExist):
-                    pass
+                equipo.entregado_a = entregado_a_obj
+                equipo.entregado_a_otro = entregado_a_manual
+            else:
+                equipo.entregado_a = None
+                equipo.entregado_a_otro = ''
             
-            if cliente_texto:
-                cliente_obj = Cliente.objects.filter(numero_cliente=cliente_texto).first()
-                if not cliente_obj:
-                    cliente_obj = Cliente.objects.create(
-                        numero_cliente=cliente_texto,
-                        direccion=f'Cliente {cliente_texto}',
-                        comuna='Por definir'
-                    )
+            if cliente_obj or cliente_manual or cliente_id == 'OTRO':
                 equipo.cliente = cliente_obj
+                equipo.cliente_otro = cliente_manual
             else:
                 equipo.cliente = None
+                equipo.cliente_otro = ''
+            if entregado_a_obj or entregado_a_manual:
+                equipo.estado_inventario = _obtener_estado_inventario(
+                    'En Trayecto',
+                    'Equipo entregado a tecnico o tercero y en traslado operativo',
+                )
             equipo.proyecto = proyecto
             equipo.tipo_medidor = tipo_medidor
         
@@ -1053,7 +1239,9 @@ def inventario_modificar_view(request, pk):
                 'fecha_entrega': equipo.fecha_entrega,
                 'estado_id': equipo.estado_inventario_id,
                 'entregado_a_id': equipo.entregado_a_id,
+                'entregado_a_otro': equipo.entregado_a_otro,
                 'cliente_id': equipo.cliente_id,
+                'cliente_otro': equipo.cliente_otro,
                 'proyecto': equipo.proyecto,
                 'tipo_medidor': equipo.tipo_medidor,
             }
@@ -1061,7 +1249,9 @@ def inventario_modificar_view(request, pk):
                 'fecha_entrega': 'Fecha Entrega',
                 'estado_id': 'Estado',
                 'entregado_a_id': 'Entregado A',
+                'entregado_a_otro': 'Entregado A',
                 'cliente_id': 'Cliente',
+                'cliente_otro': 'Cliente',
                 'proyecto': 'Proyecto',
                 'tipo_medidor': 'Tipo Medidor',
             }
@@ -1072,16 +1262,22 @@ def inventario_modificar_view(request, pk):
                 'fecha_entrega': equipo.fecha_entrega,
                 'estado_id': equipo.estado_inventario_id,
                 'en_custodia_de_id': equipo.en_custodia_de_id,
+                'entregado_a_otro': equipo.entregado_a_otro,
                 'cliente_id': equipo.cliente_id,
+                'cliente_otro': equipo.cliente_otro,
                 'medidor_id': equipo.medidor_id,
+                'medidor_otro': equipo.medidor_otro,
                 'proyecto': equipo.proyecto,
             }
             etiquetas = {
                 'fecha_entrega': 'Fecha Entrega',
                 'estado_id': 'Estado',
                 'en_custodia_de_id': 'Entregado A',
+                'entregado_a_otro': 'Entregado A',
                 'cliente_id': 'Cliente',
+                'cliente_otro': 'Cliente',
                 'medidor_id': 'Medidor',
+                'medidor_otro': 'Medidor',
                 'proyecto': 'Proyecto',
             }
             tipo_item = 'SIM'
@@ -1090,8 +1286,11 @@ def inventario_modificar_view(request, pk):
             after = {
                 'estado_id': equipo.estado_inventario_id,
                 'entregado_a_id': equipo.entregado_a_id,
+                'entregado_a_otro': equipo.entregado_a_otro,
                 'cliente_id': equipo.cliente_id,
+                'cliente_otro': equipo.cliente_otro,
                 'medidor_id': equipo.medidor_id,
+                'medidor_otro': equipo.medidor_otro,
                 'ip': equipo.ip,
                 'puerto': equipo.puerto,
                 'marca_secundaria': equipo.marca_secundaria,
@@ -1104,8 +1303,11 @@ def inventario_modificar_view(request, pk):
             etiquetas = {
                 'estado_id': 'Estado',
                 'entregado_a_id': 'Entregado A',
+                'entregado_a_otro': 'Entregado A',
                 'cliente_id': 'Cliente',
+                'cliente_otro': 'Cliente',
                 'medidor_id': 'Medidor',
+                'medidor_otro': 'Medidor',
                 'ip': 'IP',
                 'puerto': 'Puerto',
                 'marca_secundaria': 'Marca',
@@ -1204,6 +1406,7 @@ def inventario_crear_view(request):
                 marca=request.POST.get('marca', '').strip(),
                 modelo=request.POST.get('modelo', '').strip(),
                 imei=request.POST.get('imei', '').strip() or None,
+                caja=request.POST.get('caja', '').strip() or None,
                 fecha_recepcion=request.POST.get('fecha_recepcion', '').strip() or None,
                 estado_inventario=estado_obj,
                 proyecto=request.POST.get('proyecto', '').strip(),
@@ -2465,7 +2668,12 @@ def movimientos_list_view(request):
     ).order_by('nombre_interno')
     ubicaciones = Ubicacion.objects.all().order_by('nombre')
     
-    movimientos_render = list(movimientos[:100])  # Limitar a 100 para renderizado inicial
+    # Paginacion del listado para navegar todo el historico manteniendo filtros.
+    page_number = request.GET.get('page')
+    paginator = Paginator(movimientos, 50)
+    page_obj = paginator.get_page(page_number)
+
+    movimientos_render = list(page_obj.object_list)
     for mov in movimientos_render:
         detalles = []
         for item in mov.items.all():
@@ -2486,8 +2694,14 @@ def movimientos_list_view(request):
         else:
             mov.item_origen_display = '-'
 
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    query_string = query_params.urlencode()
+
     context = {
         'movimientos': movimientos_render,
+        'page_obj': page_obj,
+        'query_string': query_string,
         'total_movimientos': total_movimientos,
         'por_tipo': por_tipo,
         'responsables': responsables,
@@ -2537,20 +2751,68 @@ def movimientos_detalle_view(request, movimiento_id):
         id=movimiento_id
     )
     
-    # Obtener items agrupados por tipo
     items = movimiento.items.all().select_related(
         'medidor', 'simcard', 'modem'
     )
-    
-    items_medidores = items.filter(tipo_equipo='MEDIDOR')
-    items_sims = items.filter(tipo_equipo='SIM')
-    items_modems = items.filter(tipo_equipo='MODEM')
+
+    items_detalle = []
+    resumen_por_tipo = {
+        'MEDIDOR': 0,
+        'SIM': 0,
+        'MODEM': 0,
+    }
+
+    for item in items:
+        if item.medidor:
+            resumen_por_tipo['MEDIDOR'] += 1
+            items_detalle.append({
+                'tipo': 'Medidor',
+                'identificador': item.medidor.serie,
+                'descripcion': ' | '.join(filter(None, [item.medidor.marca, item.medidor.caja, item.medidor.get_tipo_medidor_display()])),
+                'cliente': getattr(getattr(item.medidor, 'cliente', None), 'razon_social', '') or getattr(getattr(item.medidor, 'cliente', None), 'numero_cliente', '') or '—',
+                'estado': getattr(getattr(item.medidor, 'estado_inventario', None), 'nombre', '') or '—',
+                'historial_tipo': 'MEDIDOR',
+                'historial_id': item.medidor.id,
+            })
+        elif item.simcard:
+            resumen_por_tipo['SIM'] += 1
+            items_detalle.append({
+                'tipo': 'SIM',
+                'identificador': item.simcard.imei or item.simcard.abonado or str(item.simcard.id),
+                'descripcion': ' | '.join(filter(None, [item.simcard.operador, item.simcard.abonado, item.simcard.direccion_ip])),
+                'cliente': getattr(getattr(item.simcard, 'cliente', None), 'razon_social', '') or getattr(getattr(item.simcard, 'cliente', None), 'numero_cliente', '') or '—',
+                'estado': getattr(getattr(item.simcard, 'estado_inventario', None), 'nombre', '') or '—',
+                'historial_tipo': 'SIM',
+                'historial_id': item.simcard.id,
+            })
+        elif item.modem:
+            resumen_por_tipo['MODEM'] += 1
+            items_detalle.append({
+                'tipo': 'Módem',
+                'identificador': item.modem.serie or item.modem.imei or str(item.modem.id),
+                'descripcion': ' | '.join(filter(None, [item.modem.marca, item.modem.modelo, item.modem.imei])),
+                'cliente': getattr(getattr(item.modem, 'cliente', None), 'razon_social', '') or getattr(getattr(item.modem, 'cliente', None), 'numero_cliente', '') or '—',
+                'estado': getattr(getattr(item.modem, 'estado_inventario', None), 'nombre', '') or '—',
+                'historial_tipo': 'MODEM',
+                'historial_id': item.modem.id,
+            })
+        else:
+            items_detalle.append({
+                'tipo': item.get_tipo_equipo_display(),
+                'identificador': '—',
+                'descripcion': 'Ítem sin vínculo de equipo',
+                'cliente': '—',
+                'estado': '—',
+                'historial_tipo': '',
+                'historial_id': '',
+            })
     
     context = {
         'movimiento': movimiento,
-        'items_medidores': items_medidores,
-        'items_sims': items_sims,
-        'items_modems': items_modems,
+        'items_detalle': items_detalle,
+        'items_medidores_count': resumen_por_tipo['MEDIDOR'],
+        'items_sims_count': resumen_por_tipo['SIM'],
+        'items_modems_count': resumen_por_tipo['MODEM'],
         'total_items': items.count(),
         'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
     }
@@ -2582,10 +2844,10 @@ def movimientos_historial_equipo_view(request):
     
     if tipo_equipo == 'MEDIDOR':
         equipo = get_object_or_404(Medidor, id=equipo_id)
-        equipo_nombre = f"Medidor {equipo.numero_serie}"
+        equipo_nombre = f"Medidor {equipo.serie}"
     elif tipo_equipo == 'SIM':
         equipo = get_object_or_404(SimCard, id=equipo_id)
-        equipo_nombre = f"SIM {equipo.iccid}"
+        equipo_nombre = f"SIM {equipo.imei}"
     elif tipo_equipo == 'MODEM':
         equipo = get_object_or_404(Modem, id=equipo_id)
         equipo_nombre = f"Módem {equipo.imei}"
@@ -2606,16 +2868,43 @@ def movimientos_historial_equipo_view(request):
         'movimiento__destino',
         'movimiento__responsable'
     ).order_by('-movimiento__fecha_hora')
-    
+
+    # Evaluar queryset y adjuntar reporte MoreApp a cada item para que el
+    # template pueda acceder con item.reporte_moreapp sin templatetags extra.
+    from ordenes_trabajo.models import IntegracionMoreApp
+    import re as _re
+
+    items_list = list(items)
+    total_movimientos = len(items_list)
+
+    # Recolectar todos los submission_id únicos de movimientos MOREAPP
+    sid_map = {}  # submission_id → item.movimiento.id
+    for item in items_list:
+        mov = item.movimiento
+        item.reporte_moreapp = None
+        if mov.origen_sistema == 'MOREAPP' and mov.observacion:
+            m = _re.search(r'submission:\s*([a-f0-9]+)', mov.observacion, _re.IGNORECASE)
+            if m:
+                sid_map.setdefault(m.group(1).strip(), []).append(item)
+
+    # Consulta única para todos los submission_ids encontrados
+    if sid_map:
+        reportes = IntegracionMoreApp.objects.filter(
+            moreapp_submission_id__in=sid_map.keys()
+        ).only('id', 'moreapp_submission_id', 'estado_revision', 'estado_sincronizacion')
+        for reporte in reportes:
+            for item in sid_map.get(reporte.moreapp_submission_id, []):
+                item.reporte_moreapp = reporte
+
     context = {
         'equipo': equipo,
         'equipo_nombre': equipo_nombre,
         'tipo_equipo': tipo_equipo,
-        'items': items,
-        'total_movimientos': items.count(),
+        'items': items_list,
+        'total_movimientos': total_movimientos,
         'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
     }
-    
+
     return render(request, 'movimientos/historial.html', context)
 
 
@@ -3033,6 +3322,21 @@ def _fecha_desde_json_moreapp(registro):
     return registro.fecha_recepcion
 
 
+def _tecnico_visible_moreapp(registro):
+    """Devuelve el texto visible de técnico en listados MoreApp."""
+    datos_procesados = registro.datos_procesados if isinstance(registro.datos_procesados, dict) else {}
+
+    tecnico_responsable = str(datos_procesados.get('tecnico_responsable', '')).strip()
+    if tecnico_responsable:
+        return tecnico_responsable
+
+    tecnico_certelec = str(datos_procesados.get('tecnico_certelec', '')).strip()
+    if tecnico_certelec:
+        return 'Certelec'
+
+    return ''
+
+
 def _calcular_adv_breakdown(model_class):
     """Cuenta registros con advertencia agrupados en 3 categorías operativas."""
     from django.db.models import Q as _Q
@@ -3153,6 +3457,7 @@ def reportes_moreapp_list(request):
         reg.bloqueos_operativos = bloqueos
         reg.categorias_advertencia = categorias_advertencia
         reg.fecha_visible = _fecha_desde_json_moreapp(reg)
+        reg.tecnico_visible = _tecnico_visible_moreapp(reg)
         reg.tiene_bloqueo_operativo = len(bloqueos) > 0
         reg.bloqueo_operativo_preview = bloqueos[0]['motivo'] if bloqueos else ''
         if bloqueo == '1' and not reg.tiene_bloqueo_operativo:
