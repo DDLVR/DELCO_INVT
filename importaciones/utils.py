@@ -3,12 +3,39 @@ Utilidades para importación desde Excel
 """
 
 import openpyxl
+<<<<<<< Updated upstream
+=======
+import logging
+import time
+import unicodedata
+from django.db.utils import OperationalError
+>>>>>>> Stashed changes
 from importaciones.models import ImportacionExcel, ImportacionExcelError
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion, MovimientoInventario, MovimientoItem
 from clientes.models import Cliente
 from usuarios.models import Usuario
 
 
+<<<<<<< Updated upstream
+=======
+logger = logging.getLogger(__name__)
+
+
+def _db_write_with_retry(callback, retries=4, delay=0.25):
+    """Reintenta escrituras cuando SQLite devuelve 'database is locked'."""
+    intento = 0
+    while True:
+        try:
+            return callback()
+        except OperationalError as exc:
+            mensaje = str(exc).lower()
+            if 'database is locked' not in mensaje or intento >= retries:
+                raise
+            intento += 1
+            time.sleep(delay * intento)
+
+
+>>>>>>> Stashed changes
 def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
     """
     Importa equipos (Medidores, SIM, Módems) desde archivo Excel.
@@ -22,15 +49,83 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
     """
     from datetime import datetime
 
+<<<<<<< Updated upstream
+=======
+    def error_columna(columna, mensaje, valor=None):
+        """Genera un mensaje homogéneo y legible para errores por columna."""
+        base = f'Columna "{columna}": {mensaje}'
+        if valor is not None and str(valor).strip() != '':
+            return f'{base}. Valor recibido: {valor}'
+        return base
+
+    def fila_a_texto(headers_fila, valores_fila):
+        """Convierte una fila en texto columna: valor para facilitar corrección."""
+        data = {}
+        for i, valor in enumerate(valores_fila):
+            nombre_columna = headers_fila[i] if i < len(headers_fila) else None
+            nombre_columna = str(nombre_columna).strip() if nombre_columna else f'Columna_{i + 1}'
+            data[nombre_columna] = valor
+        return json.dumps(data, ensure_ascii=False, default=str)
+
+    clientes_cache = {}
+    estado_cache = {}
+    medidor_cache = {}
+
+    def resolver_cliente_por_numero(cliente_numero):
+        if not cliente_numero:
+            return None
+        cliente_num_str = str(cliente_numero).strip()
+        if not cliente_num_str:
+            return None
+        if cliente_num_str in clientes_cache:
+            return clientes_cache[cliente_num_str]
+
+        cliente_obj = Cliente.objects.filter(numero_cliente=cliente_num_str).first()
+        if not cliente_obj:
+            cliente_obj = _db_write_with_retry(lambda: Cliente.objects.create(
+                numero_cliente=cliente_num_str,
+                direccion=f'Cliente {cliente_num_str}',
+                comuna='Por definir'
+            ))
+        clientes_cache[cliente_num_str] = cliente_obj
+        return cliente_obj
+
+    def resolver_estado_por_nombre(estado_nombre, estado_default):
+        if not estado_nombre:
+            return estado_default
+        clave = str(estado_nombre).strip().lower()
+        if not clave:
+            return estado_default
+        if clave in estado_cache:
+            return estado_cache[clave]
+        estado_obj = EstadoInventario.objects.filter(nombre__icontains=str(estado_nombre).strip()).first()
+        if not estado_obj:
+            estado_obj = estado_default
+        estado_cache[clave] = estado_obj
+        return estado_obj
+
+    def resolver_medidor_por_serie(medidor_serie):
+        if not medidor_serie:
+            return None
+        serie = str(medidor_serie).strip()
+        if not serie:
+            return None
+        if serie in medidor_cache:
+            return medidor_cache[serie]
+        medidor_obj = Medidor.objects.filter(serie=serie).first()
+        medidor_cache[serie] = medidor_obj
+        return medidor_obj
+
+>>>>>>> Stashed changes
     def registrar_movimiento_importacion(equipo_obj, tipo_item, estado_obj_local, detalle, fila):
         try:
-            movimiento = MovimientoInventario.objects.create(
+            movimiento = _db_write_with_retry(lambda: MovimientoInventario.objects.create(
                 tipo='IMPORTACION',
                 origen=bodega,
                 destino=bodega,
                 responsable=usuario,
                 observacion=f'Importación masiva {tipo_item} fila {fila}: {detalle}',
-            )
+            ))
             item_kwargs = {
                 'movimiento': movimiento,
                 'tipo_equipo': tipo_item,
@@ -42,17 +137,17 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                 item_kwargs['simcard'] = equipo_obj
             else:
                 item_kwargs['modem'] = equipo_obj
-            MovimientoItem.objects.create(**item_kwargs)
+            _db_write_with_retry(lambda: MovimientoItem.objects.create(**item_kwargs))
         except Exception:
             # No interrumpir importación si falla el registro de trazabilidad
             pass
     
     # Crear registro de importación
-    importacion = ImportacionExcel.objects.create(
+    importacion = _db_write_with_retry(lambda: ImportacionExcel.objects.create(
         tipo='EQUIPOS',
         archivo_original=archivo.name if hasattr(archivo, 'name') else 'Upload',
         usuario=usuario,
-    )
+    ))
     
     try:
         # Cargar workbook
@@ -79,6 +174,10 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
         contador_filas = 0
         exitosas = 0
         fallidas = 0
+        existing_medidor_series = set(Medidor.objects.values_list('serie', flat=True))
+        existing_sim_imeis = set(filter(None, SimCard.objects.values_list('imei', flat=True)))
+        existing_modem_series = set(Modem.objects.values_list('serie', flat=True))
+        existing_modem_imeis = set(filter(None, Modem.objects.values_list('imei', flat=True)))
         
         # Iterar filas (saltando header)
         for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), start=2):
@@ -170,28 +269,25 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         modulo = None
 
                     # Validar unicidad de serie
+<<<<<<< Updated upstream
                     if Medidor.objects.filter(serie=serie).exists():
                         raise ValueError(f'Medidor con serie {serie} ya existe')
+=======
+                    if serie in existing_medidor_series:
+                        raise ValueError(
+                            error_columna(
+                                'Medidor/Serie',
+                                'ya existe en base de datos',
+                                serie,
+                            )
+                        )
+>>>>>>> Stashed changes
 
                     # Buscar estado si viene
-                    estado_obj = None
-                    if estado_nombre:
-                        estado_nombre_str = str(estado_nombre).strip()
-                        estado_obj = EstadoInventario.objects.filter(nombre__icontains=estado_nombre_str).first()
-                    if not estado_obj:
-                        estado_obj = estado
+                    estado_obj = resolver_estado_por_nombre(estado_nombre, estado)
 
                     # Cliente por número (desde planilla)
-                    cliente_obj = None
-                    if cliente_numero:
-                        cliente_num_str = str(cliente_numero).strip()
-                        cliente_obj = Cliente.objects.filter(numero_cliente=cliente_num_str).first()
-                        if not cliente_obj:
-                            cliente_obj = Cliente.objects.create(
-                                numero_cliente=cliente_num_str,
-                                direccion=f'Cliente {cliente_num_str}',
-                                comuna='Por definir'
-                            )
+                    cliente_obj = resolver_cliente_por_numero(cliente_numero)
 
                     # Buscar usuario entregado_a si viene
 
@@ -226,7 +322,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                                 fecha_entrega = None
 
                     # Crear medidor
-                    medidor = Medidor.objects.create(
+                    medidor = _db_write_with_retry(lambda: Medidor.objects.create(
                         fecha_recepcion=fecha_recepcion,
                         bodega=str(bodega_ref).strip() if bodega_ref else '',
                         marca=marca,
@@ -239,7 +335,9 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         estado_inventario=estado_obj,
                         cliente=cliente_obj,
                         ubicacion_actual=bodega
-                    )
+                    ))
+                    existing_medidor_series.add(serie)
+                    medidor_cache[serie] = medidor
                     registrar_movimiento_importacion(
                         medidor,
                         'MEDIDOR',
@@ -324,8 +422,19 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     entregado_a_nombre = limpiar_valor(entregado_a_nombre) if entregado_a_nombre else ''
                     
                     # Verificar duplicados
+<<<<<<< Updated upstream
                     if SimCard.objects.filter(imei=imei).exists():
                         raise ValueError(f'SIM con IMEI {imei} ya existe en base de datos')
+=======
+                    if imei in existing_sim_imeis:
+                        raise ValueError(
+                            error_columna(
+                                'IMEI',
+                                'ya existe en base de datos',
+                                imei,
+                            )
+                        )
+>>>>>>> Stashed changes
                     
                     # Convertir fecha de recepción (Excel date o string)
                     try:
@@ -370,49 +479,22 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                             fecha_entrega = None
                     
                     # Buscar estado si viene
-                    estado_obj = None
-                    if estado_nombre:
-                        estado_nombre_str = str(estado_nombre).strip()
-                        estado_obj = EstadoInventario.objects.filter(
-                            nombre__icontains=estado_nombre_str
-                        ).first()
-                    
-                    # Si no hay estado especificado, usar "Instalado" por defecto
-                    if not estado_obj:
-                        estado_obj = EstadoInventario.objects.filter(nombre='Instalado').first()
-                        if not estado_obj:
-                            estado_obj = EstadoInventario.objects.create(nombre='Instalado')
+                    estado_instalado_default = estado_cache.get('__instalado_default__')
+                    if not estado_instalado_default:
+                        estado_instalado_default = EstadoInventario.objects.filter(nombre='Instalado').first()
+                        if not estado_instalado_default:
+                            estado_instalado_default = _db_write_with_retry(lambda: EstadoInventario.objects.create(nombre='Instalado'))
+                        estado_cache['__instalado_default__'] = estado_instalado_default
+                    estado_obj = resolver_estado_por_nombre(estado_nombre, estado_instalado_default)
                     
                     # Buscar cliente si viene (por numero_cliente)
-                    cliente_obj = None
-                    if cliente_numero:
-                        try:
-                            cliente_num_str = str(cliente_numero).strip()
-                            # Buscar por numero_cliente (campo correcto en modelo Cliente)
-                            cliente_obj = Cliente.objects.filter(
-                                numero_cliente=cliente_num_str
-                            ).first()
-                            
-                            # Si no existe, crear el cliente
-                            if not cliente_obj:
-                                cliente_obj = Cliente.objects.create(
-                                    numero_cliente=cliente_num_str,
-                                    direccion=f'Cliente {cliente_num_str}',
-                                    comuna='Por definir'
-                                )
-                        except:
-                            pass  # Si falla, continuar sin cliente
+                    cliente_obj = resolver_cliente_por_numero(cliente_numero)
                     
                     # Buscar medidor si viene
-                    medidor_obj = None
-                    if medidor_serie:
-                        medidor_serie_str = str(medidor_serie).strip()
-                        medidor_obj = Medidor.objects.filter(
-                            serie=medidor_serie_str
-                        ).first()
+                    medidor_obj = resolver_medidor_por_serie(medidor_serie)
                     
                     # Crear SIM Card
-                    sim = SimCard.objects.create(
+                    sim = _db_write_with_retry(lambda: SimCard.objects.create(
                         imei=imei,
                         operador=operador,
                         abonado=abonado,
@@ -425,7 +507,9 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         cliente=cliente_obj,
                         medidor=medidor_obj,
                         ubicacion_actual=bodega
-                    )
+                    ))
+                    if imei:
+                        existing_sim_imeis.add(imei)
                     registrar_movimiento_importacion(
                         sim,
                         'SIM',
@@ -492,8 +576,15 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     tecnico_responsable = limpiar_valor(tecnico_responsable)
                     
                     # Verificar duplicados
+<<<<<<< Updated upstream
                     if Modem.objects.filter(serie=serie).exists():
                         raise ValueError(f'Modem con SERIE {serie} ya existe en base de datos')
+=======
+                    if serie in existing_modem_series:
+                        raise ValueError(error_columna('SERIE', 'ya existe en base de datos', serie))
+                    if imei and imei in existing_modem_imeis:
+                        raise ValueError(error_columna('IMEI', 'ya existe en base de datos', imei))
+>>>>>>> Stashed changes
                     
                     # Convertir fechas
                     try:
@@ -530,25 +621,10 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                             fecha_entrega = None
                     
                     # Buscar cliente
-                    cliente_obj = None
-                    if cliente_numero:
-                        try:
-                            cliente_num_str = str(cliente_numero).strip()
-                            cliente_obj = Cliente.objects.filter(numero_cliente=cliente_num_str).first()
-                            if not cliente_obj:
-                                cliente_obj = Cliente.objects.create(
-                                    numero_cliente=cliente_num_str,
-                                    direccion=f'Cliente {cliente_num_str}',
-                                    comuna='Por definir'
-                                )
-                        except:
-                            pass
+                    cliente_obj = resolver_cliente_por_numero(cliente_numero)
                     
                     # Buscar medidor
-                    medidor_obj = None
-                    if medidor_serie:
-                        medidor_serie_str = str(medidor_serie).strip()
-                        medidor_obj = Medidor.objects.filter(serie=medidor_serie_str).first()
+                    medidor_obj = resolver_medidor_por_serie(medidor_serie)
                     
                     # Crear estado por defecto
                     estado_obj = EstadoInventario.objects.filter(nombre='BODEGA').first()
@@ -556,7 +632,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         estado_obj = EstadoInventario.objects.create(nombre='BODEGA')
                     
                     # Crear Modem
-                    modem = Modem.objects.create(
+                    modem = _db_write_with_retry(lambda: Modem.objects.create(
                         marca=marca,
                         modelo=modelo,
                         imei=imei if imei else None,
@@ -577,7 +653,10 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         proyecto=limpiar_valor(proyecto),
                         estado_inventario=estado_obj,
                         ubicacion_actual=bodega
-                    )
+                    ))
+                    existing_modem_series.add(serie)
+                    if imei:
+                        existing_modem_imeis.add(imei)
                     registrar_movimiento_importacion(
                         modem,
                         'MODEM',
@@ -590,12 +669,17 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
             
             except Exception as e:
                 fallidas += 1
-                ImportacionExcelError.objects.create(
+                _db_write_with_retry(lambda: ImportacionExcelError.objects.create(
                     importacion=importacion,
                     numero_fila=idx,
                     motivo=str(e),
+<<<<<<< Updated upstream
                     data_cruda=str(valores)
                 )
+=======
+                    data_cruda=fila_a_texto(headers, valores)
+                ))
+>>>>>>> Stashed changes
         
         # Finalizar importación
         importacion.total_filas = contador_filas
@@ -603,12 +687,12 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
         importacion.fallidas = fallidas
         importacion.estado = 'COMPLETADO'
         importacion.observaciones = f'Se importaron {exitosas} de {contador_filas} equipos'
-        importacion.save()
+        _db_write_with_retry(lambda: importacion.save())
     
     except Exception as e:
         importacion.estado = 'ERROR'
         importacion.observaciones = f'Error en importación: {str(e)}'
-        importacion.save()
+        _db_write_with_retry(lambda: importacion.save())
     
     return importacion
 

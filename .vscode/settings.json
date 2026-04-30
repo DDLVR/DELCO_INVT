@@ -1,0 +1,27 @@
+{
+    "chat.tools.terminal.autoApprove": {
+        "&": true,
+        "/^python manage\\.py migrate sessions$/": {
+            "approve": true,
+            "matchCommandLine": true
+        },
+        "/^python manage\\.py showmigrations sessions$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    },
+    "python.analysis.typeCheckingMode": "basic",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportUnknownParameterType": "none",
+        "reportUnknownArgumentType": "none",
+        "reportUnknownMemberType": "none",
+        "reportUnknownVariableType": "none",
+        "reportUnknownLambdaType": "none",
+        "reportMissingParameterType": "none",
+        "reportMissingTypeArgument": "none",
+        "reportConstantRedefinition": "none",
+        "reportAttributeAccessIssue": "none",
+        "reportOptionalMemberAccess": "none",
+        "reportGeneralTypeIssues": "none"
+    }
+}
