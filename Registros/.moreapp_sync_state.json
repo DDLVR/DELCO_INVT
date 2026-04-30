@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "forms": {
+    "177930/Lectura": {
+      "last_correlativo": 246
+    },
+    "177930/Mantenimiento_Telemetria_V3": {
+      "last_correlativo": 450
+    },
+    "177930/Registro_de_Medidores_y_Telemetr\u00eda_V3": {
+      "last_correlativo": 1931
+    }
+  }
+}

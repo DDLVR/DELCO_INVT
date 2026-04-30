@@ -337,6 +337,15 @@
                         </small>
                     </div>
                     <div id="importResultados" class="mt-3" style="display:none;">
+                        <div id="importProgresoWrapper" class="mb-2" style="display:none;">
+                            <div class="d-flex justify-content-between small mb-1">
+                                <span id="importProgresoTexto">Subiendo archivo...</span>
+                                <span id="importProgresoPorcentaje">0%</span>
+                            </div>
+                            <div class="progress" role="progressbar" aria-label="Progreso de importacion" aria-valuemin="0" aria-valuemax="100">
+                                <div id="importProgresoBarra" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+                            </div>
+                        </div>
                         <div id="importMensaje" class="alert"></div>
                     </div>
                 </div>
@@ -349,6 +358,263 @@
     </div>
 </div>
 
+<<<<<<< Updated upstream
+=======
+{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+<!-- Modal para agregar equipo individual -->
+<div class="modal fade" id="modalAgregarEquipo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-plus-circle"></i> Agregar {{ titulo|lower|slice:':-1' }}</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formAgregarEquipo">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="tipo" value="{{ tipo }}">
+
+                    {% if tipo == 'medidor' %}
+                    <div class="mb-3">
+                        <label class="form-label">Serie *</label>
+                        <input type="text" class="form-control" name="serie" required inputmode="numeric" autocomplete="off" data-validacion="numerico" data-etiqueta="Serie">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Marca</label>
+                        <input type="text" class="form-control" name="marca">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Caja</label>
+                        <input type="text" class="form-control" name="caja" inputmode="numeric" autocomplete="off" data-validacion="numerico" data-etiqueta="Caja">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de medidor *</label>
+                        <select class="form-select" name="tipo_medidor" required>
+                            <option value="">-- Seleccionar --</option>
+                            {% for codigo, nombre in tipo_medidor_choices %}
+                            <option value="{{ codigo }}">{{ nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="Proyecto asociado">
+                    </div>
+                    {% elif tipo == 'sim' %}
+                    <div class="mb-3">
+                        <label class="form-label">IMEI *</label>
+                        <input type="text" class="form-control" name="imei" required placeholder="Ej: 123456789012345" inputmode="numeric" autocomplete="off" data-validacion="numerico" data-etiqueta="IMEI">
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Operador</label>
+                            <input type="text" class="form-control" name="operador" placeholder="Ej: ENTEL, CLARO">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Abonado</label>
+                            <input type="text" class="form-control" name="abonado" placeholder="Número abonado" inputmode="numeric" autocomplete="off" data-validacion="numerico" data-etiqueta="Abonado">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Dirección IP</label>
+                            <input type="text" class="form-control" name="direccion_ip" placeholder="Ej: 192.168.1.1">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">APN</label>
+                            <input type="text" class="form-control" name="apn" placeholder="Ej: internet.entel.cl">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="Proyecto asociado">
+                    </div>
+                    {% else %}
+                    {# Módems #}
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Serie *</label>
+                            <input type="text" class="form-control" name="serie" required inputmode="numeric" autocomplete="off" data-validacion="numerico" data-etiqueta="Serie">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Caja</label>
+                            <input type="text" class="form-control" name="caja" placeholder="Nº de caja" inputmode="numeric" autocomplete="off" data-validacion="numerico" data-etiqueta="Caja">
+                        </div>
+                    </div>
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Marca</label>
+                            <input type="text" class="form-control" name="marca">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Modelo</label>
+                            <input type="text" class="form-control" name="modelo">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">IMEI</label>
+                        <input type="text" class="form-control" name="imei" placeholder="Ej: 123456789012345" inputmode="numeric" autocomplete="off" data-validacion="numerico" data-etiqueta="IMEI">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="Proyecto asociado">
+                    </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label">Fecha recepción</label>
+                        <input type="date" class="form-control" name="fecha_recepcion">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Estado inicial</label>
+                        <select class="form-select" name="estado_id">
+                            <option value="">-- Sin estado --</option>
+                            {% for estado in estados_disponibles %}
+                            <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para edición masiva -->
+<div class="modal fade" id="modalEditarMasivo" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title"><i class="bi bi-check2-square"></i> Modificación masiva</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formEditarMasivo">
+                {% csrf_token %}
+                <div class="modal-body">
+                    <input type="hidden" name="tipo" value="{{ tipo }}">
+                    <input type="hidden" name="ids" id="bulkIds">
+                    <p class="small text-muted" id="bulkResumenSeleccion">0 equipos seleccionados</p>
+
+                    <div class="mb-3">
+                        <label class="form-label">Estado</label>
+                        <select class="form-select" name="estado_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for estado in estados_disponibles %}
+                            <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    {% if tipo == 'medidor' %}
+                    <div class="mb-3">
+                        <label class="form-label">Entregado a</label>
+                        <select class="form-select" name="entregado_a_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for usuario in usuarios %}
+                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cliente (número)</label>
+                        <input type="text" class="form-control" name="cliente_texto" placeholder="-- No cambiar --">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de medidor</label>
+                        <select class="form-select" name="tipo_medidor">
+                            <option value="">-- No cambiar --</option>
+                            {% for codigo, nombre in tipo_medidor_choices %}
+                            <option value="{{ codigo }}">{{ nombre }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    {% elif tipo == 'sim' %}
+                    <div class="mb-3">
+                        <label class="form-label">Entregado A / En Custodia De</label>
+                        <select class="form-select" name="entregado_a_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for usuario in usuarios %}
+                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cliente (número)</label>
+                        <input type="text" class="form-control" name="cliente_texto" placeholder="-- No cambiar --">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Medidor</label>
+                        <select class="form-select" name="medidor_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for medidor in medidores %}
+                            <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
+                    </div>
+                    {% else %}
+                    <div class="mb-3">
+                        <label class="form-label">Entregado A</label>
+                        <select class="form-select" name="entregado_a_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for usuario in usuarios %}
+                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cliente</label>
+                        <select class="form-select" name="cliente_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for cliente in clientes %}
+                            <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Medidor</label>
+                        <select class="form-select" name="medidor_id">
+                            <option value="">-- No cambiar --</option>
+                            {% for medidor in medidores %}
+                            <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Proyecto</label>
+                        <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
+                    </div>
+                    {% endif %}
+
+                    <hr class="my-3">
+                    <div class="mb-3">
+                        <label class="form-label">Observación</label>
+                        <textarea class="form-control" name="observacion" rows="2" placeholder="Detalle operativo del movimiento"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-dark">Aplicar cambios</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+
+>>>>>>> Stashed changes
 <!-- Modal para Modificar Equipo -->
 <div class="modal fade" id="modalModificar" tabindex="-1">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
@@ -808,6 +1074,94 @@ function obtenerFechaHoy() {
     return `${year}-${mes}-${dia}`;
 }
 
+<<<<<<< Updated upstream
+=======
+function actualizarCampoOtro(selectElement) {
+    if (!selectElement) {
+        return;
+    }
+    const wrapperId = selectElement.dataset.otroTarget;
+    if (!wrapperId) {
+        return;
+    }
+    const wrapper = document.getElementById(wrapperId);
+    if (!wrapper) {
+        return;
+    }
+    const mostrar = selectElement.value === 'OTRO';
+    wrapper.classList.toggle('d-none', !mostrar);
+    if (!mostrar) {
+        const input = wrapper.querySelector('input');
+        if (input) {
+            input.value = '';
+        }
+    }
+}
+
+function validarValorNumerico(input, mostrarToast = true) {
+    if (!input) {
+        return true;
+    }
+    const valorOriginal = input.value || '';
+    const valorLimpio = valorOriginal.replace(/\D+/g, '');
+    const etiqueta = input.dataset.etiqueta || input.name || 'este campo';
+
+    if (valorOriginal !== valorLimpio) {
+        input.value = valorLimpio;
+        if (mostrarToast) {
+            showToast(`Caracter incorrecto detectado en ${etiqueta}. Solo se permiten numeros.`, 'warning');
+        }
+        input.classList.add('is-invalid');
+        input.setCustomValidity('Solo se permiten numeros.');
+        return false;
+    }
+
+    input.classList.remove('is-invalid');
+    input.setCustomValidity('');
+    return true;
+}
+
+function activarValidacionNumerica() {
+    const teclasPermitidas = new Set(['Backspace', 'Delete', 'Tab', 'ArrowLeft', 'ArrowRight', 'Home', 'End']);
+
+    document.querySelectorAll('input[data-validacion="numerico"]').forEach(input => {
+        input.addEventListener('keydown', function(event) {
+            if (event.ctrlKey || event.metaKey || event.altKey) {
+                return;
+            }
+            if (teclasPermitidas.has(event.key)) {
+                return;
+            }
+            if (!/^\d$/.test(event.key)) {
+                event.preventDefault();
+                validarValorNumerico(input, true);
+            }
+        });
+
+        input.addEventListener('paste', function(event) {
+            const texto = (event.clipboardData || window.clipboardData).getData('text') || '';
+            if (/\D/.test(texto)) {
+                event.preventDefault();
+                validarValorNumerico(input, true);
+            }
+        });
+
+        input.addEventListener('input', function() {
+            validarValorNumerico(input, false);
+        });
+    });
+}
+
+document.querySelectorAll('.selector-con-otro').forEach(selectElement => {
+    selectElement.addEventListener('change', function() {
+        actualizarCampoOtro(this);
+    });
+    actualizarCampoOtro(selectElement);
+});
+
+activarValidacionNumerica();
+
+>>>>>>> Stashed changes
 // Mostrar/ocultar campos por tipo
 function mostrarCamposPorTipo(tipo) {
     const camposMedidorSoloEntrega = document.getElementById('camposMedidorSoloEntrega');
@@ -1085,6 +1439,96 @@ if (btnGuardar) {
     console.error('Botón btnGuardarModificacion no encontrado');
 }
 
+<<<<<<< Updated upstream
+=======
+// Selección múltiple y edición masiva
+const selectAllEquipos = document.getElementById('selectAllEquipos');
+if (selectAllEquipos) {
+    selectAllEquipos.addEventListener('change', function() {
+        document.querySelectorAll('.equipo-checkbox').forEach(cb => {
+            cb.checked = this.checked;
+        });
+    });
+}
+
+const btnAbrirMasivo = document.getElementById('btnAbrirMasivo');
+if (btnAbrirMasivo) {
+    btnAbrirMasivo.addEventListener('click', function() {
+        const seleccionados = Array.from(document.querySelectorAll('.equipo-checkbox:checked'));
+        if (!seleccionados.length) {
+            showToast('Selecciona al menos un equipo para la modificación masiva.', 'warning');
+            return;
+        }
+
+        const ids = seleccionados.map(cb => cb.value).join(',');
+        document.getElementById('bulkIds').value = ids;
+        document.getElementById('bulkResumenSeleccion').textContent = `${seleccionados.length} equipos seleccionados`;
+
+        const modalEl = document.getElementById('modalEditarMasivo');
+        const modal = new bootstrap.Modal(modalEl);
+        modal.show();
+    });
+}
+
+const formEditarMasivo = document.getElementById('formEditarMasivo');
+if (formEditarMasivo) {
+    formEditarMasivo.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(formEditarMasivo);
+
+        fetch("{% url 'inventario_modificar_masivo' %}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message || 'Actualización masiva aplicada.', 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast('Error: ' + (data.message || 'No se pudo aplicar la actualización masiva'), 'danger');
+            }
+        })
+        .catch(() => showToast('Error de conexión al aplicar cambios masivos.', 'danger'));
+    });
+}
+
+const formAgregarEquipo = document.getElementById('formAgregarEquipo');
+if (formAgregarEquipo) {
+    formAgregarEquipo.addEventListener('submit', function(e) {
+        const camposNumericos = formAgregarEquipo.querySelectorAll('input[data-validacion="numerico"]');
+        let hayError = false;
+        camposNumericos.forEach(input => {
+            const valido = validarValorNumerico(input, false);
+            hayError = hayError || !valido;
+        });
+        if (hayError) {
+            e.preventDefault();
+            showToast('Hay campos con caracteres incorrectos. Corrigelos antes de guardar.', 'warning');
+            return;
+        }
+
+        e.preventDefault();
+        const formData = new FormData(formAgregarEquipo);
+
+        fetch("{% url 'inventario_crear' %}", {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message || 'Equipo creado correctamente.', 'success');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast('Error: ' + (data.message || 'No se pudo crear el equipo'), 'danger');
+            }
+        })
+        .catch(() => showToast('Error de conexión al crear equipo.', 'danger'));
+    });
+}
+
+>>>>>>> Stashed changes
 }); // Fin de DOMContentLoaded
 </script>
 
@@ -1114,13 +1558,97 @@ document.getElementById('btnExportar').addEventListener('click', function() {
 document.getElementById('btnImportarSubmit').addEventListener('click', function() {
     const form = document.getElementById('formImportar');
     const archivo = document.getElementById('archivoImportar').files[0];
+    const btnImportar = document.getElementById('btnImportarSubmit');
+    const resultadosDiv = document.getElementById('importResultados');
+    const mensajeDiv = document.getElementById('importMensaje');
+    const progresoWrapper = document.getElementById('importProgresoWrapper');
+    const progresoTexto = document.getElementById('importProgresoTexto');
+    const progresoPorcentaje = document.getElementById('importProgresoPorcentaje');
+    const progresoBarra = document.getElementById('importProgresoBarra');
+    let progresoProcesamientoTimer = null;
+    let tiempoProcesamientoTimer = null;
+    let progresoActual = 0;
+    let inicioProcesamiento = null;
+    let etapaActualTexto = '';
+
+    function actualizarBarra(valor, texto, mensaje) {
+        progresoActual = Math.max(0, Math.min(100, Math.round(valor)));
+        progresoBarra.style.width = `${progresoActual}%`;
+        progresoPorcentaje.textContent = `${progresoActual}%`;
+        if (texto) {
+            progresoTexto.textContent = texto;
+        }
+        if (mensaje) {
+            mensajeDiv.textContent = mensaje;
+        }
+    }
+
+    function obtenerEtapaProcesamiento(porcentaje) {
+        if (porcentaje < 88) {
+            return 'Validando formato del archivo...';
+        }
+        if (porcentaje < 91) {
+            return 'Leyendo filas del Excel...';
+        }
+        if (porcentaje < 94) {
+            return 'Aplicando validaciones de datos...';
+        }
+        if (porcentaje < 97) {
+            return 'Guardando registros en base de datos...';
+        }
+        return 'Finalizando importacion...';
+    }
+
+    function refrescarEtapaProcesamiento() {
+        const etapa = obtenerEtapaProcesamiento(progresoActual);
+        etapaActualTexto = etapa;
+        progresoTexto.textContent = etapa;
+    }
+
+    function iniciarSimulacionProcesamiento() {
+        refrescarEtapaProcesamiento();
+
+        progresoProcesamientoTimer = setInterval(() => {
+            if (progresoActual < 97) {
+                actualizarBarra(progresoActual + 1, null, 'Procesando datos en el servidor...');
+                refrescarEtapaProcesamiento();
+            }
+        }, 800);
+
+        inicioProcesamiento = Date.now();
+        tiempoProcesamientoTimer = setInterval(() => {
+            const segundos = Math.floor((Date.now() - inicioProcesamiento) / 1000);
+            const etapa = etapaActualTexto || 'Procesando datos en el servidor...';
+            mensajeDiv.textContent = `${etapa} (${segundos}s)`;
+        }, 1000);
+    }
+
+    function detenerSimulacionProcesamiento() {
+        if (progresoProcesamientoTimer) {
+            clearInterval(progresoProcesamientoTimer);
+            progresoProcesamientoTimer = null;
+        }
+        if (tiempoProcesamientoTimer) {
+            clearInterval(tiempoProcesamientoTimer);
+            tiempoProcesamientoTimer = null;
+        }
+    }
     
     if (!archivo) {
         alert('Selecciona un archivo');
         return;
     }
+
+    // Inicializar UI de progreso
+    resultadosDiv.style.display = 'block';
+    progresoWrapper.style.display = 'block';
+    mensajeDiv.className = 'alert alert-info mt-2';
+    actualizarBarra(0, 'Subiendo archivo...', 'Preparando importacion...');
+    btnImportar.disabled = true;
+    btnImportar.innerHTML = '<i class="spinner-border spinner-border-sm me-2"></i>Importando...';
     
     const formData = new FormData(form);
+<<<<<<< Updated upstream
     
     fetch("{% url 'inventario_importar' %}", {
         method: 'POST',
@@ -1138,14 +1666,62 @@ document.getElementById('btnImportarSubmit').addEventListener('click', function(
         
         if (data.success) {
             mensajeDiv.className = 'alert alert-success';
+=======
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', "{% url 'inventario_importar' %}", true);
+    xhr.timeout = 20 * 60 * 1000;
+    xhr.setRequestHeader('X-CSRFToken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+
+    xhr.upload.onprogress = function(event) {
+        if (event.lengthComputable) {
+            const porcentajeSubida = Math.round((event.loaded / event.total) * 85);
+            actualizarBarra(
+                porcentajeSubida,
+                'Subiendo archivo...',
+                `Subida en progreso (${Math.round((event.loaded / event.total) * 100)}%).`
+            );
+        }
+    };
+
+    xhr.upload.onload = function() {
+        actualizarBarra(85, 'Archivo subido', 'Archivo subido. Iniciando procesamiento...');
+        iniciarSimulacionProcesamiento();
+    };
+
+    xhr.onreadystatechange = function() {
+        if (xhr.readyState !== 4) {
+            return;
+        }
+
+        detenerSimulacionProcesamiento();
+
+        btnImportar.disabled = false;
+        btnImportar.textContent = 'Importar';
+
+        let data = null;
+        try {
+            data = JSON.parse(xhr.responseText || '{}');
+        } catch (parseError) {
+            actualizarBarra(100, 'Importacion finalizada con error', null);
+            showToast('Error de conexión al importar: respuesta no válida.', 'danger', 0);
+            mensajeDiv.className = 'alert alert-danger mt-2';
+            mensajeDiv.textContent = 'Error: respuesta no válida del servidor.';
+            return;
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+            actualizarBarra(100, 'Importacion completada', 'Importacion completada correctamente.');
+            showToast(`✓ Importación exitosa: ${data.exitosas} registros importados.`, 'success', 6000);
+            mensajeDiv.className = 'alert alert-success mt-2';
+>>>>>>> Stashed changes
             let html = `
                 <strong>✓ Importación exitosa!</strong><br>
                 ${data.message}<br>
                 Exitosas: ${data.exitosas}<br>
                 Fallidas: ${data.fallidas}
             `;
-            
-            // Agregar resumen de errores si hay fallidas
+
             if (data.fallidas > 0 && data.errores_resumen && data.errores_resumen.length > 0) {
                 html += `
                     <div class="mt-3 p-2 bg-light border rounded">
@@ -1163,13 +1739,12 @@ document.getElementById('btnImportarSubmit').addEventListener('click', function(
                     <i class="bi bi-exclamation-triangle"></i> Ver Todos los Errores y Corregir
                 </a>`;
             }
-            
+
             mensajeDiv.innerHTML = html;
-            
-            // Recargar la tabla después de 3 segundos
             setTimeout(() => {
                 location.reload();
             }, 3000);
+<<<<<<< Updated upstream
         } else {
             mensajeDiv.className = 'alert alert-danger';
             let html = `
@@ -1209,6 +1784,75 @@ document.getElementById('btnImportarSubmit').addEventListener('click', function(
         document.getElementById('importMensaje').textContent = 'Error: ' + error.message;
         document.getElementById('importResultados').style.display = 'block';
     });
+=======
+            return;
+        }
+
+        actualizarBarra(100, 'Importacion finalizada con errores', null);
+        showToast(`✗ Importación con errores: ${data.fallidas || 0} fallidas.`, 'danger', 0);
+        mensajeDiv.className = 'alert alert-danger mt-2';
+        let html = `
+            <strong>✗ Error en la importación</strong><br>
+            ${data.message || 'Error no controlado'}<br>
+            Exitosas: ${data.exitosas || 0}<br>
+            Fallidas: ${data.fallidas || 0}
+        `;
+
+        if (data.fallidas > 0 && data.errores_resumen && data.errores_resumen.length > 0) {
+            html += `
+                <div class="mt-3 p-2 bg-light border rounded">
+                    <strong><i class="bi bi-exclamation-circle text-danger"></i> Errores Más Comunes:</strong>
+                    <ul class="mb-2 mt-2 small">
+            `;
+            data.errores_resumen.forEach(err => {
+                html += `<li><strong>${err.count} filas:</strong> ${err.motivo}</li>`;
+            });
+            html += `
+                    </ul>
+                </div>
+            `;
+
+            if (data.importacion_id) {
+                html += `<a href="/importaciones/${data.importacion_id}/errores/" class="btn btn-warning btn-sm mt-2">
+                    <i class="bi bi-exclamation-triangle"></i> Ver Todos los Errores y Corregir
+                </a>`;
+            }
+        }
+
+        mensajeDiv.innerHTML = html;
+    };
+
+    xhr.onerror = function() {
+        detenerSimulacionProcesamiento();
+        actualizarBarra(100, 'Importacion finalizada con error', null);
+        btnImportar.disabled = false;
+        btnImportar.textContent = 'Importar';
+        showToast('Error de conexión al importar.', 'danger', 0);
+        mensajeDiv.className = 'alert alert-danger mt-2';
+        mensajeDiv.textContent = 'Error: no fue posible conectar con el servidor.';
+    };
+
+    xhr.ontimeout = function() {
+        detenerSimulacionProcesamiento();
+        actualizarBarra(100, 'Importacion cancelada por tiempo', null);
+        btnImportar.disabled = false;
+        btnImportar.textContent = 'Importar';
+        showToast('La importacion supero el tiempo de espera. Revisa si el servidor sigue procesando.', 'warning', 0);
+        mensajeDiv.className = 'alert alert-warning mt-2';
+        mensajeDiv.textContent = 'Tiempo de espera excedido. Si la carga era muy grande, intenta con un archivo menor.';
+    };
+
+    xhr.onabort = function() {
+        detenerSimulacionProcesamiento();
+        actualizarBarra(100, 'Importacion cancelada', null);
+        btnImportar.disabled = false;
+        btnImportar.textContent = 'Importar';
+        mensajeDiv.className = 'alert alert-warning mt-2';
+        mensajeDiv.textContent = 'Importacion cancelada.';
+    };
+
+    xhr.send(formData);
+>>>>>>> Stashed changes
 });
 
 // =============================================
