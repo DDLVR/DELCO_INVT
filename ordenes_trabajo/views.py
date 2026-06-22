@@ -116,13 +116,13 @@ def orden_crear_view(request):
             # Observaciones iniciales (los equipos se registran después)
             orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '')
             
-            orden.estado = 'ASIGNADA'
+            orden.estado = 'PENDIENTE'
             orden.creada_por = request.user
             orden.fecha_asignacion = timezone.now()
             
             orden.save()
             
-            messages.success(request, f'Orden #{orden.id} creada y asignada a {orden.tecnico_responsable.nombre_interno}')
+            messages.success(request, f'Orden #{orden.id} creada con estado PENDIENTE y asignada a {orden.tecnico_responsable.nombre_interno}')
             return redirect('orden_detalle', pk=orden.id)
             
         except Exception as e:
@@ -167,6 +167,7 @@ def orden_detalle_view(request, pk):
         'sincronizaciones': sincronizaciones,
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'es_tecnico_responsable': orden.tecnico_responsable == usuario,
+        'estados': OrdenTrabajo.ESTADO_CHOICES,
     }
     
     return render(request, 'ordenes/detalle.html', context)
