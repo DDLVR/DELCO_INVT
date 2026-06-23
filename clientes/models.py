@@ -8,6 +8,10 @@ class Cliente(models.Model):
     Un cliente es el lugar donde se instalan medidores y se realizan trabajos.
     """
     
+    # ═════════════════════════════════════════════════════════
+    # CAMPOS PRINCIPALES (VERDES) - Datos de instalación
+    # ═════════════════════════════════════════════════════════
+    
     numero_cliente = models.CharField(
         max_length=50,
         unique=True,
@@ -31,6 +35,44 @@ class Cliente(models.Model):
         related_name='cliente_actual',
         help_text='Medidor instalado actualmente en este cliente'
     )
+    
+    # ═════════════════════════════════════════════════════════
+    # CAMPOS ADICIONALES (AMARILLOS) - Para rellenar por administrativo
+    # ═════════════════════════════════════════════════════════
+    
+    trabajo = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Descripción del trabajo realizado o a realizar'
+    )
+    
+    ip = models.CharField(
+        max_length=45,
+        blank=True,
+        help_text='Dirección IP asignada al cliente/modem'
+    )
+    
+    puerto = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text='Puerto o número de puerto de la conexión'
+    )
+    
+    modem = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Modelo o información del módem instalado'
+    )
+    
+    fecha_registro = models.DateField(
+        null=True,
+        blank=True,
+        help_text='Fecha de registro o instalación del cliente'
+    )
+    
+    # ═════════════════════════════════════════════════════════
+    # CAMPOS DE AUDITORÍA
+    # ═════════════════════════════════════════════════════════
     
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     

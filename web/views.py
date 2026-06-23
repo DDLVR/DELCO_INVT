@@ -4,7 +4,8 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
-from inventario.models import MovimientoInventario, MovimientoItem, Ubicacion
+from django.db import models
+from inventario.models import MovimientoInventario, MovimientoItem, Ubicacion, Medidor, SimCard, Modem
 from django.views.decorators.http import require_POST
 from django.conf import settings
 
@@ -2482,6 +2483,7 @@ def usuario_reset_password_view(request, pk):
 
 @login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
+@login_required
 def clientes_list_view(request):
     """Lista de clientes activos con modo solo lectura para ADMINISTRATIVO."""
     clientes = Cliente.objects.filter(activo=True).order_by('numero_cliente')
@@ -2502,6 +2504,11 @@ def cliente_crear_view(request):
         direccion = request.POST.get('direccion', '').strip()
         comuna = request.POST.get('comuna', '').strip()
         referencia = request.POST.get('referencia', '').strip()
+        trabajo = request.POST.get('trabajo', '').strip()
+        ip = request.POST.get('ip', '').strip()
+        puerto = request.POST.get('puerto', '').strip()
+        modem = request.POST.get('modem', '').strip()
+        fecha_registro = request.POST.get('fecha_registro', '').strip()
         medidor_serie = request.POST.get('medidor_serie', '').strip()
 
         if not all([numero_cliente, direccion, comuna]):
@@ -2527,6 +2534,11 @@ def cliente_crear_view(request):
             direccion=direccion,
             comuna=comuna,
             referencia=referencia,
+            trabajo=trabajo or None,
+            ip=ip or None,
+            puerto=puerto or None,
+            modem=modem or None,
+            fecha_registro=fecha_registro or None,
             medidor_actual=medidor_obj,
             activo=True,
         )
@@ -2547,6 +2559,11 @@ def cliente_editar_view(request, pk):
         direccion = request.POST.get('direccion', '').strip()
         comuna = request.POST.get('comuna', '').strip()
         referencia = request.POST.get('referencia', '').strip()
+        trabajo = request.POST.get('trabajo', '').strip()
+        ip = request.POST.get('ip', '').strip()
+        puerto = request.POST.get('puerto', '').strip()
+        modem = request.POST.get('modem', '').strip()
+        fecha_registro = request.POST.get('fecha_registro', '').strip()
         medidor_serie = request.POST.get('medidor_serie', '').strip()
 
         if not all([numero_cliente, direccion, comuna]):
@@ -2571,6 +2588,11 @@ def cliente_editar_view(request, pk):
         cliente.direccion = direccion
         cliente.comuna = comuna
         cliente.referencia = referencia
+        cliente.trabajo = trabajo or None
+        cliente.ip = ip or None
+        cliente.puerto = puerto or None
+        cliente.modem = modem or None
+        cliente.fecha_registro = fecha_registro or None
         cliente.medidor_actual = medidor_obj
         cliente.save()
 
@@ -3397,6 +3419,68 @@ def _calcular_adv_breakdown(model_class):
         {'categoria': 'Bloqueo de regla operativa', 'count': adv_regla},
         {'categoria': 'Doble trabajo / conflicto', 'count': adv_doble},
     ]
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# API DE BÚSQUEDA PARA ÓRDENES DE TRABAJO (Autocomplete)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@login_required
+def api_buscar_medidores(request):
+    """API para buscar medidores por serie, caja o marca (autocomplete)"""
+    from inventario.models import Medidor
+    
+    query = request.GET.get('q', '').strip()
+    
+    if not query or len(query) < 2:
+        return JsonResponse({'results': []})
+    
+    try:
+        # Buscar medidores que coincidan con serie, caja o marca
+        medidores = Medidor.objects.filter(
+            activo=True
+        ).filter(
+            models.Q(serie__icontains=query) |
+            models.Q(caja__icontains=query) |
+            models.Q(marca__icontains=query)
+        ).values('id', 'serie', 'caja', 'marca', 'en_custodia_de__nombre_interno')[:20]
+        
+        results = []
+        for med in medidores:
+            results.append({
+                'id': med['id'],
+                'serie': med['serie'],
+                'caja': med['caja'],
+                'marca': med['marca'] or 'No especificada',
+                'custodia': med['en_custodia_de__nombre_interno'] or 'Bodega',
+                'label': f"{med['serie']} - Caja: {med['caja']} ({med['marca'] or 'S/M'})",
+            })
+        
+        return JsonResponse({'results': results})
+    except Exception as e:
+        return JsonResponse({'results': [], 'error': str(e)}, status=400)
+
+
+@login_required
+def api_obtener_medidor(request, medidor_id):
+    """API para obtener detalles completos de un medidor"""
+    from inventario.models import Medidor
+    
+    try:
+        medidor = Medidor.objects.get(id=medidor_id, activo=True)
+        return JsonResponse({
+            'id': medidor.id,
+            'serie': medidor.serie,
+            'caja': medidor.caja,
+            'marca': medidor.marca or 'No especificada',
+            'modelo': medidor.modelo or 'No especificado',
+            'tipo': medidor.get_tipo_medidor_display() if hasattr(medidor, 'get_tipo_medidor_display') else 'Estándar',
+            'en_custodia': medidor.en_custodia_de.nombre_interno if medidor.en_custodia_de else 'Bodega',
+        })
+    except Medidor.DoesNotExist:
+        return JsonResponse({'error': 'Medidor no encontrado'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=400)
 
 
 def _extraer_bloqueos_operativos_registro(registro):

@@ -8,6 +8,13 @@ from .views import (
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
     reportes_moreapp_list, reportes_moreapp_detalle, reportes_moreapp_sincronizar, reportes_moreapp_eliminar,
     pendientes_operativos_view, moreapp_marcar_revision_view,
+    api_buscar_medidores, api_obtener_medidor,
+)
+from ordenes_trabajo.views import (
+    ordenes_list_view as ordenes_trabajo_list, 
+    orden_crear_view, 
+    orden_detalle_view, 
+    cambiar_estado_orden_view
 )
 
 urlpatterns = [
@@ -53,6 +60,12 @@ urlpatterns = [
     path('clientes/<int:pk>/editar/', cliente_editar_view, name='cliente_editar'),
     path('clientes/<int:pk>/eliminar/', cliente_eliminar_view, name='cliente_eliminar'),
 
+    # Órdenes de Trabajo
+    path('ordenes/', ordenes_trabajo_list, name='ordenes_list'),
+    path('ordenes/crear/', orden_crear_view, name='orden_crear'),
+    path('ordenes/<int:pk>/', orden_detalle_view, name='orden_detalle'),
+    path('ordenes/<int:pk>/cambiar-estado/', cambiar_estado_orden_view, name='cambiar_estado_orden'),
+
     # Movimientos de Inventario
     path('movimientos/', movimientos_list_view, name='movimientos_list'),
     path('movimientos/<int:movimiento_id>/', movimientos_detalle_view, name='movimientos_detalle'),
@@ -70,4 +83,8 @@ urlpatterns = [
 
     # API Webhook MoreApp (tiempo real - sin autenticación Django)
     path('api/moreapp-webhook/', movimientos_importar_moreapp_webhook, name='movimientos_webhook_moreapp'),
+    
+    # API - Búsqueda de Medidores (Autocomplete)
+    path('api/buscar-medidores/', api_buscar_medidores, name='api_buscar_medidores'),
+    path('api/medidores/<int:medidor_id>/', api_obtener_medidor, name='api_obtener_medidor'),
 ]

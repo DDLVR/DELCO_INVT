@@ -12,7 +12,17 @@
       <i class="bi bi-house me-2"></i> Dashboard
     </a>
 
-    <!-- Órdenes de Trabajo desactivado (fase 1) -->
+    <!-- Órdenes de Trabajo -->
+    {% if user.rol in 'ADMIN,ADMINISTRATIVO,TECNICO,GERENCIA,AUDITOR' %}
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name in 'ordenes_list,orden_crear,orden_detalle,cambiar_estado_orden' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
+        <i class="bi bi-clipboard-check me-2"></i> Órdenes de Trabajo
+      </a>
+      {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
+      <a class="list-group-item list-group-item-action app-nav-link ms-3" style="font-size: 0.88rem;" href="{% url 'orden_crear' %}">
+        <i class="bi bi-plus-circle me-2"></i> Nueva Orden
+      </a>
+      {% endif %}
+    {% endif %}
 
     <!-- Inventario -->
     {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'TECNICO' or user.rol == 'SUPERVISOR' %}
