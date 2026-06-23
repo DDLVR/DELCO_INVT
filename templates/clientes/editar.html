@@ -3,7 +3,7 @@
 {% block title %}Editar Cliente{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 700px;">
+<div class="container" style="max-width: 900px;">
   <div class="row mb-4">
     <div class="col-12">
       <h1>✏️ Editar Cliente</h1>
@@ -16,32 +16,81 @@
       <form method="post">
         {% csrf_token %}
 
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Numero de Cliente</label>
-          <input type="text" name="numero_cliente" class="form-control" value="{{ cliente.numero_cliente }}" required>
+        <!-- ═════════════════════════════════════════════════════ -->
+        <!-- DATOS PRINCIPALES (VERDES) -->
+        <!-- ═════════════════════════════════════════════════════ -->
+        <div class="card bg-light mb-4" style="border-left: 5px solid #90EE90;">
+          <div class="card-header" style="background-color: #90EE90;">
+            <h5 class="mb-0">📋 Datos Principales del Cliente (VERDES)</h5>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Numero de Cliente <span class="text-danger">*</span></label>
+              <input type="text" name="numero_cliente" class="form-control" value="{{ cliente.numero_cliente }}" required>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Direccion <span class="text-danger">*</span></label>
+              <input type="text" name="direccion" class="form-control" value="{{ cliente.direccion }}" required>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Comuna <span class="text-danger">*</span></label>
+              <input type="text" name="comuna" class="form-control" value="{{ cliente.comuna }}" required>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Referencia</label>
+              <textarea name="referencia" class="form-control" rows="2" placeholder="Notas adicionales para ubicación (Opcional)">{{ cliente.referencia }}</textarea>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Identificacion del Medidor</label>
+              <input type="text" name="medidor_serie" class="form-control" value="{{ cliente.medidor_actual.serie|default:'' }}" placeholder="Serie del medidor (Opcional)">
+              <small class="text-muted">Deja vacio para quitar la asociacion de medidor.</small>
+            </div>
+          </div>
         </div>
 
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Direccion</label>
-          <input type="text" name="direccion" class="form-control" value="{{ cliente.direccion }}" required>
+        <!-- ═════════════════════════════════════════════════════ -->
+        <!-- DATOS ADICIONALES (AMARILLOS) - Para administrativo -->
+        <!-- ═════════════════════════════════════════════════════ -->
+        <div class="card bg-light mb-4" style="border-left: 5px solid #FFFF99;">
+          <div class="card-header" style="background-color: #FFFF99;">
+            <h5 class="mb-0">⚙️ Datos Adicionales (AMARILLOS) - Para completar por el administrativo</h5>
+          </div>
+          <div class="card-body">
+            <div class="mb-3">
+              <label class="form-label">Trabajo</label>
+              <input type="text" name="trabajo" class="form-control" value="{{ cliente.trabajo|default:'' }}" placeholder="Descripción del trabajo (Opcional)">
+            </div>
+
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <label class="form-label">IP</label>
+                <input type="text" name="ip" class="form-control" value="{{ cliente.ip|default:'' }}" placeholder="Ej: 192.168.1.100">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Puerto</label>
+                <input type="text" name="puerto" class="form-control" value="{{ cliente.puerto|default:'' }}" placeholder="Ej: 8080">
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Modem</label>
+              <input type="text" name="modem" class="form-control" value="{{ cliente.modem|default:'' }}" placeholder="Modelo del modem (Opcional)">
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Fecha de Registro</label>
+              <input type="date" name="fecha_registro" class="form-control" value="{% if cliente.fecha_registro %}{{ cliente.fecha_registro|date:'Y-m-d' }}{% endif %}">
+            </div>
+          </div>
         </div>
 
-        <div class="mb-3">
-          <label class="form-label fw-semibold">Comuna</label>
-          <input type="text" name="comuna" class="form-control" value="{{ cliente.comuna }}" required>
-        </div>
-
-        <div class="mb-4">
-          <label class="form-label fw-semibold">Referencia</label>
-          <textarea name="referencia" class="form-control" rows="3" placeholder="Opcional">{{ cliente.referencia }}</textarea>
-        </div>
-
-        <div class="mb-4">
-          <label class="form-label fw-semibold">Identificacion del Medidor</label>
-          <input type="text" name="medidor_serie" class="form-control" value="{{ cliente.medidor_actual.serie|default:'' }}" placeholder="Serie del medidor (opcional)">
-          <small class="text-muted">Deja vacio para quitar la asociacion de medidor.</small>
-        </div>
-
+        <!-- ═════════════════════════════════════════════════════ -->
+        <!-- BOTONES -->
+        <!-- ═════════════════════════════════════════════════════ -->
         <div class="d-flex gap-2">
           <button type="submit" class="btn btn-primary">✓ Guardar Cambios</button>
           <a href="{% url 'clientes_list' %}" class="btn btn-secondary">Cancelar</a>

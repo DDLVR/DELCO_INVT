@@ -68,11 +68,15 @@
       <thead class="table-dark">
         <tr>
           <th>#</th>
-          <th>Numero Cliente</th>
-          <th>Direccion</th>
-          <th>Comuna</th>
-          <th>Identificacion Medidor</th>
-          <th>Referencia</th>
+          <th style="background-color: #90EE90;">Numero Cliente</th>
+          <th style="background-color: #90EE90;">Direccion</th>
+          <th style="background-color: #90EE90;">Comuna</th>
+          <th style="background-color: #90EE90;">Identificacion Medidor</th>
+          <th style="background-color: #FFFF99;">Trabajo</th>
+          <th style="background-color: #FFFF99;">IP</th>
+          <th style="background-color: #FFFF99;">Puerto</th>
+          <th style="background-color: #FFFF99;">Modem</th>
+          <th style="background-color: #FFFF99;">Fecha Registro</th>
           <th>Acciones</th>
         </tr>
       </thead>
@@ -80,11 +84,15 @@
         {% for cliente in clientes %}
           <tr>
             <td>{{ forloop.counter }}</td>
-            <td><strong>{{ cliente.numero_cliente }}</strong></td>
-            <td>{{ cliente.direccion }}</td>
-            <td>{{ cliente.comuna }}</td>
-            <td>{{ cliente.medidor_actual.serie|default:'-' }}</td>
-            <td>{{ cliente.referencia|default:'-' }}</td>
+            <td><strong style="background-color: #E8F8E8;">{{ cliente.numero_cliente }}</strong></td>
+            <td style="background-color: #E8F8E8;">{{ cliente.direccion }}</td>
+            <td style="background-color: #E8F8E8;">{{ cliente.comuna }}</td>
+            <td style="background-color: #E8F8E8;">{{ cliente.medidor_actual.serie|default:'-' }}</td>
+            <td style="background-color: #FFFACD;">{{ cliente.trabajo|default:'-' }}</td>
+            <td style="background-color: #FFFACD;">{{ cliente.ip|default:'-' }}</td>
+            <td style="background-color: #FFFACD;">{{ cliente.puerto|default:'-' }}</td>
+            <td style="background-color: #FFFACD;">{{ cliente.modem|default:'-' }}</td>
+            <td style="background-color: #FFFACD;">{{ cliente.fecha_registro|date:"d/m/Y"|default:'-' }}</td>
             <td>
               {% if puede_editar %}
                 <a href="{% url 'cliente_editar' cliente.id %}" class="btn btn-sm btn-info">✏️ Editar</a>
@@ -99,7 +107,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="7" class="text-center text-muted py-4">No hay clientes registrados.</td>
+            <td colspan="11" class="text-center text-muted py-4">No hay clientes registrados.</td>
           </tr>
         {% endfor %}
       </tbody>

@@ -314,18 +314,33 @@ def orden_registrar_equipos_view(request, pk):
             return redirect('orden_detalle', pk=pk)
         
         try:
-            # Registrar medidor
+            # Registrar medidor (primero intenta por ID si viene del autocomplete, luego por serie)
+            medidor_id = request.POST.get('medidor_id', '').strip()
             medidor_serie = request.POST.get('medidor_serie', '').strip()
-            if medidor_serie:
+            
+            if medidor_id:
+                # Si viene del autocomplete, usar ID
+                try:
+                    medidor = Medidor.objects.get(id=int(medidor_id))
+                    # Verificar que el medidor esté en custodia del técnico
+                    if medidor.en_custodia_de == request.user or request.user.rol in ['ADMIN', 'ADMINISTRATIVO']:
+                        orden.medidor = medidor
+                        messages.success(request, f'✓ Medidor {medidor.serie} registrado correctamente')
+                    else:
+                        messages.warning(request, f'⚠ El medidor {medidor.serie} no está en tu custodia')
+                except (Medidor.DoesNotExist, ValueError):
+                    messages.warning(request, 'Medidor no encontrado')
+            elif medidor_serie:
+                # Si no viene ID pero viene serie (compatibilidad con entrada manual)
                 try:
                     medidor = Medidor.objects.get(serie=medidor_serie)
                     # Verificar que el medidor esté en custodia del técnico
                     if medidor.en_custodia_de == request.user or request.user.rol in ['ADMIN', 'ADMINISTRATIVO']:
                         orden.medidor = medidor
                     else:
-                        messages.warning(request, f'El medidor {medidor_serie} no está en tu custodia')
+                        messages.warning(request, f'⚠ El medidor {medidor_serie} no está en tu custodia')
                 except Medidor.DoesNotExist:
-                    messages.warning(request, f'Medidor {medidor_serie} no encontrado')
+                    messages.warning(request, f'⚠ Medidor {medidor_serie} no encontrado')
             else:
                 orden.medidor = None
             
@@ -337,10 +352,11 @@ def orden_registrar_equipos_view(request, pk):
                     # Verificar que la SIM esté en custodia del técnico
                     if simcard.en_custodia_de == request.user or request.user.rol in ['ADMIN', 'ADMINISTRATIVO']:
                         orden.simcard = simcard
+                        messages.success(request, f'✓ SIM Card {simcard_imei} registrada correctamente')
                     else:
-                        messages.warning(request, f'La SIM {simcard_imei} no está en tu custodia')
+                        messages.warning(request, f'⚠ La SIM {simcard_imei} no está en tu custodia')
                 except SimCard.DoesNotExist:
-                    messages.warning(request, f'SIM Card {simcard_imei} no encontrada')
+                    messages.warning(request, f'⚠ SIM Card {simcard_imei} no encontrada')
             else:
                 orden.simcard = None
             
@@ -352,18 +368,19 @@ def orden_registrar_equipos_view(request, pk):
                     # Verificar que el módem esté en custodia del técnico
                     if modem.en_custodia_de == request.user or request.user.rol in ['ADMIN', 'ADMINISTRATIVO']:
                         orden.modem = modem
+                        messages.success(request, f'✓ Módem {modem_serie} registrado correctamente')
                     else:
-                        messages.warning(request, f'El módem {modem_serie} no está en tu custodia')
+                        messages.warning(request, f'⚠ El módem {modem_serie} no está en tu custodia')
                 except Modem.DoesNotExist:
-                    messages.warning(request, f'Módem {modem_serie} no encontrado')
+                    messages.warning(request, f'⚠ Módem {modem_serie} no encontrado')
             else:
                 orden.modem = None
             
             orden.save()
-            messages.success(request, 'Equipos registrados correctamente en la orden')
+            messages.success(request, '✓ Equipos registrados correctamente en la orden')
             
         except Exception as e:
-            messages.error(request, f'Error al registrar equipos: {str(e)}')
+            messages.error(request, f'❌ Error al registrar equipos: {str(e)}')
         
         return redirect('orden_detalle', pk=pk)
     

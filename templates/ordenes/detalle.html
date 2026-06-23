@@ -141,15 +141,46 @@
                     {% if es_tecnico_responsable and orden.estado in 'EN_EJECUCION,FINALIZADA' %}
                     <hr>
                     <h6 class="mb-3"><i class="bi bi-plus-circle"></i> Registrar/Actualizar Equipos Usados</h6>
-                    <form method="post" action="{% url 'orden_registrar_equipos' orden.id %}">
+                    <form method="post" action="{% url 'orden_registrar_equipos' orden.id %}" id="formRegistrarEquipos">
                         {% csrf_token %}
                         <div class="row">
+                            <!-- Campo de Búsqueda de Medidor -->
                             <div class="col-md-4 mb-2">
-                                <label class="form-label small">📏 Medidor (Serie)</label>
-                                <input type="text" name="medidor_serie" class="form-control form-control-sm" 
-                                       placeholder="Ej: MED-2024-001" 
-                                       value="{{ orden.medidor.serie|default:'' }}">
+                                <label class="form-label small">📏 Medidor (Serie o Caja)</label>
+                                <div style="position: relative;">
+                                    <input type="text" 
+                                           id="medidor_search" 
+                                           class="form-control form-control-sm" 
+                                           placeholder="Escribe para buscar..."
+                                           autocomplete="off">
+                                    <input type="hidden" id="medidor_id" name="medidor_id">
+                                    <input type="text" id="medidor_serie" name="medidor_serie" style="display:none;">
+                                     
+                                    <!-- Dropdown de sugerencias -->
+                                    <ul id="medidores_list" style="
+                                        position: absolute;
+                                        top: 100%;
+                                        left: 0;
+                                        right: 0;
+                                        background: white;
+                                        border: 1px solid #ddd;
+                                        border-top: none;
+                                        max-height: 200px;
+                                        overflow-y: auto;
+                                        display: none;
+                                        list-style: none;
+                                        padding: 0;
+                                        margin: 0;
+                                        z-index: 1000;
+                                        border-radius: 0 0 4px 4px;
+                                    ">
+                                    </ul>
+                                </div>
+                                <small class="text-muted d-block mt-1">
+                                    💡 Escribe al menos 2 caracteres de la serie o caja del medidor
+                                </small>
                             </div>
+                             
                             <div class="col-md-4 mb-2">
                                 <label class="form-label small">📱 SIM Card (IMEI)</label>
                                 <input type="text" name="simcard_imei" class="form-control form-control-sm" 
@@ -163,6 +194,18 @@
                                        value="{{ orden.modem.serie|default:'' }}">
                             </div>
                         </div>
+                         
+                        <!-- Información del medidor seleccionado -->
+                        <div id="medidor_info" style="display: none;" class="alert alert-info mt-2 mb-2">
+                            <small>
+                                <strong>Medidor seleccionado:</strong><br>
+                                Serie: <span id="info_serie"></span><br>
+                                Caja: <span id="info_caja"></span><br>
+                                Marca: <span id="info_marca"></span><br>
+                                En custodia: <span id="info_custodia"></span>
+                            </small>
+                        </div>
+                         
                         <button type="submit" class="btn btn-sm btn-primary">
                             <i class="bi bi-save"></i> Registrar Equipos
                         </button>
@@ -170,6 +213,121 @@
                             <i class="bi bi-info-circle"></i> Solo registra los equipos que realmente usaste en este trabajo
                         </small>
                     </form>
+                     
+                    <script>
+                    document.addEventListener('DOMContentLoaded', function() {
+                        const searchInput = document.getElementById('medidor_search');
+                        const medidorList = document.getElementById('medidores_list');
+                        const medidorIdField = document.getElementById('medidor_id');
+                        const medidorSerieField = document.getElementById('medidor_serie');
+                        const medidorInfoDiv = document.getElementById('medidor_info');
+                        let debounceTimer;
+                         
+                        // Búsqueda con debounce
+                        searchInput.addEventListener('input', function() {
+                            clearTimeout(debounceTimer);
+                            const query = this.value.trim();
+                             
+                            medidorList.style.display = 'none';
+                            medidorList.innerHTML = '';
+                            medidorInfoDiv.style.display = 'none';
+                             
+                            if (query.length < 2) return;
+                             
+                            debounceTimer = setTimeout(() => {
+                                fetch(`{% url 'api_buscar_medidores' %}?q=` + encodeURIComponent(query))
+                                    .then(response => response.json())
+                                    .then(data => {
+                                        if (data.results.length === 0) {
+                                            medidorList.innerHTML = '<li style="padding: 8px 12px; color: #999;">No se encontraron medidores</li>';
+                                        } else {
+                                            data.results.forEach(med => {
+                                                const li = document.createElement('li');
+                                                li.style.cssText = 'padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #eee;';
+                                                li.innerHTML = `
+                                                    <strong>${med.serie}</strong> - Caja: ${med.caja}<br>
+                                                    <small style="color: #666;">Marca: ${med.marca} | Custodia: ${med.custodia}</small>
+                                                `;
+                                                li.addEventListener('click', () => selectMedidor(med));
+                                                li.addEventListener('mouseover', () => li.style.backgroundColor = '#f5f5f5');
+                                                li.addEventListener('mouseout', () => li.style.backgroundColor = 'white');
+                                                medidorList.appendChild(li);
+                                            });
+                                        }
+                                        medidorList.style.display = 'block';
+                                    })
+                                    .catch(error => {
+                                        console.error('Error:', error);
+                                        medidorList.innerHTML = '<li style="padding: 8px 12px; color: #c00;">Error en la búsqueda</li>';
+                                        medidorList.style.display = 'block';
+                                    });
+                            }, 300);
+                        });
+                         
+                        // Seleccionar medidor
+                        function selectMedidor(med) {
+                            searchInput.value = med.label;
+                            medidorIdField.value = med.id;
+                            medidorSerieField.value = med.serie;
+                            medidorList.style.display = 'none';
+                             
+                            // Mostrar información del medidor
+                            document.getElementById('info_serie').textContent = med.serie;
+                            document.getElementById('info_caja').textContent = med.caja;
+                            document.getElementById('info_marca').textContent = med.marca;
+                            document.getElementById('info_custodia').textContent = med.custodia;
+                            medidorInfoDiv.style.display = 'block';
+                        }
+                         
+                        // Cerrar dropdown al hacer clic fuera
+                        document.addEventListener('click', function(e) {
+                            if (e.target !== searchInput && e.target !== medidorList) {
+                                medidorList.style.display = 'none';
+                            }
+                        });
+                         
+                        // Permitir navegación con teclado
+                        searchInput.addEventListener('keydown', function(e) {
+                            const items = medidorList.querySelectorAll('li');
+                            let selected = medidorList.querySelector('li[style*="background"]');
+                             
+                            if (e.key === 'ArrowDown') {
+                                e.preventDefault();
+                                if (selected) {
+                                    selected.style.backgroundColor = 'white';
+                                    selected = selected.nextElementSibling;
+                                } else if (items.length > 0) {
+                                    selected = items[0];
+                                }
+                                if (selected) {
+                                    selected.style.backgroundColor = '#f5f5f5';
+                                    selected.scrollIntoView({ block: 'nearest' });
+                                }
+                            } else if (e.key === 'ArrowUp') {
+                                e.preventDefault();
+                                if (selected) {
+                                    selected.style.backgroundColor = 'white';
+                                    selected = selected.previousElementSibling;
+                                } else if (items.length > 0) {
+                                    selected = items[items.length - 1];
+                                }
+                                if (selected) {
+                                    selected.style.backgroundColor = '#f5f5f5';
+                                    selected.scrollIntoView({ block: 'nearest' });
+                                }
+                            } else if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if (selected && selected.textContent) {
+                                    const medIdx = Array.from(items).indexOf(selected);
+                                    if (medIdx >= 0) {
+                                        // Simulamos click en el elemento
+                                        selected.click();
+                                    }
+                                }
+                            }
+                        });
+                    });
+                    </script>
                     {% endif %}
                 </div>
             </div>
