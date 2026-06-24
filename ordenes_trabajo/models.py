@@ -115,8 +115,15 @@ class OrdenTrabajo(models.Model):
     """Orden de trabajo con flujo operativo"""
 
     ESTADO_CHOICES = [
-        ('PENDIENTE', 'Pendiente'),
-        ('REALIZADO', 'Realizado'),
+        ('CREADA', 'Creada'),
+        ('ASIGNADA', 'Asignada'),
+        ('EN_EJECUCION', 'En ejecución'),
+        ('REASIGNADA', 'Reasignada'),
+        ('MANTENIMIENTO', 'Mantenimiento'),
+        ('PENDIENTE_VALIDACION', 'Pendiente validación'),
+        ('VALIDADA', 'Validada'),
+        ('OBSERVADA', 'Observada'),
+        ('FINALIZADA', 'Finalizada'),
         ('CANCELADA', 'Cancelada'),
     ]
 
@@ -187,7 +194,7 @@ class OrdenTrabajo(models.Model):
     estado = models.CharField(
         max_length=30,
         choices=ESTADO_CHOICES,
-        default='PENDIENTE'
+        default='CREADA'
     )
 
     # Asignación de personal
@@ -264,15 +271,27 @@ class OrdenTrabajo(models.Model):
     def puede_cambiar_estado(self, usuario, nuevo_estado):
         """Valida si usuario puede cambiar a nuevo_estado"""
 
-        # ADMIN y ADMINISTRATIVO pueden cambiar a cualquier estado
+        # ADMIN y ADMINISTRATIVO pueden todo
         if usuario.rol in ['ADMIN', 'ADMINISTRATIVO']:
             return True
 
-        # TECNICO responsable puede cambiar de PENDIENTE a REALIZADO
+        # TECNICO responsable (permisos limitados)
         if usuario.rol == 'TECNICO' and usuario == self.tecnico_responsable:
-            if self.estado == 'PENDIENTE' and nuevo_estado == 'REALIZADO':
+            # Puede cambiar a EN_EJECUCION
+            if nuevo_estado == 'EN_EJECUCION':
                 return True
+            # Puede finalizar
+            if nuevo_estado == 'FINALIZADA':
+                return True
+            # Puede solicitar reasignación (una sola vez)
+            if nuevo_estado in ['REASIGNADA', 'MANTENIMIENTO']:
+                if not self.tecnico_solicito_reasignacion:
+                    return True
         
+        # SUPERVISOR puede validar
+        if usuario.rol == 'SUPERVISOR' and nuevo_estado in ['VALIDADA', 'OBSERVADA']:
+            return True
+
         return False
 
     def cambiar_estado(self, usuario, nuevo_estado, razon=''):
@@ -285,9 +304,17 @@ class OrdenTrabajo(models.Model):
 
         self.estado = nuevo_estado
 
-        if nuevo_estado == 'REALIZADO':
+        if nuevo_estado == 'FINALIZADA':
             from django.utils import timezone
-            self.fecha_fin_ejecucion = timezone.now()
+            self.fecha_cierre = timezone.now()
+
+        if nuevo_estado in ['REASIGNADA', 'MANTENIMIENTO']:
+            self.tecnico_solicito_reasignacion = True
+
+        if nuevo_estado == 'VALIDADA':
+            self.validada_por = usuario
+            from django.utils import timezone
+            self.fecha_validacion = timezone.now()
 
         self.save()
 

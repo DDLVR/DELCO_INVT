@@ -486,19 +486,12 @@
                         {% csrf_token %}
                         <label class="form-label">Cambiar Estado</label>
                         <select name="nuevo_estado" class="form-select mb-2">
-                            {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
-                                <!-- Admins pueden cambiar a cualquier estado -->
-                                {% for codigo, nombre in estados %}
-                                    {% if codigo != orden.estado %}
-                                    <option value="{{ codigo }}">{{ nombre }}</option>
-                                    {% endif %}
-                                {% endfor %}
-                            {% elif user.rol == 'TECNICO' and es_tecnico_responsable %}
-                                <!-- Técnicos solo pueden cambiar PENDIENTE a REALIZADO -->
-                                {% if orden.estado == 'PENDIENTE' %}
-                                <option value="REALIZADO">Marcar como Realizado</option>
-                                <option value="CANCELADA">Cancelar Orden</option>
-                                {% endif %}
+                            <option value="EN_EJECUCION">En ejecución</option>
+                            <option value="FINALIZADA">Finalizada</option>
+                            <option value="CANCELADA">Cancelada</option>
+                            {% if puede_editar %}
+                            <option value="PENDIENTE_VALIDACION">Pendiente validación</option>
+                            <option value="VALIDADA">Validada</option>
                             {% endif %}
                         </select>
                         <button type="submit" class="btn btn-warning w-100">
