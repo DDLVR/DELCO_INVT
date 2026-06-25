@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.db.models import Q
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
+from io import BytesIO
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
@@ -28,54 +29,62 @@ from inventario.models import Medidor, SimCard, Modem
 from web.decorators import admin_only
 
 
-@login_required
-def ordenes_list_view(request):
-    """
-    Lista de órdenes de trabajo con filtros
-    """
+def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
+    """Queryset de órdenes según rol y filtros GET (listado y exportación)."""
     usuario = request.user
-    
-    # Base queryset según rol
+
     if usuario.rol in ['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR']:
         ordenes = OrdenTrabajo.objects.all()
     elif usuario.rol == 'TECNICO':
         ordenes = OrdenTrabajo.objects.filter(tecnico_responsable=usuario)
     else:
         ordenes = OrdenTrabajo.objects.none()
+
+    if aplicar_filtros:
+        estado_filtro = request.GET.get('estado', '')
+        tipo_filtro = request.GET.get('tipo_trabajo', '')
+        tecnico_filtro = request.GET.get('tecnico', '')
+        cliente_filtro = request.GET.get('cliente', '')
+        buscar = request.GET.get('buscar', '')
+
+        if estado_filtro:
+            ordenes = ordenes.filter(estado=estado_filtro)
+        if tipo_filtro:
+            ordenes = ordenes.filter(tipo_trabajo=tipo_filtro)
+        if tecnico_filtro:
+            ordenes = ordenes.filter(tecnico_responsable_id=tecnico_filtro)
+        if cliente_filtro:
+            ordenes = ordenes.filter(cliente_id=cliente_filtro)
+        if buscar:
+            ordenes = ordenes.filter(
+                Q(titulo__icontains=buscar)
+                | Q(descripcion__icontains=buscar)
+                | Q(cliente__numero_cliente__icontains=buscar)
+            )
+
+    return ordenes.select_related(
+        'tecnico_responsable',
+        'cliente',
+        'medidor',
+        'simcard',
+        'modem',
+        'creada_por',
+    ).order_by('-fecha_creacion')
+
+
+@login_required
+def ordenes_list_view(request):
+    """
+    Lista de órdenes de trabajo con filtros
+    """
+    usuario = request.user
+    ordenes = _queryset_ordenes_filtrado(request)
     
-    # Aplicar filtros
     estado_filtro = request.GET.get('estado', '')
     tipo_filtro = request.GET.get('tipo_trabajo', '')
     tecnico_filtro = request.GET.get('tecnico', '')
     cliente_filtro = request.GET.get('cliente', '')
     buscar = request.GET.get('buscar', '')
-    
-    if estado_filtro:
-        ordenes = ordenes.filter(estado=estado_filtro)
-    
-    if tipo_filtro:
-        ordenes = ordenes.filter(tipo_trabajo=tipo_filtro)
-    
-    if tecnico_filtro:
-        ordenes = ordenes.filter(tecnico_responsable_id=tecnico_filtro)
-    
-    if cliente_filtro:
-        ordenes = ordenes.filter(cliente_id=cliente_filtro)
-    
-    if buscar:
-        ordenes = ordenes.filter(
-            Q(titulo__icontains=buscar) |
-            Q(descripcion__icontains=buscar) |
-            Q(cliente__numero_cliente__icontains=buscar)
-        )
-    
-    ordenes = ordenes.select_related(
-        'tecnico_responsable', 
-        'cliente', 
-        'medidor', 
-        'simcard', 
-        'modem'
-    ).order_by('-fecha_creacion')
     
     # Obtener opciones para filtros
     tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True)
@@ -439,35 +448,42 @@ def ordenes_importar_view(request):
                 errores_resumen.append({'motivo': motivo[:150], 'count': count})
 
         return JsonResponse({
-            'success': importacion.estado == 'COMPLETADO',
-            'message': importacion.observaciones,
+            'success': importacion.exitosas > 0,
+            'message': importacion.observaciones or 'Importación finalizada.',
             'exitosas': importacion.exitosas,
             'fallidas': importacion.fallidas,
+            'total_filas': importacion.total_filas,
             'importacion_id': importacion.id,
             'errores_resumen': errores_resumen,
+            'estado': importacion.estado,
         })
     except Exception as exc:
-        return JsonResponse({'success': False, 'message': str(exc)})
+        return JsonResponse({'success': False, 'message': str(exc), 'exitosas': 0, 'fallidas': 0})
 
 
 @login_required
 def ordenes_exportar_view(request):
-    """Exporta órdenes filtradas a Excel."""
+    """Exporta todas las órdenes visibles para el rol del usuario."""
     if request.user.rol not in ['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR']:
         messages.error(request, 'Sin permisos para exportar')
         return redirect('ordenes_list')
 
-    qs = OrdenTrabajo.objects.all().select_related('cliente', 'tecnico_responsable')
-    estado = request.GET.get('estado', '')
-    if estado:
-        qs = qs.filter(estado=estado)
+    # Exportar sin filtros GET: evita Excel vacío por filtros activos en la URL
+    usar_filtros = request.GET.get('filtrar') == '1'
+    qs = _queryset_ordenes_filtrado(request, aplicar_filtros=usar_filtros)
+    wb = exportar_ordenes_excel(list(qs))
 
-    buffer = exportar_ordenes_excel(qs.order_by('-fecha_creacion'))
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    timestamp = timezone.now().strftime('%d-%m-%Y')
     response = HttpResponse(
-        buffer.getvalue(),
+        stream.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
-    response['Content-Disposition'] = 'attachment; filename="ordenes_trabajo.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="ordenes_trabajo_{timestamp}.xlsx"'
+    response['Cache-Control'] = 'no-store'
     return response
 
 

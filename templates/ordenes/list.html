@@ -19,18 +19,15 @@
                 <a href="{% url 'orden_crear' %}" class="btn btn-success">
                     <i class="bi bi-plus-circle"></i> Nueva Orden
                 </a>
-                <button type="button" class="btn btn-outline-dark" id="btnAbrirMasivo">
-                    <i class="bi bi-check2-square"></i> Edición múltiple
-                </button>
                 <button type="button" class="btn btn-outline-primary" id="btnAsignarMasivo">
                     <i class="bi bi-person-check"></i> Asignar responsable
                 </button>
                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarOrdenes">
                     <i class="bi bi-upload"></i> Importar Excel
                 </button>
-                <button type="button" class="btn btn-info" id="btnExportarOrdenes">
+                <a href="{% url 'ordenes_exportar' %}" class="btn btn-info">
                     <i class="bi bi-download"></i> Exportar Excel
-                </button>
+                </a>
                 <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalFormatoOrdenes">
                     <i class="bi bi-info-circle"></i> Formato
                 </button>
@@ -148,7 +145,7 @@
                                 <td>{{ orden.fecha_asignacion|date:"d/m/Y H:i"|default:"-" }}</td>
                                 <td>
                                     {% if orden.alerta_duplicado %}
-                                    <span class="text-warning" title="{{ orden.descripcion_alerta_duplicado }}">
+                                    <span class="text-warning" title="{{ orden.descripcion_alerta_duplicado|escape }}">
                                         <i class="bi bi-exclamation-triangle-fill"></i>
                                     </span>
                                     {% else %}-{% endif %}
@@ -158,7 +155,7 @@
                                         <i class="bi bi-eye"></i> Ver
                                     </a>
                                     {% if puede_eliminar %}
-                                    <form action="{% url 'orden_eliminar' orden.id %}" method="post" class="d-inline form-eliminar-orden" data-orden-id="{{ orden.id }}" data-orden-titulo="{{ orden.titulo }}">
+                                    <form action="{% url 'orden_eliminar' orden.id %}" method="post" class="d-inline form-eliminar-orden" data-orden-id="{{ orden.id }}" data-orden-titulo="{{ orden.titulo|escape }}">
                                         {% csrf_token %}
                                         <button type="submit" class="btn btn-sm btn-danger">
                                             <i class="bi bi-trash"></i>
@@ -168,8 +165,13 @@
                                 </td>
                             </tr>
                             {% empty %}
-                            <tr>
-                                <td colspan="11" class="text-center text-muted py-4">No hay órdenes de trabajo</td>
+                            <tr class="delco-fila-vacia">
+                                {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
+                                <td></td>
+                                <td colspan="10" class="text-center text-muted py-4">No hay órdenes de trabajo</td>
+                                {% else %}
+                                <td colspan="10" class="text-center text-muted py-4">No hay órdenes de trabajo</td>
+                                {% endif %}
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -182,22 +184,32 @@
 
 {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
 <!-- Modal Importar -->
-<div class="modal fade" id="modalImportarOrdenes" tabindex="-1">
+<div class="modal fade" id="modalImportarOrdenes" tabindex="-1" aria-labelledby="modalImportarOrdenesLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Importar órdenes desde Excel</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <h5 class="modal-title" id="modalImportarOrdenesLabel">Importar órdenes desde Excel</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form id="formImportarOrdenes" enctype="multipart/form-data">
                 {% csrf_token %}
                 <div class="modal-body">
                     <p class="text-muted">Carga un Excel (.xlsx) con las órdenes. El técnico es opcional; si no viene, la orden queda en estado <strong>Creada</strong>.</p>
-                    <input type="file" class="form-control" name="archivo" accept=".xlsx,.xls" required>
+                    <input type="file" class="form-control" id="archivoImportarOrdenes" name="archivo"
+                           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                    <div class="delco-import-progress mt-3" style="display:none;">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="delco-import-progress-label text-muted">Preparando importación...</small>
+                            <small class="delco-import-progress-pct fw-semibold">0%</small>
+                        </div>
+                        <div class="progress" style="height:22px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated delco-import-progress-bar" role="progressbar" style="width:0%">0%</div>
+                        </div>
+                    </div>
                     <div id="importOrdenesResult" class="mt-3" style="display:none;"><div id="importOrdenesMsg" class="alert"></div></div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="btnCancelarImportOrdenes">Cancelar</button>
                     <button type="button" class="btn btn-primary" id="btnImportarOrdenesSubmit">Importar</button>
                 </div>
             </form>
@@ -222,9 +234,15 @@
                         <tr><td><code>Titulo</code></td><td>No</td><td>Título del trabajo. Por defecto: "Trabajo — {cliente}".</td></tr>
                         <tr><td><code>Descripcion</code></td><td>No</td><td>Detalle adicional.</td></tr>
                         <tr><td><code>Tipo Trabajo</code></td><td>No</td><td>Instalación, Cambio, Retiro, Mantención, etc. Default: Instalación.</td></tr>
-                        <tr><td><code>Tecnico</code></td><td>No</td><td>Nombre interno del técnico. Si viene, la orden queda <strong>Asignada</strong>.</td></tr>
+                        <tr><td><code>Tecnico Responsable</code></td><td>No</td><td>Nombre interno del técnico. Si viene, la orden queda <strong>Asignada</strong>.</td></tr>
+                        <tr><td><code>ID Orden</code></td><td>No</td><td>Si viene (como en el Excel exportado), se <strong>actualiza</strong> esa orden en lugar de crear una nueva.</td></tr>
+                        <tr><td><code>Estado</code></td><td>No</td><td>Se respeta al reimportar un Excel exportado (ej. Asignada, Realizada).</td></tr>
                     </tbody>
                 </table>
+                <div class="alert alert-info small">
+                    Puedes <strong>exportar</strong> el listado, editar el mismo archivo y <strong>volver a importarlo</strong>.
+                    Las filas con <code>ID Orden</code> se actualizan; las filas nuevas (sin ID) se crean.
+                </div>
                 <div class="alert alert-warning small mb-0">
                     Si el mismo cliente tiene otra orden en los últimos <strong>14 días</strong>, el sistema marcará una alerta de posible duplicidad.
                 </div>
@@ -233,8 +251,8 @@
     </div>
 </div>
 
-<!-- Modal Edición múltiple -->
-<div class="modal fade" id="modalEditarMasivoOrdenes" tabindex="-1">
+<!-- Modal Edición múltiple (oculto temporalmente) -->
+<div class="modal fade d-none" id="modalEditarMasivoOrdenes" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-dark text-white">
@@ -318,19 +336,12 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
 
+{% block extra_js %}
 <script>
 $(document).ready(function() {
-    const dtOptions = {
-        language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json' },
-        pageLength: 25,
-        order: [[{% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}7{% else %}6{% endif %}, 'desc']],
-        columnDefs: [{ targets: -1, orderable: false, searchable: false }]
-    };
-    {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
-    dtOptions.columnDefs.push({ targets: 0, orderable: false, searchable: false });
-    {% endif %}
-    $('#tablaOrdenes').DataTable(dtOptions);
+    // --- Handlers críticos primero (no deben quedar bloqueados por DataTables) ---
 
     function obtenerSeleccionadas() {
         return Array.from(document.querySelectorAll('.check-orden:checked'));
@@ -355,40 +366,81 @@ $(document).ready(function() {
         return true;
     }
 
-    const btnMasivo = document.getElementById('btnAbrirMasivo');
-    if (btnMasivo) btnMasivo.addEventListener('click', () => abrirModalSeleccion('modalEditarMasivoOrdenes', 'bulkOrdenIds', 'bulkOrdenResumen'));
-
     const btnAsignar = document.getElementById('btnAsignarMasivo');
     if (btnAsignar) btnAsignar.addEventListener('click', () => abrirModalSeleccion('modalAsignarMasivoOrdenes', 'bulkAsignarIds', 'bulkAsignarResumen'));
 
-    const btnExportar = document.getElementById('btnExportarOrdenes');
-    if (btnExportar) btnExportar.addEventListener('click', () => { window.location.href = "{% url 'ordenes_exportar' %}"; });
+    const modalImportarOrdenes = document.getElementById('modalImportarOrdenes');
+    if (modalImportarOrdenes) {
+        modalImportarOrdenes.addEventListener('hide.bs.modal', function(e) {
+            if (modalImportarOrdenes.dataset.importing === '1') {
+                e.preventDefault();
+                return;
+            }
+            if (document.activeElement && modalImportarOrdenes.contains(document.activeElement)) {
+                document.activeElement.blur();
+            }
+        });
+        modalImportarOrdenes.addEventListener('hidden.bs.modal', function() {
+            modalImportarOrdenes.dataset.importing = '0';
+            const form = document.getElementById('formImportarOrdenes');
+            if (form) form.reset();
+            const box = document.getElementById('importOrdenesResult');
+            const progress = modalImportarOrdenes.querySelector('.delco-import-progress');
+            if (box) box.style.display = 'none';
+            if (progress) progress.style.display = 'none';
+        });
+    }
 
     const btnImportar = document.getElementById('btnImportarOrdenesSubmit');
     if (btnImportar) {
         btnImportar.addEventListener('click', function() {
+            if (typeof window.ejecutarImportacionExcel !== 'function') {
+                if (window.showToast) showToast('No se cargó el módulo de importación. Recarga la página (Ctrl+F5).', 'danger', 0);
+                return;
+            }
+
             const form = document.getElementById('formImportarOrdenes');
-            const fd = new FormData(form);
-            fetch("{% url 'ordenes_importar' %}", { method: 'POST', body: fd })
-                .then(r => r.json())
-                .then(data => {
+            const archivoInput = document.getElementById('archivoImportarOrdenes');
+
+            if (!archivoInput || !archivoInput.files.length) {
+                if (window.showToast) showToast('Selecciona un archivo Excel antes de importar.', 'warning');
+                return;
+            }
+
+            window.ejecutarImportacionExcel({
+                url: "{% url 'ordenes_importar' %}",
+                form: form,
+                fileInput: archivoInput,
+                submitBtn: btnImportar,
+                modalEl: modalImportarOrdenes,
+                onSuccess: function(data) {
+                    if (modalImportarOrdenes) modalImportarOrdenes.dataset.importing = '0';
                     const box = document.getElementById('importOrdenesResult');
                     const msg = document.getElementById('importOrdenesMsg');
                     box.style.display = 'block';
                     msg.className = 'alert ' + (data.success ? 'alert-success' : 'alert-danger');
-                    msg.innerHTML = `<strong>${data.success ? 'OK' : 'Error'}</strong> ${data.message}<br>Exitosas: ${data.exitosas || 0} | Fallidas: ${data.fallidas || 0}`;
+                    let html = `<strong>${data.success ? 'Importación completada' : 'Importación con errores'}</strong><br>${data.message}<br>Exitosas: ${data.exitosas || 0} | Fallidas: ${data.fallidas || 0}`;
+                    if (data.fallidas > 0 && data.importacion_id) {
+                        html += `<br><a href="/importaciones/${data.importacion_id}/errores/" class="btn btn-warning btn-sm mt-2">Ver errores detallados</a>`;
+                    }
+                    msg.innerHTML = html;
+                    if (window.showToast) {
+                        showToast(data.success ? `Importadas ${data.exitosas} órdenes.` : (data.message || 'Revisa el archivo importado.'), data.success ? 'success' : 'danger', data.success ? 6000 : 0);
+                    }
                     if (data.success) setTimeout(() => location.reload(), 2500);
-                });
-        });
-    }
-
-    const formMasivo = document.getElementById('formEditarMasivoOrdenes');
-    if (formMasivo) {
-        formMasivo.addEventListener('submit', function(e) {
-            e.preventDefault();
-            fetch("{% url 'ordenes_modificar_masivo' %}", { method: 'POST', body: new FormData(formMasivo) })
-                .then(r => r.json())
-                .then(data => { alert(data.message); if (data.success) location.reload(); });
+                },
+                onError: function(err) {
+                    if (modalImportarOrdenes) modalImportarOrdenes.dataset.importing = '0';
+                    const box = document.getElementById('importOrdenesResult');
+                    const msg = document.getElementById('importOrdenesMsg');
+                    if (box && msg) {
+                        box.style.display = 'block';
+                        msg.className = 'alert alert-danger';
+                        msg.textContent = err.message || 'Error al importar.';
+                    }
+                    if (window.showToast) showToast(err.message || 'Error al importar.', 'danger', 0);
+                }
+            }).catch(function() { /* onError ya informó */ });
         });
     }
 
@@ -414,6 +466,28 @@ $(document).ready(function() {
             if (confirmado) form.submit();
         });
     });
+
+    // --- DataTables al final: si falla, no bloquea importación ni otros handlers ---
+    $.fn.dataTable.ext.errMode = 'none';
+    const dtOptions = {
+        language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json' },
+        pageLength: 25,
+        order: [[{% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}7{% else %}6{% endif %}, 'desc']],
+        columnDefs: [{ targets: -1, orderable: false, searchable: false }]
+    };
+    {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
+    dtOptions.columnDefs.push({ targets: 0, orderable: false, searchable: false });
+    {% endif %}
+
+    const tablaOrdenes = document.getElementById('tablaOrdenes');
+    const filasDatos = tablaOrdenes ? tablaOrdenes.querySelectorAll('tbody tr:not(.delco-fila-vacia)') : [];
+    if (tablaOrdenes && filasDatos.length > 0) {
+        try {
+            $('#tablaOrdenes').DataTable(dtOptions);
+        } catch (err) {
+            console.warn('DataTables no inicializado en órdenes:', err);
+        }
+    }
 });
 </script>
 {% endblock %}

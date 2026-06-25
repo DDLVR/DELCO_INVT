@@ -505,6 +505,15 @@
                             {% endif %}
                         </small>
                     </div>
+                    <div class="delco-import-progress mt-3" style="display:none;">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="delco-import-progress-label text-muted">Preparando importación...</small>
+                            <small class="delco-import-progress-pct fw-semibold">0%</small>
+                        </div>
+                        <div class="progress" style="height:22px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated delco-import-progress-bar" role="progressbar" style="width:0%">0%</div>
+                        </div>
+                    </div>
                     <div id="importResultados" class="mt-3" style="display:none;">
                         <div id="importMensaje" class="alert"></div>
                     </div>
@@ -1798,109 +1807,62 @@ if (btnExportarCompleto) {
     });
 }
 
-// Importar Excel
-document.getElementById('btnImportarSubmit').addEventListener('click', function() {
-    const form = document.getElementById('formImportar');
-    const archivo = document.getElementById('archivoImportar').files[0];
-    
-    if (!archivo) {
-        showToast('Selecciona un archivo antes de importar.', 'warning');
-        return;
-    }
-    
-    const formData = new FormData(form);
-    
-    fetch("{% url 'inventario_importar' %}", {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-        },
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        const resultadosDiv = document.getElementById('importResultados');
-        const mensajeDiv = document.getElementById('importMensaje');
-        
-        resultadosDiv.style.display = 'block';
-        
-        if (data.success) {
-            showToast(`✓ Importación exitosa: ${data.exitosas} registros importados.`, 'success', 6000);
-            mensajeDiv.className = 'alert alert-success';
-            let html = `
-                <strong>✓ Importación exitosa!</strong><br>
-                ${data.message}<br>
-                Exitosas: ${data.exitosas}<br>
-                Fallidas: ${data.fallidas}
-            `;
-            
-            // Agregar resumen de errores si hay fallidas
-            if (data.fallidas > 0 && data.errores_resumen && data.errores_resumen.length > 0) {
-                html += `
-                    <div class="mt-3 p-2 bg-light border rounded">
-                        <strong><i class="bi bi-exclamation-circle text-warning"></i> Resumen de Errores Más Comunes:</strong>
-                        <ul class="mb-2 mt-2 small">
-                `;
-                data.errores_resumen.forEach(err => {
-                    html += `<li><strong>${err.count} filas:</strong> ${err.motivo}</li>`;
-                });
-                html += `
-                        </ul>
-                    </div>
-                `;
-                html += `<a href="/importaciones/${data.importacion_id}/errores/" class="btn btn-warning btn-sm mt-2">
-                    <i class="bi bi-exclamation-triangle"></i> Ver Todos los Errores y Corregir
-                </a>`;
-            }
-            
-            mensajeDiv.innerHTML = html;
-            
-            // Recargar la tabla después de 3 segundos
-            setTimeout(() => {
-                location.reload();
-            }, 3000);
-        } else {
-            showToast(`✗ Importación con errores: ${data.fallidas || 0} fallidas.`, 'danger', 0);
-            mensajeDiv.className = 'alert alert-danger';
-            let html = `
-                <strong>✗ Error en la importación</strong><br>
-                ${data.message}<br>
-                Exitosas: ${data.exitosas || 0}<br>
-                Fallidas: ${data.fallidas || 0}
-            `;
-            
-            // Agregar resumen de errores incluso si no es "success"
-            if (data.fallidas > 0 && data.errores_resumen && data.errores_resumen.length > 0) {
-                html += `
-                    <div class="mt-3 p-2 bg-light border rounded">
-                        <strong><i class="bi bi-exclamation-circle text-danger"></i> Errores Más Comunes:</strong>
-                        <ul class="mb-2 mt-2 small">
-                `;
-                data.errores_resumen.forEach(err => {
-                    html += `<li><strong>${err.count} filas:</strong> ${err.motivo}</li>`;
-                });
-                html += `
-                        </ul>
-                    </div>
-                `;
-                
-                if (data.importacion_id) {
-                    html += `<a href="/importaciones/${data.importacion_id}/errores/" class="btn btn-warning btn-sm mt-2">
-                        <i class="bi bi-exclamation-triangle"></i> Ver Todos los Errores y Corregir
-                    </a>`;
-                }
-            }
-            
-            mensajeDiv.innerHTML = html;
+// Importar Excel con barra de progreso
+const btnImportarSubmit = document.getElementById('btnImportarSubmit');
+if (btnImportarSubmit) {
+    btnImportarSubmit.addEventListener('click', function() {
+        const form = document.getElementById('formImportar');
+        const archivo = document.getElementById('archivoImportar').files[0];
+
+        if (!archivo) {
+            showToast('Selecciona un archivo antes de importar.', 'warning');
+            return;
         }
-    })
-    .catch(error => {
-        showToast('Error de conexión al importar: ' + error.message, 'danger', 0);
-        document.getElementById('importMensaje').className = 'alert alert-danger';
-        document.getElementById('importMensaje').textContent = 'Error: ' + error.message;
-        document.getElementById('importResultados').style.display = 'block';
+
+        window.ejecutarImportacionExcel({
+            url: "{% url 'inventario_importar' %}",
+            form: form,
+            submitBtn: btnImportarSubmit,
+            onSuccess: function(data) {
+                const resultadosDiv = document.getElementById('importResultados');
+                const mensajeDiv = document.getElementById('importMensaje');
+                resultadosDiv.style.display = 'block';
+
+                if (data.success) {
+                    showToast(`✓ Importación exitosa: ${data.exitosas} registros importados.`, 'success', 6000);
+                    mensajeDiv.className = 'alert alert-success';
+                    let html = `<strong>✓ Importación exitosa!</strong><br>${data.message}<br>Exitosas: ${data.exitosas}<br>Fallidas: ${data.fallidas}`;
+                    if (data.fallidas > 0 && data.errores_resumen && data.errores_resumen.length > 0) {
+                        html += `<div class="mt-3 p-2 bg-light border rounded"><strong><i class="bi bi-exclamation-circle text-warning"></i> Resumen de Errores Más Comunes:</strong><ul class="mb-2 mt-2 small">`;
+                        data.errores_resumen.forEach(err => { html += `<li><strong>${err.count} filas:</strong> ${err.motivo}</li>`; });
+                        html += `</ul></div><a href="/importaciones/${data.importacion_id}/errores/" class="btn btn-warning btn-sm mt-2"><i class="bi bi-exclamation-triangle"></i> Ver Todos los Errores y Corregir</a>`;
+                    }
+                    mensajeDiv.innerHTML = html;
+                    setTimeout(() => location.reload(), 3000);
+                } else {
+                    showToast(`✗ Importación con errores: ${data.fallidas || 0} fallidas.`, 'danger', 0);
+                    mensajeDiv.className = 'alert alert-danger';
+                    let html = `<strong>✗ Error en la importación</strong><br>${data.message}<br>Exitosas: ${data.exitosas || 0}<br>Fallidas: ${data.fallidas || 0}`;
+                    if (data.fallidas > 0 && data.errores_resumen && data.errores_resumen.length > 0) {
+                        html += `<div class="mt-3 p-2 bg-light border rounded"><strong><i class="bi bi-exclamation-circle text-danger"></i> Errores Más Comunes:</strong><ul class="mb-2 mt-2 small">`;
+                        data.errores_resumen.forEach(err => { html += `<li><strong>${err.count} filas:</strong> ${err.motivo}</li>`; });
+                        html += `</ul></div>`;
+                        if (data.importacion_id) {
+                            html += `<a href="/importaciones/${data.importacion_id}/errores/" class="btn btn-warning btn-sm mt-2"><i class="bi bi-exclamation-triangle"></i> Ver Todos los Errores y Corregir</a>`;
+                        }
+                    }
+                    mensajeDiv.innerHTML = html;
+                }
+            },
+            onError: function(err) {
+                showToast('Error de conexión al importar: ' + (err.message || ''), 'danger', 0);
+                document.getElementById('importMensaje').className = 'alert alert-danger';
+                document.getElementById('importMensaje').textContent = 'Error: ' + (err.message || '');
+                document.getElementById('importResultados').style.display = 'block';
+            }
+        });
     });
-});
+}
 
 // =============================================
 // DataTables con filtros estilo Excel
