@@ -65,18 +65,18 @@
 
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0" id="tablaClientes">
-      <thead class="table-dark">
+      <thead class="table-delco">
         <tr>
           <th>#</th>
-          <th style="background-color: #90EE90;">Numero Cliente</th>
-          <th style="background-color: #90EE90;">Direccion</th>
-          <th style="background-color: #90EE90;">Comuna</th>
-          <th style="background-color: #90EE90;">Identificacion Medidor</th>
-          <th style="background-color: #FFFF99;">Trabajo</th>
-          <th style="background-color: #FFFF99;">IP</th>
-          <th style="background-color: #FFFF99;">Puerto</th>
-          <th style="background-color: #FFFF99;">Modem</th>
-          <th style="background-color: #FFFF99;">Fecha Registro</th>
+          <th>Numero Cliente</th>
+          <th>Direccion</th>
+          <th>Comuna</th>
+          <th>Identificacion Medidor</th>
+          <th>Trabajo</th>
+          <th>IP</th>
+          <th>Puerto</th>
+          <th>Modem</th>
+          <th>Fecha Registro</th>
           <th>Acciones</th>
         </tr>
       </thead>
@@ -84,15 +84,15 @@
         {% for cliente in clientes %}
           <tr>
             <td>{{ forloop.counter }}</td>
-            <td><strong style="background-color: #E8F8E8;">{{ cliente.numero_cliente }}</strong></td>
-            <td style="background-color: #E8F8E8;">{{ cliente.direccion }}</td>
-            <td style="background-color: #E8F8E8;">{{ cliente.comuna }}</td>
-            <td style="background-color: #E8F8E8;">{{ cliente.medidor_actual.serie|default:'-' }}</td>
-            <td style="background-color: #FFFACD;">{{ cliente.trabajo|default:'-' }}</td>
-            <td style="background-color: #FFFACD;">{{ cliente.ip|default:'-' }}</td>
-            <td style="background-color: #FFFACD;">{{ cliente.puerto|default:'-' }}</td>
-            <td style="background-color: #FFFACD;">{{ cliente.modem|default:'-' }}</td>
-            <td style="background-color: #FFFACD;">{{ cliente.fecha_registro|date:"d/m/Y"|default:'-' }}</td>
+            <td><strong>{{ cliente.numero_cliente }}</strong></td>
+            <td>{{ cliente.direccion }}</td>
+            <td>{{ cliente.comuna }}</td>
+            <td>{{ cliente.medidor_actual.serie|default:'-' }}</td>
+            <td>{{ cliente.trabajo|default:'-' }}</td>
+            <td>{{ cliente.ip|default:'-' }}</td>
+            <td>{{ cliente.puerto|default:'-' }}</td>
+            <td>{{ cliente.modem|default:'-' }}</td>
+            <td>{{ cliente.fecha_registro|date:"d/m/Y"|default:'-' }}</td>
             <td>
               {% if puede_editar %}
                 <a href="{% url 'cliente_editar' cliente.id %}" class="btn btn-sm btn-info">✏️ Editar</a>

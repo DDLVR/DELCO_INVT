@@ -3,16 +3,25 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
 from django.db.models import Q
+from django.http import JsonResponse, HttpResponse
+from django.views.decorators.http import require_POST
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse
 import json
 
-from .models import OrdenTrabajo, AdjuntoOrden, IntegracionMoreApp
+from .models import OrdenTrabajo, AdjuntoOrden, IntegracionMoreApp, InformeCliente
 from .serializers import OrdenTrabajoSerializer
+from .utils import (
+    importar_ordenes_excel,
+    exportar_ordenes_excel,
+    asignar_ordenes_masivo,
+    aplicar_alerta_duplicado,
+    guardar_informe_pdf,
+    detectar_duplicado_orden,
+)
 from usuarios.models import Usuario
 from clientes.models import Cliente
 from inventario.models import Medidor, SimCard, Modem
@@ -82,6 +91,7 @@ def ordenes_list_view(request):
         'tecnico_filtro': tecnico_filtro,
         'cliente_filtro': cliente_filtro,
         'buscar': buscar,
+        'total_alertas_duplicado': ordenes.filter(alerta_duplicado=True).count(),
     }
     
     return render(request, 'ordenes/list.html', context)
@@ -108,21 +118,29 @@ def orden_crear_view(request):
             cliente_id = request.POST.get('cliente')
             if cliente_id:
                 orden.cliente = Cliente.objects.get(id=cliente_id)
-            
-            # Técnico responsable
-            tecnico_id = request.POST.get('tecnico_responsable')
-            orden.tecnico_responsable = Usuario.objects.get(id=tecnico_id)
-            
-            # Observaciones iniciales (los equipos se registran después)
+
             orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '')
             
-            orden.estado = 'ASIGNADA'
+            # Técnico responsable (opcional — sin técnico queda CREADA)
+            tecnico_id = request.POST.get('tecnico_responsable', '').strip()
+            if tecnico_id:
+                orden.tecnico_responsable = Usuario.objects.get(id=tecnico_id)
+                orden.estado = 'ASIGNADA'
+                orden.fecha_asignacion = timezone.now()
+            else:
+                orden.estado = 'CREADA'
+            
             orden.creada_por = request.user
-            orden.fecha_asignacion = timezone.now()
-            
             orden.save()
-            
-            messages.success(request, f'Orden #{orden.id} creada y asignada a {orden.tecnico_responsable.nombre_interno}')
+            aplicar_alerta_duplicado(orden)
+
+            if orden.alerta_duplicado:
+                messages.warning(request, f'Alerta: posible trabajo duplicado — {orden.descripcion_alerta_duplicado}')
+
+            if orden.estado == 'ASIGNADA':
+                messages.success(request, f'Orden #{orden.id} creada y asignada a {orden.tecnico_responsable.nombre_interno}')
+            else:
+                messages.success(request, f'Orden #{orden.id} creada. Asigna un responsable cuando esté listo.')
             return redirect('orden_detalle', pk=orden.id)
             
         except Exception as e:
@@ -155,8 +173,9 @@ def orden_detalle_view(request, pk):
             messages.error(request, 'No tienes acceso a esta orden')
             return redirect('ordenes_list')
     
-    # Obtener adjuntos
+    # Obtener adjuntos e informes
     adjuntos = orden.adjuntos.all()
+    informes = orden.informes.all()
     
     # Obtener integraciones MoreApp
     sincronizaciones = orden.sincronizaciones_moreapp.all()
@@ -164,9 +183,10 @@ def orden_detalle_view(request, pk):
     context = {
         'orden': orden,
         'adjuntos': adjuntos,
+        'informes': informes,
         'sincronizaciones': sincronizaciones,
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
-        'es_tecnico_responsable': orden.tecnico_responsable == usuario,
+        'es_tecnico_responsable': orden.tecnico_responsable == usuario if orden.tecnico_responsable else False,
     }
     
     return render(request, 'ordenes/detalle.html', context)
@@ -384,6 +404,180 @@ def orden_registrar_equipos_view(request, pk):
         return redirect('orden_detalle', pk=pk)
     
     return redirect('orden_detalle', pk=pk)
+
+
+def _requiere_admin_ordenes(view_func):
+    """Solo ADMIN o ADMINISTRATIVO pueden gestionar órdenes masivamente."""
+    def wrapper(request, *args, **kwargs):
+        if request.user.rol not in ['ADMIN', 'ADMINISTRATIVO']:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' or 'application/json' in request.headers.get('Accept', ''):
+                return JsonResponse({'success': False, 'message': 'Sin permisos'}, status=403)
+            messages.error(request, 'No tienes permisos para esta acción')
+            return redirect('ordenes_list')
+        return view_func(request, *args, **kwargs)
+    return login_required(wrapper)
+
+
+@_requiere_admin_ordenes
+@require_POST
+def ordenes_importar_view(request):
+    """Importación masiva de órdenes desde Excel."""
+    archivo = request.FILES.get('archivo')
+    if not archivo:
+        return JsonResponse({'success': False, 'message': 'No se seleccionó ningún archivo'})
+
+    try:
+        importacion = importar_ordenes_excel(archivo, request.user)
+        errores_resumen = []
+        if importacion.fallidas > 0:
+            from collections import Counter
+            errores = importacion.errores.all()[:100]
+            for motivo, count in Counter(e.motivo for e in errores).most_common(5):
+                errores_resumen.append({'motivo': motivo[:150], 'count': count})
+
+        return JsonResponse({
+            'success': importacion.estado == 'COMPLETADO',
+            'message': importacion.observaciones,
+            'exitosas': importacion.exitosas,
+            'fallidas': importacion.fallidas,
+            'importacion_id': importacion.id,
+            'errores_resumen': errores_resumen,
+        })
+    except Exception as exc:
+        return JsonResponse({'success': False, 'message': str(exc)})
+
+
+@login_required
+def ordenes_exportar_view(request):
+    """Exporta órdenes filtradas a Excel."""
+    if request.user.rol not in ['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR']:
+        messages.error(request, 'Sin permisos para exportar')
+        return redirect('ordenes_list')
+
+    qs = OrdenTrabajo.objects.all().select_related('cliente', 'tecnico_responsable')
+    estado = request.GET.get('estado', '')
+    if estado:
+        qs = qs.filter(estado=estado)
+
+    buffer = exportar_ordenes_excel(qs.order_by('-fecha_creacion'))
+    response = HttpResponse(
+        buffer.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = 'attachment; filename="ordenes_trabajo.xlsx"'
+    return response
+
+
+@_requiere_admin_ordenes
+@require_POST
+def ordenes_asignar_masivo_view(request):
+    """Asigna responsable a múltiples órdenes (estado ASIGNADA)."""
+    ids_raw = request.POST.get('ids', '').strip()
+    tecnico_id = request.POST.get('tecnico_responsable', '').strip()
+
+    if not ids_raw or not tecnico_id:
+        return JsonResponse({'success': False, 'message': 'Selecciona órdenes y un técnico responsable'})
+
+    try:
+        ids = [int(x) for x in ids_raw.split(',') if x.strip().isdigit()]
+        resultado = asignar_ordenes_masivo(ids, int(tecnico_id), request.user)
+        msg = (
+            f'{resultado["actualizadas"]} órdenes asignadas a {resultado["tecnico"]}. '
+            f'Alertas duplicidad: {resultado["alertas_duplicado"]}.'
+        )
+        return JsonResponse({'success': True, 'message': msg, **resultado})
+    except Usuario.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Técnico no válido'})
+    except Exception as exc:
+        return JsonResponse({'success': False, 'message': str(exc)})
+
+
+@_requiere_admin_ordenes
+@require_POST
+def ordenes_modificar_masivo_view(request):
+    """Edición masiva de estado y tipo de trabajo."""
+    ids_raw = request.POST.get('ids', '').strip()
+    if not ids_raw:
+        return JsonResponse({'success': False, 'message': 'Selecciona al menos una orden'})
+
+    try:
+        ids = [int(x) for x in ids_raw.split(',') if x.strip().isdigit()]
+    except ValueError:
+        return JsonResponse({'success': False, 'message': 'IDs inválidos'})
+
+    nuevo_estado = request.POST.get('estado', '').strip()
+    nuevo_tipo = request.POST.get('tipo_trabajo', '').strip()
+    tecnico_id = request.POST.get('tecnico_responsable', '').strip()
+
+    ordenes = OrdenTrabajo.objects.filter(pk__in=ids)
+    actualizadas = 0
+
+    for orden in ordenes:
+        cambios = []
+        if nuevo_estado and nuevo_estado in dict(OrdenTrabajo.ESTADO_CHOICES):
+            orden.estado = nuevo_estado
+            cambios.append('estado')
+            if nuevo_estado == 'ASIGNADA' and not orden.fecha_asignacion:
+                orden.fecha_asignacion = timezone.now()
+            if nuevo_estado in ['REALIZADA', 'FINALIZADA'] and not orden.fecha_fin_ejecucion:
+                orden.fecha_fin_ejecucion = timezone.now()
+        if nuevo_tipo and nuevo_tipo in dict(OrdenTrabajo.TIPO_TRABAJO_CHOICES):
+            orden.tipo_trabajo = nuevo_tipo
+            cambios.append('tipo_trabajo')
+        if tecnico_id:
+            orden.tecnico_responsable = Usuario.objects.get(pk=int(tecnico_id), rol='TECNICO')
+            if orden.estado == 'CREADA':
+                orden.estado = 'ASIGNADA'
+                orden.fecha_asignacion = timezone.now()
+            cambios.append('tecnico_responsable')
+
+        if cambios:
+            orden.save()
+            aplicar_alerta_duplicado(orden)
+            actualizadas += 1
+
+    return JsonResponse({
+        'success': True,
+        'message': f'{actualizadas} órdenes actualizadas correctamente',
+        'actualizadas': actualizadas,
+    })
+
+
+@login_required
+@require_POST
+def orden_subir_informe_view(request, pk):
+    """Sube un informe PDF del cliente vinculado a la orden."""
+    orden = get_object_or_404(OrdenTrabajo, pk=pk)
+
+    if request.user.rol not in ['ADMIN', 'ADMINISTRATIVO'] and orden.tecnico_responsable != request.user:
+        return JsonResponse({'success': False, 'message': 'No tienes permisos'}, status=403)
+
+    if not orden.cliente:
+        return JsonResponse({'success': False, 'message': 'La orden no tiene cliente asociado'}, status=400)
+
+    archivo = request.FILES.get('archivo')
+    if not archivo:
+        return JsonResponse({'success': False, 'message': 'No se envió archivo'}, status=400)
+
+    if not archivo.name.lower().endswith('.pdf'):
+        return JsonResponse({'success': False, 'message': 'Solo se permiten archivos PDF'}, status=400)
+
+    try:
+        informe = guardar_informe_pdf(
+            cliente=orden.cliente,
+            archivo_origen=archivo,
+            nombre_archivo=archivo.name,
+            orden=orden,
+            usuario=request.user,
+            origen='MANUAL',
+        )
+        return JsonResponse({
+            'success': True,
+            'message': 'Informe PDF guardado correctamente',
+            'informe_id': informe.id,
+        })
+    except Exception as exc:
+        return JsonResponse({'success': False, 'message': str(exc)}, status=500)
 
 
 # ========================================

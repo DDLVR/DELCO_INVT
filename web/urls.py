@@ -14,7 +14,12 @@ from ordenes_trabajo.views import (
     ordenes_list_view as ordenes_trabajo_list, 
     orden_crear_view, 
     orden_detalle_view, 
-    cambiar_estado_orden_view
+    cambiar_estado_orden_view,
+    ordenes_importar_view,
+    ordenes_exportar_view,
+    ordenes_asignar_masivo_view,
+    ordenes_modificar_masivo_view,
+    orden_subir_informe_view,
 )
 
 urlpatterns = [
@@ -63,8 +68,13 @@ urlpatterns = [
     # Órdenes de Trabajo
     path('ordenes/', ordenes_trabajo_list, name='ordenes_list'),
     path('ordenes/crear/', orden_crear_view, name='orden_crear'),
+    path('ordenes/importar/', ordenes_importar_view, name='ordenes_importar'),
+    path('ordenes/exportar/', ordenes_exportar_view, name='ordenes_exportar'),
+    path('ordenes/asignar-masivo/', ordenes_asignar_masivo_view, name='ordenes_asignar_masivo'),
+    path('ordenes/modificar-masivo/', ordenes_modificar_masivo_view, name='ordenes_modificar_masivo'),
     path('ordenes/<int:pk>/', orden_detalle_view, name='orden_detalle'),
     path('ordenes/<int:pk>/cambiar-estado/', cambiar_estado_orden_view, name='cambiar_estado_orden'),
+    path('ordenes/<int:pk>/subir-informe/', orden_subir_informe_view, name='orden_subir_informe'),
 
     # Movimientos de Inventario
     path('movimientos/', movimientos_list_view, name='movimientos_list'),

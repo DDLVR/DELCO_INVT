@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     OrdenTrabajo, EquipoTrabajo, Vehiculo, Herramienta,
-    OrdenHerramientaRequerida, AdjuntoOrden, IntegracionMoreApp
+    OrdenHerramientaRequerida, AdjuntoOrden, IntegracionMoreApp, InformeCliente,
 )
 
 
@@ -20,9 +20,10 @@ class OrdenTrabajoAdmin(admin.ModelAdmin):
         'estado',
         'tecnico_responsable',
         'cliente',
+        'alerta_duplicado',
         'fecha_creacion',
     )
-    list_filter = ('estado', 'tipo_trabajo', 'fecha_creacion', 'tecnico_responsable')
+    list_filter = ('estado', 'tipo_trabajo', 'alerta_duplicado', 'fecha_creacion', 'tecnico_responsable')
     search_fields = ('titulo', 'descripcion', 'cliente__numero_cliente')
     readonly_fields = ('fecha_creacion', 'fecha_asignacion', 'fecha_inicio_ejecucion', 'fecha_fin_ejecucion', 'fecha_cierre', 'fecha_validacion')
     inlines = [AdjuntoOrdenInline]
@@ -42,7 +43,7 @@ class OrdenTrabajoAdmin(admin.ModelAdmin):
             'fields': ('observaciones_tecnicas', 'observacion_validacion')
         }),
         ('Estados', {
-            'fields': ('estado', 'tecnico_solicito_reasignacion')
+            'fields': ('estado', 'alerta_duplicado', 'descripcion_alerta_duplicado', 'tecnico_solicito_reasignacion')
         }),
         ('Auditoría y Fechas', {
             'fields': (
@@ -93,6 +94,13 @@ class AdjuntoOrdenAdmin(admin.ModelAdmin):
     list_filter = ('tipo', 'fecha_hora')
     search_fields = ('nombre_archivo', 'orden__titulo')
     readonly_fields = ('fecha_hora', 'hash_archivo')
+
+
+@admin.register(InformeCliente)
+class InformeClienteAdmin(admin.ModelAdmin):
+    list_display = ('nombre_archivo', 'cliente', 'orden', 'origen', 'fecha_subida')
+    list_filter = ('origen', 'fecha_subida')
+    search_fields = ('nombre_archivo', 'cliente__numero_cliente')
 
 
 @admin.register(IntegracionMoreApp)

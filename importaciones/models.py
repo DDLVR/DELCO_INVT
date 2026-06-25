@@ -9,6 +9,7 @@ class ImportacionExcel(models.Model):
         ('EQUIPOS', 'Importar Equipos (Medidores/SIM/Módems)'),
         ('CLIENTES', 'Importar Clientes'),
         ('MOVIMIENTOS', 'Importar Movimientos de Inventario'),
+        ('ORDENES_TRABAJO', 'Importar Órdenes de Trabajo'),
     ]
     
     STATUS_CHOICES = [
