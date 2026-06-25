@@ -556,11 +556,37 @@
                 </div>
             </div>
             {% endif %}
+
+            {% if puede_eliminar %}
+            <div class="card mt-3 border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0"><i class="bi bi-trash"></i> Zona de peligro</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-2">Elimina permanentemente esta orden, sus adjuntos e informes asociados.</p>
+                    <form action="{% url 'orden_eliminar' orden.id %}" method="post" id="formEliminarOrden">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-danger w-100">
+                            <i class="bi bi-trash"></i> Eliminar orden
+                        </button>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
 
 <script>
+document.getElementById('formEliminarOrden')?.addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const mensaje = '¿Eliminar la orden #{{ orden.id }} ({{ orden.titulo|escapejs }})? Esta acción no se puede deshacer.';
+    const confirmado = window.showConfirm
+        ? await window.showConfirm(mensaje, 'Eliminar orden', 'Sí, eliminar', 'Cancelar')
+        : confirm(mensaje);
+    if (confirmado) this.submit();
+});
+
 // Subida de informe PDF
 document.getElementById('formSubirInforme')?.addEventListener('submit', function(e) {
     e.preventDefault();

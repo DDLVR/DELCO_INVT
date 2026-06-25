@@ -157,6 +157,14 @@
                                     <a href="{% url 'orden_detalle' orden.id %}" class="btn btn-sm btn-primary">
                                         <i class="bi bi-eye"></i> Ver
                                     </a>
+                                    {% if puede_eliminar %}
+                                    <form action="{% url 'orden_eliminar' orden.id %}" method="post" class="d-inline form-eliminar-orden" data-orden-id="{{ orden.id }}" data-orden-titulo="{{ orden.titulo }}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="btn btn-sm btn-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
                                 </td>
                             </tr>
                             {% empty %}
@@ -393,6 +401,19 @@ $(document).ready(function() {
                 .then(data => { alert(data.message); if (data.success) location.reload(); });
         });
     }
+
+    document.querySelectorAll('.form-eliminar-orden').forEach(function(form) {
+        form.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const ordenId = form.getAttribute('data-orden-id');
+            const titulo = form.getAttribute('data-orden-titulo') || '';
+            const mensaje = '¿Eliminar la orden #' + ordenId + (titulo ? ' (' + titulo + ')' : '') + '? Esta acción no se puede deshacer.';
+            const confirmado = window.showConfirm
+                ? await window.showConfirm(mensaje, 'Eliminar orden', 'Sí, eliminar', 'Cancelar')
+                : confirm(mensaje);
+            if (confirmado) form.submit();
+        });
+    });
 });
 </script>
 {% endblock %}
