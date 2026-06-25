@@ -4,8 +4,8 @@ detección de duplicados e integración con informes de clientes.
 """
 import json
 import os
+import unicodedata
 from datetime import timedelta
-from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -42,18 +42,33 @@ TIPO_TRABAJO_MAP = {
     'OTRO': 'OTRO',
 }
 
+ESTADO_MAP = {
+    codigo: codigo for codigo, _ in OrdenTrabajo.ESTADO_CHOICES
+}
+for codigo, etiqueta in OrdenTrabajo.ESTADO_CHOICES:
+    ESTADO_MAP[etiqueta.upper()] = codigo
+    clave = unicodedata.normalize('NFD', etiqueta.upper())
+    clave = ''.join(c for c in clave if unicodedata.category(c) != 'Mn')
+    ESTADO_MAP[clave] = codigo
+
+# Columnas reconocidas al importar (compatible con el Excel que genera exportar_ordenes_excel)
 COLUMNAS_ORDEN = {
     'numero_cliente': (
         'numero_cliente', 'numero cliente', 'n cliente', 'cliente', 'n° cliente',
         'nº cliente', 'id cliente',
     ),
     'titulo': ('titulo', 'título', 'titulo trabajo', 'asunto'),
-    'descripcion': ('descripcion', 'descripción', 'detalle', 'observaciones'),
+    'descripcion': ('descripcion', 'descripción', 'detalle'),
     'tipo_trabajo': ('tipo_trabajo', 'tipo trabajo', 'tipo', 'actividad', 'trabajo'),
     'tecnico': (
         'tecnico', 'técnico', 'responsable', 'tecnico responsable',
-        'técnico responsable', 'asignado a',
+        'tecnico_responsable', 'técnico responsable', 'asignado a',
     ),
+    'estado': ('estado',),
+    'observaciones_tecnicas': ('observaciones tecnicas', 'observaciones_tecnicas'),
+    'id_orden': ('id orden', 'id_orden'),
+    'direccion_cliente': ('direccion cliente', 'direccion_cliente', 'direccion'),
+    'comuna': ('comuna',),
     'fecha_trabajo': ('fecha', 'fecha trabajo', 'fecha asignacion', 'fecha asignación'),
 }
 
@@ -61,7 +76,35 @@ COLUMNAS_ORDEN = {
 def _normalizar_texto(valor) -> str:
     if valor is None:
         return ''
-    return str(valor).strip()
+    if isinstance(valor, bool):
+        return 'Si' if valor else 'No'
+    if isinstance(valor, int):
+        return str(valor)
+    if isinstance(valor, float):
+        if valor.is_integer():
+            return str(int(valor))
+        return str(valor).strip()
+    texto = str(valor).strip()
+    if texto.endswith('.0'):
+        base = texto[:-2]
+        if base.isdigit():
+            return base
+    return texto
+
+
+def _limpiar_header(texto) -> str:
+    clave = _normalizar_texto(texto).lower()
+    if clave.startswith('\ufeff'):
+        clave = clave.lstrip('\ufeff')
+    clave = unicodedata.normalize('NFD', clave)
+    return ''.join(c for c in clave if unicodedata.category(c) != 'Mn')
+
+
+def _variantes_header(clave: str):
+    variantes = {clave}
+    variantes.add(clave.replace(' ', '_'))
+    variantes.add(clave.replace('_', ' '))
+    return variantes
 
 
 def _mapear_headers(headers) -> Dict[str, int]:
@@ -69,10 +112,14 @@ def _mapear_headers(headers) -> Dict[str, int]:
     for i, header in enumerate(headers):
         if header is None:
             continue
-        clave = _normalizar_texto(header).lower()
+        clave_base = _limpiar_header(header)
         for campo, alias in COLUMNAS_ORDEN.items():
-            if clave in alias and campo not in indice:
-                indice[campo] = i
+            if campo in indice:
+                continue
+            for variante in _variantes_header(clave_base):
+                if variante in alias:
+                    indice[campo] = i
+                    break
     return indice
 
 
@@ -87,19 +134,75 @@ def _resolver_tipo_trabajo(texto: str) -> str:
     clave = _normalizar_texto(texto).upper()
     if not clave:
         return 'INSTALACION'
+    clave_sin_acentos = unicodedata.normalize('NFD', clave)
+    clave_sin_acentos = ''.join(c for c in clave_sin_acentos if unicodedata.category(c) != 'Mn')
     if clave in dict(OrdenTrabajo.TIPO_TRABAJO_CHOICES):
         return clave
-    return TIPO_TRABAJO_MAP.get(clave, 'OTRO')
+    if clave_sin_acentos in dict(OrdenTrabajo.TIPO_TRABAJO_CHOICES):
+        return clave_sin_acentos
+    return TIPO_TRABAJO_MAP.get(clave, TIPO_TRABAJO_MAP.get(clave_sin_acentos, 'OTRO'))
+
+
+def _resolver_estado(texto: str) -> Optional[str]:
+    clave = _normalizar_texto(texto).upper()
+    if not clave:
+        return None
+    clave_sin_acentos = unicodedata.normalize('NFD', clave)
+    clave_sin_acentos = ''.join(c for c in clave_sin_acentos if unicodedata.category(c) != 'Mn')
+    return ESTADO_MAP.get(clave) or ESTADO_MAP.get(clave_sin_acentos)
+
+
+def _parse_id_orden(valor) -> Optional[int]:
+    texto = _normalizar_texto(valor)
+    if not texto:
+        return None
+    try:
+        return int(float(texto))
+    except (ValueError, TypeError):
+        return None
 
 
 def _resolver_tecnico(texto: str) -> Optional[Usuario]:
+    """Busca técnico por nombre_interno, nombre, email o RUT. Nunca lanza error."""
     nombre = _normalizar_texto(texto)
     if not nombre:
         return None
-    tecnico = Usuario.objects.filter(rol='TECNICO', is_active=True, nombre_interno__iexact=nombre).first()
+    qs = Usuario.objects.filter(rol='TECNICO', is_active=True)
+    for lookup in (
+        {'nombre_interno__iexact': nombre},
+        {'nombre__iexact': nombre},
+        {'email__iexact': nombre},
+        {'rut__iexact': nombre},
+    ):
+        tecnico = qs.filter(**lookup).first()
+        if tecnico:
+            return tecnico
+    return None
+
+
+def _obtener_o_crear_cliente(numero_cliente: str, valores, indice) -> Cliente:
+    cliente = Cliente.objects.filter(numero_cliente=numero_cliente).first()
+    if not cliente:
+        cliente = Cliente.objects.filter(numero_cliente__iexact=numero_cliente).first()
+    if cliente:
+        return cliente
+
+    direccion = _valor_fila(valores, indice, 'direccion_cliente') or f'Cliente {numero_cliente}'
+    comuna = _valor_fila(valores, indice, 'comuna') or 'Por definir'
+    cliente, _ = Cliente.objects.get_or_create(
+        numero_cliente=numero_cliente,
+        defaults={'direccion': direccion, 'comuna': comuna},
+    )
+    return cliente
+
+
+def _aplicar_tecnico_a_orden(orden: OrdenTrabajo, tecnico: Optional[Usuario]) -> None:
     if tecnico:
-        return tecnico
-    return Usuario.objects.filter(rol='TECNICO', is_active=True, username__iexact=nombre).first()
+        orden.tecnico_responsable = tecnico
+        if orden.estado == 'CREADA':
+            orden.estado = 'ASIGNADA'
+            if not orden.fecha_asignacion:
+                orden.fecha_asignacion = timezone.now()
 
 
 def _fila_a_texto(headers, valores):
@@ -170,59 +273,96 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
     )
 
     try:
-        wb = openpyxl.load_workbook(archivo)
+        nombre_archivo = getattr(archivo, 'name', '') or ''
+        if nombre_archivo.lower().endswith('.xls') and not nombre_archivo.lower().endswith('.xlsx'):
+            raise ValueError(
+                'Formato .xls no soportado. Guarda el archivo como Excel (.xlsx) e intenta de nuevo.'
+            )
+
+        if hasattr(archivo, 'seek'):
+            archivo.seek(0)
+        wb = openpyxl.load_workbook(archivo, data_only=True)
         ws = wb.active
         headers = [cell.value for cell in ws[1]]
         indice = _mapear_headers(headers)
 
         if 'numero_cliente' not in indice:
             raise ValueError(
-                'El Excel debe incluir la columna "Numero Cliente" (o "Cliente").'
+                'El Excel debe incluir la columna "Numero Cliente" (o "Cliente"). '
+                f'Columnas detectadas: {", ".join(str(h) for h in headers if h)}'
             )
 
         contador = 0
         exitosas = 0
         fallidas = 0
         alertas = 0
+        creadas = 0
+        actualizadas = 0
 
         for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), start=2):
             valores = [cell.value for cell in row]
-            if not any(valores):
+            if not any(v is not None and str(v).strip() != '' for v in valores):
+                continue
+
+            numero_cliente_raw = _valor_fila(valores, indice, 'numero_cliente')
+            if numero_cliente_raw and _limpiar_header(numero_cliente_raw) in COLUMNAS_ORDEN['numero_cliente']:
                 continue
 
             contador += 1
             try:
-                numero_cliente = _valor_fila(valores, indice, 'numero_cliente')
+                numero_cliente = numero_cliente_raw
                 if not numero_cliente:
                     raise ValueError('Numero Cliente es obligatorio')
 
-                cliente = Cliente.objects.filter(numero_cliente=numero_cliente).first()
-                if not cliente:
-                    cliente = Cliente.objects.create(
-                        numero_cliente=numero_cliente,
-                        direccion=f'Cliente {numero_cliente}',
-                        comuna='Por definir',
-                    )
+                cliente = _obtener_o_crear_cliente(numero_cliente, valores, indice)
 
                 titulo = _valor_fila(valores, indice, 'titulo') or f'Trabajo — {numero_cliente}'
                 descripcion = _valor_fila(valores, indice, 'descripcion')
                 tipo_trabajo = _resolver_tipo_trabajo(_valor_fila(valores, indice, 'tipo_trabajo'))
-                tecnico = _resolver_tecnico(_valor_fila(valores, indice, 'tecnico'))
+                tecnico_nombre = _valor_fila(valores, indice, 'tecnico')
+                tecnico = _resolver_tecnico(tecnico_nombre)
+                estado_import = _resolver_estado(_valor_fila(valores, indice, 'estado'))
+                observaciones_tecnicas = _valor_fila(valores, indice, 'observaciones_tecnicas')
+                orden_id = _parse_id_orden(_valor_fila(valores, indice, 'id_orden'))
 
                 with transaction.atomic():
-                    orden = OrdenTrabajo(
-                        titulo=titulo,
-                        descripcion=descripcion,
-                        tipo_trabajo=tipo_trabajo,
-                        cliente=cliente,
-                        creada_por=usuario,
-                        estado='CREADA',
-                    )
-                    if tecnico:
-                        orden.tecnico_responsable = tecnico
-                        orden.estado = 'ASIGNADA'
-                        orden.fecha_asignacion = timezone.now()
-                    orden.save()
+                    orden = None
+                    if orden_id:
+                        orden = OrdenTrabajo.objects.filter(pk=orden_id).first()
+
+                    if orden:
+                        orden.cliente = cliente
+                        orden.titulo = titulo[:200]
+                        orden.descripcion = descripcion
+                        orden.tipo_trabajo = tipo_trabajo
+                        if observaciones_tecnicas:
+                            orden.observaciones_tecnicas = observaciones_tecnicas
+                        if estado_import:
+                            orden.estado = estado_import
+                        if tecnico:
+                            _aplicar_tecnico_a_orden(orden, tecnico)
+                        elif not tecnico_nombre:
+                            pass
+                        orden.save()
+                        actualizadas += 1
+                    else:
+                        orden = OrdenTrabajo(
+                            titulo=titulo[:200],
+                            descripcion=descripcion,
+                            tipo_trabajo=tipo_trabajo,
+                            cliente=cliente,
+                            creada_por=usuario,
+                            estado='CREADA',
+                        )
+                        if observaciones_tecnicas:
+                            orden.observaciones_tecnicas = observaciones_tecnicas
+                        if estado_import and estado_import != 'CREADA':
+                            orden.estado = estado_import
+                        if tecnico:
+                            _aplicar_tecnico_a_orden(orden, tecnico)
+                        orden.save()
+                        creadas += 1
+
                     aplicar_alerta_duplicado(orden)
                     if orden.alerta_duplicado:
                         alertas += 1
@@ -240,11 +380,15 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
         importacion.total_filas = contador
         importacion.exitosas = exitosas
         importacion.fallidas = fallidas
-        importacion.estado = 'COMPLETADO'
-        importacion.observaciones = (
-            f'Se importaron {exitosas} de {contador} órdenes. '
-            f'Alertas duplicidad: {alertas}. Fallidas: {fallidas}.'
-        )
+        importacion.estado = 'COMPLETADO' if contador > 0 and exitosas > 0 else ('ERROR' if contador == 0 else 'COMPLETADO')
+        if contador == 0:
+            importacion.observaciones = 'No se encontraron filas con datos para importar.'
+        else:
+            importacion.observaciones = (
+                f'Se procesaron {exitosas} de {contador} filas '
+                f'(creadas: {creadas}, actualizadas: {actualizadas}). '
+                f'Alertas duplicidad: {alertas}. Fallidas: {fallidas}.'
+            )
         importacion.save()
     except Exception as exc:
         importacion.estado = 'ERROR'
@@ -254,34 +398,57 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
     return importacion
 
 
-def exportar_ordenes_excel(queryset) -> BytesIO:
+def exportar_ordenes_excel(ordenes):
+    """Genera workbook Excel con las órdenes recibidas."""
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = 'Ordenes de Trabajo'
     ws.append([
-        'ID', 'Titulo', 'Tipo Trabajo', 'Estado', 'Numero Cliente',
-        'Tecnico Responsable', 'Fecha Creacion', 'Fecha Asignacion',
-        'Alerta Duplicado', 'Descripcion Alerta',
+        'Numero Cliente',
+        'Titulo',
+        'Descripcion',
+        'Tipo Trabajo',
+        'Tecnico Responsable',
+        'Estado',
+        'Direccion Cliente',
+        'Comuna',
+        'Medidor Serie',
+        'SIM IMEI',
+        'Modem Serie',
+        'Observaciones Tecnicas',
+        'Fecha Creacion',
+        'Fecha Asignacion',
+        'Fecha Fin Ejecucion',
+        'Creada Por',
+        'ID Orden',
+        'Alerta Duplicado',
+        'Descripcion Alerta',
     ])
 
-    for orden in queryset.select_related('cliente', 'tecnico_responsable'):
+    for orden in ordenes:
         ws.append([
-            orden.id,
-            orden.titulo,
-            orden.get_tipo_trabajo_display(),
-            orden.get_estado_display(),
             orden.cliente.numero_cliente if orden.cliente else '',
+            orden.titulo or '',
+            orden.descripcion or '',
+            orden.get_tipo_trabajo_display(),
             orden.tecnico_responsable.nombre_interno if orden.tecnico_responsable else '',
+            orden.get_estado_display(),
+            orden.cliente.direccion if orden.cliente else '',
+            orden.cliente.comuna if orden.cliente else '',
+            orden.medidor.serie if orden.medidor else '',
+            orden.simcard.imei if orden.simcard else '',
+            orden.modem.serie if orden.modem else '',
+            orden.observaciones_tecnicas or '',
             orden.fecha_creacion.strftime('%d/%m/%Y %H:%M') if orden.fecha_creacion else '',
             orden.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if orden.fecha_asignacion else '',
+            orden.fecha_fin_ejecucion.strftime('%d/%m/%Y %H:%M') if orden.fecha_fin_ejecucion else '',
+            orden.creada_por.nombre_interno if orden.creada_por else '',
+            orden.id,
             'SI' if orden.alerta_duplicado else 'NO',
-            orden.descripcion_alerta_duplicado,
+            orden.descripcion_alerta_duplicado or '',
         ])
 
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    return buffer
+    return wb
 
 
 def guardar_informe_pdf(

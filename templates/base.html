@@ -250,6 +250,146 @@
     });
   };
 
+  /**
+   * Importación Excel con barra de progreso (subida + procesamiento en servidor).
+   * config: { url, form, submitBtn, validate, onSuccess, onError }
+   */
+  window.ejecutarImportacionExcel = function (config) {
+    var form = config.form;
+    var submitBtn = config.submitBtn;
+    var url = config.url;
+    var modalEl = config.modalEl || (form ? form.closest('.modal') : null);
+    if (!form || !url) return Promise.reject(new Error('Formulario o URL no definidos'));
+
+    var scope = form.closest('.modal-content') || form;
+    var wrap = scope.querySelector('.delco-import-progress');
+    var bar = scope.querySelector('.delco-import-progress-bar');
+    var label = scope.querySelector('.delco-import-progress-label');
+    var pctEl = scope.querySelector('.delco-import-progress-pct');
+    var dismissButtons = modalEl
+      ? modalEl.querySelectorAll('[data-bs-dismiss="modal"]')
+      : [];
+
+    function setProgress(value, text) {
+      var pct = Math.max(0, Math.min(100, Math.round(value)));
+      if (bar) {
+        bar.style.width = pct + '%';
+        bar.textContent = pct + '%';
+        bar.setAttribute('aria-valuenow', pct);
+      }
+      if (pctEl) pctEl.textContent = pct + '%';
+      if (label && text) label.textContent = text;
+    }
+
+    function lockModal() {
+      if (modalEl) modalEl.dataset.importing = '1';
+      dismissButtons.forEach(function (btn) { btn.disabled = true; });
+    }
+
+    function unlockModal() {
+      if (modalEl) modalEl.dataset.importing = '0';
+      dismissButtons.forEach(function (btn) { btn.disabled = false; });
+    }
+
+    if (typeof config.validate === 'function' && config.validate() === false) {
+      return Promise.resolve(false);
+    }
+
+    var fileInput = config.fileInput || form.querySelector('input[type="file"]');
+    if (!fileInput || !fileInput.files || !fileInput.files.length) {
+      return Promise.reject(new Error('No se seleccionó ningún archivo.'));
+    }
+
+    var formData = new FormData(form);
+    formData.set('archivo', fileInput.files[0]);
+
+    var csrfInput = form.querySelector('[name=csrfmiddlewaretoken]');
+    var csrfToken = csrfInput ? csrfInput.value : '';
+
+    lockModal();
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.dataset.originalText = submitBtn.dataset.originalText || submitBtn.innerHTML;
+      submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importando...';
+    }
+    if (wrap) wrap.style.display = 'block';
+    setProgress(3, 'Preparando archivo...');
+
+    return new Promise(function (resolve, reject) {
+      var xhr = new XMLHttpRequest();
+      var timer = null;
+      var serverPct = 45;
+
+      xhr.open('POST', url, true);
+      if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken);
+      xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+      xhr.upload.addEventListener('progress', function (ev) {
+        if (ev.lengthComputable && ev.total > 0) {
+          var uploadPct = 5 + Math.round((ev.loaded / ev.total) * 35);
+          setProgress(uploadPct, 'Subiendo archivo... (' + Math.round((ev.loaded / ev.total) * 100) + '%)');
+        } else {
+          setProgress(20, 'Subiendo archivo...');
+        }
+      });
+
+      xhr.upload.addEventListener('loadend', function () {
+        setProgress(45, 'Archivo recibido. Procesando filas en el servidor...');
+        timer = setInterval(function () {
+          if (serverPct < 92) {
+            serverPct += 1;
+            setProgress(serverPct, 'Procesando filas en el servidor...');
+          }
+        }, 350);
+      });
+
+      xhr.onload = function () {
+        if (timer) clearInterval(timer);
+        setProgress(100, 'Importación finalizada');
+
+        var data = null;
+        try {
+          data = JSON.parse(xhr.responseText);
+        } catch (e) {
+          var err = new Error('Respuesta inválida del servidor (código ' + xhr.status + ').');
+          unlockModal();
+          if (typeof config.onError === 'function') config.onError(err);
+          reject(err);
+          return;
+        }
+
+        if (xhr.status >= 200 && xhr.status < 300) {
+          if (typeof config.onSuccess === 'function') config.onSuccess(data);
+          resolve(data);
+        } else {
+          var errHttp = new Error((data && data.message) ? data.message : ('Error HTTP ' + xhr.status));
+          unlockModal();
+          if (typeof config.onError === 'function') config.onError(errHttp, data);
+          reject(errHttp);
+        }
+      };
+
+      xhr.onerror = function () {
+        if (timer) clearInterval(timer);
+        setProgress(0, 'Error de conexión');
+        unlockModal();
+        var errNet = new Error('No se pudo conectar con el servidor.');
+        if (typeof config.onError === 'function') config.onError(errNet);
+        reject(errNet);
+      };
+
+      xhr.onloadend = function () {
+        unlockModal();
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = submitBtn.dataset.originalText || 'Importar';
+        }
+      };
+
+      xhr.send(formData);
+    });
+  };
+
   // Auto-mostrar mensajes Django como toasts al cargar la página
   document.addEventListener('DOMContentLoaded', function () {
     var profileModalEl = document.getElementById('profileModal');
