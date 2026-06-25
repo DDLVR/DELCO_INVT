@@ -1734,7 +1734,7 @@ def reprocesar_registro_moreapp(registro) -> Dict[str, Any]:
     registro.fecha_procesamiento = timezone.now()
     if resumen.get('movimientos_generados', 0) > 0 or registro.actualizo_equipos:
         registro.estado_sincronizacion = 'PROCESADO'
-    elif regumen.get('pendientes_revision') or registro.alerta_doble_trabajo:
+    elif resumen.get('pendientes_revision') or registro.alerta_doble_trabajo:
         registro.estado_sincronizacion = 'ALERTA_REVISION'
     registro.save()
 
