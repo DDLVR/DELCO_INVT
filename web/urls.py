@@ -15,6 +15,9 @@ from ordenes_trabajo.views import (
     orden_crear_view, 
     orden_detalle_view, 
     cambiar_estado_orden_view,
+    orden_editar_tecnico_view,
+    orden_subir_adjunto_view,
+    orden_registrar_equipos_view,
     ordenes_importar_view,
     ordenes_exportar_view,
     ordenes_asignar_masivo_view,
@@ -74,6 +77,9 @@ urlpatterns = [
     path('ordenes/modificar-masivo/', ordenes_modificar_masivo_view, name='ordenes_modificar_masivo'),
     path('ordenes/<int:pk>/', orden_detalle_view, name='orden_detalle'),
     path('ordenes/<int:pk>/cambiar-estado/', cambiar_estado_orden_view, name='cambiar_estado_orden'),
+    path('ordenes/<int:pk>/editar/', orden_editar_tecnico_view, name='orden_editar_tecnico'),
+    path('ordenes/<int:pk>/subir-adjunto/', orden_subir_adjunto_view, name='orden_subir_adjunto'),
+    path('ordenes/<int:pk>/registrar-equipos/', orden_registrar_equipos_view, name='orden_registrar_equipos'),
     path('ordenes/<int:pk>/subir-informe/', orden_subir_informe_view, name='orden_subir_informe'),
 
     # Movimientos de Inventario

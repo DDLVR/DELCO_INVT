@@ -293,8 +293,8 @@ def guardar_informe_pdf(
     origen: str = 'MANUAL',
     registro_moreapp=None,
 ) -> InformeCliente:
-    """Guarda un PDF en la carpeta Informe Clientes."""
-    Path(settings.MEDIA_ROOT / 'Informe Clientes').mkdir(parents=True, exist_ok=True)
+    """Guarda un PDF en Registros/Evidencias."""
+    Path(settings.EVIDENCIAS_ROOT).mkdir(parents=True, exist_ok=True)
 
     informe = InformeCliente(
         orden=orden,

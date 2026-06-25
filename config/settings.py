@@ -172,6 +172,10 @@ STATICFILES_DIRS = [BASE_DIR / 'static']
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+# Evidencias de órdenes de trabajo (adjuntos PDF, fotos, informes)
+EVIDENCIAS_ROOT = BASE_DIR / 'Registros' / 'Evidencias'
+EVIDENCIAS_URL = '/registros/evidencias/'
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
