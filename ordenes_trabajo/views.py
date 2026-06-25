@@ -29,6 +29,15 @@ from inventario.models import Medidor, SimCard, Modem
 from web.decorators import admin_only
 
 
+def puede_editar_observaciones_orden(orden, usuario):
+    """Admin/administrativo o técnico responsable pueden editar observaciones."""
+    if usuario.rol in ['ADMIN', 'ADMINISTRATIVO']:
+        return True
+    if usuario.rol == 'TECNICO' and orden.tecnico_responsable == usuario:
+        return True
+    return False
+
+
 def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
     """Queryset de órdenes según rol y filtros GET (listado y exportación)."""
     usuario = request.user
@@ -185,7 +194,7 @@ def orden_detalle_view(request, pk):
             return redirect('ordenes_list')
 
     if request.method == 'POST' and request.POST.get('accion') == 'guardar_observaciones':
-        if orden.puede_editar_observaciones_tecnicas(usuario):
+        if puede_editar_observaciones_orden(orden, usuario):
             orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '').strip()
             orden.save(update_fields=['observaciones_tecnicas'])
             messages.success(request, 'Observaciones técnicas guardadas')
@@ -208,7 +217,7 @@ def orden_detalle_view(request, pk):
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'puede_eliminar': usuario.rol == 'ADMIN',
         'es_tecnico_responsable': orden.tecnico_responsable == usuario if orden.tecnico_responsable else False,
-        'puede_editar_observaciones': orden.puede_editar_observaciones_tecnicas(usuario),
+        'puede_editar_observaciones': puede_editar_observaciones_orden(orden, usuario),
     }
     
     return render(request, 'ordenes/detalle.html', context)
@@ -222,7 +231,7 @@ def orden_guardar_observaciones_view(request, pk):
 
     orden = get_object_or_404(OrdenTrabajo, pk=pk)
 
-    if not orden.puede_editar_observaciones_tecnicas(request.user):
+    if not puede_editar_observaciones_orden(orden, request.user):
         messages.error(request, 'No tienes permiso para editar las observaciones técnicas')
         return redirect('orden_detalle', pk=pk)
 
