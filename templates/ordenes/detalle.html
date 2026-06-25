@@ -9,7 +9,7 @@
         <div class="col-12 d-flex justify-content-between align-items-center">
             <h1>
                 <i class="bi bi-clipboard-check"></i> Orden #{{ orden.id }}
-                <span class="badge bg-{% if orden.estado == 'FINALIZADA' %}success{% elif orden.estado == 'CANCELADA' %}danger{% elif orden.estado == 'EN_EJECUCION' %}primary{% else %}secondary{% endif %}">
+                <span class="badge bg-{% if orden.estado == 'REALIZADA' or orden.estado == 'FINALIZADA' %}success{% elif orden.estado == 'REALIZADA_PENDIENTE_COMPROBACION' %}info{% elif orden.estado == 'CANCELADA' %}danger{% elif orden.estado == 'EN_EJECUCION' %}primary{% elif orden.estado == 'ASIGNADA' %}warning text-dark{% else %}secondary{% endif %}">
                     {{ orden.get_estado_display }}
                 </span>
             </h1>
@@ -18,6 +18,17 @@
             </a>
         </div>
     </div>
+
+    {% if orden.alerta_duplicado %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-warning mb-0">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>Posible trabajo duplicado:</strong> {{ orden.descripcion_alerta_duplicado }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
     <div class="row">
         <!-- Columna principal -->
@@ -66,8 +77,12 @@
                         <div class="col-md-6 mb-3">
                             <label class="text-muted small">Técnico Responsable</label>
                             <p class="mb-0">
+                                {% if orden.tecnico_responsable %}
                                 <strong>{{ orden.tecnico_responsable.nombre_interno }}</strong><br>
                                 <small class="text-muted">{{ orden.tecnico_responsable.email }}</small>
+                                {% else %}
+                                <em class="text-muted">Sin asignar — usa edición múltiple o asignación masiva</em>
+                                {% endif %}
                             </p>
                         </div>
                     </div>
@@ -406,6 +421,41 @@
                 </div>
             </div>
 
+            <!-- Informes PDF del cliente -->
+            <div class="card mb-3">
+                <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
+                    <h5 class="mb-0">📄 Informes de Cliente (PDF)</h5>
+                </div>
+                <div class="card-body">
+                    {% if informes %}
+                    <ul class="list-group list-group-flush mb-3">
+                        {% for informe in informes %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div>
+                                <i class="bi bi-file-earmark-pdf text-danger"></i>
+                                <a href="{{ informe.archivo.url }}" target="_blank">{{ informe.nombre_archivo }}</a><br>
+                                <small class="text-muted">{{ informe.fecha_subida|date:"d/m/Y H:i" }} — {{ informe.get_origen_display }}</small>
+                            </div>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted"><em>Sin informes PDF registrados</em></p>
+                    {% endif %}
+
+                    {% if puede_editar or es_tecnico_responsable %}
+                    <form id="formSubirInforme" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="input-group input-group-sm">
+                            <input type="file" class="form-control" name="archivo" accept=".pdf" required>
+                            <button type="submit" class="btn btn-primary">Subir PDF</button>
+                        </div>
+                        <small class="text-muted">Se guarda en la carpeta <code>Informe Clientes</code></small>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+
             <!-- Integraciones MoreApp -->
             {% if sincronizaciones %}
             <div class="card mb-3">
@@ -486,10 +536,15 @@
                         {% csrf_token %}
                         <label class="form-label">Cambiar Estado</label>
                         <select name="nuevo_estado" class="form-select mb-2">
+                            {% if puede_editar %}
+                            <option value="ASIGNADA">Asignada</option>
+                            {% endif %}
                             <option value="EN_EJECUCION">En ejecución</option>
+                            <option value="REALIZADA">Realizada</option>
                             <option value="FINALIZADA">Finalizada</option>
                             <option value="CANCELADA">Cancelada</option>
                             {% if puede_editar %}
+                            <option value="REALIZADA_PENDIENTE_COMPROBACION">Realizada - Pendiente comprobación</option>
                             <option value="PENDIENTE_VALIDACION">Pendiente validación</option>
                             <option value="VALIDADA">Validada</option>
                             {% endif %}
@@ -506,6 +561,17 @@
 </div>
 
 <script>
+// Subida de informe PDF
+document.getElementById('formSubirInforme')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    fetch("{% url 'orden_subir_informe' orden.id %}", {
+        method: 'POST',
+        body: new FormData(this),
+    })
+    .then(r => r.json())
+    .then(data => { alert(data.message); if (data.success) location.reload(); });
+});
+
 // Manejo de subida de adjuntos con AJAX
 document.getElementById('formSubirAdjunto')?.addEventListener('submit', function(e) {
     e.preventDefault();

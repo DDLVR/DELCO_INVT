@@ -50,16 +50,16 @@
                             </div>
                             
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">Técnico Responsable *</label>
-                                <select name="tecnico_responsable" class="form-select" required>
-                                    <option value="">-- Seleccionar técnico --</option>
+                                <label class="form-label">Técnico Responsable</label>
+                                <select name="tecnico_responsable" class="form-select">
+                                    <option value="">— Asignar después (queda Creada) —</option>
                                     {% for tecnico in tecnicos %}
                                     <option value="{{ tecnico.id }}">
                                         👤 {{ tecnico.nombre_interno }}{% if tecnico.email %} - {{ tecnico.email }}{% endif %}
                                     </option>
                                     {% endfor %}
                                 </select>
-                                <small class="text-muted">Solo técnicos activos disponibles</small>
+                                <small class="text-muted">Opcional. Puedes asignar después con edición múltiple.</small>
                             </div>
                         </div>
                         
@@ -108,10 +108,10 @@
                         Al crear una orden:
                     </p>
                     <ul class="small">
-                        <li>El estado inicial será <strong>ASIGNADA</strong></li>
-                        <li>El técnico recibirá la asignación</li>
-                        <li>Los equipos usados se registrarán <strong>después</strong></li>
-                        <li>Se registrará la trazabilidad completa</li>
+                        <li>Sin técnico: estado <strong>Creada</strong></li>
+                        <li>Con técnico: estado <strong>Asignada</strong></li>
+                        <li>Para muchas órdenes usa <strong>Importar Excel</strong></li>
+                        <li>Los equipos usados se registran <strong>después</strong></li>
                     </ul>
                 </div>
             </div>

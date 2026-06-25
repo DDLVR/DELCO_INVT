@@ -893,6 +893,18 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
     else:
         registro.estado_revision = 'REVISADO'
 
+    # Vincular informe entrante con orden de trabajo del cliente
+    if cliente_obj:
+        from ordenes_trabajo.utils import vincular_informe_cliente_a_orden
+        orden_vinculada = vincular_informe_cliente_a_orden(
+            cliente=cliente_obj,
+            registro_moreapp=registro,
+            ruta_carpeta=getattr(registro, 'ruta_carpeta', '') or '',
+        )
+        if orden_vinculada:
+            resumen['orden_actualizada'] = orden_vinculada.id
+            resumen['orden_estado'] = orden_vinculada.estado
+
     return resumen
 
 
@@ -1197,13 +1209,27 @@ def _detectar_alerta_doble_trabajo(submission_id: str, datos: Dict[str, Any]) ->
 
     ahora = timezone.now()
     ventana_alta = ahora - timedelta(days=1)
-    ventana_media = ahora - timedelta(days=7)
+    ventana_duplicado = ahora - timedelta(days=14)
+
+    # Regla sobre órdenes de trabajo: misma asignación al cliente en 14 días
+    from ordenes_trabajo.models import OrdenTrabajo
+    from ordenes_trabajo.utils import detectar_duplicado_orden
+
+    cliente_obj = None
+    if cliente:
+        from clientes.models import Cliente
+        cliente_obj = Cliente.objects.filter(numero_cliente__iexact=cliente).first()
+
+    if cliente_obj:
+        tiene_dup_orden, desc_orden = detectar_duplicado_orden(cliente_obj)
+        if tiene_dup_orden:
+            return True, desc_orden
 
     # Excluir el propio registro (puede que ya exista como DUPLICADO)
     candidatos = IntegracionMoreApp.objects.exclude(
         moreapp_submission_id=submission_id
     ).filter(
-        fecha_recepcion__gte=ventana_media,
+        fecha_recepcion__gte=ventana_duplicado,
     ).exclude(
         estado_sincronizacion='DUPLICADO'
     )
@@ -1220,7 +1246,7 @@ def _detectar_alerta_doble_trabajo(submission_id: str, datos: Dict[str, Any]) ->
             if candidato.fecha_recepcion >= ventana_alta:
                 severidad = 'Alta (mismo día)'
             else:
-                severidad = 'Media (últimos 7 días)'
+                severidad = 'Media (últimos 14 días)'
 
             desc = (
                 f'Posible doble trabajo — Cliente: {cliente} | '

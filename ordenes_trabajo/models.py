@@ -120,12 +120,18 @@ class OrdenTrabajo(models.Model):
         ('EN_EJECUCION', 'En ejecución'),
         ('REASIGNADA', 'Reasignada'),
         ('MANTENIMIENTO', 'Mantenimiento'),
+        ('REALIZADA', 'Realizada'),
+        ('REALIZADA_PENDIENTE_COMPROBACION', 'Realizada - Pendiente comprobación'),
         ('PENDIENTE_VALIDACION', 'Pendiente validación'),
         ('VALIDADA', 'Validada'),
         ('OBSERVADA', 'Observada'),
         ('FINALIZADA', 'Finalizada'),
         ('CANCELADA', 'Cancelada'),
     ]
+
+    ESTADOS_ABIERTOS = {
+        'CREADA', 'ASIGNADA', 'EN_EJECUCION', 'REASIGNADA', 'MANTENIMIENTO',
+    }
 
     TIPO_TRABAJO_CHOICES = [
         ('INSTALACION', 'Instalación'),
@@ -192,17 +198,19 @@ class OrdenTrabajo(models.Model):
     )
 
     estado = models.CharField(
-        max_length=30,
+        max_length=40,
         choices=ESTADO_CHOICES,
         default='CREADA'
     )
 
-    # Asignación de personal
+    # Asignación de personal (opcional al crear/importar; se asigna después)
     tecnico_responsable = models.ForeignKey(
         Usuario,
         on_delete=models.PROTECT,
         related_name='ordenes_responsable',
-        limit_choices_to={'rol': 'TECNICO'}
+        limit_choices_to={'rol': 'TECNICO'},
+        null=True,
+        blank=True,
     )
     
     equipo_trabajo = models.ForeignKey(
@@ -265,6 +273,15 @@ class OrdenTrabajo(models.Model):
         help_text='Observaciones si la validación rechaza la OT'
     )
 
+    alerta_duplicado = models.BooleanField(
+        default=False,
+        help_text='Posible trabajo duplicado para el mismo cliente en los últimos 14 días',
+    )
+    descripcion_alerta_duplicado = models.TextField(
+        blank=True,
+        help_text='Detalle de la alerta de posible duplicidad',
+    )
+
     def __str__(self):
         return f'OT #{self.id} - {self.titulo}'
     
@@ -280,8 +297,8 @@ class OrdenTrabajo(models.Model):
             # Puede cambiar a EN_EJECUCION
             if nuevo_estado == 'EN_EJECUCION':
                 return True
-            # Puede finalizar
-            if nuevo_estado == 'FINALIZADA':
+            # Puede marcar como realizada o finalizada
+            if nuevo_estado in ['REALIZADA', 'FINALIZADA']:
                 return True
             # Puede solicitar reasignación (una sola vez)
             if nuevo_estado in ['REASIGNADA', 'MANTENIMIENTO']:
@@ -304,9 +321,15 @@ class OrdenTrabajo(models.Model):
 
         self.estado = nuevo_estado
 
+        from django.utils import timezone
+
+        if nuevo_estado in ['REALIZADA', 'FINALIZADA']:
+            if not self.fecha_fin_ejecucion:
+                self.fecha_fin_ejecucion = timezone.now()
         if nuevo_estado == 'FINALIZADA':
-            from django.utils import timezone
             self.fecha_cierre = timezone.now()
+        if nuevo_estado == 'ASIGNADA' and not self.fecha_asignacion:
+            self.fecha_asignacion = timezone.now()
 
         if nuevo_estado in ['REASIGNADA', 'MANTENIMIENTO']:
             self.tecnico_solicito_reasignacion = True
@@ -417,6 +440,58 @@ class AdjuntoOrden(models.Model):
             models.Index(fields=['orden']),
             models.Index(fields=['tipo']),
         ]
+
+
+class InformeCliente(models.Model):
+    """Informes PDF de clientes vinculados a órdenes de trabajo."""
+
+    ORIGEN_CHOICES = [
+        ('MANUAL', 'Carga manual'),
+        ('MOREAPP', 'MoreApp'),
+        ('SISTEMA', 'Sistema'),
+    ]
+
+    orden = models.ForeignKey(
+        OrdenTrabajo,
+        on_delete=models.CASCADE,
+        related_name='informes',
+        null=True,
+        blank=True,
+    )
+    cliente = models.ForeignKey(
+        'clientes.Cliente',
+        on_delete=models.PROTECT,
+        related_name='informes',
+    )
+    nombre_archivo = models.CharField(max_length=255)
+    archivo = models.FileField(
+        upload_to='Informe Clientes/%Y/%m/',
+        help_text='PDF del informe del cliente',
+    )
+    subido_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='informes_subidos',
+    )
+    origen = models.CharField(max_length=20, choices=ORIGEN_CHOICES, default='MANUAL')
+    registro_moreapp = models.ForeignKey(
+        'IntegracionMoreApp',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='informes_generados',
+    )
+    fecha_subida = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'{self.nombre_archivo} — {self.cliente.numero_cliente}'
+
+    class Meta:
+        verbose_name = 'Informe de Cliente'
+        verbose_name_plural = 'Informes de Clientes'
+        ordering = ['-fecha_subida']
 
 
 class IntegracionMoreApp(models.Model):
