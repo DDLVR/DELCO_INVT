@@ -347,17 +347,29 @@
                 </div>
             </div>
 
-            <!-- Observaciones -->
-            {% if orden.observaciones_tecnicas %}
+            <!-- Observaciones Técnicas -->
             <div class="card mb-3">
                 <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
                     <h5 class="mb-0">📝 Observaciones Técnicas</h5>
                 </div>
                 <div class="card-body">
-                    <p class="mb-0">{{ orden.observaciones_tecnicas }}</p>
+                    {% if puede_editar_observaciones %}
+                    <form method="post" action="{% url 'orden_detalle' orden.id %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="accion" value="guardar_observaciones">
+                        <textarea name="observaciones_tecnicas" class="form-control mb-2" rows="4"
+                                  placeholder="Instrucciones, detalles del trabajo o notas del técnico...">{{ orden.observaciones_tecnicas }}</textarea>
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="bi bi-save"></i> Guardar observaciones
+                        </button>
+                    </form>
+                    {% elif orden.observaciones_tecnicas %}
+                    <p class="mb-0">{{ orden.observaciones_tecnicas|linebreaksbr }}</p>
+                    {% else %}
+                    <p class="text-muted mb-0"><em>Sin observaciones registradas</em></p>
+                    {% endif %}
                 </div>
             </div>
-            {% endif %}
 
             <!-- Adjuntos y Evidencias -->
             <div class="card mb-3">

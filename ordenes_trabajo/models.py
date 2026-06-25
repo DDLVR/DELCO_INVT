@@ -347,6 +347,14 @@ class OrdenTrabajo(models.Model):
             'mensaje': f'Estado actualizado a {nuevo_estado}'
         }
 
+    def puede_editar_observaciones_tecnicas(self, usuario):
+        """Admin/administrativo o técnico responsable pueden editar observaciones en cualquier estado."""
+        if usuario.rol in ['ADMIN', 'ADMINISTRATIVO']:
+            return True
+        if usuario.rol == 'TECNICO' and usuario == self.tecnico_responsable:
+            return True
+        return False
+
     def puede_tecnico_editar(self, usuario):
         """Valida si un técnico puede editar la orden (máximo 2 veces)"""
         # Solo el técnico responsable puede editar

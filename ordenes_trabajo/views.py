@@ -183,6 +183,15 @@ def orden_detalle_view(request, pk):
         if usuario.rol == 'TECNICO' and orden.tecnico_responsable != usuario:
             messages.error(request, 'No tienes acceso a esta orden')
             return redirect('ordenes_list')
+
+    if request.method == 'POST' and request.POST.get('accion') == 'guardar_observaciones':
+        if orden.puede_editar_observaciones_tecnicas(usuario):
+            orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '').strip()
+            orden.save(update_fields=['observaciones_tecnicas'])
+            messages.success(request, 'Observaciones técnicas guardadas')
+        else:
+            messages.error(request, 'No tienes permiso para editar las observaciones técnicas')
+        return redirect('orden_detalle', pk=pk)
     
     # Obtener adjuntos e informes
     adjuntos = orden.adjuntos.all()
@@ -199,9 +208,28 @@ def orden_detalle_view(request, pk):
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'puede_eliminar': usuario.rol == 'ADMIN',
         'es_tecnico_responsable': orden.tecnico_responsable == usuario if orden.tecnico_responsable else False,
+        'puede_editar_observaciones': orden.puede_editar_observaciones_tecnicas(usuario),
     }
     
     return render(request, 'ordenes/detalle.html', context)
+
+
+@login_required
+def orden_guardar_observaciones_view(request, pk):
+    """Guarda observaciones técnicas (admin, administrativo o técnico responsable)."""
+    if request.method != 'POST':
+        return redirect('orden_detalle', pk=pk)
+
+    orden = get_object_or_404(OrdenTrabajo, pk=pk)
+
+    if not orden.puede_editar_observaciones_tecnicas(request.user):
+        messages.error(request, 'No tienes permiso para editar las observaciones técnicas')
+        return redirect('orden_detalle', pk=pk)
+
+    orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '').strip()
+    orden.save(update_fields=['observaciones_tecnicas'])
+    messages.success(request, 'Observaciones técnicas guardadas')
+    return redirect('orden_detalle', pk=pk)
 
 
 @login_required
