@@ -25,6 +25,7 @@ from .utils import (
 from usuarios.models import Usuario
 from clientes.models import Cliente
 from inventario.models import Medidor, SimCard, Modem
+from web.decorators import admin_only
 
 
 @login_required
@@ -92,6 +93,7 @@ def ordenes_list_view(request):
         'cliente_filtro': cliente_filtro,
         'buscar': buscar,
         'total_alertas_duplicado': ordenes.filter(alerta_duplicado=True).count(),
+        'puede_eliminar': usuario.rol == 'ADMIN',
     }
     
     return render(request, 'ordenes/list.html', context)
@@ -186,6 +188,7 @@ def orden_detalle_view(request, pk):
         'informes': informes,
         'sincronizaciones': sincronizaciones,
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
+        'puede_eliminar': usuario.rol == 'ADMIN',
         'es_tecnico_responsable': orden.tecnico_responsable == usuario if orden.tecnico_responsable else False,
     }
     
@@ -578,6 +581,27 @@ def orden_subir_informe_view(request, pk):
         })
     except Exception as exc:
         return JsonResponse({'success': False, 'message': str(exc)}, status=500)
+
+
+@login_required
+@admin_only
+@require_POST
+def orden_eliminar_view(request, pk):
+    """Elimina una orden de trabajo (solo rol ADMIN)."""
+    orden = get_object_or_404(OrdenTrabajo, pk=pk)
+    orden_id = orden.id
+    titulo = orden.titulo
+
+    for adjunto in orden.adjuntos.all():
+        if adjunto.archivo:
+            adjunto.archivo.delete(save=False)
+    for informe in orden.informes.all():
+        if informe.archivo:
+            informe.archivo.delete(save=False)
+
+    orden.delete()
+    messages.success(request, f'Orden #{orden_id} ({titulo}) eliminada correctamente.')
+    return redirect('ordenes_list')
 
 
 # ========================================

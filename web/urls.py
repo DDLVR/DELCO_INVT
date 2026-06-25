@@ -23,6 +23,7 @@ from ordenes_trabajo.views import (
     ordenes_asignar_masivo_view,
     ordenes_modificar_masivo_view,
     orden_subir_informe_view,
+    orden_eliminar_view,
 )
 
 urlpatterns = [
@@ -81,6 +82,7 @@ urlpatterns = [
     path('ordenes/<int:pk>/subir-adjunto/', orden_subir_adjunto_view, name='orden_subir_adjunto'),
     path('ordenes/<int:pk>/registrar-equipos/', orden_registrar_equipos_view, name='orden_registrar_equipos'),
     path('ordenes/<int:pk>/subir-informe/', orden_subir_informe_view, name='orden_subir_informe'),
+    path('ordenes/<int:pk>/eliminar/', orden_eliminar_view, name='orden_eliminar'),
 
     # Movimientos de Inventario
     path('movimientos/', movimientos_list_view, name='movimientos_list'),
