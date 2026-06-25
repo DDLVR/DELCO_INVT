@@ -36,6 +36,14 @@
       {% else %}
         <span class="badge bg-light text-dark fs-6 align-self-center">{{ registro.estado_sincronizacion }}</span>
       {% endif %}
+      {% if mostrar_panel_operativo and registro.datos_recibidos.data %}
+      <form method="post" action="{% url 'moreapp_reprocesar' registro.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary btn-sm">
+          <i class="bi bi-arrow-repeat"></i> Reprocesar inventario
+        </button>
+      </form>
+      {% endif %}
       {% if registro_delete_url %}
       <form method="post"
         action="{{ registro_delete_url }}"

@@ -461,6 +461,24 @@ def moreapp_marcar_revision_view(request, pk):
     })
 
 
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
+@require_POST
+def moreapp_reprocesar_view(request, pk):
+    """Reaplica las actualizaciones de inventario para un registro MoreApp."""
+    from ordenes_trabajo.models import IntegracionMoreApp
+    from integraciones.reader import reprocesar_registro_moreapp
+
+    registro = get_object_or_404(IntegracionMoreApp, pk=pk)
+    resultado = reprocesar_registro_moreapp(registro)
+
+    if resultado.get('success'):
+        messages.success(request, resultado.get('message', 'Registro reprocesado.'))
+    else:
+        messages.warning(request, resultado.get('message', 'No se pudo actualizar inventario.'))
+
+    return redirect('reportes_moreapp_detalle', pk=pk)
+
+
 # ========== VISTAS DE ÓRDENES DE TRABAJO ==========
 
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO'])
