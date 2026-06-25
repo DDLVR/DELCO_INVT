@@ -7,7 +7,7 @@ from .views import (
     registro_errores_view, importacion_errores_view, importacion_corregir_fila_view,
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
     reportes_moreapp_list, reportes_moreapp_detalle, reportes_moreapp_sincronizar, reportes_moreapp_eliminar,
-    pendientes_operativos_view, moreapp_marcar_revision_view,
+    pendientes_operativos_view, moreapp_marcar_revision_view, moreapp_reprocesar_view,
     api_buscar_medidores, api_obtener_medidor,
 )
 from ordenes_trabajo.views import (
@@ -98,6 +98,7 @@ urlpatterns = [
     # Vistas operativas (Puntos 2, 8, 9, 11)
     path('operacional/pendientes/', pendientes_operativos_view, name='pendientes_operativos'),
     path('operacional/moreapp/<int:pk>/marcar-revision/', moreapp_marcar_revision_view, name='moreapp_marcar_revision'),
+    path('reportes/moreapp/<int:pk>/reprocesar/', moreapp_reprocesar_view, name='moreapp_reprocesar'),
 
     # API Webhook MoreApp (tiempo real - sin autenticación Django)
     path('api/moreapp-webhook/', movimientos_importar_moreapp_webhook, name='movimientos_webhook_moreapp'),

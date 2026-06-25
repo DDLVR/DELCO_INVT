@@ -203,7 +203,33 @@ def _obtener_estado_por_nombre(nombre_estado: str):
 
     if not nombre_estado:
         return None
-    return EstadoInventario.objects.filter(nombre__iexact=nombre_estado).first()
+
+    obj = EstadoInventario.objects.filter(nombre__iexact=nombre_estado).first()
+    if obj:
+        return obj
+
+    norm = _normalizar_texto(nombre_estado)
+    alias_map = {
+        'instalado': ('Instalado', 'Entregado'),
+        'entregado': ('Instalado',),
+        'bodega': ('En bodega', 'BODEGA', 'Disponible'),
+        'retirado': ('Retirado',),
+        'baja': ('Dado de baja',),
+        'reparacion': ('En reparación',),
+        'reparacion en curso': ('En reparación',),
+        'peaje': ('En peaje',),
+        'trayecto': ('En Trayecto',),
+        'custodia': ('En custodia técnico',),
+        'revision': ('En revisión',),
+    }
+    for clave, candidatos in alias_map.items():
+        if clave in norm:
+            for candidato in candidatos:
+                obj = EstadoInventario.objects.filter(nombre__iexact=candidato).first()
+                if obj:
+                    return obj
+
+    return _resolver_estado_inventario(nombre_estado)
 
 
 def _resolver_estado_desde_contexto(*textos):
@@ -402,6 +428,40 @@ def _ubicacion_valida_preinstalacion(equipo) -> bool:
     return ubicacion.tipo in {'BODEGA_DELCO', 'BODEGA_CONTRATISTA', 'TECNICO', 'CLIENTE'}
 
 
+def _equipo_puede_instalar_desde_moreapp(equipo, tipo_equipo: str, estado_obj, cliente_obj) -> bool:
+    """
+    Valida si un equipo puede pasar a Instalado desde MoreApp.
+    Acepta equipos en bodega/trayecto/custodia aunque no tengan FK de custodio
+    o ubicación cargada (común en importaciones Excel).
+    """
+    if not _es_estado_instalado(estado_obj):
+        return True
+
+    if _tiene_custodio_previo(equipo, tipo_equipo):
+        return True
+    if _ubicacion_valida_preinstalacion(equipo):
+        return True
+
+    estado_actual = getattr(equipo, 'estado_inventario', None)
+    if not estado_actual:
+        return True
+
+    if _es_estado_instalado(estado_actual):
+        if cliente_obj and getattr(equipo, 'cliente_id', None) == cliente_obj.id:
+            return True
+        return False
+
+    nombre = _normalizar_texto(estado_actual.nombre)
+    tokens_preinstalacion = (
+        'bodega', 'trayecto', 'custodia', 'retir', 'repar', 'revision',
+        'peaje', 'disponible', 'transito',
+    )
+    if any(token in nombre for token in tokens_preinstalacion):
+        return True
+
+    return not _es_estado_instalado(estado_actual)
+
+
 def _registrar_bloqueo_operativo(
     registro,
     tipo_equipo: str,
@@ -436,17 +496,14 @@ def _validar_reglas_operativas_previas(
     """Reglas operativas antes de aceptar cambios de estado/custodia."""
     identificador = _identificador_equipo(equipo, tipo_equipo)
 
-    # Regla 1: permitir instalar si existe trazabilidad mínima previa
-    # por custodio o por ubicación actual válida en inventario.
+    # Regla 1: trazabilidad mínima para pasar a Instalado (flexible para equipos en bodega).
     if _es_estado_instalado(estado_obj):
-        tiene_custodio = _tiene_custodio_previo(equipo, tipo_equipo)
-        ubicacion_valida = _ubicacion_valida_preinstalacion(equipo)
-        if not tiene_custodio and not ubicacion_valida:
+        if not _equipo_puede_instalar_desde_moreapp(equipo, tipo_equipo, estado_obj, cliente_obj):
             _registrar_bloqueo_operativo(
                 registro,
                 tipo_equipo,
                 identificador,
-                'No se puede instalar sin trazabilidad previa: sin custodio y sin ubicación válida.',
+                'No se puede instalar: el equipo ya está instalado en otro cliente o sin trazabilidad.',
                 contexto=observacion,
                 registrar_pendiente=registrar_pendiente,
             )
@@ -467,6 +524,8 @@ def _validar_reglas_operativas_previas(
 
     # Regla 3: compatibilidad módem/medidor en instalación.
     if tipo_equipo == 'MODEM' and _es_estado_instalado(estado_obj):
+        if medidor_asociado and hasattr(medidor_asociado, 'refresh_from_db'):
+            medidor_asociado.refresh_from_db()
         if not medidor_asociado:
             _registrar_bloqueo_operativo(
                 registro,
@@ -524,6 +583,12 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
     if estado_obj and getattr(equipo, 'estado_inventario_id', None) != estado_obj.id:
         equipo.estado_inventario = estado_obj
         cambios.append('estado_inventario')
+
+    if _es_estado_instalado(estado_obj):
+        destino_cliente = _obtener_o_crear_ubicacion('CLIENTE', 'Instalado en cliente')
+        if hasattr(equipo, 'ubicacion_actual_id') and equipo.ubicacion_actual_id != destino_cliente.id:
+            equipo.ubicacion_actual = destino_cliente
+            cambios.append('ubicacion_actual')
 
     if cliente_obj and hasattr(equipo, 'cliente_id') and equipo.cliente_id != cliente_obj.id:
         equipo.cliente = cliente_obj
@@ -748,6 +813,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             if actualizado:
                 resumen['movimientos_generados'] += 1
             medidor_principal = medidor_instalado
+            medidor_principal.refresh_from_db()
         elif medidor_dejado_serie:
             _agregar_pendiente('MEDIDOR', medidor_dejado_serie, 'Serie de medidor dejado no encontrada en inventario')
 
@@ -1639,6 +1705,49 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
     else:
         resultado['mensaje'] = desc_alerta if tiene_alerta else 'OK'
     return resultado
+
+
+def reprocesar_registro_moreapp(registro) -> Dict[str, Any]:
+    """Reaplica actualizaciones de inventario/cliente sobre un registro MoreApp existente."""
+    data = registro.datos_recibidos if isinstance(registro.datos_recibidos, dict) else {}
+    if not data.get('data'):
+        return {
+            'success': False,
+            'message': 'El registro no tiene payload JSON completo para reprocesar.',
+        }
+
+    nombre_formulario = registro.nombre_formulario or data.get('info', {}).get('formName', '')
+    datos_norm = _extraer_datos_normalizados(data)
+
+    registro.alerta_doble_trabajo = False
+    registro.descripcion_alerta = ''
+    registro.actualizo_cliente = False
+    registro.actualizo_equipos = False
+
+    resumen = _aplicar_actualizaciones_operativas(
+        registro=registro,
+        payload=data,
+        datos_norm=datos_norm,
+        nombre_formulario=nombre_formulario,
+    )
+    registro.datos_procesados = {**datos_norm, 'resultado_operativo': resumen}
+    registro.fecha_procesamiento = timezone.now()
+    if resumen.get('movimientos_generados', 0) > 0 or registro.actualizo_equipos:
+        registro.estado_sincronizacion = 'PROCESADO'
+    elif regumen.get('pendientes_revision') or registro.alerta_doble_trabajo:
+        registro.estado_sincronizacion = 'ALERTA_REVISION'
+    registro.save()
+
+    movimientos = resumen.get('movimientos_generados', 0)
+    pendientes = len(resumen.get('pendientes_revision', []))
+    return {
+        'success': movimientos > 0 or registro.actualizo_equipos or registro.actualizo_cliente,
+        'message': (
+            f'Reprocesado: {movimientos} movimiento(s) de inventario. '
+            f'Pendientes: {pendientes}.'
+        ),
+        'resumen': resumen,
+    }
 
 
 def _guardar_error(json_path, ruta_carpeta, numero_correlativo, estado, mensaje, data):
