@@ -1,5 +1,6 @@
 from django.db import models
 from usuarios.models import Usuario
+from config.storage import evidencias_storage, evidencia_upload_to
 
 
 class EquipoTrabajo(models.Model):
@@ -400,8 +401,9 @@ class AdjuntoOrden(models.Model):
     nombre_archivo = models.CharField(max_length=255)
     
     archivo = models.FileField(
-        upload_to='ordenes_adjuntos/%Y/%m/%d/',
-        help_text='Archivo subido'
+        upload_to=evidencia_upload_to,
+        storage=evidencias_storage,
+        help_text='Archivo subido en Registros/Evidencias',
     )
     
     url_externa = models.URLField(
@@ -465,8 +467,9 @@ class InformeCliente(models.Model):
     )
     nombre_archivo = models.CharField(max_length=255)
     archivo = models.FileField(
-        upload_to='Informe Clientes/%Y/%m/',
-        help_text='PDF del informe del cliente',
+        upload_to=evidencia_upload_to,
+        storage=evidencias_storage,
+        help_text='PDF del informe en Registros/Evidencias',
     )
     subido_por = models.ForeignKey(
         Usuario,

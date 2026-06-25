@@ -25,16 +25,21 @@ urlpatterns = [
     path('integraciones/', include('integraciones.urls')),
 ]
 
-# Servir archivos de media en desarrollo
+# Servir archivos de media y evidencias
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.EVIDENCIAS_URL, document_root=settings.EVIDENCIAS_ROOT)
 else:
-    # Fallback para hosting compartido: sirve /static y /media desde Django.
-    # Evita errores 404/MIME cuando Apache/cPanel no expone estaticos.
+    # Fallback para hosting compartido: sirve /static, /media y /registros/evidencias desde Django.
     from django.contrib.staticfiles.views import serve as staticfiles_serve
     from django.views.static import serve as media_serve
 
     urlpatterns += [
         re_path(r'^static/(?P<path>.*)$', staticfiles_serve, {'insecure': True}),
         re_path(r'^media/(?P<path>.*)$', media_serve, {'document_root': settings.MEDIA_ROOT}),
+        re_path(
+            r'^registros/evidencias/(?P<path>.*)$',
+            media_serve,
+            {'document_root': settings.EVIDENCIAS_ROOT},
+        ),
     ]
