@@ -19,3 +19,6 @@ Registros/
 .env.local
 reset_mysql_password.py
 setup_mysql_user.py
+
+# Python virtualenv
+.venv/
