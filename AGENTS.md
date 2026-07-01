@@ -10,6 +10,7 @@ This is a Django project (`DELCO_INVT`) — inventory management with MoreApp in
 - Default dev settings are `config.settings` (used automatically by `manage.py`). It falls back to **SQLite** (`db.sqlite3`) whenever the `DB_*` env vars are absent — no MySQL is needed for local development.
 - `config.settings_production` targets MySQL with hardcoded/prod credentials and is only for the Passenger/cPanel host; do not use it locally.
 - Custom user model: login uses **RUT** as the username field (not email). `createsuperuser` won't prompt for the required `nombre`/`apellido`/`nombre_interno` fields, so create admins via `manage.py shell` using `Usuario.objects.create_superuser(rut=..., email=..., password=..., nombre=..., apellido=..., nombre_interno=...)`.
+- RUT login gotcha: the login page JS auto-formats the RUT with dots (e.g. `11.111.111-1`), and `login_view` only matches the raw input or a fully-stripped variant. To log in reliably, store the user's `rut` in the same dotted format the form submits (e.g. `11.111.111-1`), otherwise authentication fails even with the correct password.
 - After migrating, run `python manage.py inicializar_estados` to seed the standard inventory states.
 - Run the dev server with `python manage.py runserver 0.0.0.0:8000`. Entry point `/` redirects to `/login/`; after login you land on `/dashboard/`.
 
