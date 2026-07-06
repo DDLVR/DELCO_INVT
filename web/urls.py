@@ -4,6 +4,7 @@ from .views import (
     inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, inventario_eliminar_view, inventario_crear_view, inventario_modificar_masivo_view, profile_view, update_profile_view,
     usuarios_list_view, usuario_crear_view, usuario_editar_view, usuario_reset_password_view, usuario_eliminar_view,
     clientes_list_view, cliente_crear_view, cliente_editar_view, cliente_eliminar_view,
+    clientes_borrar_todo_view, clientes_restaurar_todo_view,  # TEMPORAL: borrado masivo
     registro_errores_view, importacion_errores_view, importacion_corregir_fila_view,
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
     reportes_moreapp_list, reportes_moreapp_detalle, reportes_moreapp_sincronizar, reportes_moreapp_eliminar,
@@ -66,6 +67,10 @@ urlpatterns = [
 
     # Clientes
     path('clientes/', clientes_list_view, name='clientes_list'),
+    # === TEMPORAL: borrado/restauracion masiva de clientes (revertir tras migracion) ===
+    path('clientes/borrar-todo/', clientes_borrar_todo_view, name='clientes_borrar_todo'),
+    path('clientes/restaurar-todo/', clientes_restaurar_todo_view, name='clientes_restaurar_todo'),
+    # === FIN TEMPORAL ===
     path('clientes/crear/', cliente_crear_view, name='cliente_crear'),
     path('clientes/<int:pk>/editar/', cliente_editar_view, name='cliente_editar'),
     path('clientes/<int:pk>/eliminar/', cliente_eliminar_view, name='cliente_eliminar'),
