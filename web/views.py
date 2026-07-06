@@ -2509,6 +2509,8 @@ def clientes_list_view(request):
         'clientes': clientes,
         'total_clientes': clientes.count(),
         'puede_editar': request.user.rol == 'ADMIN',
+        # TEMPORAL: cantidad de clientes inactivos para la opcion de restaurar.
+        'total_inactivos': Cliente.objects.filter(activo=False).count(),
     }
     return render(request, 'clientes/list.html', context)
 
@@ -2633,6 +2635,57 @@ def cliente_eliminar_view(request, pk):
     cliente.save(update_fields=['activo'])
     messages.success(request, f'Cliente {cliente.numero_cliente} eliminado correctamente.')
     return redirect('clientes_list')
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# === TEMPORAL: BORRADO MASIVO DE LA BASE DE CLIENTES (revertir tras migracion) ===
+# Elimina (soft-delete: activo=False) TODOS los clientes activos desde la app,
+# sin tocar la base de datos por consulta directa. Se usa un borrado logico para:
+#   - mantener la integridad relacional (OrdenTrabajo/InformeCliente usan PROTECT;
+#     Medidor/SimCard/Modem usan SET_NULL) sin romper la continuidad operativa,
+#   - permitir revertir la operacion (restaurar activo=True desde el admin de Django
+#     o con el boton "Restaurar" de la zona de peligro).
+# Para eliminar esta funcionalidad temporal: borrar esta vista, la ruta
+# 'clientes_borrar_todo'/'clientes_restaurar_todo' en web/urls.py y el bloque
+# marcado TEMPORAL en templates/clientes/list.html.
+# ═════════════════════════════════════════════════════════════════════════════
+@login_required
+@role_required(['ADMIN'])
+@require_POST
+def clientes_borrar_todo_view(request):
+    """TEMPORAL: borrado logico masivo de todos los clientes activos (solo ADMIN)."""
+    confirmacion = (request.POST.get('confirmacion') or '').strip()
+    if confirmacion != 'BORRAR CLIENTES':
+        messages.error(
+            request,
+            'Confirmacion invalida. Escribe exactamente "BORRAR CLIENTES" para continuar.',
+        )
+        return redirect('clientes_list')
+
+    total = Cliente.objects.filter(activo=True).update(activo=False)
+    if total:
+        messages.success(
+            request,
+            f'Se desactivaron {total} clientes. Los datos y relaciones se conservan; '
+            f'puedes restaurarlos desde la zona de peligro o el admin de Django.',
+        )
+    else:
+        messages.info(request, 'No habia clientes activos para borrar.')
+    return redirect('clientes_list')
+
+
+@login_required
+@role_required(['ADMIN'])
+@require_POST
+def clientes_restaurar_todo_view(request):
+    """TEMPORAL: revierte el borrado masivo reactivando todos los clientes inactivos."""
+    total = Cliente.objects.filter(activo=False).update(activo=True)
+    if total:
+        messages.success(request, f'Se restauraron {total} clientes.')
+    else:
+        messages.info(request, 'No habia clientes inactivos para restaurar.')
+    return redirect('clientes_list')
+# ═════════════════════════ FIN BLOQUE TEMPORAL ══════════════════════════════
 
 
 @login_required

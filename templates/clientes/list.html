@@ -63,6 +63,63 @@
     </div>
   </div>
 
+  {# === TEMPORAL: Zona de peligro - borrado masivo de la base de clientes (solo ADMIN) === #}
+  {# Para revertir: eliminar este bloque completo y las rutas/vistas 'clientes_borrar_todo'/'clientes_restaurar_todo'. #}
+  {% if puede_editar %}
+  <div class="row mb-3">
+    <div class="col-12">
+      <div class="card border-danger">
+        <div class="card-body d-flex justify-content-between align-items-center flex-wrap gap-2">
+          <div>
+            <h6 class="text-danger mb-1">⚠️ Zona de peligro (temporal)</h6>
+            <p class="text-muted mb-0 small">
+              Borra toda la base de clientes desde la app (borrado lógico reversible).
+              Los medidores, SIM, módems y órdenes asociadas se conservan.
+              {% if total_inactivos %}Hay <strong>{{ total_inactivos }}</strong> cliente(s) inactivo(s) restaurables.{% endif %}
+            </p>
+          </div>
+          <div class="d-flex gap-2">
+            {% if total_inactivos %}
+            <form action="{% url 'clientes_restaurar_todo' %}" method="post" class="d-inline" id="formRestaurarTodo">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-outline-secondary btn-sm">♻️ Restaurar todos</button>
+            </form>
+            {% endif %}
+            <button type="button" class="btn btn-danger btn-sm" data-bs-toggle="modal" data-bs-target="#modalBorrarTodo">
+              🗑️ Borrar toda la base de clientes
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="modalBorrarTodo" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form action="{% url 'clientes_borrar_todo' %}" method="post">
+          {% csrf_token %}
+          <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title">Borrar toda la base de clientes</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+          </div>
+          <div class="modal-body">
+            <p>Esta acción desactivará <strong>todos los {{ total_clientes }} clientes activos</strong>.
+            Es reversible (los datos y relaciones se conservan), pero afecta a todo el sistema.</p>
+            <label for="inputConfirmacionBorrar" class="form-label">Para confirmar, escribe <code>BORRAR CLIENTES</code>:</label>
+            <input type="text" name="confirmacion" id="inputConfirmacionBorrar" class="form-control" autocomplete="off" placeholder="BORRAR CLIENTES">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-danger" id="btnConfirmarBorrarTodo" disabled>Sí, borrar todo</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+  {# === FIN TEMPORAL === #}
+
   <div class="table-responsive">
     <table class="table table-hover align-middle mb-0" id="tablaClientes">
       <thead class="table-delco">
@@ -212,6 +269,16 @@
           } catch (e) {
             console.log('Info: DataTables no pudo inicializarse en clientes');
           }
+
+          /* === TEMPORAL: habilitar boton de borrado masivo solo con la frase exacta === */
+          var inputConfirmacion = document.getElementById('inputConfirmacionBorrar');
+          var btnConfirmarBorrar = document.getElementById('btnConfirmarBorrarTodo');
+          if (inputConfirmacion && btnConfirmarBorrar) {
+            inputConfirmacion.addEventListener('input', function () {
+              btnConfirmarBorrar.disabled = (inputConfirmacion.value.trim() !== 'BORRAR CLIENTES');
+            });
+          }
+          /* === FIN TEMPORAL === */
         });
         </script>
         {% endblock %}
