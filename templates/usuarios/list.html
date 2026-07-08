@@ -302,20 +302,6 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       modalBorrar.hide();
     });
-  // Formateo automático de RUT mientras el usuario digita
-  const rutInput = document.getElementById('editar-usuario-rut-numero');
-  rutInput.addEventListener('input', function() {
-    let val = this.value.replace(/[^0-9]/g, '');
-    let formatted = '';
-    if (val.length > 7) {
-      formatted = val.slice(0, val.length - 7) + '.' + val.slice(val.length - 7, val.length - 4) + '.' + val.slice(val.length - 4);
-    } else if (val.length > 4) {
-      formatted = val.slice(0, val.length - 4) + '.' + val.slice(val.length - 4);
-    } else {
-      formatted = val;
-    }
-    this.value = formatted;
-  });
 });
 </script>
 {% endblock %}

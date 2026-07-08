@@ -54,11 +54,6 @@ def admin_or_technical(view_func):
     return role_required(['ADMIN', 'TECNICO'])(view_func)
 
 
-def supervisor_only(view_func):
-    """Acceso solo para SUPERVISOR"""
-    return role_required(['SUPERVISOR'])(view_func)
-
-
 def inventory_staff(view_func):
     """Acceso para ADMINISTRATIVO o ADMIN"""
     return role_required(['ADMIN', 'ADMINISTRATIVO'])(view_func)

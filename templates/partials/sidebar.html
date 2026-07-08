@@ -13,7 +13,7 @@
     </a>
 
     <!-- Órdenes de Trabajo -->
-    {% if user.rol in 'ADMIN,ADMINISTRATIVO,TECNICO,GERENCIA,AUDITOR' %}
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'TECNICO' or user.rol == 'GERENCIA' or user.rol == 'AUDITOR' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name in 'ordenes_list,orden_crear,orden_detalle,cambiar_estado_orden' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
         <i class="bi bi-clipboard-check me-2"></i> Órdenes de Trabajo
       </a>
@@ -25,7 +25,7 @@
     {% endif %}
 
     <!-- Inventario -->
-    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'TECNICO' or user.rol == 'SUPERVISOR' %}
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'TECNICO' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'inventario_list' %}active bg-primary text-white{% endif %}" href="{% url 'inventario_list' %}">
         <i class="bi bi-box me-2"></i> Inventario
       </a>
@@ -39,7 +39,7 @@
     {% endif %}
 
     <!-- Reportes -->
-    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'SUPERVISOR' %}
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if 'reportes_moreapp' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}"
          href="{% url 'reportes_moreapp_list' %}">
         <i class="bi bi-cloud-download me-2"></i> Reportes MoreApp
@@ -60,15 +60,15 @@
       </a>
     {% endif %}
 
-    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'GERENCIA' or user.rol == 'AUDITOR' or user.rol == 'TECNICO' %}
       {% url 'clientes_list' as clientes_list_url %}
       {% if clientes_list_url %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'clientes_list' or request.resolver_match.url_name == 'cliente_crear' or request.resolver_match.url_name == 'cliente_editar' %}active bg-primary text-white{% endif %}" href="{{ clientes_list_url }}">
         <i class="bi bi-building me-2"></i>
-        {% if user.rol == 'ADMIN' %}
+        {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
           Gestión Clientes
         {% else %}
-          Clientes (Lectura)
+          Clientes
         {% endif %}
       </a>
       {% endif %}

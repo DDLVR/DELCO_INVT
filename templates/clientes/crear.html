@@ -24,66 +24,110 @@
             <h5 class="mb-0">📋 Datos Principales del Cliente</h5>
           </div>
           <div class="card-body">
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Numero de Cliente <span class="text-danger">*</span></label>
-              <input type="text" name="numero_cliente" class="form-control" required placeholder="Ej: 283448">
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Direccion <span class="text-danger">*</span></label>
-              <input type="text" name="direccion" class="form-control" required placeholder="Ej: GENOVA 7260">
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Comuna <span class="text-danger">*</span></label>
-              <input type="text" name="comuna" class="form-control" required placeholder="Ej: CERRO NAVIA">
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Referencia</label>
-              <textarea name="referencia" class="form-control" rows="2" placeholder="Notas adicionales para ubicación (Opcional)"></textarea>
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label fw-semibold">Identificacion del Medidor</label>
-              <input type="text" name="medidor_serie" class="form-control" placeholder="Serie del medidor (Opcional)">
-              <small class="text-muted">Si se informa una serie, debe existir en inventario y no estar asignada a otro cliente.</small>
-            </div>
-          </div>
-        </div>
-
-        <!-- ═════════════════════════════════════════════════════ -->
-        <!-- DATOS ADICIONALES (AMARILLOS) - Para administrativo -->
-        <!-- ═════════════════════════════════════════════════════ -->
-        <div class="card bg-light mb-4" style="border-left: 5px solid var(--delco-secondary);">
-          <div class="card-header card-header-delco">
-            <h5 class="mb-0">⚙️ Datos Adicionales</h5>
-          </div>
-          <div class="card-body">
-            <div class="mb-3">
-              <label class="form-label">Trabajo</label>
-              <input type="text" name="trabajo" class="form-control" placeholder="Descripción del trabajo (Opcional)">
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Numero de Cliente <span class="text-danger">*</span></label>
+                <input type="text" name="numero_cliente" class="form-control" required placeholder="Ej: 283448">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Sector <span class="text-danger">*</span></label>
+                <input type="text" name="sector" class="form-control" required placeholder="Ej: NORTE">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Tipo de Suministro <span class="text-danger">*</span></label>
+                <input type="text" name="tipo_suministro" class="form-control" required placeholder="Ej: ELECTRICO">
+              </div>
             </div>
 
             <div class="row">
-              <div class="col-md-6 mb-3">
-                <label class="form-label">IP</label>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Comuna <span class="text-danger">*</span></label>
+                <input type="text" name="comuna" class="form-control" required placeholder="Ej: CERRO NAVIA">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Nombre Cliente <span class="text-danger">*</span></label>
+                <input type="text" name="customer_name" class="form-control" required placeholder="Ej: ACME S.A.">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Dirección Instalación <span class="text-danger">*</span></label>
+                <input type="text" name="installation_address" class="form-control" required placeholder="Ej: GENOVA 7260">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Proyecto</label>
+                <input type="text" name="proyecto" class="form-control" placeholder="si queda vacio SIN PROYECTO">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Fabricante/ID Medidor <span class="text-danger">*</span></label>
+                <input type="text" name="meter_manufacturer_id" class="form-control" required placeholder="Ej: SCHNEIDER">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Serie Medidor <span class="text-danger">*</span></label>
+                <input type="text" name="meter_serial_n_1" class="form-control" required placeholder="Ej: 987654321">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Dirección Base <span class="text-danger">*</span></label>
+                <input type="text" name="direccion" class="form-control" required placeholder="Ej: GENOVA 7260">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Ciudad <span class="text-danger">*</span></label>
+                <input type="text" name="city" class="form-control" required placeholder="Ej: SANTIAGO">
+              </div>
+            </div>
+
+            <small class="text-muted d-block mb-3">La serie de medidor debe existir en inventario y no puede estar duplicada en otro cliente.</small>
+
+            <hr>
+            <h6 class="fw-semibold mb-3">Datos Operativos</h6>
+
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Ultimo Reset <span class="text-danger">*</span></label>
+                <input type="date" name="ultimo_reset" class="form-control" required>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Ultimo Acceso <span class="text-danger">*</span></label>
+                <input type="date" name="ultimo_acceso" class="form-control" required>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Ultimo Perfil Carga</label>
+                <input type="text" name="ultimo_perfil_carga" class="form-control" placeholder="Si queda vacío SIN PERFIL">
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Ultimo Registro Facturación <span class="text-danger">*</span></label>
+                <input type="date" name="ultimo_registro_facturacion" class="form-control" required>
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">IP</label>
                 <input type="text" name="ip" class="form-control" placeholder="Ej: 192.168.1.100">
               </div>
-              <div class="col-md-6 mb-3">
-                <label class="form-label">Puerto</label>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Puerto</label>
                 <input type="text" name="puerto" class="form-control" placeholder="Ej: 8080">
               </div>
             </div>
 
-            <div class="mb-3">
-              <label class="form-label">Modem</label>
-              <input type="text" name="modem" class="form-control" placeholder="Modelo del modem (Opcional)">
-            </div>
-
-            <div class="mb-3">
-              <label class="form-label">Fecha de Registro</label>
-              <input type="date" name="fecha_registro" class="form-control">
+            <div class="row">
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Fecha de Registro</label>
+                <input type="date" name="fecha_registro" class="form-control">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Modem</label>
+                <input type="text" name="modem" class="form-control" placeholder="Modelo del modem (Opcional)">
+              </div>
+              <div class="col-md-4 mb-3">
+                <label class="form-label fw-semibold">Nota</label>
+                <input type="text" name="note" class="form-control" placeholder="Nota opcional">
+              </div>
             </div>
           </div>
         </div>

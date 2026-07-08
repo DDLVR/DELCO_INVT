@@ -9,13 +9,27 @@
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
           <h1>🏢 Gestion de Clientes</h1>
-          <p class="text-muted mb-0">Total de clientes activos: <strong>{{ total_clientes }}</strong></p>
+          <p class="text-muted mb-0">
+            Total filas última importación: <strong id="totalFilasUltimaImportacion">{{ ultima_importacion_total_filas|default:total_clientes }}</strong>
+            <span class="mx-2">|</span>
+            Clientes únicos visibles: <strong id="totalClientesVisibles">{{ total_clientes }}</strong>
+            {% if ultima_importacion_total_filas %}
+              <span class="ms-2 small text-primary">(Se muestran duplicados importados en rojo cuando existen)</span>
+            {% endif %}
+          </p>
         </div>
-        {% if puede_editar %}
-          <a href="{% url 'cliente_crear' %}" class="btn btn-primary">➕ Nuevo Cliente</a>
-        {% else %}
-          <span class="badge bg-secondary fs-6">Modo solo lectura</span>
-        {% endif %}
+        <div class="d-flex gap-2 flex-wrap">
+          {% if puede_editar %}
+            <a href="{% url 'cliente_crear' %}" class="btn btn-primary">➕ Nuevo Cliente</a>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarClientes">
+              ⬆️ Importar Clientes
+            </button>
+            <button type="button" class="btn btn-danger" id="btnEliminarSeleccionadosClientes">
+              🗑️ Eliminar seleccionados
+            </button>
+          {% endif %}
+          <a href="{% url 'clientes_exportar' %}" class="btn btn-success">⬇️ Exportar Clientes</a>
+        </div>
       </div>
     </div>
   </div>
@@ -28,8 +42,8 @@
             <div class="col-md-2">
               <label for="tablaLength" class="form-label mb-1">Mostrar</label>
               <select id="tablaLength" class="form-select form-select-sm">
-                <option value="10">10</option>
-                <option value="25" selected>25</option>
+                <option value="10" selected>10</option>
+                <option value="25">25</option>
                 <option value="50">50</option>
                 <option value="100">100</option>
                 <option value="-1">Todos</option>
@@ -39,10 +53,15 @@
               <label for="tablaBuscarCampo" class="form-label mb-1">Buscar en</label>
               <select id="tablaBuscarCampo" class="form-select form-select-sm">
                 <option value="all">Todos los campos</option>
-                <option value="1">Numero Cliente</option>
-                <option value="2">Direccion</option>
-                <option value="3">Comuna</option>
-                <option value="4">Identificacion Medidor</option>
+                <option value="2">Sector</option>
+                <option value="3">Tipo Suministro</option>
+                <option value="4">Numero Cliente</option>
+                <option value="5">Comuna</option>
+                <option value="6">Nombre Cliente</option>
+                <option value="7">Dirección Instalación</option>
+                <option value="8">Marca Medidor</option>
+                <option value="9">Proyecto</option>
+                <option value="10">Serie Medidor</option>
               </select>
             </div>
             <div class="col-md-5">
@@ -57,6 +76,14 @@
                 <i class="bi bi-arrow-clockwise"></i> Limpiar
               </button>
             </div>
+            <div class="col-12">
+              <div class="form-check form-switch mt-2">
+                <input class="form-check-input" type="checkbox" id="tablaSoloDuplicados">
+                <label class="form-check-label small fw-semibold text-danger" for="tablaSoloDuplicados">
+                  Mostrar solo duplicados (Numero Cliente o Serie Medidor)
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -67,32 +94,50 @@
     <table class="table table-hover align-middle mb-0" id="tablaClientes">
       <thead class="table-delco">
         <tr>
+          <th style="width:38px;">
+            {% if puede_editar %}
+              <input type="checkbox" id="seleccionarTodosClientes" title="Seleccionar todos los clientes visibles">
+            {% endif %}
+          </th>
           <th>#</th>
+          <th>Sector</th>
+          <th>Tipo Suministro</th>
           <th>Numero Cliente</th>
-          <th>Direccion</th>
           <th>Comuna</th>
-          <th>Identificacion Medidor</th>
-          <th>Trabajo</th>
-          <th>IP</th>
-          <th>Puerto</th>
-          <th>Modem</th>
-          <th>Fecha Registro</th>
+          <th>Nombre Cliente</th>
+          <th>Dirección Instalación</th>
+          <th>Marca Medidor</th>
+          <th>Proyecto</th>
+          <th>Serie Medidor</th>
           <th>Acciones</th>
         </tr>
       </thead>
       <tbody>
         {% for cliente in clientes %}
-          <tr>
+          <tr data-cliente-id="{{ cliente.id }}">
+            <td>
+              {% if puede_editar %}
+                <input type="checkbox" class="cliente-selector" value="{{ cliente.id }}" aria-label="Seleccionar cliente {{ cliente.numero_cliente }}">
+              {% endif %}
+            </td>
             <td>{{ forloop.counter }}</td>
+            <td>{{ cliente.sector|default_if_none:'' }}</td>
+            <td>{{ cliente.tipo_suministro|default_if_none:'' }}</td>
             <td><strong>{{ cliente.numero_cliente }}</strong></td>
-            <td>{{ cliente.direccion }}</td>
-            <td>{{ cliente.comuna }}</td>
-            <td>{{ cliente.medidor_actual.serie|default:'-' }}</td>
-            <td>{{ cliente.trabajo|default:'-' }}</td>
-            <td>{{ cliente.ip|default:'-' }}</td>
-            <td>{{ cliente.puerto|default:'-' }}</td>
-            <td>{{ cliente.modem|default:'-' }}</td>
-            <td>{{ cliente.fecha_registro|date:"d/m/Y"|default:'-' }}</td>
+            <td>{{ cliente.comuna|default_if_none:'' }}</td>
+            <td>{{ cliente.customer_name|default_if_none:'' }}</td>
+            <td>{{ cliente.installation_address|default_if_none:'' }}</td>
+            <td>
+              {% if cliente.meter_manufacturer_id and cliente.meter_manufacturer_id|lower != 'null' and cliente.meter_manufacturer_id|lower != 'nulo' %}
+                {{ cliente.meter_manufacturer_id }}
+              {% endif %}
+            </td>
+            <td>{{ cliente.proyecto|default_if_none:'' }}</td>
+            <td>
+              {% if cliente.meter_serial_n_1 and cliente.meter_serial_n_1|lower != 'null' and cliente.meter_serial_n_1|lower != 'nulo' %}
+                {{ cliente.meter_serial_n_1 }}
+              {% endif %}
+            </td>
             <td>
               {% if puede_editar %}
                 <a href="{% url 'cliente_editar' cliente.id %}" class="btn btn-sm btn-info">✏️ Editar</a>
@@ -107,11 +152,75 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="11" class="text-center text-muted py-4">No hay clientes registrados.</td>
+            <td colspan="12" class="text-center text-muted py-4">No hay clientes registrados.</td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
+  </div>
+
+</div>
+<div class="modal fade" id="modalImportarClientes" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Importar Clientes desde Excel</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form id="formImportarClientes" enctype="multipart/form-data">
+        {% csrf_token %}
+        <div class="modal-body">
+          <p class="text-muted mb-3">Carga un archivo Excel (.xlsx) usando el formato de clientes indicado.</p>
+          <div class="mb-3">
+            <label for="archivoImportarClientes" class="form-label">Archivo Excel</label>
+            <input type="file" class="form-control" id="archivoImportarClientes" name="archivo" accept=".xlsx" required>
+          </div>
+          <div class="mb-3">
+            <label for="modoImportacionClientes" class="form-label">Modo de importación</label>
+            <select id="modoImportacionClientes" name="modo_importacion" class="form-select">
+              <option value="incremental" selected>Incremental (recomendado): crea/actualiza y conserva clientes anteriores</option>
+              <option value="sync">Sincronización completa: desactiva clientes que no estén en este Excel</option>
+            </select>
+            <small class="text-muted">Usa sincronización completa solo cuando el archivo represente el universo total de clientes vigentes.</small>
+          </div>
+          <div class="alert alert-secondary small mb-0">
+            <strong>Columnas mínimas requeridas:</strong> Numero Cliente (llave principal para crear/actualizar y sincronizar).
+            <div class="mt-2">
+              <strong>Opcionales:</strong> Sector, Tipo Suministro, Comuna, Nombre Cliente, Dirección de Instalación, Marca Medidor, Proyecto, Serie Medidor (o Numero Medidor), Referencia, Ciudad, Ultimo Acceso, Ultimo Perfil Carga, Ultimo Perfil Instrumentacion, Ultimo Reset, Ultimo Registro Facturacion, Nota, Trabajo, IP, Puerto, Modem, Fecha Registro.
+            </div>
+            <div class="mt-2 text-danger">
+              <strong>Duplicados:</strong> Se permiten en la importación y se muestran como advertencias en rojo para revisión.
+            </div>
+          </div>
+          <div class="alert alert-info small mt-3">
+            Asegúrate de subir un archivo .xlsx con la primera fila de encabezados y las columnas requeridas.
+          </div>
+          <div class="delco-import-progress mt-3" style="display:none;">
+            <div class="d-flex justify-content-between mb-1">
+              <small class="delco-import-progress-label text-muted">Preparando importación...</small>
+              <small class="delco-import-progress-pct fw-semibold">0%</small>
+            </div>
+            <div class="progress" style="height:22px;">
+              <div class="progress-bar progress-bar-striped progress-bar-animated delco-import-progress-bar" role="progressbar" style="width:0%;">0%</div>
+            </div>
+          </div>
+          <div id="importResultadosClientes" class="mt-3" style="display:none;">
+            <div id="importMensajeClientes" class="alert"></div>
+            <div id="importFiltroDuplicadosWrap" class="form-check form-switch mt-2" style="display:none;">
+              <input class="form-check-input" type="checkbox" id="importFiltroDuplicadosClientes">
+              <label class="form-check-label small fw-semibold text-danger" for="importFiltroDuplicadosClientes">
+                Mostrar solo duplicados
+              </label>
+            </div>
+            <ul id="importErroresClientes" class="mt-2 small text-danger" style="display:none; padding-left: 20px;"></ul>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-primary" id="btnImportarClientesSubmit">Importar</button>
+        </div>
+      </form>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -119,34 +228,197 @@
         {% block extra_js %}
         <script>
         var dataTableClientes = null;
+        var duplicadosNumeroSet = new Set();
+        var duplicadosSerieSet = new Set();
+        var duplicadosImportacionSet = new Set();
+        var duplicadosImportacionDetalle = [];
+        var btnImportarClientes = null;
+        var btnEliminarSeleccionadosClientes = null;
+        var seleccionarTodosClientes = null;
+        var tablaBuscar = null;
+        var tablaLength = null;
+        var tablaBuscarCampo = null;
+        var btnAplicarFiltroTabla = null;
+        var btnLimpiarFiltroTabla = null;
+        var tablaSoloDuplicados = null;
 
         $(document).ready(function() {
           $.fn.dataTable.ext.errMode = 'none';
 
+          function inyectarFilasDuplicadasEnTbody() {
+            // Ya no se inyectan filas duplicadas artificiales: ahora los duplicados son registros reales.
+          }
+
+          inyectarFilasDuplicadasEnTbody();
+
           try {
+            // Debug: log structure before initializing DataTables
+            try {
+              const thCount = $('#tablaClientes thead tr').first().find('th').length;
+              const tbody = $('#tablaClientes tbody');
+              const firstRow = tbody.find('tr').first();
+              const tdCount = firstRow.length ? firstRow.find('td').length : 0;
+              console.log('DataTables init: header columns=', thCount, 'first-row cells=', tdCount, 'dataTable exists=', !!$.fn.dataTable);
+
+              // Remover cualquier fila placeholder (colspan) para evitar _DT_CellIndex.
+              tbody.find('tr').each(function() {
+                const celdas = $(this).find('td');
+                if (celdas.length === 1 && celdas.first().attr('colspan')) {
+                  $(this).remove();
+                }
+              });
+            } catch (errInner) { console.warn('Error mid-debugging table structure', errInner); }
+
             dataTableClientes = $('#tablaClientes').DataTable({
               language: {
                 url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
               },
               dom: 'rt<"d-flex justify-content-between align-items-center mt-2"ip>',
-              pageLength: 25,
+              pageLength: 10,
               lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Todos']],
-              order: [[0, 'desc']],
+              order: [[4, 'asc']],
               autoWidth: false,
               columnDefs: [
                 {
-                  targets: -1,
+                  targets: 0,
+                  orderable: false,
+                  searchable: false
+                },
+                {
+                  targets: 1,
                   orderable: false,
                   searchable: false,
+                  render: function(data, type, row, meta) {
+                    return meta.row + meta.settings._iDisplayStart + 1;
+                  }
+                },
+                {
+                  targets: -1,
+                  orderable: false,
+                  searchable: false
                 }
               ]
             });
 
-            const tablaBuscar = document.getElementById('tablaBuscar');
-            const tablaLength = document.getElementById('tablaLength');
-            const tablaBuscarCampo = document.getElementById('tablaBuscarCampo');
-            const btnAplicarFiltroTabla = document.getElementById('btnAplicarFiltroTabla');
-            const btnLimpiarFiltroTabla = document.getElementById('btnLimpiarFiltroTabla');
+            function renderDuplicadosImportacion() {
+              // La tabla de detalle fue retirada para evitar que expanda la página.
+            }
+
+            renderDuplicadosImportacion();
+
+            function agregarFilasDuplicadasImportacionATabla() {
+              // No-op: ahora se inyectan antes de inicializar DataTables.
+            }
+
+            function extraerTextoDeCelda(valorCelda) {
+              var div = document.createElement('div');
+              div.innerHTML = valorCelda == null ? '' : String(valorCelda);
+              return (div.textContent || div.innerText || '').trim();
+            }
+
+            function recalcularDuplicadosNumero() {
+              if (!dataTableClientes) return;
+              var frecuenciasNumero = {};
+              var frecuenciasSerie = {};
+              duplicadosNumeroSet = new Set();
+              duplicadosSerieSet = new Set();
+              dataTableClientes.rows().every(function() {
+                var data = this.data();
+                var numero = extraerTextoDeCelda(data[4]);
+                var serie = extraerTextoDeCelda(data[10]);
+                if (numero) {
+                  frecuenciasNumero[numero] = (frecuenciasNumero[numero] || 0) + 1;
+                }
+                if (serie) {
+                  frecuenciasSerie[serie] = (frecuenciasSerie[serie] || 0) + 1;
+                }
+              });
+              Object.keys(frecuenciasNumero).forEach(function(numero) {
+                if (frecuenciasNumero[numero] > 1) {
+                  duplicadosNumeroSet.add(numero);
+                }
+              });
+              Object.keys(frecuenciasSerie).forEach(function(serie) {
+                if (frecuenciasSerie[serie] > 1) {
+                  duplicadosSerieSet.add(serie);
+                }
+              });
+            }
+
+            var filtroDuplicadosRegistrado = false;
+            if (!filtroDuplicadosRegistrado) {
+              $.fn.dataTable.ext.search.push(function(settings, data) {
+                if (!settings || settings.nTable.id !== 'tablaClientes') return true;
+                var check = document.getElementById('tablaSoloDuplicados');
+                if (!check || !check.checked) return true;
+                var numero = extraerTextoDeCelda(data[4]);
+                var serie = extraerTextoDeCelda(data[10]);
+                return duplicadosNumeroSet.has(numero) || duplicadosSerieSet.has(serie) || duplicadosImportacionSet.has(numero);
+              });
+              filtroDuplicadosRegistrado = true;
+            }
+
+            function pintarDuplicadosNumeroEnPagina() {
+              if (!dataTableClientes) return;
+              dataTableClientes.rows({ page: 'current' }).every(function() {
+                var data = this.data();
+                var numero = extraerTextoDeCelda(data[4]);
+                var serie = extraerTextoDeCelda(data[10]);
+                var esDuplicado = duplicadosNumeroSet.has(numero) || duplicadosSerieSet.has(serie) || duplicadosImportacionSet.has(numero);
+                var nodo = this.node();
+                if (!nodo) return;
+                var celdaNumero = nodo.querySelector('td:nth-child(5)');
+                if (!celdaNumero) return;
+                celdaNumero.classList.toggle('text-danger', esDuplicado);
+                celdaNumero.classList.toggle('fw-bold', esDuplicado);
+                celdaNumero.style.color = esDuplicado ? '#dc3545' : '';
+                celdaNumero.title = esDuplicado ? 'Duplicado detectado en importación/tabla' : '';
+              });
+            }
+
+            function actualizarTotalVisible() {
+              if (!dataTableClientes) return;
+              var totalVisible = dataTableClientes.rows({ filter: 'applied' }).count();
+              var totalEl = document.getElementById('totalClientesVisibles');
+              if (totalEl) {
+                totalEl.textContent = String(totalVisible);
+              }
+            }
+
+            function obtenerIdsClientesSeleccionados() {
+              return Array.from(document.querySelectorAll('.cliente-selector:checked')).map(function(el) {
+                return el.value;
+              });
+            }
+
+            function sincronizarSeleccionTotal() {
+              if (!seleccionarTodosClientes) return;
+              var checkboxes = Array.from(document.querySelectorAll('.cliente-selector'));
+              if (!checkboxes.length) {
+                seleccionarTodosClientes.checked = false;
+                seleccionarTodosClientes.indeterminate = false;
+                return;
+              }
+              var seleccionados = checkboxes.filter(function(el) { return el.checked; }).length;
+              seleccionarTodosClientes.checked = seleccionados > 0 && seleccionados === checkboxes.length;
+              seleccionarTodosClientes.indeterminate = seleccionados > 0 && seleccionados < checkboxes.length;
+            }
+
+            agregarFilasDuplicadasImportacionATabla();
+            recalcularDuplicadosNumero();
+            pintarDuplicadosNumeroEnPagina();
+            actualizarTotalVisible();
+            dataTableClientes.on('draw', function() {
+              pintarDuplicadosNumeroEnPagina();
+              actualizarTotalVisible();
+            });
+
+            tablaBuscar = document.getElementById('tablaBuscar');
+            tablaLength = document.getElementById('tablaLength');
+            tablaBuscarCampo = document.getElementById('tablaBuscarCampo');
+            btnAplicarFiltroTabla = document.getElementById('btnAplicarFiltroTabla');
+            btnLimpiarFiltroTabla = document.getElementById('btnLimpiarFiltroTabla');
+            tablaSoloDuplicados = document.getElementById('tablaSoloDuplicados');
 
             function aplicarBusqueda() {
               if (!dataTableClientes || !tablaBuscar) return;
@@ -185,8 +457,15 @@
               btnLimpiarFiltroTabla.addEventListener('click', function() {
                 if (tablaBuscar) tablaBuscar.value = '';
                 if (tablaBuscarCampo) tablaBuscarCampo.value = 'all';
+                if (tablaSoloDuplicados) tablaSoloDuplicados.checked = false;
                 dataTableClientes.search('');
                 dataTableClientes.columns().search('');
+                dataTableClientes.draw();
+              });
+            }
+
+            if (tablaSoloDuplicados) {
+              tablaSoloDuplicados.addEventListener('change', function() {
                 dataTableClientes.draw();
               });
             }
@@ -195,6 +474,191 @@
               tablaLength.value = String(dataTableClientes.page.len());
               tablaLength.addEventListener('change', function() {
                 dataTableClientes.page.len(parseInt(this.value, 10)).draw();
+              });
+            }
+
+            var modalImportarClientes = document.getElementById('modalImportarClientes');
+            btnImportarClientes = document.getElementById('btnImportarClientesSubmit');
+            btnEliminarSeleccionadosClientes = document.getElementById('btnEliminarSeleccionadosClientes');
+            seleccionarTodosClientes = document.getElementById('seleccionarTodosClientes');
+
+            if (seleccionarTodosClientes) {
+              seleccionarTodosClientes.addEventListener('change', function() {
+                var checkboxes = document.querySelectorAll('.cliente-selector');
+                checkboxes.forEach(function(el) {
+                  el.checked = seleccionarTodosClientes.checked;
+                });
+              });
+            }
+
+            document.addEventListener('change', function(event) {
+              if (event.target && event.target.classList && event.target.classList.contains('cliente-selector')) {
+                sincronizarSeleccionTotal();
+              }
+            });
+
+            if (btnEliminarSeleccionadosClientes) {
+              btnEliminarSeleccionadosClientes.addEventListener('click', async function() {
+                var ids = obtenerIdsClientesSeleccionados();
+                if (!ids.length) {
+                  if (window.showToast) showToast('Selecciona al menos un cliente para eliminar.', 'warning');
+                  return;
+                }
+
+                var confirmado = await window.showConfirm(
+                  'Se eliminarán ' + ids.length + ' clientes seleccionados. Esta acción no se puede deshacer.',
+                  'Eliminar clientes seleccionados',
+                  'Sí, eliminar',
+                  'Cancelar'
+                );
+                if (!confirmado) return;
+
+                var form = document.createElement('form');
+                form.method = 'POST';
+                form.action = '{% url 'clientes_eliminar_masivo' %}';
+                var csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+                if (csrfInput) {
+                  var csrfClone = csrfInput.cloneNode(true);
+                  form.appendChild(csrfClone);
+                }
+
+                ids.forEach(function(id) {
+                  var input = document.createElement('input');
+                  input.type = 'hidden';
+                  input.name = 'cliente_ids';
+                  input.value = id;
+                  form.appendChild(input);
+                });
+
+                document.body.appendChild(form);
+                form.submit();
+              });
+            }
+
+            if (btnImportarClientes) {
+              btnImportarClientes.addEventListener('click', function() {
+                const form = document.getElementById('formImportarClientes');
+                const archivoInput = document.getElementById('archivoImportarClientes');
+                if (!archivoInput || !archivoInput.files.length) {
+                  if (window.showToast) showToast('Selecciona un archivo Excel antes de importar.', 'warning');
+                  return;
+                }
+                if (typeof window.ejecutarImportacionExcel !== 'function') {
+                  if (window.showToast) showToast('Función de importación no disponible.', 'danger');
+                  return;
+                }
+                window.ejecutarImportacionExcel({
+                  url: "{% url 'clientes_importar' %}",
+                  form: form,
+                  submitBtn: btnImportarClientes,
+                  modalEl: modalImportarClientes,
+                  onSuccess: function(data) {
+                    const resultados = document.getElementById('importResultadosClientes');
+                    const mensaje = document.getElementById('importMensajeClientes');
+                    if (resultados && mensaje) {
+                      resultados.style.display = 'block';
+                      mensaje.className = data.success ? 'alert alert-success' : 'alert alert-danger';
+                      var resumen = data.message || 'Importación finalizada.';
+                      mensaje.textContent = resumen;
+
+                      var erroresLista = document.getElementById('importErroresClientes');
+                      var filtroWrap = document.getElementById('importFiltroDuplicadosWrap');
+                      var filtroDuplicados = document.getElementById('importFiltroDuplicadosClientes');
+
+                      function aplicarFiltroDuplicadosLista() {
+                        if (!erroresLista || !filtroDuplicados) return;
+                        var mostrarSoloDuplicados = !!filtroDuplicados.checked;
+                        var elementos = erroresLista.querySelectorAll('li');
+                        elementos.forEach(function(item) {
+                          var esDuplicado = item.getAttribute('data-duplicado') === '1';
+                          item.style.display = (mostrarSoloDuplicados && !esDuplicado) ? 'none' : '';
+                        });
+                      }
+
+                      if (erroresLista) {
+                        erroresLista.innerHTML = '';
+                        if (filtroDuplicados) {
+                          filtroDuplicados.checked = false;
+                        }
+
+                        var advertencias = Array.isArray(data.warnings) ? data.warnings : [];
+                        var errores = Array.isArray(data.errors) ? data.errors : [];
+                        var itemsResultado = advertencias.concat(errores);
+
+                        if (
+                          data.warning_summary &&
+                          Array.isArray(data.warning_summary.duplicados_numero_detalle) &&
+                          data.warning_summary.duplicados_numero_detalle.length
+                        ) {
+                          data.warning_summary.duplicados_numero_detalle.forEach(function(item) {
+                            if (!item || !item.numero) return;
+                            var liDup = document.createElement('li');
+                            var filasTxt = Array.isArray(item.filas) && item.filas.length
+                              ? ' (filas: ' + item.filas.join(', ') + ')'
+                              : '';
+                            liDup.textContent = '[DUPLICADO] Numero Cliente ' + item.numero + ' repetido ' + item.repeticiones + ' veces en Excel' + filasTxt;
+                            liDup.setAttribute('data-duplicado', '1');
+                            liDup.classList.add('fw-bold', 'text-danger');
+                            erroresLista.appendChild(liDup);
+                          });
+                        }
+
+                        if (itemsResultado.length || (data.warning_summary && Array.isArray(data.warning_summary.duplicados_numero_detalle) && data.warning_summary.duplicados_numero_detalle.length)) {
+                          var totalDuplicados = 0;
+                          itemsResultado.forEach(function(error) {
+                            var li = document.createElement('li');
+                            li.textContent = error;
+                            var esDuplicado = String(error || '').toUpperCase().indexOf('[DUPLICADO]') >= 0;
+                            li.setAttribute('data-duplicado', esDuplicado ? '1' : '0');
+                            if (esDuplicado) {
+                              totalDuplicados += 1;
+                              li.classList.add('fw-bold', 'text-danger');
+                            }
+                            erroresLista.appendChild(li);
+                          });
+
+                          if (data.warning_summary && Array.isArray(data.warning_summary.duplicados_numero_detalle)) {
+                            totalDuplicados += data.warning_summary.duplicados_numero_detalle.length;
+                          }
+
+                          if (filtroDuplicados) {
+                            filtroDuplicados.onchange = aplicarFiltroDuplicadosLista;
+                          }
+
+                          if (filtroWrap) {
+                            filtroWrap.style.display = totalDuplicados > 0 ? 'block' : 'none';
+                          }
+
+                          erroresLista.style.display = 'block';
+                        } else {
+                          if (filtroWrap) {
+                            filtroWrap.style.display = 'none';
+                          }
+                          erroresLista.style.display = 'none';
+                        }
+                      }
+                    }
+                    if (data.success) {
+                      if (data.warning_summary) {
+                        localStorage.setItem('clientesResumenUltimaImportacion', JSON.stringify({
+                          total_filas: data.total_filas,
+                          clientes_unicos: data.warning_summary.clientes_unicos_detectados,
+                          filas_numero_repetido: data.warning_summary.filas_numero_repetido
+                        }));
+                      }
+
+                      if (window.showToast) showToast(data.message || 'Importación completada', 'success', 0);
+                      setTimeout(function() {
+                        location.reload();
+                      }, 700);
+                    } else {
+                      if (window.showToast) showToast(data.message || 'Error en la importación.', 'danger', 0);
+                    }
+                  },
+                  onError: function(err) {
+                    if (window.showToast) showToast(err.message || 'Error en la importación.', 'danger', 0);
+                  }
+                });
               });
             }
 
@@ -210,7 +674,8 @@
               });
             });
           } catch (e) {
-            console.log('Info: DataTables no pudo inicializarse en clientes');
+            console.error('Info: DataTables no pudo inicializarse en clientes', e);
+            if (window.showToast) showToast('Error al inicializar la tabla de clientes. Revisa la consola del navegador.', 'danger', 0);
           }
         });
         </script>
