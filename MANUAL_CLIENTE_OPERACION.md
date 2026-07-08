@@ -1,6 +1,6 @@
 # MANUAL CLIENTE - OPERACION DIARIA DELCO_INVT
 
-Documento orientado a usuarios operativos (ADMIN, ADMINISTRATIVO, SUPERVISOR).
+Documento orientado a usuarios operativos (ADMIN, ADMINISTRATIVO, AUDITOR).
 
 ## 1. Objetivo
 

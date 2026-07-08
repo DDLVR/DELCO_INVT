@@ -1,3 +1,106 @@
+from io import BytesIO
+
+import openpyxl
 from django.test import TestCase
 
-# Create your tests here.
+from clientes.models import Cliente
+from importaciones.utils import importar_clientes_excel
+from usuarios.models import Usuario
+
+
+class ImportacionClientesModoTests(TestCase):
+	def setUp(self):
+		self.usuario = Usuario.objects.create_user(
+			rut='22222222-2',
+			email='import_test@delco.cl',
+			password='admin1234',
+			nombre='Import',
+			apellido='Tester',
+			nombre_interno='import_tester',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+
+	def _build_excel(self, rows):
+		wb = openpyxl.Workbook()
+		ws = wb.active
+		ws.title = 'CLIENTES'
+		ws.append([
+			'Sector',
+			'Tipo Suministro',
+			'Numero Cliente',
+			'Comuna',
+			'Nombre Cliente',
+			'Direccion de Instalacion',
+			'Marca Medidor',
+			'Proyecto',
+			'Serie Medidor',
+			'IP',
+		])
+		for row in rows:
+			ws.append(row)
+
+		buffer = BytesIO()
+		wb.save(buffer)
+		buffer.seek(0)
+		buffer.name = 'clientes_test.xlsx'
+		return buffer
+
+	def test_importacion_incremental_conserva_clientes_no_presentes(self):
+		Cliente.objects.create(
+			numero_cliente='CLI-OLD-1',
+			direccion='Dir old 1',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='NORTE',
+			customer_name='Cliente Old',
+			installation_address='Inst old',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-OLD-1',
+			activo=True,
+		)
+
+		archivo = self._build_excel([
+			['CENTRO', 'ELECTRICO', 'CLI-NEW-1', 'Santiago', 'Cliente Nuevo', 'Inst New', 'SCHNEIDER', 'PROY A', 'SER-NEW-1', '10.0.0.10'],
+		])
+		importacion = importar_clientes_excel(archivo, self.usuario, sincronizar_completo=False)
+
+		self.assertEqual(importacion.estado, 'COMPLETADO')
+		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-NEW-1', activo=True).exists())
+		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-OLD-1', activo=True).exists())
+
+	def test_importacion_sync_desactiva_clientes_no_presentes(self):
+		Cliente.objects.create(
+			numero_cliente='CLI-KEEP-1',
+			direccion='Dir keep',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='NORTE',
+			customer_name='Cliente Keep',
+			installation_address='Inst keep',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-KEEP-1',
+			activo=True,
+		)
+		Cliente.objects.create(
+			numero_cliente='CLI-DROP-1',
+			direccion='Dir drop',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='SUR',
+			customer_name='Cliente Drop',
+			installation_address='Inst drop',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-DROP-1',
+			activo=True,
+		)
+
+		archivo = self._build_excel([
+			['NORTE', 'ELECTRICO', 'CLI-KEEP-1', 'Santiago', 'Cliente Keep Updated', 'Inst keep 2', 'TEST', 'PROY B', 'SER-KEEP-1', '10.0.0.20'],
+		])
+		importacion = importar_clientes_excel(archivo, self.usuario, sincronizar_completo=True)
+
+		self.assertEqual(importacion.estado, 'COMPLETADO')
+		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-KEEP-1', activo=True).exists())
+		self.assertFalse(Cliente.objects.filter(numero_cliente='CLI-DROP-1', activo=True).exists())

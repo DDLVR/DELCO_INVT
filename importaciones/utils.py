@@ -10,6 +10,14 @@ from importaciones.models import ImportacionExcel, ImportacionExcelError
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion, MovimientoInventario, MovimientoItem
 from clientes.models import Cliente
 from usuarios.models import Usuario
+from web.services.validators import (
+    merge_issues,
+    validate_ip_format,
+    validate_ip_port_coherence,
+    validate_meter_uniqueness,
+    validate_modem_assignment,
+)
+from web.services.audit import AuditEvent, register_audit_event
 
 
 logger = logging.getLogger(__name__)
@@ -737,14 +745,18 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
     return importacion
 
 
-def importar_clientes_excel(archivo, usuario):
+def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
     """
     Importa clientes desde archivo Excel.
-    
+
     Formato esperado:
-    numero_cliente, direccion, comuna, referencia (opcional)
+    Columnas mínimas requeridas: Sector, Tipo Suministro, Numero Cliente, Comuna, Nombre Cliente,
+    Dirección de Instalación, Marca Medidor, Proyecto, Serie Medidor.
+    Columnas opcionales: Referencia, Ciudad, Ultimo Acceso, Ultimo Perfil Carga,
+    Ultimo Perfil Instrumentacion, Ultimo Reset, Ultimo Registro Facturacion, Nota, Trabajo,
+    IP, Puerto, Modem, Fecha Registro.
     """
-    
+
     importacion = ImportacionExcel.objects.create(
         tipo='CLIENTES',
         archivo_original=archivo.name if hasattr(archivo, 'name') else 'Upload',
@@ -764,49 +776,510 @@ def importar_clientes_excel(archivo, usuario):
             nombre_columna = str(nombre_columna).strip() if nombre_columna else f'Columna_{i + 1}'
             data[nombre_columna] = valor
         return json.dumps(data, ensure_ascii=False, default=str)
-    
+
+    def normalizar_header(valor):
+        if valor is None:
+            return ''
+        texto = str(valor).strip().lower()
+        texto = texto.replace('\t', ' ').replace('\r', ' ').replace('\n', ' ')
+        texto = ' '.join(texto.split())
+        texto = texto.replace('°', 'o').replace('º', 'o')
+        texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('ascii')
+        texto = texto.replace(':', '').replace('#', 'numero')
+        texto = texto.replace('-', ' ').replace('/', ' ').replace('.', ' ').replace('_', ' ')
+        texto = ' '.join(texto.split())
+        texto = texto.replace(' ', '_')
+        while '__' in texto:
+            texto = texto.replace('__', '_')
+        return texto
+
+    def matches_header(header, alias):
+        header_n = normalizar_header(header)
+        alias_n = normalizar_header(alias)
+        if alias_n == header_n:
+            return True
+
+        # Evitar falsos positivos con aliases cortos (ej. "ip" dentro de "tipo_suministro").
+        if len(alias_n) <= 3 or len(header_n) <= 3:
+            return False
+
+        alias_parts = [p for p in alias_n.split('_') if p]
+        header_parts = [p for p in header_n.split('_') if p]
+
+        if alias_parts and header_parts and all(part in header_parts for part in alias_parts):
+            return True
+
+        return False
+
+    def idx_col(*aliases):
+        for alias in aliases:
+            for idx, header in enumerate(headers_norm):
+                if header is None:
+                    continue
+                if matches_header(header, alias):
+                    return idx
+        return None
+
+    def get_val(*aliases):
+        idx = idx_col(*aliases)
+        if idx is None or idx >= len(valores):
+            return None
+        return valores[idx]
+
+    def clean_text(valor):
+        if valor is None:
+            return None
+        valor = str(valor).strip()
+        return valor or None
+
+    def normalizar_numero_cliente(valor):
+        """Normaliza Numero Cliente para evitar variantes como 100.0 vs 100."""
+        if valor is None:
+            return None
+
+        if isinstance(valor, (int,)):
+            return str(valor)
+
+        if isinstance(valor, float):
+            if valor.is_integer():
+                return str(int(valor))
+            return str(valor).strip()
+
+        texto = str(valor).strip()
+        if not texto:
+            return None
+
+        # Excel suele exportar enteros como texto terminado en .0
+        if texto.endswith('.0') and texto[:-2].isdigit():
+            return texto[:-2]
+
+        return texto
+
+    def normalizar_clave(valor):
+        """Normaliza textos para comparar duplicados sin distinguir mayúsculas/espacios."""
+        if valor is None:
+            return None
+        texto = str(valor).strip().lower()
+        return texto or None
+
+    def parse_fecha_registro(valor):
+        from datetime import datetime, date
+        if isinstance(valor, date):
+            return valor
+        if valor is None:
+            return None
+        if isinstance(valor, str):
+            valor = valor.strip()
+            if not valor:
+                return None
+            formatos = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
+            for fmt in formatos:
+                try:
+                    return datetime.strptime(valor, fmt).date()
+                except Exception:
+                    continue
+        if hasattr(valor, 'date'):
+            try:
+                return valor.date()
+            except Exception:
+                pass
+        raise ValueError(error_columna('Fecha Registro', 'formato no válido. Usa DD/MM/AAAA o YYYY-MM-DD', valor))
+
     try:
         wb = openpyxl.load_workbook(archivo)
-        ws = wb.active
-        headers = [cell.value for cell in ws[1]]
-        
+
+        def row_headers(fila):
+            return [normalizar_header(cell.value) for cell in fila]
+
+        def tokenize_header(valor):
+            texto = normalizar_header(valor)
+            tokens = [token for token in texto.split('_') if token]
+            return set(tokens)
+
+        def header_matches(alias, header):
+            alias_tokens = tokenize_header(alias)
+            header_tokens = tokenize_header(header)
+            if not alias_tokens or not header_tokens:
+                return False
+            if alias_tokens == header_tokens:
+                return True
+            if alias_tokens.issubset(header_tokens) or header_tokens.issubset(alias_tokens):
+                return True
+            if alias_tokens & header_tokens:
+                # require at least two shared meaningful tokens to avoid accidental matches
+                return len(alias_tokens & header_tokens) >= 2
+            return False
+
+        def score_header_row(fila):
+            """Asigna puntaje a una fila candidata de encabezados para elegir la mejor."""
+            nombres = [cell.value for cell in fila]
+            grupos = {
+                'numero_cliente': ['numero_cliente', 'numero cliente', 'numero', 'client number', '#', 'nro_cliente', 'nro cliente', 'n° cliente', 'nº cliente', 'no_cliente', 'no cliente'],
+                'sector': ['sector', 'setor'],
+                'tipo_suministro': ['tipo_suministro', 'tipo suministro', 'tipo de suministro', 'suministro'],
+                'comuna': ['comuna', 'municipio'],
+                'customer_name': ['customer_name', 'nombre cliente', 'nombre del cliente', 'customer name', 'cliente', 'name'],
+                'installation_address': ['installation_address', 'direccion instalacion', 'direccion de instalacion', 'direcion de instalacion', 'dirección instalación', 'dirección de instalación', 'installation address', 'direccion', 'dirección', 'direccion cliente'],
+                'meter_manufacturer_id': ['meter_manufacturer_id', 'fabricante', 'fabricante/id medidor', 'fabricante id medidor', 'meter manufacturer id', 'marca medidor', 'marca del medidor', 'marca'],
+                'proyecto': ['proyecto', 'project', 'nombre proyecto'],
+                'meter_serial_n_1': ['meter_serial_n_1', 'serie medidor', 'serie del medidor', 'medidor serie', 'serial', 'serie'],
+                'ip': ['ip', 'direccion ip', 'ip address', 'ipv4'],
+            }
+
+            matched_groups = 0
+            has_numero_cliente = False
+
+            for key, aliases in grupos.items():
+                found = False
+                for alias in aliases:
+                    for header in nombres:
+                        if header_matches(alias, header):
+                            found = True
+                            break
+                    if found:
+                        break
+
+                if found:
+                    matched_groups += 1
+                    if key == 'numero_cliente':
+                        has_numero_cliente = True
+
+            if not has_numero_cliente:
+                return 0
+
+            return matched_groups
+
+        def find_header_sheet():
+            best_ws = None
+            best_row = None
+            best_score = 0
+
+            for worksheet in wb.worksheets:
+                for i in range(1, min(12, worksheet.max_row) + 1):
+                    fila = worksheet[i]
+                    score = score_header_row(fila)
+                    if score > best_score:
+                        best_score = score
+                        best_ws = worksheet
+                        best_row = i
+
+            # Requiere al menos numero_cliente y algunas columnas adicionales
+            if best_score >= 3:
+                return best_ws, best_row
+            return None, None
+
+        ws, header_row_index = find_header_sheet()
+        if ws is None:
+            first_sheet = wb.worksheets[0]
+            headers = [cell.value for cell in first_sheet[1]]
+            raise ValueError(
+                'No se encontraron encabezados válidos en el Excel. ' +
+                f'Encabezados detectados en la primera hoja: {headers}'
+            )
+
+        headers = [cell.value for cell in ws[header_row_index]]
+        headers_norm = [normalizar_header(h) for h in headers]
+
+        columnas_relevantes = [
+            idx_col('numero_cliente', 'numero cliente', 'numero de cliente', 'número de cliente', 'numero', 'nro_cliente', 'nro cliente'),
+            idx_col('sector', 'setor'),
+            idx_col('tipo_suministro', 'tipo suministro', 'tipo de suministro', 'suministro'),
+            idx_col('comuna', 'municipio'),
+            idx_col('customer_name', 'nombre cliente', 'nombre de cliente', 'nombre del cliente', 'customer name', 'cliente'),
+            idx_col('installation_address', 'direccion instalacion', 'direccion de instalacion', 'direcion de instalacion', 'dirección instalación', 'dirección de instalación', 'installation address', 'direccion', 'dirección'),
+            idx_col('meter_manufacturer_id', 'fabricante', 'marca medidor', 'marca del medidor', 'marca'),
+            idx_col('proyecto', 'project', 'nombre proyecto'),
+            idx_col('meter_serial_n_1', 'serie medidor', 'serie del medidor', 'medidor serie', 'serial', 'serie'),
+            idx_col('ip', 'direccion ip', 'ip address', 'ipv4'),
+        ]
+        columnas_relevantes = [idx for idx in columnas_relevantes if idx is not None]
+
+        ips_importadas = {}
+        series_importadas = {}
+
         contador_filas = 0
         exitosas = 0
         fallidas = 0
-        
-        for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), start=2):
-            contador_filas += 1
-            
+        creadas = 0
+        actualizadas = 0
+        desactivadas = 0
+        numeros_excel = set()
+        numeros_en_filas = set()
+        filas_numero_repetido = 0
+        advertencias = []
+        duplicados_ip_count = 0
+        duplicados_serie_count = 0
+        duplicados_numero_set = set()
+        numero_cliente_frecuencia = {}
+        numero_cliente_filas = {}
+        numero_cliente_filas_detalle = {}
+        proyecto_detectado_count = 0
+        serie_detectada_count = 0
+
+        for idx, row in enumerate(ws.iter_rows(min_row=header_row_index + 1, values_only=False), start=header_row_index + 1):
+
             try:
                 valores = [cell.value for cell in row]
-                
-                if not any(valores):
-                    continue
-                
-                numero, direccion, comuna, referencia = valores[0], valores[1], valores[2], valores[3]
 
-                faltantes = []
-                if not numero:
-                    faltantes.append('Numero Cliente')
-                if not direccion:
-                    faltantes.append('Direccion')
-                if not comuna:
-                    faltantes.append('Comuna')
-                if faltantes:
-                    raise ValueError(f'Faltan columnas requeridas: {", ".join(faltantes)}')
-                
-                if Cliente.objects.filter(numero_cliente=numero).exists():
-                    raise ValueError(error_columna('Numero Cliente', 'ya existe en base de datos', numero))
-                
-                Cliente.objects.create(
-                    numero_cliente=numero,
-                    direccion=direccion,
-                    comuna=comuna,
-                    referencia=referencia or ''
+                def valor_no_vacio(v):
+                    if v is None:
+                        return False
+                    return str(v).strip() != ''
+
+                hay_dato_relevante = any(
+                    col < len(valores) and valor_no_vacio(valores[col])
+                    for col in columnas_relevantes
                 )
-                
+                if not hay_dato_relevante:
+                    continue
+
+                contador_filas += 1
+
+                numero = clean_text(get_val(
+                    'numero_cliente', 'numero cliente', 'numero', 'client number', '#',
+                    'nro_cliente', 'nro cliente', 'numero_cliente', 'numero cliente', 'n° cliente', 'nº cliente', 'no_cliente', 'no cliente',
+                    'numero de cliente', 'número de cliente'
+                ))
+                sector = clean_text(get_val('sector', 'setor', 'sector facturacion', 'sector_facturacion'))
+                tipo_suministro = clean_text(get_val('tipo_suministro', 'tipo suministro', 'tipo de suministro', 'suministro'))
+                comuna = clean_text(get_val('comuna', 'municipio'))
+                customer_name = clean_text(get_val('customer_name', 'nombre cliente', 'nombre de cliente', 'nombre del cliente', 'customer name', 'cliente'))
+                installation_address = clean_text(get_val(
+                    'installation_address', 'direccion instalacion', 'direccion de instalacion', 'direcion de instalacion',
+                    'dirección instalación', 'dirección de instalación', 'installation address', 'direccion', 'dirección', 'direccion cliente'
+                ))
+                meter_manufacturer_id = clean_text(get_val(
+                    'meter_manufacturer_id', 'fabricante', 'fabricante/id medidor', 'fabricante id medidor',
+                    'meter manufacturer id', 'marca medidor', 'marca del medidor', 'marca'
+                ))
+                proyecto = clean_text(get_val(
+                    'proyecto', 'project', 'nombre proyecto', 'proyecto cliente', 'proy', 'proyecto_id', 'id proyecto'
+                ))
+                meter_serial_n_1 = clean_text(get_val(
+                    'meter_serial_n_1', 'serie medidor', 'serie del medidor', 'medidor serie',
+                    'serial', 'serie', 'n serie', 'numero serie', 'nro serie', 'no serie',
+                    'n serie medidor', 'numero serie medidor', 'nro serie medidor', 'serial medidor',
+                    'numero medidor', 'nro medidor', 'medidor numero'
+                ))
+                referencia = clean_text(get_val('referencia', 'observaciones', 'notes', 'nota'))
+                city = clean_text(get_val('city', 'ciudad'))
+                ultimo_acceso = clean_text(get_val('ultimo_acceso', 'ultimo acceso'))
+                ultimo_perfil_carga = clean_text(get_val('ultimo_perfil_carga', 'ultimo perfil carga'))
+                ultimo_perfil_instrumentacion = clean_text(get_val('ultimo_perfil_instrumentacion', 'ultimo perfil instrumentacion'))
+                ultimo_reset = clean_text(get_val('ultimo_reset', 'ultimo reset'))
+                ultimo_registro_facturacion = clean_text(get_val('ultimo_registro_facturacion', 'ultimo registro facturacion'))
+                note = clean_text(get_val('note', 'nota', 'notas'))
+                trabajo = clean_text(get_val('trabajo', 'work'))
+                ip = clean_text(get_val('ip', 'direccion ip', 'ip address', 'ipv4'))
+                puerto = clean_text(get_val('puerto', 'port'))
+                modem = clean_text(get_val('modem'))
+                fecha_registro_raw = clean_text(get_val('fecha_registro', 'fecha de registro', 'registro fecha'))
+
+                validation_issues = merge_issues(
+                    validate_ip_format(ip),
+                    validate_ip_port_coherence(ip, puerto),
+                )
+                for issue in validation_issues:
+                    if issue.severity == 'error':
+                        raise ValueError(error_columna('IP', issue.message, ip))
+                    advertencias.append(f'Fila {idx}: [VALIDACION] {issue.message}')
+
+                if not numero:
+                    raise ValueError('Falta campo obligatorio: Numero Cliente')
+
+                numero_text = normalizar_numero_cliente(numero)
+                if not numero_text:
+                    raise ValueError('Falta campo obligatorio: Numero Cliente')
+
+                if numero_text in numeros_en_filas:
+                    filas_numero_repetido += 1
+                    duplicados_numero_set.add(numero_text)
+                else:
+                    numeros_en_filas.add(numero_text)
+
+                numero_cliente_frecuencia[numero_text] = numero_cliente_frecuencia.get(numero_text, 0) + 1
+                numero_cliente_filas.setdefault(numero_text, []).append(idx)
+                numero_cliente_filas_detalle.setdefault(numero_text, []).append({
+                    'fila_excel': idx,
+                    'sector': sector or '',
+                    'tipo_suministro': tipo_suministro or '',
+                    'numero_cliente': numero_text,
+                    'comuna': comuna or '',
+                    'customer_name': customer_name or '',
+                    'installation_address': installation_address or '',
+                    'meter_manufacturer_id': meter_manufacturer_id or '',
+                    'proyecto': (proyecto or 'SIN PROYECTO') or '',
+                    'meter_serial_n_1': meter_serial_n_1 or '',
+                })
+
+                if numero_text == '0':
+                    raise ValueError(error_columna('Numero Cliente', 'valor inválido', numero_text))
+
+                if sector and str(sector).strip() == '0':
+                    sector = None
+                serie_text = str(meter_serial_n_1).strip() if meter_serial_n_1 else ''
+                cliente_existente = Cliente.objects.filter(
+                    numero_cliente=numero_text,
+                    meter_serial_n_1__iexact=serie_text,
+                ).first()
+
+                ip_key = normalizar_clave(ip)
+                if ip_key:
+                    if Cliente.objects.filter(activo=True, ip__iexact=ip).exclude(numero_cliente=numero_text).exists():
+                        duplicados_ip_count += 1
+                        advertencias.append(
+                            f'Fila {idx}: ' + error_columna('IP', '[DUPLICADO] ya existe en clientes activos', ip)
+                        )
+                    if ip_key in ips_importadas:
+                        fila_prev, numero_prev = ips_importadas[ip_key]
+                        if numero_prev != numero_text:
+                            duplicados_ip_count += 1
+                            advertencias.append(
+                                f'Fila {idx}: ' + error_columna('IP', f'[DUPLICADO] repetida en el mismo Excel (primera aparición en fila {fila_prev})', ip)
+                            )
+
+                serie_key = normalizar_clave(meter_serial_n_1)
+                if serie_key:
+                    meter_exists_other_active = Cliente.objects.filter(
+                        activo=True,
+                        meter_serial_n_1__iexact=meter_serial_n_1,
+                    ).exclude(numero_cliente=numero_text).exists()
+                    meter_issues = validate_meter_uniqueness(meter_serial_n_1, meter_exists_other_active)
+                    for issue in meter_issues:
+                        duplicados_serie_count += 1
+                        advertencias.append(
+                            f'Fila {idx}: [VALIDACION] {issue.message}'
+                        )
+                    if serie_key in series_importadas:
+                        fila_prev, numero_prev = series_importadas[serie_key]
+                        if numero_prev != numero_text:
+                            duplicados_serie_count += 1
+                            advertencias.append(
+                                f'Fila {idx}: ' + error_columna('Serie Medidor', f'[DUPLICADO] repetida en el mismo Excel (primera aparición en fila {fila_prev})', meter_serial_n_1)
+                            )
+
+                medidor_obj = None
+                if meter_serial_n_1:
+                    serie_detectada_count += 1
+                    medidor_text = str(meter_serial_n_1).strip()
+                    medidor_obj = Medidor.objects.filter(serie__iexact=medidor_text).first()
+                    # La serie se guarda en Cliente aunque el medidor no exista en inventario.
+                    # Solo validamos asignación duplicada cuando sí existe objeto Medidor.
+                    if medidor_obj and Cliente.objects.filter(medidor_actual=medidor_obj, activo=True).exclude(numero_cliente=numero_text).exists():
+                        duplicados_serie_count += 1
+                        advertencias.append(
+                            f'Fila {idx}: ' + error_columna('Serie Medidor', '[DUPLICADO] el medidor está asignado a otro cliente activo', meter_serial_n_1)
+                        )
+                        medidor_obj = None
+
+                modem_issues = validate_modem_assignment(
+                    modem,
+                    bool(modem and Cliente.objects.filter(activo=True, modem__iexact=modem).exclude(numero_cliente=numero_text).exists()),
+                )
+                for issue in modem_issues:
+                    advertencias.append(f'Fila {idx}: [VALIDACION] {issue.message}')
+
+                fecha_registro = parse_fecha_registro(fecha_registro_raw)
+
+                if proyecto:
+                    proyecto_detectado_count += 1
+                proyecto_final = proyecto or 'SIN PROYECTO'
+
+                if cliente_existente:
+                    cliente_existente.activo = True
+                    if sector:
+                        cliente_existente.sector = sector
+                    if tipo_suministro:
+                        cliente_existente.tipo_suministro = tipo_suministro
+                    if comuna:
+                        cliente_existente.comuna = comuna
+                    if customer_name:
+                        cliente_existente.customer_name = customer_name
+                    if installation_address:
+                        cliente_existente.installation_address = installation_address
+                        cliente_existente.direccion = installation_address
+                    if meter_manufacturer_id:
+                        cliente_existente.meter_manufacturer_id = meter_manufacturer_id
+                    if proyecto:
+                        cliente_existente.proyecto = proyecto
+                    elif not cliente_existente.proyecto:
+                        cliente_existente.proyecto = proyecto_final
+                    if meter_serial_n_1:
+                        cliente_existente.meter_serial_n_1 = meter_serial_n_1
+                    if referencia:
+                        cliente_existente.referencia = referencia
+                    cliente_existente.pod = None
+                    if city:
+                        cliente_existente.city = city
+                    cliente_existente.client_type = None
+                    if ultimo_acceso:
+                        cliente_existente.ultimo_acceso = ultimo_acceso
+                    if ultimo_perfil_carga:
+                        cliente_existente.ultimo_perfil_carga = ultimo_perfil_carga
+                    if ultimo_perfil_instrumentacion:
+                        cliente_existente.ultimo_perfil_instrumentacion = ultimo_perfil_instrumentacion
+                    if ultimo_reset:
+                        cliente_existente.ultimo_reset = ultimo_reset
+                    if ultimo_registro_facturacion:
+                        cliente_existente.ultimo_registro_facturacion = ultimo_registro_facturacion
+                    if note:
+                        cliente_existente.note = note
+                    if trabajo:
+                        cliente_existente.trabajo = trabajo
+                    if ip:
+                        cliente_existente.ip = ip
+                    if puerto:
+                        cliente_existente.puerto = puerto
+                    if modem:
+                        cliente_existente.modem = modem
+                    if fecha_registro_raw:
+                        cliente_existente.fecha_registro = fecha_registro
+                    if medidor_obj:
+                        cliente_existente.medidor_actual = medidor_obj
+                    cliente_existente.save()
+                    actualizadas += 1
+                else:
+                    Cliente.objects.create(
+                        numero_cliente=numero_text,
+                        direccion=installation_address or '',
+                        comuna=comuna or '',
+                        referencia=referencia,
+                        tipo_suministro=tipo_suministro,
+                        pod=None,
+                        sector=sector,
+                        city=city,
+                        customer_name=customer_name,
+                        installation_address=installation_address or '',
+                        proyecto=proyecto_final,
+                        meter_manufacturer_id=meter_manufacturer_id,
+                        meter_serial_n_1=meter_serial_n_1,
+                        client_type=None,
+                        ultimo_acceso=ultimo_acceso,
+                        ultimo_perfil_carga=ultimo_perfil_carga,
+                        ultimo_perfil_instrumentacion=ultimo_perfil_instrumentacion,
+                        ultimo_reset=ultimo_reset,
+                        ultimo_registro_facturacion=ultimo_registro_facturacion,
+                        note=note,
+                        trabajo=trabajo,
+                        ip=ip,
+                        puerto=puerto,
+                        modem=modem,
+                        fecha_registro=fecha_registro,
+                        medidor_actual=medidor_obj,
+                        activo=True,
+                    )
+                    creadas += 1
+
+                if ip_key:
+                    ips_importadas[ip_key] = (idx, numero_text)
+                if serie_key:
+                    series_importadas[serie_key] = (idx, numero_text)
+
+                # Solo sincronizar activos con claves exactas efectivamente procesadas sin error.
+                numeros_excel.add((numero_text, serie_text))
+
                 exitosas += 1
-            
+
             except Exception as e:
                 fallidas += 1
                 ImportacionExcelError.objects.create(
@@ -815,20 +1288,136 @@ def importar_clientes_excel(archivo, usuario):
                     motivo=str(e),
                     data_cruda=fila_a_texto(headers, valores)
                 )
-        
+
+        desactivadas = 0
+        if sincronizar_completo and numeros_excel:
+            for cliente_activo in Cliente.objects.filter(activo=True):
+                clave_cliente = (
+                    str(cliente_activo.numero_cliente).strip(),
+                    str(cliente_activo.meter_serial_n_1).strip() if cliente_activo.meter_serial_n_1 else '',
+                )
+                if clave_cliente not in numeros_excel:
+                    cliente_activo.activo = False
+                    cliente_activo.save(update_fields=['activo'])
+                    desactivadas += 1
+
         importacion.total_filas = contador_filas
         importacion.exitosas = exitosas
         importacion.fallidas = fallidas
-        importacion.estado = 'COMPLETADO'
-        importacion.observaciones = f'Se importaron {exitosas} de {contador_filas} clientes'
+        importacion.estado = 'COMPLETADO' if exitosas > 0 else 'ERROR'
+        resumen_modo = 'sincronización completa' if sincronizar_completo else 'importación incremental'
+        importacion.observaciones = (
+            f'Importación finalizada. Filas útiles: {contador_filas}. '
+            f'Correctas: {exitosas}. Con error: {fallidas}. '
+            f'Clientes únicos detectados en archivo: {len(numeros_en_filas)}. '
+            f'Filas repetidas por Numero Cliente: {filas_numero_repetido}. '
+            f'Proyecto detectado en {proyecto_detectado_count} filas. '
+            f'Serie Medidor detectada en {serie_detectada_count} filas. '
+            f'Resultado de {resumen_modo}: {creadas} creados, {actualizadas} actualizados, {desactivadas} desactivados. '
+            f'Advertencias de duplicado: {len(advertencias)}.'
+        )
         importacion.save()
-    
+        importacion.warnings = advertencias
+        importacion.warning_summary = {
+            'duplicados_total': len(advertencias),
+            'duplicados_numero': len(duplicados_numero_set),
+            'duplicados_ip': duplicados_ip_count,
+            'duplicados_serie': duplicados_serie_count,
+            'filas_numero_repetido': filas_numero_repetido,
+            'clientes_unicos_detectados': len(numeros_en_filas),
+            'numeros_duplicados_muestra': sorted(list(duplicados_numero_set))[:500],
+            'duplicados_numero_detalle': [
+                {
+                    'numero': numero,
+                    'repeticiones': frecuencia,
+                    'filas': numero_cliente_filas.get(numero, []),
+                }
+                for numero, frecuencia in sorted(numero_cliente_frecuencia.items(), key=lambda x: (-x[1], x[0]))
+                if frecuencia > 1
+            ][:1000],
+            'duplicados_numero_filas': {
+                numero: numero_cliente_filas_detalle.get(numero, [])
+                for numero, frecuencia in sorted(numero_cliente_frecuencia.items(), key=lambda x: (-x[1], x[0]))
+                if frecuencia > 1
+            },
+        }
+        register_audit_event(
+            AuditEvent(
+                actor_id=getattr(usuario, 'id', None),
+                action='CLIENT_IMPORT',
+                entity='ImportacionExcel',
+                entity_id=str(importacion.id),
+                field_name='estado',
+                old_value=None,
+                new_value=importacion.estado,
+                reason=(
+                    f'Importación clientes ({resumen_modo}) - '
+                    f'creados={creadas}, actualizados={actualizadas}, '
+                    f'desactivados={desactivadas}, errores={fallidas}'
+                ),
+            )
+        )
+
     except Exception as e:
         importacion.estado = 'ERROR'
         importacion.observaciones = f'Error: {str(e)}'
         importacion.save()
-    
+
     return importacion
+
+
+def exportar_clientes_excel(clientes):
+    """
+    Exporta clientes a archivo Excel.
+    """
+    from openpyxl.styles import Font, PatternFill, Alignment
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'CLIENTES'
+
+    headers = [
+        'Sector',
+        'Tipo Suministro',
+        'Numero Cliente',
+        'Comuna',
+        'Nombre Cliente',
+        'Dirección Instalación',
+        'Marca Medidor',
+        'Proyecto',
+        'Serie Medidor',
+    ]
+
+    col_widths = [18, 20, 18, 18, 28, 30, 22, 22, 22]
+
+    header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=11)
+    header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_alignment
+
+    for idx, width in enumerate(col_widths, start=1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(idx)].width = width
+
+    for cliente in clientes:
+        row = [
+            cliente.sector or '',
+            cliente.tipo_suministro or '',
+            cliente.numero_cliente,
+            cliente.comuna,
+            cliente.customer_name or '',
+            cliente.installation_address or '',
+            cliente.meter_manufacturer_id or '',
+            cliente.proyecto or '',
+            cliente.meter_serial_n_1 or '',
+        ]
+        ws.append(row)
+
+    return wb
 
 
 def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):

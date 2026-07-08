@@ -83,8 +83,22 @@ from urllib.parse import quote_plus
 from .decorators import role_required, admin_or_administrativo
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion
 from clientes.models import Cliente
-from importaciones.utils import importar_equipos_excel, exportar_equipos_excel, exportar_equipos_excel_completo
+from importaciones.utils import (
+    importar_equipos_excel,
+    importar_clientes_excel,
+    exportar_equipos_excel,
+    exportar_equipos_excel_completo,
+    exportar_clientes_excel,
+)
 from importaciones.models import ImportacionExcel, ImportacionExcelError
+from web.services.validators import (
+    merge_issues,
+    validate_ip_format,
+    validate_ip_port_coherence,
+    validate_meter_uniqueness,
+    validate_modem_assignment,
+)
+from web.services.audit import AuditEvent, register_audit_event
 
 logger = logging.getLogger(__name__)
 
@@ -357,12 +371,6 @@ def dashboard_view(request):
         context['finalizadas'] = 0
         return render(request, 'dashboards/tecnico_dashboard.html', context)
     
-    # SUPERVISOR: Validaciones pendientes
-    elif rol == 'SUPERVISOR':
-        context['pendientes_validacion'] = []
-        context['observadas'] = 0
-        return render(request, 'dashboards/supervisor_dashboard.html', context)
-    
     # GERENCIA: KPIs y reportes
     elif rol == 'GERENCIA':
         context['ordenes_finalizadas'] = 0
@@ -380,7 +388,7 @@ def dashboard_view(request):
 
 # ========== VISTAS OPERATIVAS (Puntos 2, 8, 9, 11) ==========
 
-@role_required(['ADMIN', 'ADMINISTRATIVO', 'SUPERVISOR'])
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
 def pendientes_operativos_view(request):
     """
     Punto 2: Cola formal de operaciones pendientes de revisión (MoreApp).
@@ -428,7 +436,7 @@ def pendientes_operativos_view(request):
     return render(request, 'operacional/pendientes.html', context)
 
 
-@role_required(['ADMIN', 'ADMINISTRATIVO', 'SUPERVISOR'])
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
 @require_POST
 def moreapp_marcar_revision_view(request, pk):
     """
@@ -488,7 +496,7 @@ def ordenes_list_view(request):
     return redirect('dashboard')
 
 
-@role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO', 'SUPERVISOR'])
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO'])
 def orden_detalle_view(request, pk):
     """Módulo retirado."""
     messages.warning(request, 'El módulo de órdenes de trabajo fue retirado del sistema.')
@@ -2345,7 +2353,7 @@ def usuarios_list_view(request):
     """Listar todos los usuarios activos y pasar roles para filtro select"""
     from usuarios.models import Usuario
     usuarios = Usuario.objects.filter(is_active=True).order_by('nombre_interno')
-    roles_order = ['ADMIN', 'ADMINISTRATIVO', 'TECNICO', 'SUPERVISOR', 'GERENCIA', 'AUDITOR']
+    roles_order = ['ADMIN', 'ADMINISTRATIVO', 'TECNICO', 'GERENCIA', 'AUDITOR']
     context = {
         'usuarios': usuarios,
         'roles_order': roles_order,
@@ -2399,7 +2407,7 @@ def usuario_crear_view(request):
             messages.error(request, f"Error al crear usuario: {str(e)}")
             return redirect('usuario_crear')
     
-    roles = ['ADMIN', 'ADMINISTRATIVO', 'TECNICO', 'SUPERVISOR', 'GERENCIA', 'AUDITOR']
+    roles = ['ADMIN', 'ADMINISTRATIVO', 'TECNICO', 'GERENCIA', 'AUDITOR']
     context = {'roles': roles}
     return render(request, 'usuarios/crear.html', context)
 
@@ -2449,7 +2457,7 @@ def usuario_editar_view(request, pk):
         messages.success(request, "Usuario actualizado correctamente")
         return redirect('usuarios_list')
     
-    roles = ['ADMIN', 'ADMINISTRATIVO', 'TECNICO', 'SUPERVISOR', 'GERENCIA', 'AUDITOR']
+    roles = ['ADMIN', 'ADMINISTRATIVO', 'TECNICO', 'GERENCIA', 'AUDITOR']
     context = {
         'usuario': usuario,
         'roles': roles,
@@ -2500,59 +2508,213 @@ def usuario_reset_password_view(request, pk):
 
 
 @login_required
-@role_required(['ADMIN', 'ADMINISTRATIVO'])
-@login_required
 def clientes_list_view(request):
-    """Lista de clientes activos con modo solo lectura para ADMINISTRATIVO."""
-    clientes = Cliente.objects.filter(activo=True).order_by('numero_cliente')
+    """Lista de clientes activos para todos los roles autenticados."""
+    clientes = Cliente.objects.filter(activo=True).exclude(numero_cliente='0').order_by('numero_cliente', 'meter_serial_n_1', 'id')
+    ultima_importacion_clientes = ImportacionExcel.objects.filter(tipo='CLIENTES').order_by('-id').first()
+
     context = {
         'clientes': clientes,
         'total_clientes': clientes.count(),
-        'puede_editar': request.user.rol == 'ADMIN',
+        'ultima_importacion_total_filas': ultima_importacion_clientes.total_filas if ultima_importacion_clientes else None,
+        'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
     }
     return render(request, 'clientes/list.html', context)
 
 
 @login_required
-@role_required(['ADMIN'])
+def clientes_exportar_view(request):
+    """Exportar clientes activos a Excel."""
+    clientes = Cliente.objects.filter(activo=True).order_by('numero_cliente')
+    wb = exportar_clientes_excel(clientes)
+
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    response['Content-Disposition'] = 'attachment; filename="clientes.xlsx"'
+    wb.save(response)
+    return response
+
+
+@login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
+def clientes_importar_view(request):
+    """Importar clientes desde archivo Excel."""
+    archivo = request.FILES.get('archivo')
+    modo_importacion = (request.POST.get('modo_importacion', 'incremental') or 'incremental').strip().lower()
+    sincronizar_completo = modo_importacion in ('sync', 'sincronizar', 'completo', 'full')
+    if not archivo:
+        return JsonResponse({'success': False, 'message': 'No se seleccionó ningún archivo'})
+
+    filename = getattr(archivo, 'name', '')
+    if not filename.lower().endswith('.xlsx'):
+        return JsonResponse({'success': False, 'message': 'Solo se aceptan archivos Excel .xlsx'})
+
+    try:
+        importacion = importar_clientes_excel(archivo, request.user, sincronizar_completo=sincronizar_completo)
+        errores = list(importacion.errores.values_list('motivo', flat=True).distinct()[:30])
+        advertencias = list(dict.fromkeys(getattr(importacion, 'warnings', [])))[:40]
+        warning_summary = getattr(importacion, 'warning_summary', {})
+
+        if importacion.estado == 'COMPLETADO':
+            message = (
+                f'Importación completada: {importacion.exitosas} filas correctas '
+                f'y {importacion.fallidas} con error.'
+            )
+        else:
+            message = (
+                f'Importación con problemas: {importacion.exitosas} filas correctas '
+                f'y {importacion.fallidas} con error.'
+            )
+
+        return JsonResponse({
+            'success': importacion.estado == 'COMPLETADO',
+            'message': message,
+            'details': importacion.observaciones,
+            'modo_importacion': 'sincronizacion_completa' if sincronizar_completo else 'incremental',
+            'errors': errores,
+            'warnings': advertencias,
+            'warning_summary': warning_summary,
+            'exitosas': importacion.exitosas,
+            'fallidas': importacion.fallidas,
+            'total_filas': importacion.total_filas,
+            'importacion_id': importacion.id,
+        })
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Error durante la importación: {str(e)}'})
+
+
+@login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
 def cliente_crear_view(request):
-    """Crear cliente (solo rol ADMIN)."""
+    """Crear cliente (roles ADMIN y ADMINISTRATIVO)."""
     if request.method == 'POST':
         numero_cliente = request.POST.get('numero_cliente', '').strip()
         direccion = request.POST.get('direccion', '').strip()
         comuna = request.POST.get('comuna', '').strip()
-        referencia = request.POST.get('referencia', '').strip()
-        trabajo = request.POST.get('trabajo', '').strip()
+        tipo_suministro = request.POST.get('tipo_suministro', '').strip()
+        sector = request.POST.get('sector', '').strip()
+        city = request.POST.get('city', '').strip()
+        customer_name = request.POST.get('customer_name', '').strip()
+        installation_address = request.POST.get('installation_address', '').strip()
+        proyecto = request.POST.get('proyecto', '').strip()
+        meter_manufacturer_id = request.POST.get('meter_manufacturer_id', '').strip()
+        meter_serial_n_1 = request.POST.get('meter_serial_n_1', '').strip()
+        ultimo_acceso = request.POST.get('ultimo_acceso', '').strip()
+        ultimo_perfil_carga = request.POST.get('ultimo_perfil_carga', '').strip()
+        ultimo_reset = request.POST.get('ultimo_reset', '').strip()
+        ultimo_registro_facturacion = request.POST.get('ultimo_registro_facturacion', '').strip()
+        note = request.POST.get('note', '').strip()
         ip = request.POST.get('ip', '').strip()
         puerto = request.POST.get('puerto', '').strip()
         modem = request.POST.get('modem', '').strip()
         fecha_registro = request.POST.get('fecha_registro', '').strip()
-        medidor_serie = request.POST.get('medidor_serie', '').strip()
 
-        if not all([numero_cliente, direccion, comuna]):
-            messages.error(request, 'Numero de cliente, direccion y comuna son obligatorios.')
+        proyecto_final = proyecto or 'SIN PROYECTO'
+        ultimo_perfil_carga_final = ultimo_perfil_carga or 'SIN PERFIL'
+        meter_exists_other_active = bool(
+            meter_serial_n_1
+            and Cliente.objects.filter(meter_serial_n_1__iexact=meter_serial_n_1, activo=True).exists()
+        )
+        modem_assigned_other_active = bool(
+            modem
+            and Cliente.objects.filter(modem__iexact=modem, activo=True).exists()
+        )
+        validation_issues = merge_issues(
+            validate_ip_format(ip),
+            validate_ip_port_coherence(ip, puerto),
+            validate_meter_uniqueness(meter_serial_n_1, meter_exists_other_active),
+            validate_modem_assignment(modem, modem_assigned_other_active),
+        )
+
+        blocking_errors = [issue for issue in validation_issues if issue.severity == 'error']
+        if blocking_errors:
+            for issue in blocking_errors:
+                messages.error(request, issue.message)
             return redirect('cliente_crear')
 
-        if Cliente.objects.filter(numero_cliente=numero_cliente).exists():
-            messages.error(request, f'Ya existe un cliente con numero {numero_cliente}.')
+        for issue in validation_issues:
+            if issue.severity == 'warning':
+                messages.warning(request, issue.message)
+
+        if not all([
+            numero_cliente,
+            direccion,
+            comuna,
+            tipo_suministro,
+            sector,
+            city,
+            customer_name,
+            installation_address,
+            meter_manufacturer_id,
+            meter_serial_n_1,
+        ]):
+            messages.error(request, 'Faltan campos obligatorios: asegúrate de completar todos los datos requeridos.')
             return redirect('cliente_crear')
+
+        if Cliente.objects.filter(
+            numero_cliente=numero_cliente,
+            meter_serial_n_1__iexact=meter_serial_n_1,
+            activo=True,
+        ).exists():
+            messages.error(request, f'Ya existe un cliente activo con numero {numero_cliente} y la misma serie {meter_serial_n_1}.')
+            return redirect('cliente_crear')
+
+        cliente_duplicado_serie_distinta = Cliente.objects.filter(
+            numero_cliente=numero_cliente,
+            activo=True,
+        ).exclude(
+            meter_serial_n_1__iexact=meter_serial_n_1,
+        ).exists()
+
+        ip_duplicada_serie_distinta = False
+        if ip:
+            if Cliente.objects.filter(
+                ip__iexact=ip,
+                meter_serial_n_1__iexact=meter_serial_n_1,
+                activo=True,
+            ).exists():
+                messages.error(request, f'La IP {ip} ya está asignada a un cliente activo con la misma serie {meter_serial_n_1}.')
+                return redirect('cliente_crear')
+
+            ip_duplicada_serie_distinta = Cliente.objects.filter(
+                ip__iexact=ip,
+                activo=True,
+            ).exclude(
+                meter_serial_n_1__iexact=meter_serial_n_1,
+            ).exists()
 
         medidor_obj = None
-        if medidor_serie:
-            medidor_obj = Medidor.objects.filter(serie=medidor_serie).first()
+        if meter_serial_n_1:
+            medidor_obj = Medidor.objects.filter(serie=meter_serial_n_1).first()
             if not medidor_obj:
-                messages.error(request, f'No existe un medidor con serie {medidor_serie}.')
+                messages.error(request, f'No existe un medidor con serie {meter_serial_n_1}.')
                 return redirect('cliente_crear')
             if Cliente.objects.filter(medidor_actual=medidor_obj, activo=True).exists():
-                messages.error(request, f'El medidor {medidor_serie} ya esta asignado a otro cliente.')
+                messages.error(request, f'El medidor {meter_serial_n_1} ya está asignado a otro cliente o está duplicado.')
                 return redirect('cliente_crear')
 
-        Cliente.objects.create(
+        nuevo_cliente = Cliente.objects.create(
             numero_cliente=numero_cliente,
             direccion=direccion,
             comuna=comuna,
-            referencia=referencia,
-            trabajo=trabajo or None,
+            tipo_suministro=tipo_suministro,
+            pod=None,
+            sector=sector,
+            city=city,
+            customer_name=customer_name,
+            installation_address=installation_address,
+            proyecto=proyecto_final,
+            meter_manufacturer_id=meter_manufacturer_id,
+            meter_serial_n_1=meter_serial_n_1,
+            client_type=None,
+            ultimo_acceso=ultimo_acceso,
+            ultimo_perfil_carga=ultimo_perfil_carga_final,
+            ultimo_perfil_instrumentacion=None,
+            ultimo_reset=ultimo_reset or None,
+            ultimo_registro_facturacion=ultimo_registro_facturacion or None,
+            note=note or None,
+            trabajo=None,
             ip=ip or None,
             puerto=puerto or None,
             modem=modem or None,
@@ -2560,6 +2722,30 @@ def cliente_crear_view(request):
             medidor_actual=medidor_obj,
             activo=True,
         )
+        register_audit_event(
+            AuditEvent(
+                actor_id=getattr(request.user, 'id', None),
+                action='CLIENT_CREATE',
+                entity='Cliente',
+                entity_id=str(nuevo_cliente.id),
+                field_name='numero_cliente',
+                old_value=None,
+                new_value=numero_cliente,
+                reason='Alta de cliente desde gestión manual',
+            )
+        )
+        if cliente_duplicado_serie_distinta:
+            messages.warning(
+                request,
+                f'Cliente duplicado detectado: el numero {numero_cliente} ya existía con otra serie. '
+                f'Se creó el cliente con serie distinta ({meter_serial_n_1}).'
+            )
+        if ip_duplicada_serie_distinta:
+            messages.warning(
+                request,
+                f'IP duplicada detectada: la IP {ip} ya existía con otra serie de medidor. '
+                f'Se creó el cliente con serie distinta ({meter_serial_n_1}).'
+            )
         messages.success(request, f'Cliente {numero_cliente} creado correctamente.')
         return redirect('clientes_list')
 
@@ -2567,54 +2753,91 @@ def cliente_crear_view(request):
 
 
 @login_required
-@role_required(['ADMIN'])
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
 def cliente_editar_view(request, pk):
-    """Editar cliente (solo rol ADMIN)."""
+    """Editar cliente (roles ADMIN y ADMINISTRATIVO)."""
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
 
     if request.method == 'POST':
         numero_cliente = request.POST.get('numero_cliente', '').strip()
-        direccion = request.POST.get('direccion', '').strip()
+        sector = request.POST.get('sector', '').strip()
+        tipo_suministro = request.POST.get('tipo_suministro', '').strip()
         comuna = request.POST.get('comuna', '').strip()
-        referencia = request.POST.get('referencia', '').strip()
-        trabajo = request.POST.get('trabajo', '').strip()
-        ip = request.POST.get('ip', '').strip()
-        puerto = request.POST.get('puerto', '').strip()
-        modem = request.POST.get('modem', '').strip()
-        fecha_registro = request.POST.get('fecha_registro', '').strip()
-        medidor_serie = request.POST.get('medidor_serie', '').strip()
+        customer_name = request.POST.get('customer_name', '').strip()
+        installation_address = request.POST.get('installation_address', '').strip()
+        proyecto = request.POST.get('proyecto', '').strip()
+        meter_manufacturer_id = request.POST.get('meter_manufacturer_id', '').strip()
+        meter_serial_n_1 = request.POST.get('meter_serial_n_1', '').strip()
 
-        if not all([numero_cliente, direccion, comuna]):
-            messages.error(request, 'Numero de cliente, direccion y comuna son obligatorios.')
+        before_values = {
+            'numero_cliente': cliente.numero_cliente,
+            'sector': cliente.sector,
+            'tipo_suministro': cliente.tipo_suministro,
+            'comuna': cliente.comuna,
+            'customer_name': cliente.customer_name,
+            'installation_address': cliente.installation_address,
+            'meter_manufacturer_id': cliente.meter_manufacturer_id,
+            'proyecto': cliente.proyecto,
+            'meter_serial_n_1': cliente.meter_serial_n_1,
+        }
+
+        # Si no envían número de cliente en edición, se conserva el actual.
+        numero_cliente_final = numero_cliente or cliente.numero_cliente
+
+        if Cliente.objects.filter(
+            numero_cliente=numero_cliente_final,
+            meter_serial_n_1__iexact=meter_serial_n_1,
+            activo=True,
+        ).exclude(pk=pk).exists():
+            messages.error(request, f'Ya existe un cliente activo con numero {numero_cliente_final} y la misma serie {meter_serial_n_1}.')
             return redirect('cliente_editar', pk=pk)
 
-        if Cliente.objects.filter(numero_cliente=numero_cliente).exclude(pk=pk).exists():
-            messages.error(request, f'Ya existe un cliente con numero {numero_cliente}.')
+        if meter_serial_n_1 and Cliente.objects.filter(
+            meter_serial_n_1__iexact=meter_serial_n_1,
+            activo=True,
+        ).exclude(pk=pk).exists():
+            messages.error(request, f'El número de serie {meter_serial_n_1} ya está asignado a otro cliente activo.')
             return redirect('cliente_editar', pk=pk)
 
-        medidor_obj = None
-        if medidor_serie:
-            medidor_obj = Medidor.objects.filter(serie=medidor_serie).first()
-            if not medidor_obj:
-                messages.error(request, f'No existe un medidor con serie {medidor_serie}.')
-                return redirect('cliente_editar', pk=pk)
-            if Cliente.objects.filter(medidor_actual=medidor_obj, activo=True).exclude(pk=pk).exists():
-                messages.error(request, f'El medidor {medidor_serie} ya esta asignado a otro cliente.')
-                return redirect('cliente_editar', pk=pk)
-
-        cliente.numero_cliente = numero_cliente
-        cliente.direccion = direccion
-        cliente.comuna = comuna
-        cliente.referencia = referencia
-        cliente.trabajo = trabajo or None
-        cliente.ip = ip or None
-        cliente.puerto = puerto or None
-        cliente.modem = modem or None
-        cliente.fecha_registro = fecha_registro or None
-        cliente.medidor_actual = medidor_obj
+        cliente.numero_cliente = numero_cliente_final
+        cliente.sector = sector or None
+        cliente.tipo_suministro = tipo_suministro or None
+        cliente.comuna = comuna or None
+        cliente.customer_name = customer_name or None
+        cliente.installation_address = installation_address or None
+        cliente.meter_manufacturer_id = meter_manufacturer_id or None
+        cliente.proyecto = proyecto or None
+        cliente.meter_serial_n_1 = meter_serial_n_1 or None
         cliente.save()
 
-        messages.success(request, f'Cliente {numero_cliente} actualizado correctamente.')
+        after_values = {
+            'numero_cliente': cliente.numero_cliente,
+            'sector': cliente.sector,
+            'tipo_suministro': cliente.tipo_suministro,
+            'comuna': cliente.comuna,
+            'customer_name': cliente.customer_name,
+            'installation_address': cliente.installation_address,
+            'meter_manufacturer_id': cliente.meter_manufacturer_id,
+            'proyecto': cliente.proyecto,
+            'meter_serial_n_1': cliente.meter_serial_n_1,
+        }
+        for field_name, old_value in before_values.items():
+            new_value = after_values.get(field_name)
+            if old_value != new_value:
+                register_audit_event(
+                    AuditEvent(
+                        actor_id=getattr(request.user, 'id', None),
+                        action='CLIENT_UPDATE',
+                        entity='Cliente',
+                        entity_id=str(cliente.id),
+                        field_name=field_name,
+                        old_value=old_value,
+                        new_value=new_value,
+                        reason='Edición desde gestión de clientes',
+                    )
+                )
+
+        messages.success(request, f'Cliente {numero_cliente_final} actualizado correctamente.')
         return redirect('clientes_list')
 
     context = {'cliente': cliente}
@@ -2622,16 +2845,73 @@ def cliente_editar_view(request, pk):
 
 
 @login_required
-@role_required(['ADMIN'])
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
 def cliente_eliminar_view(request, pk):
-    """Elimina logicamente un cliente (solo rol ADMIN)."""
+    """Elimina logicamente un cliente (roles ADMIN y ADMINISTRATIVO)."""
     if request.method != 'POST':
         return redirect('clientes_list')
 
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
+    cliente_numero = cliente.numero_cliente
     cliente.activo = False
     cliente.save(update_fields=['activo'])
-    messages.success(request, f'Cliente {cliente.numero_cliente} eliminado correctamente.')
+    register_audit_event(
+        AuditEvent(
+            actor_id=getattr(request.user, 'id', None),
+            action='CLIENT_SOFT_DELETE',
+            entity='Cliente',
+            entity_id=str(cliente.id),
+            field_name='activo',
+            old_value=True,
+            new_value=False,
+            reason='Eliminación lógica individual desde gestión',
+        )
+    )
+    messages.success(request, f'Cliente {cliente_numero} eliminado correctamente.')
+    return redirect('clientes_list')
+
+
+@login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
+@require_POST
+def clientes_eliminar_masivo_view(request):
+    """Elimina lógicamente múltiples clientes seleccionados desde la gestión."""
+    ids = request.POST.getlist('cliente_ids')
+    if not ids:
+        messages.warning(request, 'No se seleccionaron clientes para eliminar.')
+        return redirect('clientes_list')
+
+    clientes = Cliente.objects.filter(pk__in=ids, activo=True)
+    total = clientes.count()
+    clientes_auditoria = list(clientes.values('id', 'numero_cliente'))
+    numeros = [item['numero_cliente'] for item in clientes_auditoria[:10]]
+    clientes.update(activo=False)
+
+    for item in clientes_auditoria:
+        register_audit_event(
+            AuditEvent(
+                actor_id=getattr(request.user, 'id', None),
+                action='CLIENT_SOFT_DELETE_MASSIVE',
+                entity='Cliente',
+                entity_id=str(item['id']),
+                field_name='activo',
+                old_value=True,
+                new_value=False,
+                reason='Eliminación lógica masiva desde gestión',
+            )
+        )
+
+    if total == 0:
+        messages.warning(request, 'No se encontraron clientes activos para eliminar.')
+    else:
+        extra = ''
+        if total > 10:
+            extra = f' y {total - 10} más'
+        numeros_txt = ', '.join(numeros)
+        messages.success(
+            request,
+            f'Se eliminaron {total} clientes seleccionados. {numeros_txt}{extra}'.strip()
+        )
     return redirect('clientes_list')
 
 
@@ -3299,7 +3579,8 @@ def usuario_eliminar_view(request, pk):
 # REPORTES — Integraciones MoreApp
 # ─────────────────────────────────────────────────────────────────────────────
 
-ROLES_REPORTES = ('ADMIN', 'ADMINISTRATIVO', 'SUPERVISOR')
+ROLES_REPORTES_LECTURA = ('ADMIN', 'ADMINISTRATIVO', 'AUDITOR')
+ROLES_REPORTES_GESTION = ('ADMIN', 'ADMINISTRATIVO')
 
 
 def _ejecutar_autosync_moreapp_si_corresponde():
@@ -3549,7 +3830,7 @@ def reportes_moreapp_list(request):
     """Lista de registros sincronizados desde carpetas de MoreApp."""
     from ordenes_trabajo.models import IntegracionMoreApp
 
-    if request.user.rol not in ROLES_REPORTES:
+    if request.user.rol not in ROLES_REPORTES_LECTURA:
         messages.error(request, 'No tienes permiso para acceder a Reportes.')
         return redirect('dashboard')
 
@@ -3673,7 +3954,7 @@ def reportes_moreapp_detalle(request, pk):
     from ordenes_trabajo.models import IntegracionMoreApp
     from inventario.models import MovimientoInventario
 
-    if request.user.rol not in ROLES_REPORTES:
+    if request.user.rol not in ROLES_REPORTES_LECTURA:
         messages.error(request, 'No tienes permiso para acceder a Reportes.')
         return redirect('dashboard')
 
@@ -3750,7 +4031,7 @@ def reportes_moreapp_sincronizar(request):
     """Dispara la sincronización manual desde el navegador."""
     from integraciones.reader import leer_carpetas
 
-    if request.user.rol not in ROLES_REPORTES:
+    if request.user.rol not in ROLES_REPORTES_GESTION:
         messages.error(request, 'No tienes permiso.')
         return redirect('dashboard')
 

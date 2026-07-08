@@ -79,7 +79,7 @@ Cada movimiento registra:
 
 - ADMIN: control total, elimina reportes MoreApp de prueba.
 - ADMINISTRATIVO: operacion, revision y gestion diaria.
-- SUPERVISOR: seguimiento y validacion operativa.
+- AUDITOR: seguimiento y validacion operativa (rol de validacion + solo lectura).
 - TECNICO: ejecucion de terreno.
 - GERENCIA / AUDITOR: monitoreo y control.
 

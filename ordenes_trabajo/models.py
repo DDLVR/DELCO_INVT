@@ -243,7 +243,7 @@ class OrdenTrabajo(models.Model):
         null=True,
         blank=True,
         related_name='ordenes_validadas',
-        limit_choices_to={'rol': 'SUPERVISOR'}
+        limit_choices_to={'rol': 'AUDITOR'}
     )
 
     # Fechas
@@ -306,8 +306,8 @@ class OrdenTrabajo(models.Model):
                 if not self.tecnico_solicito_reasignacion:
                     return True
         
-        # SUPERVISOR puede validar
-        if usuario.rol == 'SUPERVISOR' and nuevo_estado in ['VALIDADA', 'OBSERVADA']:
+        # AUDITOR cumple rol de supervisor para validacion operativa
+        if usuario.rol == 'AUDITOR' and nuevo_estado in ['VALIDADA', 'OBSERVADA']:
             return True
 
         return False
