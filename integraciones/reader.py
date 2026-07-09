@@ -732,6 +732,10 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         if comuna and cliente_obj.comuna != comuna:
             cliente_obj.comuna = comuna
             cambios_cliente.append('comuna')
+        empresa = _as_text(datos_norm.get('empresa', ''))
+        if empresa and cliente_obj.empresa != empresa:
+            cliente_obj.empresa = empresa
+            cambios_cliente.append('empresa')
         if not cliente_obj.activo:
             cliente_obj.activo = True
             cambios_cliente.append('activo')
@@ -777,6 +781,16 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
     tecnico_moreapp = _as_text(datos_norm.get('tecnico_responsable'))
     responsable_movimiento = _resolver_responsable_moreapp(tecnico_moreapp) or _obtener_responsable_sistema()
     medidor_principal = _buscar_medidor(medidor_serie)
+
+    if cliente_obj and medidor_serie:
+        from web.services.validators import validate_meter_terreno_vs_sistema
+        for issue in validate_meter_terreno_vs_sistema(medidor_serie, cliente_obj.meter_serial_n_1):
+            _agregar_pendiente('MEDIDOR', medidor_serie, issue.message)
+            registro.alerta_doble_trabajo = True
+            if registro.descripcion_alerta:
+                registro.descripcion_alerta += f' | {issue.message}'
+            else:
+                registro.descripcion_alerta = issue.message
 
     if formulario_canonico == 'REGISTRO_MEDIDORES_TELEMETRIA_V3':
         medidor_retirado = _buscar_medidor(medidor_activo_serie)

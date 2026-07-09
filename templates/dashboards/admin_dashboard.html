@@ -341,6 +341,79 @@
 
 </div>
 
+{# ---- Alertas de calidad de datos (Puntos 4, 7, 13) ---- #}
+{% if clientes_ip_duplicada or clientes_medidor_duplicado or clientes_pendientes_stb or clientes_pendientes_sci4 or clientes_reincidentes or ordenes_cerradas_sin_ejecutar %}
+<div class="container-fluid pb-4">
+    <div class="row">
+        <div class="col-12">
+            <h4 class="mb-3"><i class="bi bi-shield-exclamation text-danger"></i> Alertas de Calidad y Gestión</h4>
+        </div>
+    </div>
+    <div class="row mb-3">
+        {% if clientes_ip_duplicada %}
+        <div class="col-md-4 col-lg-2 mb-3">
+            <div class="card border-danger shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h3 class="text-danger mb-0">{{ clientes_ip_duplicada }}</h3>
+                    <small class="text-muted">Clientes con IP repetida</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if clientes_medidor_duplicado %}
+        <div class="col-md-4 col-lg-2 mb-3">
+            <div class="card border-danger shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h3 class="text-danger mb-0">{{ clientes_medidor_duplicado }}</h3>
+                    <small class="text-muted">Clientes con medidor repetido</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if clientes_pendientes_stb %}
+        <div class="col-md-4 col-lg-2 mb-3">
+            <div class="card border-warning shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h3 class="text-warning mb-0">{{ clientes_pendientes_stb }}</h3>
+                    <small class="text-muted">Pendientes STB</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if clientes_pendientes_sci4 %}
+        <div class="col-md-4 col-lg-2 mb-3">
+            <div class="card border-warning shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h3 class="text-warning mb-0">{{ clientes_pendientes_sci4 }}</h3>
+                    <small class="text-muted">Pendientes SCi4</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if clientes_reincidentes %}
+        <div class="col-md-4 col-lg-2 mb-3">
+            <div class="card border-warning shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h3 class="text-warning mb-0">{{ clientes_reincidentes }}</h3>
+                    <small class="text-muted">Clientes reincidentes (6 meses)</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if ordenes_cerradas_sin_ejecutar %}
+        <div class="col-md-4 col-lg-2 mb-3">
+            <div class="card border-secondary shadow-sm h-100">
+                <div class="card-body text-center">
+                    <h3 class="text-secondary mb-0">{{ ordenes_cerradas_sin_ejecutar }}</h3>
+                    <small class="text-muted">OT cerradas sin ejecutar</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
 {# ---- Panel operativo MoreApp (Puntos 6, 11) ---- #}
 {% if moreapp_pendientes or moreapp_con_advertencia or moreapp_envejecidos %}
 <div class="container-fluid pb-4">

@@ -74,14 +74,11 @@ Suite: web.tests.AlarmasIntegracionPunto7y8Tests.
 
 Fecha: 2026-07-09 | Estado: LISTO
 
-Set minimo:
-- /clientes/exportar/
-- /inventario/exportar/?tipo=medidor|sim|modem
-- /ordenes/exportar/
-- /movimientos/
-- /reportes/moreapp/
+Hub `/reportes/` con 19 informes Excel del PDF y filtros por fecha/técnico/empresa.
+Exports legacy siguen activos: clientes, inventario, órdenes, movimientos, MoreApp.
 
-Suite: web.tests.ReportesSetMinimoPunto9Tests.
+Archivos: `reportes/services.py`, `reportes/views.py`, `templates/reportes/hub.html`
+Suites: `reportes.tests.ReportesPunto9Tests`, `web.tests.ReportesSetMinimoPunto9Tests`
 
 ---
 
@@ -101,11 +98,11 @@ Suites: web.tests.MatrizRolesPunto11Tests, web.tests.PermisosSoloLecturaAuditorT
 
 Fecha: 2026-07-09 | Estado: LISTO
 
-Modelo persistente AuditLog en DB. Campos: actor, action, entity, entity_id, field_name, old_value, new_value, reason, created_at.
+AuditLog persistente + `audit_field_changes` integrado en clientes, inventario, OT y MoreApp.
+Vista historial `/auditoria/` con filtros por entidad/acción/ID.
 
-Archivos: web/models.py (AuditLog), web/services/audit.py (register_audit_event), web/migrations/0001_auditlog.py.
-
-Suites: web.tests.AuditPersistencePunto12Tests.
+Archivos: web/models.py, web/services/audit.py, web/views.py, ordenes_trabajo/models.py, templates/auditoria/list.html
+Suites: web.tests.AuditPersistencePunto12Tests, web.tests.AuditoriaExtendidaPunto12Tests
 
 ---
 

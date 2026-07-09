@@ -9,8 +9,11 @@ from .views import (
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
     reportes_moreapp_list, reportes_moreapp_detalle, reportes_moreapp_sincronizar, reportes_moreapp_eliminar,
     pendientes_operativos_view, moreapp_marcar_revision_view, moreapp_reprocesar_view,
+    auditoria_list_view,
     api_buscar_medidores, api_obtener_medidor,
 )
+from reportes.views import reportes_hub_view, reportes_export_view
+from catalogos.views import catalogo_diagnostico_list_view
 from ordenes_trabajo.views import (
     ordenes_list_view as ordenes_trabajo_list, 
     orden_crear_view, 
@@ -103,6 +106,10 @@ urlpatterns = [
 
     # Vistas operativas (Puntos 2, 8, 9, 11)
     path('operacional/pendientes/', pendientes_operativos_view, name='pendientes_operativos'),
+    path('reportes/', reportes_hub_view, name='reportes_hub'),
+    path('reportes/exportar/<slug:slug>/', reportes_export_view, name='reportes_export'),
+    path('auditoria/', auditoria_list_view, name='auditoria_list'),
+    path('catalogos/diagnostico/', catalogo_diagnostico_list_view, name='catalogo_diagnostico_list'),
     path('operacional/moreapp/<int:pk>/marcar-revision/', moreapp_marcar_revision_view, name='moreapp_marcar_revision'),
     path('reportes/moreapp/<int:pk>/reprocesar/', moreapp_reprocesar_view, name='moreapp_reprocesar'),
 

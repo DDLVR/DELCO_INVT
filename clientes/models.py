@@ -178,6 +178,86 @@ class Cliente(models.Model):
         null=True,
         help_text='Modelo o información del módem instalado'
     )
+
+    empresa = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        help_text='Empresa asociada al cliente, si corresponde'
+    )
+
+    ESTADO_TELEMETRIA_CHOICES = [
+        ('OPERATIVO', 'Operativo'),
+        ('SIN_COMUNICACION', 'Sin comunicación'),
+        ('NO_COMUNICA', 'No comunica'),
+        ('SIN_MEDIDOR', 'Sin medidor'),
+        ('OTRO', 'Otro'),
+    ]
+
+    estado_telemetria = models.CharField(
+        max_length=30,
+        choices=ESTADO_TELEMETRIA_CHOICES,
+        default='OPERATIVO',
+        help_text='Estado actual de la telemetría del cliente'
+    )
+
+    ESTADO_SISTEMA_EXTERNO_CHOICES = [
+        ('ACTUALIZADO', 'Actualizado'),
+        ('PENDIENTE', 'Pendiente de actualización'),
+        ('SIN_REGISTRO', 'Sin registro'),
+    ]
+
+    estado_stb = models.CharField(
+        max_length=20,
+        choices=ESTADO_SISTEMA_EXTERNO_CHOICES,
+        default='SIN_REGISTRO',
+        help_text='Estado de actualización en StarBeat (STB)'
+    )
+
+    estado_sci4 = models.CharField(
+        max_length=20,
+        choices=ESTADO_SISTEMA_EXTERNO_CHOICES,
+        default='SIN_REGISTRO',
+        help_text='Estado de actualización en SCi4'
+    )
+
+    sim_operador = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text='Operador de la SIM instalada'
+    )
+
+    sim_iccid = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text='ICCID o identificador de la SIM'
+    )
+
+    sim_abonado = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        help_text='Número de abonado de la SIM'
+    )
+
+    ESTADO_SIM_CHOICES = [
+        ('OPERATIVA', 'Operativa'),
+        ('SIN_DATOS', 'Sin datos'),
+        ('DANADA', 'Dañada'),
+        ('SIN_COBERTURA', 'Sin cobertura'),
+        ('SIN_IP', 'Sin IP'),
+        ('OTRO', 'Otro'),
+    ]
+
+    sim_estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_SIM_CHOICES,
+        blank=True,
+        null=True,
+        help_text='Estado operativo de la SIM'
+    )
     
     fecha_registro = models.DateField(
         null=True,

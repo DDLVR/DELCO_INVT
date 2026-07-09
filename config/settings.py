@@ -66,6 +66,8 @@ INSTALLED_APPS = [
     'inventario.apps.InventarioConfig',
     'importaciones.apps.ImportacionesConfig',
     'integraciones.apps.IntegracionesConfig',
+    'catalogos.apps.CatalogosConfig',
+    'reportes.apps.ReportesConfig',
 ]
 
 MIDDLEWARE = [
@@ -199,6 +201,7 @@ MOREAPP_WEBHOOK_REALTIME_ENABLED = os.getenv('MOREAPP_WEBHOOK_REALTIME_ENABLED',
 MOREAPP_AUTO_SYNC_ENABLED = os.getenv('MOREAPP_AUTO_SYNC_ENABLED', 'true').strip().lower() == 'true'
 MOREAPP_AUTO_SYNC_INTERVAL_SECONDS = int(os.getenv('MOREAPP_AUTO_SYNC_INTERVAL_SECONDS', '300'))
 MOREAPP_AUTO_REFRESH_SECONDS = int(os.getenv('MOREAPP_AUTO_REFRESH_SECONDS', '300'))
+ORDENES_TRABAJO_HABILITADAS = os.getenv('ORDENES_TRABAJO_HABILITADAS', 'true').strip().lower() == 'true'
 MOREAPP_INCREMENTAL_SCAN_ENABLED = os.getenv('MOREAPP_INCREMENTAL_SCAN_ENABLED', 'true').strip().lower() == 'true'
 MOREAPP_INCREMENTAL_LOOKBACK = int(os.getenv('MOREAPP_INCREMENTAL_LOOKBACK', '2'))
 

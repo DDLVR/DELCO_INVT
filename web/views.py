@@ -93,19 +93,27 @@ from importaciones.utils import (
 from importaciones.models import ImportacionExcel, ImportacionExcelError
 from web.services.validators import (
     merge_issues,
+    validate_ip_duplicate_on_active_clients,
     validate_ip_format,
     validate_ip_port_coherence,
+    validate_meter_required_fields,
     validate_meter_uniqueness,
     validate_modem_assignment,
+    validate_modem_inventory_status,
 )
-from web.services.audit import AuditEvent, register_audit_event
+from web.services.dashboard_metrics import (
+    count_clientes_con_ip_duplicada,
+    count_clientes_con_medidor_duplicado,
+    count_clientes_sin_actualizacion_sci4,
+    count_clientes_sin_actualizacion_stb,
+)
+from web.services.audit import AuditEvent, audit_field_changes, register_audit_event
 
 logger = logging.getLogger(__name__)
 
 
 def _ordenes_trabajo_habilitadas():
-    # Retiro definitivo en capa web: no habilitar aunque exista variable de entorno.
-    return False
+    return getattr(settings, 'ORDENES_TRABAJO_HABILITADAS', True)
 
 
 def _tipo_movimiento_desde_estado(estado_nombre):
@@ -236,11 +244,41 @@ def dashboard_view(request):
     if rol in ['ADMIN', 'ADMINISTRATIVO']:
         _ejecutar_autosync_moreapp_si_corresponde()
 
-        # Órdenes retiradas del flujo web (fase de eliminación)
-        context['total_ordenes'] = 0
-        context['ordenes_pendientes'] = 0
-        context['ordenes_completadas'] = 0
-        context['ordenes_canceladas'] = 0
+        if _ordenes_trabajo_habilitadas():
+            from ordenes_trabajo.models import OrdenTrabajo
+            from ordenes_trabajo.services import six_month_window_start
+
+            estados_abiertos = OrdenTrabajo.ESTADOS_ABIERTOS
+            estados_pendientes = estados_abiertos | {'PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION'}
+            estados_completadas = {'REALIZADA', 'VALIDADA', 'FINALIZADA'}
+            context['total_ordenes'] = OrdenTrabajo.objects.count()
+            context['ordenes_pendientes'] = OrdenTrabajo.objects.filter(estado__in=estados_pendientes).count()
+            context['ordenes_completadas'] = OrdenTrabajo.objects.filter(estado__in=estados_completadas).count()
+            context['ordenes_canceladas'] = OrdenTrabajo.objects.filter(estado='CANCELADA').count()
+            context['ordenes_cerradas_sin_ejecutar'] = OrdenTrabajo.objects.filter(
+                estado='CANCELADA',
+                fecha_inicio_ejecucion__isnull=True,
+            ).count()
+            context['clientes_reincidentes'] = (
+                OrdenTrabajo.objects.filter(fecha_creacion__date__gte=six_month_window_start())
+                .exclude(estado='CANCELADA')
+                .values('cliente_id')
+                .annotate(visitas=Count('id'))
+                .filter(visitas__gt=2)
+                .count()
+            )
+        else:
+            context['total_ordenes'] = 0
+            context['ordenes_pendientes'] = 0
+            context['ordenes_completadas'] = 0
+            context['ordenes_canceladas'] = 0
+            context['ordenes_cerradas_sin_ejecutar'] = 0
+            context['clientes_reincidentes'] = 0
+
+        context['clientes_ip_duplicada'] = count_clientes_con_ip_duplicada()
+        context['clientes_medidor_duplicado'] = count_clientes_con_medidor_duplicado()
+        context['clientes_pendientes_stb'] = count_clientes_sin_actualizacion_stb()
+        context['clientes_pendientes_sci4'] = count_clientes_sin_actualizacion_sci4()
         
         # Usuarios
         context['usuarios_activos'] = request.user.__class__.objects.filter(is_active=True).count()
@@ -288,7 +326,6 @@ def dashboard_view(request):
         context['modems_bodega_pct'] = round((context['modems_bodega'] / context['total_modems'] * 100) if context['total_modems'] > 0 else 0)
         
         # Estados disponibles para gráficos
-        from django.db.models import Count
         context['medidores_por_estado'] = list(
             Medidor.objects.values('estado_inventario__nombre')
             .annotate(cantidad=Count('id'))
@@ -366,20 +403,36 @@ def dashboard_view(request):
 
         return render(request, 'dashboards/admin_dashboard.html', context)
     elif rol == 'TECNICO':
-        context['mis_ordenes'] = []
-        context['en_ejecucion'] = 0
-        context['finalizadas'] = 0
+        from ordenes_trabajo.models import OrdenTrabajo
+        mis_ordenes_qs = OrdenTrabajo.objects.filter(tecnico_responsable=request.user)
+        context['mis_ordenes'] = mis_ordenes_qs.order_by('-fecha_creacion')[:10]
+        context['en_ejecucion'] = mis_ordenes_qs.filter(estado='EN_EJECUCION').count()
+        context['finalizadas'] = mis_ordenes_qs.filter(
+            estado__in={'REALIZADA', 'VALIDADA', 'FINALIZADA'}
+        ).count()
         return render(request, 'dashboards/tecnico_dashboard.html', context)
     
     # GERENCIA: KPIs y reportes
     elif rol == 'GERENCIA':
-        context['ordenes_finalizadas'] = 0
-        context['tasa_cumplimiento'] = '95%'  # Placeholder
+        from ordenes_trabajo.models import OrdenTrabajo
+        total = OrdenTrabajo.objects.count()
+        finalizadas = OrdenTrabajo.objects.filter(
+            estado__in={'REALIZADA', 'VALIDADA', 'FINALIZADA'}
+        ).count()
+        context['ordenes_finalizadas'] = finalizadas
+        context['tasa_cumplimiento'] = f'{round((finalizadas / total) * 100) if total else 0}%'
+        context['clientes_ip_duplicada'] = count_clientes_con_ip_duplicada()
+        context['clientes_medidor_duplicado'] = count_clientes_con_medidor_duplicado()
         return render(request, 'dashboards/gerencia_dashboard.html', context)
     
     # AUDITOR: Auditoría y logs
     elif rol == 'AUDITOR':
-        context['ultimas_ordenes'] = []
+        from ordenes_trabajo.models import OrdenTrabajo
+        context['ultimas_ordenes'] = OrdenTrabajo.objects.select_related(
+            'cliente', 'tecnico_responsable'
+        ).order_by('-fecha_creacion')[:10]
+        context['clientes_ip_duplicada'] = count_clientes_con_ip_duplicada()
+        context['clientes_medidor_duplicado'] = count_clientes_con_medidor_duplicado()
         return render(request, 'dashboards/auditor_dashboard.html', context)
     
     # Default
@@ -455,8 +508,21 @@ def moreapp_marcar_revision_view(request, pk):
         return redirect('reportes_moreapp_detalle', pk=pk)
 
     registro = get_object_or_404(IntegracionMoreApp, pk=pk)
+    estado_anterior = registro.estado_revision
     registro.estado_revision = nuevo_estado
     registro.save(update_fields=['estado_revision'])
+    register_audit_event(
+        AuditEvent(
+            actor_id=getattr(request.user, 'id', None),
+            action='MOREAPP_REVISION_UPDATE',
+            entity='IntegracionMoreApp',
+            entity_id=str(registro.pk),
+            field_name='estado_revision',
+            old_value=estado_anterior,
+            new_value=nuevo_estado,
+            reason='Cambio de estado de revisión operativa MoreApp',
+        )
+    )
 
     if not es_ajax:
         messages.success(request, f'Estado de revisión actualizado a: {registro.get_estado_revision_display()}')
@@ -1392,6 +1458,15 @@ def inventario_modificar_view(request, pk):
         if campos_cambiados:
             observacion = f'Modificación {tipo_item} {identificador}. Campos: {", ".join(campos_cambiados)}'
             _registrar_movimiento_inventario(equipo, tipo_item, request.user, observacion)
+            audit_field_changes(
+                actor_id=getattr(request.user, 'id', None),
+                action='INVENTORY_UPDATE',
+                entity=tipo_item,
+                entity_id=str(equipo.pk),
+                before=before,
+                after=after,
+                reason=f'Modificación inventario {tipo_item} {identificador}',
+            )
         
         return JsonResponse({
             'success': True,
@@ -2620,11 +2695,24 @@ def cliente_crear_view(request):
             modem
             and Cliente.objects.filter(modem__iexact=modem, activo=True).exists()
         )
+        ip_assigned_other_active = bool(
+            ip
+            and Cliente.objects.filter(ip__iexact=ip, activo=True).exists()
+        )
+        modem_estado = None
+        if modem:
+            modem_obj = Modem.objects.filter(serie__iexact=modem).select_related('estado_inventario').first()
+            if modem_obj and modem_obj.estado_inventario:
+                modem_estado = modem_obj.estado_inventario.nombre
+
         validation_issues = merge_issues(
             validate_ip_format(ip),
             validate_ip_port_coherence(ip, puerto),
+            validate_ip_duplicate_on_active_clients(ip, ip_assigned_other_active),
             validate_meter_uniqueness(meter_serial_n_1, meter_exists_other_active),
+            validate_meter_required_fields(meter_serial_n_1, meter_manufacturer_id),
             validate_modem_assignment(modem, modem_assigned_other_active),
+            validate_modem_inventory_status(modem_estado),
         )
 
         blocking_errors = [issue for issue in validation_issues if issue.severity == 'error']
@@ -2733,6 +2821,20 @@ def cliente_crear_view(request):
                 new_value=numero_cliente,
                 reason='Alta de cliente desde gestión manual',
             )
+        )
+        audit_field_changes(
+            actor_id=getattr(request.user, 'id', None),
+            action='CLIENT_CREATE_FIELD',
+            entity='Cliente',
+            entity_id=str(nuevo_cliente.id),
+            before={'meter_serial_n_1': None, 'ip': None, 'puerto': None, 'modem': None},
+            after={
+                'meter_serial_n_1': meter_serial_n_1 or None,
+                'ip': ip or None,
+                'puerto': puerto or None,
+                'modem': modem or None,
+            },
+            reason='Equipos y conectividad en alta de cliente',
         )
         if cliente_duplicado_serie_distinta:
             messages.warning(
@@ -4089,3 +4191,30 @@ def reportes_moreapp_eliminar(request, pk):
     if destino:
         return redirect(destino)
     return redirect('reportes_moreapp_list')
+
+
+@login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'AUDITOR', 'GERENCIA'])
+def auditoria_list_view(request):
+    """Historial de auditoría persistente (PDF punto 12)."""
+    from web.models import AuditLog
+
+    entity = request.GET.get('entity', '').strip()
+    action = request.GET.get('action', '').strip()
+    entity_id = request.GET.get('entity_id', '').strip()
+
+    qs = AuditLog.objects.select_related('actor').order_by('-created_at')
+    if entity:
+        qs = qs.filter(entity__icontains=entity)
+    if action:
+        qs = qs.filter(action__icontains=action)
+    if entity_id:
+        qs = qs.filter(entity_id=entity_id)
+
+    return render(request, 'auditoria/list.html', {
+        'registros': qs[:500],
+        'entity': entity,
+        'action': action,
+        'entity_id': entity_id,
+        'total': qs.count(),
+    })

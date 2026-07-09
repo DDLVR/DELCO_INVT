@@ -22,13 +22,13 @@ Estado:
 | 3 | Ficha unica por cliente | LISTO | Cerrar modelo de datos y defaults |
 | 4 | Validaciones obligatorias | LISTO | Implementar validaciones criticas |
 | 5 | Gestion de OT | LISTO | Definir backlog minimo y reglas base |
-| 6 | Aplicacion de terreno | FASE2 | Dejar en Fase 2 documentada |
-| 7 | Alarmas y alertas | LISTO | Definir catalogo de alertas criticas |
-| 8 | Integraciones | LISTO | Mantener import/export y definir API futura |
-| 9 | Informes y reportes | LISTO | Definir set minimo obligatorio |
-| 10 | Catalogo causa/solucion | FASE2 | DiseÃ±ar estructura de catalogo |
+| 6 | Aplicacion de terreno | PARCIAL | MoreApp sync/webhook activo; app movil propia no aplica |
+| 7 | Alarmas y alertas | PARCIAL | Panel duplicados IP/medidor/STB/SCi4/reincidencia en dashboard |
+| 8 | Integraciones | PARCIAL | Import/export + MoreApp OK; API bidireccional en Fase 2 |
+| 9 | Informes y reportes | LISTO | Hub /reportes/ con 19 informes Excel del PDF |
+| 10 | Catalogo causa/solucion | LISTO | App catalogos con vista /catalogos/diagnostico/ |
 | 11 | Roles de usuario | LISTO | Cerrar matriz de permisos por rol |
-| 12 | Trazabilidad y auditoria | LISTO | Definir esquema tecnico de auditoria |
+| 12 | Trazabilidad y auditoria | LISTO | AuditLog + vista /auditoria/ + OT/inventario/MoreApp |
 | 13 | Dashboard principal | LISTO | Definir KPIs minimos obligatorios |
 | 14 | Requerimientos tecnicos | LISTO | Checklist tecnico de cumplimiento |
 | 15 | Evitar errores operativos | LISTO | Alinear validaciones P3+P4 con este objetivo |
@@ -164,7 +164,7 @@ Estado:
 | 2026-07-09 | Cierre dashboard KPIs, errores operativos, alarmas de duplicidad e integracion MoreApp | 7,8,13,15 | Puntos 7,8,13,15 pasan a LISTO |
 | 2026-07-09 | Puntos 1,2 cerrados: alcance MVP documentado y congelado en ALCANCE_MVP_FASE2_PDF.md | 1,2 | Puntos 1 y 2 pasan a LISTO |
 | 2026-07-09 | Punto 14 cerrado: requerimientos tecnicos validados con django check y migraciones OK | 14 | Punto 14 pasa a LISTO |
-| 2026-07-09 | Puntos 6 y 10 diferidos formalmente a Fase 2 | 6,10 | Estado FASE2 documentado |
+| 2026-07-09 | Reactivacion OT en dashboard, validaciones OT conectadas, alertas duplicados/reincidencia, catalogo diagnostico y campos cliente STB/SCi4/SIM | 3,4,5,7,10,13 | Avance real sobre brechas detectadas vs PDF |
 
 ---
 

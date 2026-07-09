@@ -70,3 +70,35 @@ def register_audit_event(event: AuditEvent) -> None:
         event.new_value,
         event.reason,
     )
+
+
+def audit_field_changes(
+    *,
+    actor_id: int | None,
+    action: str,
+    entity: str,
+    entity_id: str,
+    before: dict,
+    after: dict,
+    fields: list[str] | None = None,
+    reason: str | None = None,
+) -> None:
+    """Register one audit row per changed field (PDF punto 12)."""
+    tracked = fields or list(before.keys())
+    for field_name in tracked:
+        old_value = before.get(field_name)
+        new_value = after.get(field_name)
+        if old_value == new_value:
+            continue
+        register_audit_event(
+            AuditEvent(
+                actor_id=actor_id,
+                action=action,
+                entity=entity,
+                entity_id=entity_id,
+                field_name=field_name,
+                old_value=old_value,
+                new_value=new_value,
+                reason=reason,
+            )
+        )
