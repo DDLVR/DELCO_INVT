@@ -33,6 +33,35 @@
         </div>
     </div>
 
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <a href="{% url 'clientes_list' %}" class="card border-0 shadow-sm text-decoration-none h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-primary mb-2"><i class="bi bi-building"></i> Gestión de Clientes</h5>
+                    <p class="card-text text-muted small mb-0">Consultar, crear, editar e importar fichas de clientes.</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'inventario_list' %}" class="card border-0 shadow-sm text-decoration-none h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-success mb-2"><i class="bi bi-box"></i> Inventario</h5>
+                    <p class="card-text text-muted small mb-0">Medidores, SIM y módems: stock, estados y asignaciones.</p>
+                </div>
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'ordenes_list' %}" class="card border-0 shadow-sm text-decoration-none h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-warning mb-2"><i class="bi bi-clipboard-check"></i> Órdenes de Trabajo</h5>
+                    <p class="card-text text-muted small mb-0">Crear, asignar y dar seguimiento a trabajos en terreno.</p>
+                </div>
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="row g-3 mb-4">
         <div class="col-lg-3 col-md-6">
             <div class="card border-0 shadow-sm h-100">
@@ -259,6 +288,22 @@
                     <h5 class="mb-0"><i class="bi bi-lightning-fill"></i> Acciones Rápidas</h5>
                 </div>
                 <div class="card-body">
+                    <div class="row g-2">
+                        {% if ordenes_habilitadas and ot_colas %}
+                        <div class="col-12 mb-2">
+                            <h6 class="text-muted mb-2"><i class="bi bi-diagram-3"></i> Cola operativa de órdenes</h6>
+                            <div class="d-flex flex-wrap gap-2">
+                                <a href="{% url 'ordenes_list' %}?cola=sin_asignar" class="btn btn-sm btn-outline-warning">Sin asignar ({{ ot_colas.sin_asignar }})</a>
+                                <a href="{% url 'ordenes_list' %}?cola=esperando_moreapp" class="btn btn-sm btn-outline-primary">Sin MoreApp ({{ ot_colas.esperando_moreapp }})</a>
+                                <a href="{% url 'ordenes_list' %}?cola=post_moreapp" class="btn btn-sm btn-outline-info">Post-MoreApp ({{ ot_colas.post_moreapp }})</a>
+                                <a href="{% url 'ordenes_list' %}?cola=validar" class="btn btn-sm btn-outline-success">Por validar ({{ ot_colas.validar }})</a>
+                                {% if moreapp_sin_ot %}
+                                <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm btn-outline-danger">MoreApp sin OT ({{ moreapp_sin_ot }})</a>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
                     <div class="row">
                         {% if ordenes_habilitadas %}
                         <div class="col-md-4 mb-2">
@@ -346,7 +391,7 @@
 <div class="container-fluid pb-4">
     <div class="row">
         <div class="col-12">
-            <h4 class="mb-3"><i class="bi bi-shield-exclamation text-danger"></i> Alertas de Calidad y Gestión</h4>
+            <h4 class="mb-3"><i class="bi bi-shield-exclamation text-danger"></i> Alertas operativas</h4>
         </div>
     </div>
     <div class="row mb-3">
@@ -419,7 +464,7 @@
 <div class="container-fluid pb-4">
     <div class="row">
         <div class="col-12">
-            <h4 class="mb-3"><i class="bi bi-exclamation-triangle-fill text-warning"></i> Alertas Operativas MoreApp</h4>
+            <h4 class="mb-3"><i class="bi bi-exclamation-triangle-fill text-warning"></i> Alertas MoreApp</h4>
         </div>
     </div>
     <div class="row mb-3">

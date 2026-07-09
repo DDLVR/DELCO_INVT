@@ -320,7 +320,7 @@ def _mapear_tipo_movimiento(estado_nombre: str) -> str:
 def _registrar_movimiento_equipo(
     equipo, tipo_equipo: str, observacion: str, estado_nombre: str,
     origen_sistema: str = 'MANUAL', tipo_override: str = '',
-    responsable_override=None,
+    responsable_override=None, referencia_ot: str = '',
 ):
     from inventario.models import MovimientoInventario, MovimientoItem
 
@@ -348,6 +348,7 @@ def _registrar_movimiento_equipo(
         destino=destino,
         responsable=responsable,
         observacion=observacion,
+        referencia_ot=referencia_ot or '',
     )
 
     # Actualizar ubicacion_actual del equipo al destino (Punto 4)
@@ -552,7 +553,8 @@ def _validar_reglas_operativas_previas(
 
 def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_obj, observacion: str,
                                  registro, medidor_asociado=None, ip_dejada: str = '', puerto: str = '',
-                                 registrar_pendiente=None, responsable_movimiento=None):
+                                 registrar_pendiente=None, responsable_movimiento=None,
+                                 referencia_ot: str = ''):
     cambios = []
 
     if not _validar_reglas_operativas_previas(
@@ -631,6 +633,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
             origen_sistema='MOREAPP',
             tipo_override='MOREAPP',
             responsable_override=responsable_movimiento,
+            referencia_ot=referencia_ot,
         )
         registro.actualizo_equipos = True
         return True
@@ -781,6 +784,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
     tecnico_moreapp = _as_text(datos_norm.get('tecnico_responsable'))
     responsable_movimiento = _resolver_responsable_moreapp(tecnico_moreapp) or _obtener_responsable_sistema()
     medidor_principal = _buscar_medidor(medidor_serie)
+    equipo_vinculo_modem = None
+    equipo_vinculo_sim = None
 
     if cliente_obj and medidor_serie:
         from web.services.validators import validate_meter_terreno_vs_sistema
@@ -810,6 +815,9 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
                 resumen['movimientos_generados'] += 1
         elif medidor_activo_serie:
             _agregar_pendiente('MEDIDOR', medidor_activo_serie, 'Serie de medidor activo (retiro) no encontrada en inventario')
+
+        equipo_reg_modem = None
+        equipo_reg_sim = None
 
         medidor_instalado = _buscar_medidor(medidor_dejado_serie)
         if medidor_instalado:
@@ -849,6 +857,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             )
             if actualizado:
                 resumen['movimientos_generados'] += 1
+            equipo_reg_modem = modem_instalado
         elif modem_dejado_serie:
             _agregar_pendiente('MODEM', modem_dejado_serie, 'Serie de módem dejado no encontrada en inventario')
 
@@ -869,6 +878,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             )
             if actualizado:
                 resumen['movimientos_generados'] += 1
+            equipo_reg_sim = sim_instalada
         elif sim_ip:
             _agregar_pendiente('SIM', sim_ip, 'IP dejada de SIM no encontrada en inventario')
 
@@ -877,6 +887,20 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             registro.estado_revision = 'CON_ADVERTENCIA'
         else:
             registro.estado_revision = 'REVISADO'
+
+        if cliente_obj:
+            from ordenes_trabajo.sync import vincular_moreapp_a_orden
+            orden_vinculada = vincular_moreapp_a_orden(
+                cliente_obj,
+                registro_moreapp=registro,
+                ruta_carpeta=getattr(registro, 'ruta_carpeta', '') or '',
+                medidor=medidor_principal,
+                modem=equipo_reg_modem,
+                simcard=equipo_reg_sim,
+            )
+            if orden_vinculada:
+                resumen['orden_actualizada'] = orden_vinculada.id
+                resumen['orden_estado'] = orden_vinculada.estado
         return resumen
 
     if medidor_principal:
@@ -939,6 +963,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         )
         if actualizado:
             resumen['movimientos_generados'] += 1
+        equipo_vinculo_modem = modem_encontrado
     elif modem_serie:
         _agregar_pendiente('MODEM', modem_serie, 'Serie de módem no encontrada en inventario')
 
@@ -962,6 +987,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         )
         if actualizado:
             resumen['movimientos_generados'] += 1
+        equipo_vinculo_sim = sim
     elif sim_ip:
         _agregar_pendiente('SIM', sim_ip, 'IP de SIM no encontrada en inventario')
 
@@ -975,11 +1001,14 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
 
     # Vincular informe entrante con orden de trabajo del cliente
     if cliente_obj:
-        from ordenes_trabajo.utils import vincular_informe_cliente_a_orden
-        orden_vinculada = vincular_informe_cliente_a_orden(
-            cliente=cliente_obj,
+        from ordenes_trabajo.sync import vincular_moreapp_a_orden
+        orden_vinculada = vincular_moreapp_a_orden(
+            cliente_obj,
             registro_moreapp=registro,
             ruta_carpeta=getattr(registro, 'ruta_carpeta', '') or '',
+            medidor=medidor_principal,
+            modem=equipo_vinculo_modem,
+            simcard=equipo_vinculo_sim,
         )
         if orden_vinculada:
             resumen['orden_actualizada'] = orden_vinculada.id

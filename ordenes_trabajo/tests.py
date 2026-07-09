@@ -349,3 +349,95 @@ class OrdenesValidacionesPdfTests(TestCase):
 		}, follow=False)
 		self.assertEqual(response.status_code, 302)
 		self.assertFalse(OrdenTrabajo.objects.filter(titulo='OT duplicada bloqueada').exists())
+
+
+class OrdenesSyncInventarioTests(TestCase):
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='94949494-4',
+			email='admin_sync@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Sync',
+			nombre_interno='admin_sync',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.tecnico = Usuario.objects.create_user(
+			rut='95959595-5',
+			email='tec_sync@delco.cl',
+			password=self.password,
+			nombre='Tec',
+			apellido='Sync',
+			nombre_interno='tec_sync',
+			rol='TECNICO',
+			is_active=True,
+		)
+		from inventario.models import EstadoInventario, Medidor, Ubicacion
+
+		self.estado_bodega, _ = EstadoInventario.objects.get_or_create(nombre='En bodega')
+		self.estado_instalado, _ = EstadoInventario.objects.get_or_create(nombre='Instalado')
+		self.ubicacion_bodega, _ = Ubicacion.objects.get_or_create(
+			tipo='BODEGA_DELCO',
+			nombre='Bodega Principal',
+		)
+		self.cliente = Cliente.objects.create(
+			numero_cliente='CLI-SYNC-001',
+			direccion='Dir sync',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='CENTRO',
+			customer_name='Cliente Sync',
+			installation_address='Inst',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-SYNC-001',
+			activo=True,
+		)
+		self.medidor = Medidor.objects.create(
+			serie='SER-SYNC-MED-001',
+			estado_inventario=self.estado_bodega,
+			ubicacion_actual=self.ubicacion_bodega,
+			entregado_a=self.tecnico,
+		)
+		self.orden = OrdenTrabajo.objects.create(
+			titulo='OT sync inventario',
+			tipo_trabajo='INSTALACION',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			tecnico_responsable=self.tecnico,
+			medidor=self.medidor,
+			estado='EN_EJECUCION',
+		)
+
+	def test_cambiar_estado_realizada_sincroniza_medidor(self):
+		resultado = self.orden.cambiar_estado(self.admin, 'REALIZADA')
+		self.assertTrue(resultado['success'])
+		self.medidor.refresh_from_db()
+		self.cliente.refresh_from_db()
+		self.assertEqual(self.medidor.cliente_id, self.cliente.id)
+		self.assertEqual(self.medidor.estado_inventario.nombre, 'Instalado')
+		self.assertEqual(self.cliente.medidor_actual_id, self.medidor.id)
+
+	def test_vincular_moreapp_copia_equipos_a_orden(self):
+		from ordenes_trabajo.sync import vincular_moreapp_a_orden
+
+		self.medidor.estado_inventario = self.estado_instalado
+		self.medidor.cliente = self.cliente
+		self.medidor.save()
+		self.cliente.medidor_actual = self.medidor
+		self.cliente.save()
+
+		orden_abierta = OrdenTrabajo.objects.create(
+			titulo='OT abierta moreapp',
+			tipo_trabajo='INSTALACION',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			estado='ASIGNADA',
+		)
+		vinculada = vincular_moreapp_a_orden(self.cliente, medidor=self.medidor)
+		self.assertEqual(vinculada.id, orden_abierta.id)
+		orden_abierta.refresh_from_db()
+		self.assertEqual(orden_abierta.medidor_id, self.medidor.id)
+		self.assertEqual(orden_abierta.estado, 'REALIZADA_PENDIENTE_COMPROBACION')

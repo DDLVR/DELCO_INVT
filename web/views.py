@@ -245,20 +245,26 @@ def dashboard_view(request):
         _ejecutar_autosync_moreapp_si_corresponde()
 
         if _ordenes_trabajo_habilitadas():
-            from ordenes_trabajo.models import OrdenTrabajo
+            from ordenes_trabajo.models import OrdenTrabajo, IntegracionMoreApp
             from ordenes_trabajo.services import six_month_window_start
+            from ordenes_trabajo.utils import contadores_colas_ordenes
 
             estados_abiertos = OrdenTrabajo.ESTADOS_ABIERTOS
             estados_pendientes = estados_abiertos | {'PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION'}
             estados_completadas = {'REALIZADA', 'VALIDADA', 'FINALIZADA'}
-            context['total_ordenes'] = OrdenTrabajo.objects.count()
-            context['ordenes_pendientes'] = OrdenTrabajo.objects.filter(estado__in=estados_pendientes).count()
-            context['ordenes_completadas'] = OrdenTrabajo.objects.filter(estado__in=estados_completadas).count()
-            context['ordenes_canceladas'] = OrdenTrabajo.objects.filter(estado='CANCELADA').count()
-            context['ordenes_cerradas_sin_ejecutar'] = OrdenTrabajo.objects.filter(
+            ot_qs = OrdenTrabajo.objects.all()
+            context['total_ordenes'] = ot_qs.count()
+            context['ordenes_pendientes'] = ot_qs.filter(estado__in=estados_pendientes).count()
+            context['ordenes_completadas'] = ot_qs.filter(estado__in=estados_completadas).count()
+            context['ordenes_canceladas'] = ot_qs.filter(estado='CANCELADA').count()
+            context['ordenes_cerradas_sin_ejecutar'] = ot_qs.filter(
                 estado='CANCELADA',
                 fecha_inicio_ejecucion__isnull=True,
             ).count()
+            context['ot_colas'] = contadores_colas_ordenes(ot_qs)
+            context['moreapp_sin_ot'] = IntegracionMoreApp.objects.filter(
+                orden__isnull=True,
+            ).exclude(estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR')).count()
             context['clientes_reincidentes'] = (
                 OrdenTrabajo.objects.filter(fecha_creacion__date__gte=six_month_window_start())
                 .exclude(estado='CANCELADA')
@@ -273,6 +279,8 @@ def dashboard_view(request):
             context['ordenes_completadas'] = 0
             context['ordenes_canceladas'] = 0
             context['ordenes_cerradas_sin_ejecutar'] = 0
+            context['ot_colas'] = {}
+            context['moreapp_sin_ot'] = 0
             context['clientes_reincidentes'] = 0
 
         context['clientes_ip_duplicada'] = count_clientes_con_ip_duplicada()
@@ -553,32 +561,10 @@ def moreapp_reprocesar_view(request, pk):
     return redirect('reportes_moreapp_detalle', pk=pk)
 
 
-# ========== VISTAS DE ÓRDENES DE TRABAJO ==========
-
-@role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO'])
-def ordenes_list_view(request):
-    """Módulo retirado."""
-    messages.warning(request, 'El módulo de órdenes de trabajo fue retirado del sistema.')
-    return redirect('dashboard')
-
-
-@role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO'])
-def orden_detalle_view(request, pk):
-    """Módulo retirado."""
-    messages.warning(request, 'El módulo de órdenes de trabajo fue retirado del sistema.')
-    return redirect('dashboard')
-
-
-@admin_or_administrativo
-def orden_crear_view(request):
-    """Módulo retirado."""
-    messages.warning(request, 'El módulo de órdenes de trabajo fue retirado del sistema.')
-    return redirect('dashboard')
-
-
 # ========== VISTAS DE INVENTARIO ==========
 
-@role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO'])
+@login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR', 'TECNICO'])
 def inventario_list_view(request):
     """Listado de equipos en inventario con filtros"""
     from django.core.paginator import Paginator
@@ -953,7 +939,7 @@ def inventario_list_view(request):
 
 
 @login_required
-@role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO'])
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR', 'TECNICO'])
 @require_http_methods(["GET"])
 def inventario_obtener_datos_view(request, pk):
     """Obtiene datos de un equipo en formato JSON"""
@@ -3053,7 +3039,7 @@ def update_profile_view(request):
 # =============================================================================
 
 @login_required
-@admin_or_administrativo
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR'])
 def movimientos_list_view(request):
     """
     Listar todos los movimientos de inventario con filtros
@@ -3198,7 +3184,7 @@ def movimientos_list_view(request):
 
 
 @login_required
-@admin_or_administrativo
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR'])
 def movimientos_detalle_view(request, movimiento_id):
     """
     Ver detalles completos de un movimiento específico
@@ -3284,7 +3270,7 @@ def movimientos_detalle_view(request, movimiento_id):
 
 
 @login_required
-@admin_or_administrativo
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR'])
 def movimientos_historial_equipo_view(request):
     """
     Ver historial completo de movimientos de un equipo específico

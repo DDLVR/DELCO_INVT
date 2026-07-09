@@ -6,8 +6,30 @@
 <div class="container-fluid py-4">
     <div class="mb-4">
         <h2 class="mb-1">Reportes operativos</h2>
-        <p class="text-muted mb-0">Informes del requerimiento PDF punto 9. Exportación en Excel.</p>
+        <p class="text-muted mb-0">
+            Descarga informes de trabajos en terreno y alertas en Excel.
+            Los registros aparecen cuando hay órdenes de trabajo o MoreApp procesado; las importaciones de fichas no se incluyen.
+        </p>
     </div>
+
+    {% if not hay_actividad_operativa %}
+    <div class="card border-0 shadow-sm">
+        <div class="card-body text-center py-5">
+            <div class="display-6 text-muted mb-3"><i class="bi bi-inbox"></i></div>
+            <h3 class="h5 mb-2">Sin reportes operativos por ahora</h3>
+            <p class="text-muted mb-0 mx-auto" style="max-width: 520px;">
+                No hay informes generados. Aparecerán aquí cuando registres órdenes de trabajo
+                o proceses registros de MoreApp en terreno.
+                Las importaciones de clientes siguen en Gestión de Clientes y en Auditoría.
+            </p>
+        </div>
+    </div>
+    {% else %}
+    {% if total_filas_reportes == 0 %}
+    <div class="alert alert-light border shadow-sm mb-4">
+        Hay actividad registrada, pero ningún reporte arroja filas con los filtros actuales.
+    </div>
+    {% endif %}
 
     <div class="card shadow-sm mb-4">
         <div class="card-body">
@@ -46,6 +68,7 @@
                     <tr>
                         <th>Reporte</th>
                         <th>Descripción</th>
+                        <th>Registros</th>
                         <th>Filtros</th>
                         <th class="text-end">Exportar</th>
                     </tr>
@@ -55,6 +78,13 @@
                     <tr>
                         <td class="fw-semibold">{{ item.title }}</td>
                         <td class="text-muted">{{ item.description }}</td>
+                        <td>
+                            {% if item.row_count == 0 %}
+                            <span class="badge bg-secondary">0</span>
+                            {% else %}
+                            <span class="badge bg-primary">{{ item.row_count }}</span>
+                            {% endif %}
+                        </td>
                         <td>
                             {% if item.supports_date_range %}<span class="badge bg-light text-dark border me-1">Fechas</span>{% endif %}
                             {% if item.supports_tecnico %}<span class="badge bg-light text-dark border me-1">Técnico</span>{% endif %}
@@ -72,5 +102,6 @@
             </table>
         </div>
     </div>
+    {% endif %}
 </div>
 {% endblock %}

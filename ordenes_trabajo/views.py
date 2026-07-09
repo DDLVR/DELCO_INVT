@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.http import JsonResponse, HttpResponse
 from django.views.decorators.http import require_POST
 from io import BytesIO
@@ -23,6 +23,10 @@ from .utils import (
     aplicar_alerta_duplicado,
     guardar_informe_pdf,
     detectar_duplicado_orden,
+    aplicar_cola_ordenes,
+    contadores_colas_ordenes,
+    paso_operativo_ot,
+    COLAS_ORDEN,
 )
 from usuarios.models import Usuario
 from clientes.models import Cliente
@@ -57,6 +61,7 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
         tecnico_filtro = request.GET.get('tecnico', '')
         cliente_filtro = request.GET.get('cliente', '')
         buscar = request.GET.get('buscar', '')
+        cola = request.GET.get('cola', '')
 
         if estado_filtro:
             ordenes = ordenes.filter(estado=estado_filtro)
@@ -72,6 +77,8 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
                 | Q(descripcion__icontains=buscar)
                 | Q(cliente__numero_cliente__icontains=buscar)
             )
+        if cola:
+            ordenes = aplicar_cola_ordenes(ordenes, cola)
 
     return ordenes.select_related(
         'tecnico_responsable',
@@ -80,6 +87,8 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
         'simcard',
         'modem',
         'creada_por',
+    ).annotate(
+        moreapp_count=Count('sincronizaciones_moreapp', distinct=True),
     ).order_by('-fecha_creacion')
 
 
@@ -89,6 +98,7 @@ def ordenes_list_view(request):
     Lista de órdenes de trabajo con filtros
     """
     usuario = request.user
+    base_ordenes = _queryset_ordenes_filtrado(request, aplicar_filtros=False)
     ordenes = _queryset_ordenes_filtrado(request)
     
     estado_filtro = request.GET.get('estado', '')
@@ -96,6 +106,7 @@ def ordenes_list_view(request):
     tecnico_filtro = request.GET.get('tecnico', '')
     cliente_filtro = request.GET.get('cliente', '')
     buscar = request.GET.get('buscar', '')
+    cola_filtro = request.GET.get('cola', '')
     
     # Obtener opciones para filtros
     tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True)
@@ -112,6 +123,9 @@ def ordenes_list_view(request):
         'tecnico_filtro': tecnico_filtro,
         'cliente_filtro': cliente_filtro,
         'buscar': buscar,
+        'cola_filtro': cola_filtro,
+        'colas_orden': COLAS_ORDEN,
+        'colas_conteo': contadores_colas_ordenes(base_ordenes),
         'total_alertas_duplicado': ordenes.filter(alerta_duplicado=True).count(),
         'puede_eliminar': usuario.rol == 'ADMIN',
     }
@@ -235,14 +249,28 @@ def orden_detalle_view(request, pk):
     informes = orden.informes.all()
     
     # Obtener integraciones MoreApp
-    sincronizaciones = orden.sincronizaciones_moreapp.all()
-    
+    sincronizaciones = orden.sincronizaciones_moreapp.all().order_by('-fecha_recepcion')
+    moreapp_count = sincronizaciones.count()
+    sync_advertencia = sincronizaciones.filter(estado_revision='CON_ADVERTENCIA').exists()
+    paso_operativo = paso_operativo_ot(orden, moreapp_count=moreapp_count, sync_advertencia=sync_advertencia)
+    if paso_operativo.get('accion_label') == 'Revisar pendientes':
+        paso_operativo['accion_url'] = '/operacional/pendientes/?estado=CON_ADVERTENCIA'
+    elif paso_operativo.get('accion_label') == 'Ver informes MoreApp':
+        paso_operativo['accion_url'] = '/reportes/moreapp/'
+
+    puede_validar = (
+        usuario.rol == 'AUDITOR'
+        and orden.estado in ('PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION')
+    )
+
     context = {
         'orden': orden,
         'adjuntos': adjuntos,
         'informes': informes,
         'sincronizaciones': sincronizaciones,
+        'paso_operativo': paso_operativo,
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
+        'puede_validar': puede_validar,
         'puede_eliminar': usuario.rol == 'ADMIN',
         'es_tecnico_responsable': orden.tecnico_responsable == usuario if orden.tecnico_responsable else False,
         'puede_editar_observaciones': puede_editar_observaciones_orden(orden, usuario),
@@ -269,7 +297,6 @@ def orden_guardar_observaciones_view(request, pk):
     return redirect('orden_detalle', pk=pk)
 
 
-@login_required
 @login_required
 def cambiar_estado_orden_view(request, pk):
     """
@@ -473,6 +500,11 @@ def orden_registrar_equipos_view(request, pk):
                 orden.modem = None
             
             orden.save()
+
+            from ordenes_trabajo.sync import sincronizar_orden_completa
+            if orden.estado in {'REALIZADA', 'REALIZADA_PENDIENTE_COMPROBACION', 'VALIDADA', 'FINALIZADA'}:
+                sincronizar_orden_completa(orden, request.user, orden.estado)
+
             messages.success(request, '✓ Equipos registrados correctamente en la orden')
             
         except Exception as e:
@@ -893,7 +925,10 @@ def procesar_moreapp_submission(integracion, payload):
             orden.fecha_fin_ejecucion = fecha_fin
     
     orden.save()
-    
+
+    from ordenes_trabajo.sync import sincronizar_orden_completa
+    sincronizar_orden_completa(orden, orden.creada_por or Usuario.objects.filter(rol='ADMIN').first(), orden.estado)
+
     # 5. Crear adjuntos desde URLs de fotos
     fotos = data.get('fotos', [])
     if fotos:
