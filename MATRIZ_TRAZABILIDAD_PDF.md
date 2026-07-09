@@ -1,4 +1,4 @@
-# Matriz de Trazabilidad - Requerimiento PDF
+﻿# Matriz de Trazabilidad - Requerimiento PDF
 
 ## Regla de trabajo
 
@@ -26,7 +26,7 @@ Estado:
 | 7 | Alarmas y alertas | LISTO | Definir catalogo de alertas criticas |
 | 8 | Integraciones | LISTO | Mantener import/export y definir API futura |
 | 9 | Informes y reportes | LISTO | Definir set minimo obligatorio |
-| 10 | Catalogo causa/solucion | FASE2 | Diseñar estructura de catalogo |
+| 10 | Catalogo causa/solucion | FASE2 | DiseÃ±ar estructura de catalogo |
 | 11 | Roles de usuario | LISTO | Cerrar matriz de permisos por rol |
 | 12 | Trazabilidad y auditoria | LISTO | Definir esquema tecnico de auditoria |
 | 13 | Dashboard principal | LISTO | Definir KPIs minimos obligatorios |
@@ -59,7 +59,7 @@ Estado:
   - Reglas de unicidad documentadas. (`OK`)
 - Evidencia:
   - Documento de diccionario: `DICCIONARIO_DATOS_CLIENTE_PUNTO_3.md`
-  - Acta de cierre: `CIERRE_PUNTO_3_FICHA_UNICA.md`
+  - Acta de cierre: `ACTAS_CIERRE_PUNTOS.md`
   - Pruebas automatizadas:
     - `clientes.tests.ClienteFlujoViewTests`
     - `clientes.tests.ClienteImportarViewTests`
@@ -80,7 +80,7 @@ Estado:
     - `clientes.tests.ClienteFlujoViewTests`
     - `clientes.tests.ClienteImportarViewTests`
     - `importaciones.tests.ImportacionClientesModoTests`
-  - Acta de cierre: `CIERRE_PUNTO_4_VALIDACIONES.md`
+  - Acta de cierre: `ACTAS_CIERRE_PUNTOS.md`
 
 ### B4 - Matriz de permisos por rol (PDF 11)
 
@@ -101,7 +101,7 @@ Estado:
 - Evidencia:
   - Verificacion de permisos: `VERIFICACION_PERMISOS_ROLES_ACTUALES.md`
   - Matriz final: `MATRIZ_PERMISOS_PUNTO_11.md`
-  - Acta de cierre: `CIERRE_PUNTO_11_ROLES.md`
+  - Acta de cierre: `ACTAS_CIERRE_PUNTOS.md`
   - Pruebas de matriz por rol: `web.tests.MatrizRolesPunto11Tests`
   - Pruebas por rol en ordenes: `ordenes_trabajo.tests.OrdenesRolesTests`
   - Pruebas perfil solo lectura (AUDITOR): `web.tests.PermisosSoloLecturaAuditorTests`
@@ -119,7 +119,7 @@ Estado:
 - Evidencia:
   - Pruebas automatizadas: `ordenes_trabajo.tests.OrdenesBasicasWorkflowTests`
   - Comando de verificacion: `python manage.py test ordenes_trabajo.tests.OrdenesBasicasWorkflowTests -v 1`
-  - Acta de cierre: `CIERRE_PUNTO_5_OT_BASICA.md`
+  - Acta de cierre: `ACTAS_CIERRE_PUNTOS.md`
 
 ### B6 - Trazabilidad y auditoria persistente (PDF 12)
 
@@ -135,7 +135,7 @@ Estado:
   - Modelo persistente: `web.models.AuditLog`
   - Servicio actualizado: `web.services.audit.register_audit_event`
   - Pruebas: `web.tests.AuditPersistencePunto12Tests`
-  - Acta de cierre: `CIERRE_PUNTO_12_AUDITORIA.md`
+  - Acta de cierre: `ACTAS_CIERRE_PUNTOS.md`
 
 ---
 
