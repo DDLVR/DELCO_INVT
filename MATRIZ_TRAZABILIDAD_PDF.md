@@ -21,14 +21,14 @@ Estado:
 | 2 | Alcance plataforma | PARCIAL | Congelar alcance de modulos minimos |
 | 3 | Ficha unica por cliente | LISTO | Cerrar modelo de datos y defaults |
 | 4 | Validaciones obligatorias | LISTO | Implementar validaciones criticas |
-| 5 | Gestion de OT | FALTA/PARCIAL | Definir backlog minimo y reglas base |
+| 5 | Gestion de OT | LISTO | Definir backlog minimo y reglas base |
 | 6 | Aplicacion de terreno | FALTA | Dejar en Fase 2 documentada |
 | 7 | Alarmas y alertas | PARCIAL | Definir catalogo de alertas criticas |
 | 8 | Integraciones | PARCIAL | Mantener import/export y definir API futura |
 | 9 | Informes y reportes | PARCIAL | Definir set minimo obligatorio |
 | 10 | Catalogo causa/solucion | FALTA | Diseñar estructura de catalogo |
 | 11 | Roles de usuario | LISTO | Cerrar matriz de permisos por rol |
-| 12 | Trazabilidad y auditoria | FALTA/PARCIAL | Definir esquema tecnico de auditoria |
+| 12 | Trazabilidad y auditoria | LISTO | Definir esquema tecnico de auditoria |
 | 13 | Dashboard principal | PARCIAL | Definir KPIs minimos obligatorios |
 | 14 | Requerimientos tecnicos | PARCIAL | Checklist tecnico de cumplimiento |
 | 15 | Evitar errores operativos | PARCIAL | Alinear validaciones P3+P4 con este objetivo |
@@ -106,6 +106,37 @@ Estado:
   - Pruebas por rol en ordenes: `ordenes_trabajo.tests.OrdenesRolesTests`
   - Pruebas perfil solo lectura (AUDITOR): `web.tests.PermisosSoloLecturaAuditorTests`
 
+### B5 - Gestion basica de OT (PDF 5)
+
+- Punto PDF: 5
+- Estado: LISTO
+- Tarea: dejar base operativa de OT con creacion, importacion, listado por rol y alerta de duplicado
+- Criterio de aceptacion:
+  - Carga individual minima. (`OK`)
+  - Carga masiva minima. (`OK`)
+  - Estado inicial y seguimiento basico. (`OK`)
+  - Duplicidad minima por cliente. (`OK`)
+- Evidencia:
+  - Pruebas automatizadas: `ordenes_trabajo.tests.OrdenesBasicasWorkflowTests`
+  - Comando de verificacion: `python manage.py test ordenes_trabajo.tests.OrdenesBasicasWorkflowTests -v 1`
+  - Acta de cierre: `CIERRE_PUNTO_5_OT_BASICA.md`
+
+### B6 - Trazabilidad y auditoria persistente (PDF 12)
+
+- Punto PDF: 12
+- Estado: LISTO
+- Tarea: persistir auditoria en base de datos para eventos criticos
+- Criterio de aceptacion:
+  - Registro de actor, accion, entidad, entidad_id y fecha. (`OK`)
+  - Soporte de old/new value y motivo. (`OK`)
+  - Integracion con flujos criticos (clientes/importaciones). (`OK`)
+  - Evidencia automatizada de persistencia. (`OK`)
+- Evidencia:
+  - Modelo persistente: `web.models.AuditLog`
+  - Servicio actualizado: `web.services.audit.register_audit_event`
+  - Pruebas: `web.tests.AuditPersistencePunto12Tests`
+  - Acta de cierre: `CIERRE_PUNTO_12_AUDITORIA.md`
+
 ---
 
 ## No hacer (control de cambios)
@@ -127,6 +158,8 @@ Estado:
 | 2026-07-08 | Cierre tecnico de validaciones criticas (IP/Medidor/Modem) con pruebas automatizadas | 4 | Punto 4 pasa a LISTO con evidencia reproducible |
 | 2026-07-08 | Alineacion de permisos por rol con solo roles existentes (AUDITOR como validacion operativa) y verificacion automatizada | 11 | Evita roles inexistentes y clarifica responsabilidad por rol |
 | 2026-07-08 | Cierre de punto 11 con mapeo formal Administrador/Analista/Rol de validacion operativa/Tecnico/Solo lectura a roles existentes y pruebas de permisos | 11 | Punto 11 pasa a LISTO con evidencia reproducible |
+| 2026-07-09 | Cierre tecnico de gestion basica de OT con creacion, importacion, listado por rol y alerta de duplicidad | 5 | Punto 5 pasa a LISTO con evidencia reproducible |
+| 2026-07-09 | Implementacion de auditoria persistente en DB (AuditLog) e integracion con eventos criticos | 12 | Punto 12 pasa a LISTO con evidencia reproducible |
 
 ---
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+import json
 import logging
 
 
@@ -29,12 +30,37 @@ class AuditEvent:
 
 
 def register_audit_event(event: AuditEvent) -> None:
-    """Placeholder entry point for audit persistence.
+    """Persist event in DB and mirror to logger as technical backup."""
 
-    Replace this with DB persistence once the audit model is finalized.
-    """
+    def _serialize(value: Any) -> str | None:
+        if value is None:
+            return None
+        if isinstance(value, (str, int, float, bool)):
+            return str(value)
+        try:
+            return json.dumps(value, ensure_ascii=False, default=str)
+        except Exception:
+            return str(value)
+
+    try:
+        from web.models import AuditLog
+
+        AuditLog.objects.create(
+            actor_id=event.actor_id,
+            action=(event.action or '')[:80],
+            entity=(event.entity or '')[:120],
+            entity_id=(event.entity_id or '')[:120],
+            field_name=(event.field_name or '')[:120] if event.field_name else None,
+            old_value=_serialize(event.old_value),
+            new_value=_serialize(event.new_value),
+            reason=event.reason,
+        )
+    except Exception:
+        # No romper flujo operativo por error de auditoría.
+        logger.exception('AUDIT_DB_ERROR action=%s entity=%s entity_id=%s', event.action, event.entity, event.entity_id)
+
     logger.info(
-        "AUDIT actor=%s action=%s entity=%s entity_id=%s field=%s old=%r new=%r reason=%s",
+        'AUDIT actor=%s action=%s entity=%s entity_id=%s field=%s old=%r new=%r reason=%s',
         event.actor_id,
         event.action,
         event.entity,
