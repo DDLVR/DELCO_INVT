@@ -203,7 +203,7 @@ MOREAPP_INCREMENTAL_SCAN_ENABLED = os.getenv('MOREAPP_INCREMENTAL_SCAN_ENABLED',
 MOREAPP_INCREMENTAL_LOOKBACK = int(os.getenv('MOREAPP_INCREMENTAL_LOOKBACK', '2'))
 
 # Modulo de ordenes de trabajo (fase de desactivacion segura)
-ORDENES_TRABAJO_ENABLED = os.getenv('ORDENES_TRABAJO_ENABLED', 'false').strip().lower() == 'true'
+ORDENES_TRABAJO_ENABLED = os.getenv('ORDENES_TRABAJO_ENABLED', 'true').strip().lower() == 'true'
 
 # Configuracion API para integracion con MoreApp (Webhooks)
 # Token de seguridad para validar solicitudes de MoreApp

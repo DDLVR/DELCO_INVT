@@ -256,13 +256,10 @@ def detectar_duplicado_orden(
 
 
 def aplicar_alerta_duplicado(orden: OrdenTrabajo) -> None:
-    if not orden.cliente_id:
-        return
-    tiene_alerta, desc = detectar_duplicado_orden(orden.cliente, exclude_orden_id=orden.pk)
-    if tiene_alerta:
-        orden.alerta_duplicado = True
-        orden.descripcion_alerta_duplicado = desc
-        orden.save(update_fields=['alerta_duplicado', 'descripcion_alerta_duplicado'])
+    """Compatibilidad: delega en el servicio unificado de alertas."""
+    from ordenes_trabajo.services import aplicar_alertas_operativas
+
+    aplicar_alertas_operativas(orden)
 
 
 def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
@@ -363,7 +360,9 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                         orden.save()
                         creadas += 1
 
-                    aplicar_alerta_duplicado(orden)
+                    from ordenes_trabajo.services import aplicar_alertas_operativas
+
+                    aplicar_alertas_operativas(orden)
                     if orden.alerta_duplicado:
                         alertas += 1
 

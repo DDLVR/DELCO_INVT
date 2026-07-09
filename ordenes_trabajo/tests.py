@@ -144,3 +144,57 @@ class OrdenesRolesTests(TestCase):
 		req_aud.user = self.auditor
 		qs_aud = _queryset_ordenes_filtrado(req_aud, aplicar_filtros=False)
 		self.assertEqual(set(qs_aud.values_list('id', flat=True)), {orden_t1.id, orden_t2.id})
+
+
+class OrdenesValidacionesTests(TestCase):
+	def setUp(self):
+		self.admin = Usuario.objects.create_user(
+			rut='70707070-7',
+			email='admin_val@delco.cl',
+			password='admin1234',
+			nombre='Admin',
+			apellido='Val',
+			nombre_interno='admin_val',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.cliente = __import__('clientes.models', fromlist=['Cliente']).Cliente.objects.create(
+			numero_cliente='CLI-VAL-1',
+			direccion='Calle 1',
+			comuna='Santiago',
+			note='Cliente cerrado reiteradamente',
+		)
+
+	def test_evaluar_alertas_ot_abierta_y_antecedentes(self):
+		from ordenes_trabajo.services import evaluar_alertas_ot
+
+		OrdenTrabajo.objects.create(
+			titulo='OT abierta',
+			creada_por=self.admin,
+			cliente=self.cliente,
+			estado='ASIGNADA',
+		)
+
+		result = evaluar_alertas_ot(
+			cliente=self.cliente,
+			titulo='OT nueva',
+			tipo_trabajo='INSTALACION',
+		)
+		mensajes = ' '.join(result.warnings)
+		self.assertIn('OT abierta', mensajes)
+		self.assertIn('cerrado', mensajes.lower())
+
+	def test_aplicar_alertas_operativas_persiste_en_orden(self):
+		from ordenes_trabajo.services import aplicar_alertas_operativas
+
+		orden = OrdenTrabajo.objects.create(
+			titulo='OT alerta',
+			creada_por=self.admin,
+			cliente=self.cliente,
+			estado='CREADA',
+		)
+		aplicar_alertas_operativas(orden)
+		orden.refresh_from_db()
+		self.assertTrue(orden.alerta_duplicado)
+		self.assertTrue(orden.descripcion_alerta_duplicado)

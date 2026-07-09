@@ -15,11 +15,11 @@ import json
 
 from .models import OrdenTrabajo, AdjuntoOrden, IntegracionMoreApp, InformeCliente
 from .serializers import OrdenTrabajoSerializer
+from .services import aplicar_alertas_operativas, evaluar_alertas_ot
 from .utils import (
     importar_ordenes_excel,
     exportar_ordenes_excel,
     asignar_ordenes_masivo,
-    aplicar_alerta_duplicado,
     guardar_informe_pdf,
     detectar_duplicado_orden,
 )
@@ -136,8 +136,22 @@ def orden_crear_view(request):
             
             # Cliente
             cliente_id = request.POST.get('cliente')
+            cliente = None
             if cliente_id:
-                orden.cliente = Cliente.objects.get(id=cliente_id)
+                cliente = Cliente.objects.get(id=cliente_id)
+                orden.cliente = cliente
+
+            validacion = evaluar_alertas_ot(
+                cliente=cliente,
+                titulo=request.POST.get('titulo', ''),
+                tipo_trabajo=request.POST.get('tipo_trabajo', ''),
+            )
+            for advertencia in validacion.warnings:
+                messages.warning(request, advertencia)
+            for error in validacion.errors:
+                messages.error(request, error)
+            if validacion.has_blocking_error:
+                return redirect('orden_crear')
 
             orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '')
             
@@ -152,10 +166,21 @@ def orden_crear_view(request):
             
             orden.creada_por = request.user
             orden.save()
-            aplicar_alerta_duplicado(orden)
+            aplicar_alertas_operativas(orden)
+
+            from web.services.audit import AuditEvent, register_audit_event
+            register_audit_event(
+                AuditEvent(
+                    actor_id=request.user.id,
+                    action='CREAR',
+                    entity='OrdenTrabajo',
+                    entity_id=str(orden.id),
+                    reason='Alta manual de OT',
+                )
+            )
 
             if orden.alerta_duplicado:
-                messages.warning(request, f'Alerta: posible trabajo duplicado — {orden.descripcion_alerta_duplicado}')
+                messages.warning(request, f'Alertas operativas: {orden.descripcion_alerta_duplicado}')
 
             if orden.estado == 'ASIGNADA':
                 messages.success(request, f'Orden #{orden.id} creada y asignada a {orden.tecnico_responsable.nombre_interno}')

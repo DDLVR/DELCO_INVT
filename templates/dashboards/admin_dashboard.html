@@ -199,7 +199,7 @@
                         </div>
                     </div>
                     <hr>
-                    <small class="text-muted"><i class="bi bi-clock"></i> {{ ordenes_pendientes }} pendientes</small>
+                    <small class="text-muted"><i class="bi bi-clock"></i> {{ ordenes_pendientes }} abiertas</small>
                 </div>
             </div>
         </div>
@@ -208,17 +208,77 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h6 class="text-muted mb-1">Completadas</h6>
+                            <h6 class="text-muted mb-1">Ejecutadas</h6>
                             <h2 class="mb-0 text-success">{{ ordenes_completadas }}</h2>
                         </div>
                         <div class="text-success"><i class="bi bi-check-circle" style="font-size: 2.5rem;"></i></div>
                     </div>
                     <hr>
-                    <small class="text-muted"><i class="bi bi-x-circle"></i> {{ ordenes_canceladas }} canceladas</small>
+                    <small class="text-muted"><i class="bi bi-calendar-day"></i> {{ trabajos_ejecutados_hoy|default:0 }} hoy</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-danger shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Sin ejecutar / sin respuesta</h6>
+                            <h2 class="mb-0 text-danger">{{ ordenes_cerradas_sin_ejecutar|default:0 }}</h2>
+                        </div>
+                        <div class="text-danger"><i class="bi bi-exclamation-octagon" style="font-size: 2.5rem;"></i></div>
+                    </div>
+                    <hr>
+                    <small class="text-muted"><i class="bi bi-hourglass"></i> {{ ot_sin_respuesta|default:0 }} OT &gt; 7 días</small>
                 </div>
             </div>
         </div>
         {% endif %}
+        <div class="col-lg-3 col-md-6 mb-3">
+            <div class="card border-warning shadow-sm h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="text-muted mb-1">Duplicados operativos</h6>
+                            <h2 class="mb-0 text-warning">{{ clientes_ip_duplicada|default:0 }}</h2>
+                        </div>
+                        <div class="text-warning"><i class="bi bi-copy" style="font-size: 2.5rem;"></i></div>
+                    </div>
+                    <hr>
+                    <small class="text-muted"><i class="bi bi-speedometer"></i> {{ clientes_medidor_duplicado|default:0 }} medidores repetidos</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel de alarmas operativas (PDF puntos 7 y 13) -->
+    {% if panel_alarmas %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <h4 class="mb-3"><i class="bi bi-bell-fill text-danger"></i> Panel de Alarmas Operativas</h4>
+        </div>
+        {% for alarma in panel_alarmas %}
+        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="card border-{{ alarma.severidad }} shadow-sm h-100">
+                <div class="card-body d-flex align-items-center gap-3">
+                    <i class="bi bi-exclamation-triangle-fill text-{{ alarma.severidad }}" style="font-size:2rem;"></i>
+                    <div>
+                        <h3 class="mb-0 text-{{ alarma.severidad }}">{{ alarma.cantidad }}</h3>
+                        <small class="text-muted">{{ alarma.titulo }}</small>
+                    </div>
+                </div>
+                <div class="card-footer p-2">
+                    <a href="{% url alarma.url_name %}" class="btn btn-sm btn-outline-{{ alarma.severidad }} w-100">
+                        Revisar
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="row mb-4">
         <div class="col-lg-3 col-md-6 mb-3">
             <div class="card border-info shadow-sm h-100">
                 <div class="card-body">
@@ -235,17 +295,17 @@
             </div>
         </div>
         <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card border-warning shadow-sm h-100">
+            <div class="card border-secondary shadow-sm h-100">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h6 class="text-muted mb-1">Total Clientes</h6>
-                            <h2 class="mb-0 text-warning">{{ total_clientes }}</h2>
+                            <h2 class="mb-0 text-secondary">{{ total_clientes }}</h2>
                         </div>
-                        <div class="text-warning"><i class="bi bi-building" style="font-size: 2.5rem;"></i></div>
+                        <div class="text-secondary"><i class="bi bi-building" style="font-size: 2.5rem;"></i></div>
                     </div>
                     <hr>
-                    <small class="text-muted"><i class="bi bi-person-badge"></i> {{ total_administrativos }} admins</small>
+                    <small class="text-muted"><i class="bi bi-arrow-repeat"></i> {{ clientes_reincidentes|default:0 }} reincidentes (6m)</small>
                 </div>
             </div>
         </div>

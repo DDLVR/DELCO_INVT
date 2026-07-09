@@ -104,8 +104,7 @@ logger = logging.getLogger(__name__)
 
 
 def _ordenes_trabajo_habilitadas():
-    # Retiro definitivo en capa web: no habilitar aunque exista variable de entorno.
-    return False
+    return getattr(settings, 'ORDENES_TRABAJO_ENABLED', True)
 
 
 def _tipo_movimiento_desde_estado(estado_nombre):
@@ -236,11 +235,23 @@ def dashboard_view(request):
     if rol in ['ADMIN', 'ADMINISTRATIVO']:
         _ejecutar_autosync_moreapp_si_corresponde()
 
-        # Órdenes retiradas del flujo web (fase de eliminación)
-        context['total_ordenes'] = 0
-        context['ordenes_pendientes'] = 0
-        context['ordenes_completadas'] = 0
-        context['ordenes_canceladas'] = 0
+        from web.services.alertas import obtener_kpis_ordenes, obtener_panel_alarmas
+
+        context.update(obtener_kpis_ordenes())
+        context['panel_alarmas'] = obtener_panel_alarmas()
+        context['total_alarmas_activas'] = sum(a['cantidad'] for a in context['panel_alarmas'])
+        context['clientes_ip_duplicada'] = next(
+            (a['cantidad'] for a in context['panel_alarmas'] if a['codigo'] == 'ip_duplicada'),
+            0,
+        )
+        context['clientes_medidor_duplicado'] = next(
+            (a['cantidad'] for a in context['panel_alarmas'] if a['codigo'] == 'medidor_duplicado'),
+            0,
+        )
+        context['clientes_reincidentes'] = next(
+            (a['cantidad'] for a in context['panel_alarmas'] if a['codigo'] == 'reincidencia'),
+            0,
+        )
         
         # Usuarios
         context['usuarios_activos'] = request.user.__class__.objects.filter(is_active=True).count()
@@ -366,20 +377,35 @@ def dashboard_view(request):
 
         return render(request, 'dashboards/admin_dashboard.html', context)
     elif rol == 'TECNICO':
-        context['mis_ordenes'] = []
-        context['en_ejecucion'] = 0
-        context['finalizadas'] = 0
+        from ordenes_trabajo.models import OrdenTrabajo
+
+        mis_ordenes = OrdenTrabajo.objects.filter(tecnico_responsable=request.user)
+        context['mis_ordenes'] = mis_ordenes.filter(estado__in=OrdenTrabajo.ESTADOS_ABIERTOS)[:10]
+        context['en_ejecucion'] = mis_ordenes.filter(estado='EN_EJECUCION').count()
+        context['finalizadas'] = mis_ordenes.filter(
+            estado__in=['REALIZADA', 'VALIDADA', 'FINALIZADA']
+        ).count()
         return render(request, 'dashboards/tecnico_dashboard.html', context)
     
     # GERENCIA: KPIs y reportes
     elif rol == 'GERENCIA':
-        context['ordenes_finalizadas'] = 0
-        context['tasa_cumplimiento'] = '95%'  # Placeholder
+        from web.services.alertas import obtener_kpis_ordenes, obtener_panel_alarmas
+
+        kpis = obtener_kpis_ordenes()
+        context.update(kpis)
+        context['panel_alarmas'] = obtener_panel_alarmas()
+        context['ordenes_finalizadas'] = kpis['ordenes_completadas']
+        total = kpis['total_ordenes'] or 1
+        context['tasa_cumplimiento'] = f"{round(kpis['ordenes_completadas'] / total * 100)}%"
         return render(request, 'dashboards/gerencia_dashboard.html', context)
     
     # AUDITOR: Auditoría y logs
     elif rol == 'AUDITOR':
-        context['ultimas_ordenes'] = []
+        from ordenes_trabajo.models import OrdenTrabajo
+        from web.services.alertas import obtener_panel_alarmas
+
+        context['ultimas_ordenes'] = OrdenTrabajo.objects.order_by('-fecha_creacion')[:10]
+        context['panel_alarmas'] = obtener_panel_alarmas()
         return render(request, 'dashboards/auditor_dashboard.html', context)
     
     # Default
