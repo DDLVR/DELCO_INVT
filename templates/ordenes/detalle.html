@@ -30,6 +30,22 @@
     </div>
     {% endif %}
 
+    {% if paso_operativo.mensaje %}
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="alert alert-{{ paso_operativo.nivel }} mb-0 d-flex justify-content-between align-items-start flex-wrap gap-2">
+                <div>
+                    <strong>{{ paso_operativo.titulo }}</strong><br>
+                    <span>{{ paso_operativo.mensaje }}</span>
+                </div>
+                {% if paso_operativo.accion_url and paso_operativo.accion_label %}
+                <a href="{{ paso_operativo.accion_url }}" class="btn btn-sm btn-outline-dark">{{ paso_operativo.accion_label }}</a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
     <div class="row">
         <!-- Columna principal -->
         <div class="col-lg-8">
@@ -472,20 +488,36 @@
             {% if sincronizaciones %}
             <div class="card mb-3">
                 <div class="card-header" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); color: white;">
-                    <h5 class="mb-0">🔄 Sincronizaciones MoreApp</h5>
+                    <h5 class="mb-0">🔄 Informes MoreApp vinculados</h5>
                 </div>
                 <div class="card-body">
                     {% for sync in sincronizaciones %}
-                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2">
+                    <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-2 flex-wrap gap-2">
                         <div>
-                            <strong>{{ sync.moreapp_submission_id }}</strong><br>
+                            <a href="{% url 'reportes_moreapp_detalle' sync.pk %}" class="fw-semibold text-decoration-none">
+                                {% if sync.numero_correlativo %}#{{ sync.numero_correlativo }}{% else %}Informe{% endif %}
+                                — {{ sync.nombre_formulario|truncatechars:40 }}
+                            </a><br>
                             <small class="text-muted">{{ sync.fecha_recepcion|date:"d/m/Y H:i" }}</small>
+                            {% if sync.estado_revision == 'CON_ADVERTENCIA' %}
+                            <br><small class="text-warning"><i class="bi bi-exclamation-triangle"></i> Con advertencias</small>
+                            {% elif sync.estado_revision == 'REVISADO' %}
+                            <br><small class="text-success"><i class="bi bi-check-circle"></i> Revisado</small>
+                            {% endif %}
                         </div>
-                        <span class="badge bg-{% if sync.estado_sincronizacion == 'EXITOSO' %}success{% elif sync.estado_sincronizacion == 'ERROR' %}danger{% else %}warning{% endif %}">
+                        <span class="badge bg-{% if sync.estado_sincronizacion == 'PROCESADO' %}success{% elif sync.estado_sincronizacion == 'ERROR' or sync.estado_sincronizacion == 'ERROR_JSON' %}danger{% else %}warning text-dark{% endif %}">
                             {{ sync.get_estado_sincronizacion_display }}
                         </span>
                     </div>
                     {% endfor %}
+                </div>
+            </div>
+            {% elif orden.estado == 'ASIGNADA' or orden.estado == 'EN_EJECUCION' %}
+            <div class="card mb-3 border-warning">
+                <div class="card-body py-3">
+                    <i class="bi bi-hourglass-split text-warning"></i>
+                    <strong>Sin informe MoreApp aún.</strong>
+                    <span class="text-muted">Cuando el técnico complete el formulario en terreno, aparecerá aquí y la orden pasará a comprobación.</span>
                 </div>
             </div>
             {% endif %}
@@ -552,17 +584,45 @@
                             <option value="ASIGNADA">Asignada</option>
                             {% endif %}
                             <option value="EN_EJECUCION">En ejecución</option>
+                            {% if puede_editar %}
+                            <option value="PENDIENTE_VALIDACION">Pendiente validación</option>
+                            <option value="REALIZADA_PENDIENTE_COMPROBACION">Realizada - Pendiente comprobación</option>
+                            {% endif %}
+                            {% if es_tecnico_responsable and not puede_editar %}
                             <option value="REALIZADA">Realizada</option>
+                            {% endif %}
+                            {% if puede_editar %}
                             <option value="FINALIZADA">Finalizada</option>
                             <option value="CANCELADA">Cancelada</option>
-                            {% if puede_editar %}
-                            <option value="REALIZADA_PENDIENTE_COMPROBACION">Realizada - Pendiente comprobación</option>
-                            <option value="PENDIENTE_VALIDACION">Pendiente validación</option>
-                            <option value="VALIDADA">Validada</option>
                             {% endif %}
                         </select>
                         <button type="submit" class="btn btn-warning w-100">
                             <i class="bi bi-arrow-repeat"></i> Cambiar Estado
+                        </button>
+                    </form>
+                    {% if puede_editar %}
+                    <p class="small text-muted mt-2 mb-0">La validación final la realiza auditoría cuando la orden está comprobada.</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if puede_validar %}
+            <div class="card mt-3 border-success">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-shield-check"></i> Validación Delco</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted">Revise el informe MoreApp y los equipos antes de validar.</p>
+                    <form method="post" action="{% url 'cambiar_estado_orden' orden.id %}">
+                        {% csrf_token %}
+                        <select name="nuevo_estado" class="form-select mb-2">
+                            <option value="VALIDADA">Validada</option>
+                            <option value="OBSERVADA">Observada (requiere corrección)</option>
+                            <option value="PENDIENTE_VALIDACION">Mantener pendiente</option>
+                        </select>
+                        <button type="submit" class="btn btn-success w-100">
+                            <i class="bi bi-check2-circle"></i> Registrar validación
                         </button>
                     </form>
                 </div>

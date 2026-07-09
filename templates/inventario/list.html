@@ -16,6 +16,8 @@
                 </div>
                 {% elif tipo == 'todos' %}
                 <div class="text-muted small">Vista consolidada de medidores, SIM y módems en una sola lista.</div>
+                {% else %}
+                <p class="text-muted small mb-0">Consulta stock, estados y ubicación de equipos en bodega o en terreno.</p>
                 {% endif %}
             </div>
             <div class="btn-group" role="group">
@@ -38,9 +40,11 @@
                     <i class="bi bi-check2-square"></i> Edición múltiple
                 </button>
                 {% endif %}
+                {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportar">
                     <i class="bi bi-upload"></i> Importar Excel
                 </button>
+                {% endif %}
                 <button type="button" class="btn btn-info" id="btnExportar">
                     <i class="bi bi-download"></i> Exportar Excel
                 </button>

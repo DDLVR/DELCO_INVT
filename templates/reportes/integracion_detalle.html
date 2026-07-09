@@ -586,7 +586,7 @@
             <dd class="col-sm-7 text-break"><code class="small">{{ registro.ruta_carpeta|default:"—" }}</code></dd>
             {% if registro.orden %}
             <dt class="col-sm-5">OT vinculada</dt>
-            <dd class="col-sm-7"><a href="#">OT #{{ registro.orden.numero_ot }}</a></dd>
+            <dd class="col-sm-7"><a href="{% url 'orden_detalle' registro.orden.id %}">OT #{{ registro.orden.id }}</a></dd>
             {% endif %}
           </dl>
         </div>

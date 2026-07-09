@@ -13,6 +13,7 @@ import openpyxl
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.db import transaction
+from django.db.models import Count, Q
 from django.utils import timezone
 
 from clientes.models import Cliente
@@ -575,3 +576,125 @@ def asignar_ordenes_masivo(ids, tecnico_id, usuario) -> Dict[str, Any]:
         'alertas_duplicado': alertas,
         'tecnico': tecnico.nombre_interno,
     }
+
+
+COLAS_ORDEN = (
+    ('sin_asignar', 'Sin asignar'),
+    ('en_campo', 'En campo'),
+    ('esperando_moreapp', 'Sin informe MoreApp'),
+    ('post_moreapp', 'Post-MoreApp'),
+    ('validar', 'Por validar'),
+)
+
+
+def aplicar_cola_ordenes(qs, cola: str):
+    """Filtros rápidos alineados al flujo Delco → técnico → MoreApp → validación."""
+    if cola == 'sin_asignar':
+        return qs.filter(estado='CREADA', tecnico_responsable__isnull=True)
+    if cola == 'en_campo':
+        return qs.filter(estado__in=['ASIGNADA', 'EN_EJECUCION'])
+    if cola == 'esperando_moreapp':
+        return qs.annotate(_n_moreapp=Count('sincronizaciones_moreapp')).filter(
+            estado__in=['ASIGNADA', 'EN_EJECUCION'],
+            _n_moreapp=0,
+        )
+    if cola == 'post_moreapp':
+        return qs.filter(estado='REALIZADA_PENDIENTE_COMPROBACION')
+    if cola == 'validar':
+        return qs.filter(estado__in=['PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION'])
+    return qs
+
+
+def contadores_colas_ordenes(qs) -> Dict[str, int]:
+    """Conteos para pestañas de cola operativa en listado de OT."""
+    base = qs.annotate(_n_moreapp=Count('sincronizaciones_moreapp', distinct=True))
+    return {
+        'sin_asignar': base.filter(estado='CREADA', tecnico_responsable__isnull=True).count(),
+        'en_campo': base.filter(estado__in=['ASIGNADA', 'EN_EJECUCION']).count(),
+        'esperando_moreapp': base.filter(
+            estado__in=['ASIGNADA', 'EN_EJECUCION'],
+            _n_moreapp=0,
+        ).count(),
+        'post_moreapp': base.filter(estado='REALIZADA_PENDIENTE_COMPROBACION').count(),
+        'validar': base.filter(
+            estado__in=['PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION']
+        ).count(),
+    }
+
+
+def paso_operativo_ot(orden, moreapp_count: int = 0, sync_advertencia: bool = False) -> Dict[str, Any]:
+    """Guía contextual del siguiente paso sin alterar el flujo acordado con Delco."""
+    estado = orden.estado
+    paso = {
+        'nivel': 'info',
+        'titulo': 'Seguimiento operativo',
+        'mensaje': '',
+        'accion_url': '',
+        'accion_label': '',
+    }
+
+    if estado == 'CREADA':
+        paso.update(
+            nivel='warning',
+            titulo='Paso 1 — Asignar técnico',
+            mensaje='La orden fue creada por Delco. Asigne un técnico responsable para que pueda ir a terreno.',
+            accion_url='',
+            accion_label='',
+        )
+    elif estado == 'ASIGNADA':
+        paso.update(
+            nivel='info',
+            titulo='Paso 2 — Iniciar ejecución',
+            mensaje='El técnico debe marcar la orden como en ejecución al llegar al cliente.',
+        )
+    elif estado == 'EN_EJECUCION' and moreapp_count == 0:
+        paso.update(
+            nivel='primary',
+            titulo='Paso 3 — Esperando informe MoreApp',
+            mensaje='El técnico debe completar el formulario en MoreApp al terminar el trabajo en terreno.',
+        )
+    elif estado == 'EN_EJECUCION' and moreapp_count > 0:
+        paso.update(
+            nivel='info',
+            titulo='Informe MoreApp recibido',
+            mensaje='Ya hay un registro MoreApp vinculado. Revise el detalle y cierre la comprobación.',
+            accion_label='Ver informes MoreApp',
+        )
+    elif estado == 'REALIZADA_PENDIENTE_COMPROBACION':
+        nivel = 'warning' if sync_advertencia else 'info'
+        paso.update(
+            nivel=nivel,
+            titulo='Paso 4 — Comprobar informe de terreno',
+            mensaje=(
+                'MoreApp actualizó la orden. Revise equipos, advertencias y envíe a validación de Delco.'
+                if not sync_advertencia
+                else 'Hay advertencias en el informe MoreApp. Resuélvalas antes de validar.'
+            ),
+            accion_label='Revisar pendientes',
+        )
+    elif estado == 'PENDIENTE_VALIDACION':
+        paso.update(
+            nivel='warning',
+            titulo='Paso 5 — Validación Delco',
+            mensaje='La orden está lista para que auditoría u oficina la valide.',
+        )
+    elif estado == 'VALIDADA':
+        paso.update(
+            nivel='success',
+            titulo='Orden validada',
+            mensaje='Delco validó el trabajo. Puede finalizar la orden cuando corresponda.',
+        )
+    elif estado == 'FINALIZADA':
+        paso.update(
+            nivel='success',
+            titulo='Orden finalizada',
+            mensaje='Ciclo operativo cerrado.',
+        )
+    elif estado == 'CANCELADA':
+        paso.update(
+            nivel='secondary',
+            titulo='Orden cancelada',
+            mensaje='Esta orden no continúa en el flujo operativo.',
+        )
+
+    return paso

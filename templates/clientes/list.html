@@ -8,14 +8,11 @@
     <div class="col-12">
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
         <div>
-          <h1>🏢 Gestion de Clientes</h1>
+          <h1>Gestión de Clientes</h1>
           <p class="text-muted mb-0">
-            Total filas última importación: <strong id="totalFilasUltimaImportacion">{{ ultima_importacion_total_filas|default:total_clientes }}</strong>
+            Administra la ficha de cada cliente: datos de instalación, medidor, conexión y estado operativo.
             <span class="mx-2">|</span>
-            Clientes únicos visibles: <strong id="totalClientesVisibles">{{ total_clientes }}</strong>
-            {% if ultima_importacion_total_filas %}
-              <span class="ms-2 small text-primary">(Se muestran duplicados importados en rojo cuando existen)</span>
-            {% endif %}
+            Registros visibles: <strong id="totalClientesVisibles">{{ total_clientes }}</strong>
           </p>
         </div>
         <div class="d-flex gap-2 flex-wrap">

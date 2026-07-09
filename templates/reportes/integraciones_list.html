@@ -225,6 +225,7 @@
               <th>Fecha (JSON)</th>
               <th>Estado</th>
               <th>Revisión</th>
+              <th>OT</th>
               <th>Alerta</th>
               <th class="text-end">Acciones</th>
             </tr>
@@ -272,6 +273,13 @@
                   <span class="badge bg-secondary">Descartado</span>
                 {% else %}
                   <span class="badge bg-primary">Pendiente</span>
+                {% endif %}
+              </td>
+              <td class="small">
+                {% if reg.orden_id %}
+                <a href="{% url 'orden_detalle' reg.orden_id %}" class="text-decoration-none">#{{ reg.orden_id }}</a>
+                {% else %}
+                <span class="text-muted" title="Sin OT vinculada">—</span>
                 {% endif %}
               </td>
               <td class="text-center">

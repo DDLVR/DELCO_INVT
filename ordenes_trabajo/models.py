@@ -333,6 +333,8 @@ class OrdenTrabajo(models.Model):
             self.fecha_cierre = timezone.now()
         if nuevo_estado == 'ASIGNADA' and not self.fecha_asignacion:
             self.fecha_asignacion = timezone.now()
+        if nuevo_estado == 'EN_EJECUCION' and not self.fecha_inicio_ejecucion:
+            self.fecha_inicio_ejecucion = timezone.now()
 
         if nuevo_estado in ['REASIGNADA', 'MANTENIMIENTO']:
             self.tecnico_solicito_reasignacion = True
@@ -343,6 +345,9 @@ class OrdenTrabajo(models.Model):
             self.fecha_validacion = timezone.now()
 
         self.save()
+
+        from ordenes_trabajo.sync import sincronizar_orden_completa
+        sync_result = sincronizar_orden_completa(self, usuario, nuevo_estado)
 
         register_audit_event(
             AuditEvent(
@@ -359,7 +364,8 @@ class OrdenTrabajo(models.Model):
 
         return {
             'success': True,
-            'mensaje': f'Estado actualizado a {nuevo_estado}'
+            'mensaje': f'Estado actualizado a {nuevo_estado}',
+            'sync_inventario': sync_result,
         }
 
     def puede_editar_observaciones_tecnicas(self, usuario):
