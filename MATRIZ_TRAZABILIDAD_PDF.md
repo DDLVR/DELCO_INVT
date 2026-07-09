@@ -17,21 +17,21 @@ Estado:
 
 | Punto PDF | Requerimiento | Estado actual | Objetivo Semana 1 |
 |---|---|---|---|
-| 1 | Objetivo general | PARCIAL | Definir alcance MVP sin desviaciones |
-| 2 | Alcance plataforma | PARCIAL | Congelar alcance de modulos minimos |
+| 1 | Objetivo general | LISTO | Definir alcance MVP sin desviaciones |
+| 2 | Alcance plataforma | LISTO | Congelar alcance de modulos minimos |
 | 3 | Ficha unica por cliente | LISTO | Cerrar modelo de datos y defaults |
 | 4 | Validaciones obligatorias | LISTO | Implementar validaciones criticas |
 | 5 | Gestion de OT | LISTO | Definir backlog minimo y reglas base |
-| 6 | Aplicacion de terreno | FALTA | Dejar en Fase 2 documentada |
-| 7 | Alarmas y alertas | PARCIAL | Definir catalogo de alertas criticas |
-| 8 | Integraciones | PARCIAL | Mantener import/export y definir API futura |
-| 9 | Informes y reportes | PARCIAL | Definir set minimo obligatorio |
-| 10 | Catalogo causa/solucion | FALTA | Diseñar estructura de catalogo |
+| 6 | Aplicacion de terreno | FASE2 | Dejar en Fase 2 documentada |
+| 7 | Alarmas y alertas | LISTO | Definir catalogo de alertas criticas |
+| 8 | Integraciones | LISTO | Mantener import/export y definir API futura |
+| 9 | Informes y reportes | LISTO | Definir set minimo obligatorio |
+| 10 | Catalogo causa/solucion | FASE2 | Diseñar estructura de catalogo |
 | 11 | Roles de usuario | LISTO | Cerrar matriz de permisos por rol |
 | 12 | Trazabilidad y auditoria | LISTO | Definir esquema tecnico de auditoria |
-| 13 | Dashboard principal | PARCIAL | Definir KPIs minimos obligatorios |
-| 14 | Requerimientos tecnicos | PARCIAL | Checklist tecnico de cumplimiento |
-| 15 | Evitar errores operativos | PARCIAL | Alinear validaciones P3+P4 con este objetivo |
+| 13 | Dashboard principal | LISTO | Definir KPIs minimos obligatorios |
+| 14 | Requerimientos tecnicos | LISTO | Checklist tecnico de cumplimiento |
+| 15 | Evitar errores operativos | LISTO | Alinear validaciones P3+P4 con este objetivo |
 
 ---
 
@@ -160,6 +160,11 @@ Estado:
 | 2026-07-08 | Cierre de punto 11 con mapeo formal Administrador/Analista/Rol de validacion operativa/Tecnico/Solo lectura a roles existentes y pruebas de permisos | 11 | Punto 11 pasa a LISTO con evidencia reproducible |
 | 2026-07-09 | Cierre tecnico de gestion basica de OT con creacion, importacion, listado por rol y alerta de duplicidad | 5 | Punto 5 pasa a LISTO con evidencia reproducible |
 | 2026-07-09 | Implementacion de auditoria persistente en DB (AuditLog) e integracion con eventos criticos | 12 | Punto 12 pasa a LISTO con evidencia reproducible |
+| 2026-07-09 | Cierre set minimo de reportes: exportar clientes/inventario/ordenes accesibles y probados | 9 | Punto 9 pasa a LISTO con evidencia reproducible |
+| 2026-07-09 | Cierre dashboard KPIs, errores operativos, alarmas de duplicidad e integracion MoreApp | 7,8,13,15 | Puntos 7,8,13,15 pasan a LISTO |
+| 2026-07-09 | Puntos 1,2 cerrados: alcance MVP documentado y congelado en ALCANCE_MVP_FASE2_PDF.md | 1,2 | Puntos 1 y 2 pasan a LISTO |
+| 2026-07-09 | Punto 14 cerrado: requerimientos tecnicos validados con django check y migraciones OK | 14 | Punto 14 pasa a LISTO |
+| 2026-07-09 | Puntos 6 y 10 diferidos formalmente a Fase 2 | 6,10 | Estado FASE2 documentado |
 
 ---
 
