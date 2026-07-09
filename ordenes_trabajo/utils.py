@@ -20,6 +20,7 @@ from importaciones.models import ImportacionExcel, ImportacionExcelError
 from usuarios.models import Usuario
 
 from .models import InformeCliente, OrdenTrabajo
+from .services import validate_ot_for_creation
 
 DIAS_ALERTA_DUPLICADO = 14
 
@@ -327,6 +328,7 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
 
                 with transaction.atomic():
                     orden = None
+                    ot_validation = None
                     if orden_id:
                         orden = OrdenTrabajo.objects.filter(pk=orden_id).first()
 
@@ -346,6 +348,10 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                         orden.save()
                         actualizadas += 1
                     else:
+                        ot_validation = validate_ot_for_creation(cliente, tipo_trabajo)
+                        if ot_validation.has_blocking_error:
+                            raise ValueError('; '.join(ot_validation.errors))
+
                         orden = OrdenTrabajo(
                             titulo=titulo[:200],
                             descripcion=descripcion,
@@ -366,6 +372,8 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                     aplicar_alerta_duplicado(orden)
                     if orden.alerta_duplicado:
                         alertas += 1
+                    if ot_validation and ot_validation.warnings:
+                        alertas += len(ot_validation.warnings)
 
                 exitosas += 1
             except Exception as exc:

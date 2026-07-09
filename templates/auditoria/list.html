@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+
+{% block title %}Auditoría del sistema{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <h2 class="mb-1">Trazabilidad y auditoría</h2>
+        <p class="text-muted mb-0">Historial de cambios en clientes, inventario, OT y MoreApp (PDF punto 12).</p>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Entidad</label>
+                    <input type="text" name="entity" class="form-control" value="{{ entity }}" placeholder="Cliente, OrdenTrabajo...">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Acción</label>
+                    <input type="text" name="action" class="form-control" value="{{ action }}" placeholder="OT_STATE_CHANGE...">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">ID entidad</label>
+                    <input type="text" name="entity_id" class="form-control" value="{{ entity_id }}">
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="alert alert-info">Mostrando hasta 500 registros. Total filtrado: {{ total }}.</div>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Usuario</th>
+                        <th>Acción</th>
+                        <th>Entidad</th>
+                        <th>Campo</th>
+                        <th>Valor anterior</th>
+                        <th>Valor nuevo</th>
+                        <th>Motivo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for reg in registros %}
+                    <tr>
+                        <td>{{ reg.created_at|date:"d/m/Y H:i" }}</td>
+                        <td>{{ reg.actor.nombre_interno|default:"Sistema" }}</td>
+                        <td><code>{{ reg.action }}</code></td>
+                        <td>{{ reg.entity }} #{{ reg.entity_id }}</td>
+                        <td>{{ reg.field_name|default:"-" }}</td>
+                        <td class="text-muted small">{{ reg.old_value|default:"-"|truncatechars:60 }}</td>
+                        <td class="small">{{ reg.new_value|default:"-"|truncatechars:60 }}</td>
+                        <td class="small">{{ reg.reason|default:"-"|truncatechars:80 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">Sin registros de auditoría para los filtros aplicados.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

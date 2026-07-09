@@ -504,3 +504,73 @@ class AlarmasIntegracionPunto7y8Tests(TestCase):
 		resp = self.client.post(reverse('movimientos_webhook_moreapp'), data='{}',
 		                        content_type='application/json')
 		self.assertNotEqual(resp.status_code, 500)
+
+
+@override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
+class AuditoriaExtendidaPunto12Tests(TestCase):
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='95959595-5',
+			email='admin_aud12@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Aud12',
+			nombre_interno='admin_aud12',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.auditor = Usuario.objects.create_user(
+			rut='94949494-4',
+			email='auditor_aud12@delco.cl',
+			password=self.password,
+			nombre='Auditor',
+			apellido='Aud12',
+			nombre_interno='auditor_aud12',
+			rol='AUDITOR',
+			is_active=True,
+		)
+		self.client = Client()
+
+	def test_vista_auditoria_accesible(self):
+		from django.test import RequestFactory
+		from web.views import auditoria_list_view
+
+		request = RequestFactory().get('/auditoria/')
+		request.user = self.auditor
+		response = auditoria_list_view(request)
+		self.assertEqual(response.status_code, 200)
+
+	def test_cambio_estado_ot_genera_auditoria(self):
+		from clientes.models import Cliente
+		from ordenes_trabajo.models import OrdenTrabajo
+
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-AUD-OT',
+			direccion='Dir',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='CENTRO',
+			customer_name='Cliente',
+			installation_address='Inst',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-AUD-OT',
+			activo=True,
+		)
+		orden = OrdenTrabajo.objects.create(
+			titulo='OT audit',
+			tipo_trabajo='INSTALACION',
+			cliente=cliente,
+			creada_por=self.admin,
+			estado='CREADA',
+		)
+		orden.cambiar_estado(self.admin, 'ASIGNADA')
+		self.assertTrue(
+			AuditLog.objects.filter(
+				action='OT_STATE_CHANGE',
+				entity='OrdenTrabajo',
+				entity_id=str(orden.id),
+				field_name='estado',
+			).exists()
+		)

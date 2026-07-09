@@ -15,7 +15,7 @@ El sistema permite:
 
 - Inventario: equipos, estados, custodia, edicion simple y masiva.
 - Movimientos: kardex operativo con origen/destino/responsable.
-- Ordenes de trabajo: modulo retirado de la capa web (fase de eliminación segura).
+- Ordenes de trabajo: modulo activo con validaciones PDF punto 4 y 5.
 - Reportes MoreApp: sincronizacion, detalle tecnico, revision.
 - Cola operativa: pendientes por revisar y acciones guiadas.
 

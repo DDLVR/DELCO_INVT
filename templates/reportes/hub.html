@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Reportes operativos{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <h2 class="mb-1">Reportes operativos</h2>
+        <p class="text-muted mb-0">Informes del requerimiento PDF punto 9. Exportación en Excel.</p>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Fecha desde</label>
+                    <input type="date" name="fecha_desde" class="form-control" value="{{ filters.fecha_desde|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Fecha hasta</label>
+                    <input type="date" name="fecha_hasta" class="form-control" value="{{ filters.fecha_hasta|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Técnico</label>
+                    <select name="tecnico_id" class="form-select">
+                        <option value="">Todos</option>
+                        {% for tecnico in tecnicos %}
+                        <option value="{{ tecnico.id }}" {% if filters.tecnico_id == tecnico.id|stringformat:"s" %}selected{% endif %}>
+                            {{ tecnico.nombre_interno }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Empresa</label>
+                    <input type="text" name="empresa" class="form-control" value="{{ filters.empresa|default:'' }}" placeholder="Filtrar por empresa">
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Reporte</th>
+                        <th>Descripción</th>
+                        <th>Filtros</th>
+                        <th class="text-end">Exportar</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in catalog %}
+                    <tr>
+                        <td class="fw-semibold">{{ item.title }}</td>
+                        <td class="text-muted">{{ item.description }}</td>
+                        <td>
+                            {% if item.supports_date_range %}<span class="badge bg-light text-dark border me-1">Fechas</span>{% endif %}
+                            {% if item.supports_tecnico %}<span class="badge bg-light text-dark border me-1">Técnico</span>{% endif %}
+                            {% if item.supports_empresa %}<span class="badge bg-light text-dark border me-1">Empresa</span>{% endif %}
+                        </td>
+                        <td class="text-end">
+                            <a class="btn btn-sm btn-success"
+                               href="{% url 'reportes_export' item.slug %}?fecha_desde={{ filters.fecha_desde|default:'' }}&fecha_hasta={{ filters.fecha_hasta|default:'' }}&tecnico_id={{ filters.tecnico_id|default:'' }}&empresa={{ filters.empresa|default:'' }}">
+                                Excel
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

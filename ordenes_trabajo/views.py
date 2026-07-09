@@ -15,6 +15,7 @@ import json
 
 from .models import OrdenTrabajo, AdjuntoOrden, IntegracionMoreApp, InformeCliente
 from .serializers import OrdenTrabajoSerializer
+from .services import validate_ot_for_creation
 from .utils import (
     importar_ordenes_excel,
     exportar_ordenes_excel,
@@ -27,6 +28,7 @@ from usuarios.models import Usuario
 from clientes.models import Cliente
 from inventario.models import Medidor, SimCard, Modem
 from web.decorators import admin_only
+from web.services.audit import AuditEvent, register_audit_event
 
 
 def puede_editar_observaciones_orden(orden, usuario):
@@ -136,8 +138,19 @@ def orden_crear_view(request):
             
             # Cliente
             cliente_id = request.POST.get('cliente')
+            cliente = None
             if cliente_id:
-                orden.cliente = Cliente.objects.get(id=cliente_id)
+                cliente = Cliente.objects.get(id=cliente_id)
+                orden.cliente = cliente
+
+            ot_validation = validate_ot_for_creation(
+                cliente,
+                request.POST.get('tipo_trabajo'),
+            )
+            if ot_validation.has_blocking_error:
+                for error in ot_validation.errors:
+                    messages.error(request, error)
+                return redirect('orden_crear')
 
             orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '')
             
@@ -152,7 +165,22 @@ def orden_crear_view(request):
             
             orden.creada_por = request.user
             orden.save()
+            register_audit_event(
+                AuditEvent(
+                    actor_id=getattr(request.user, 'id', None),
+                    action='OT_CREATE',
+                    entity='OrdenTrabajo',
+                    entity_id=str(orden.pk),
+                    field_name='estado',
+                    old_value=None,
+                    new_value=orden.estado,
+                    reason='Creación de orden de trabajo',
+                )
+            )
             aplicar_alerta_duplicado(orden)
+
+            for warning in ot_validation.warnings:
+                messages.warning(request, warning)
 
             if orden.alerta_duplicado:
                 messages.warning(request, f'Alerta: posible trabajo duplicado — {orden.descripcion_alerta_duplicado}')

@@ -302,3 +302,50 @@ class OrdenesBasicasWorkflowTests(TestCase):
 		qs = _queryset_ordenes_filtrado(req, aplicar_filtros=False)
 		self.assertEqual(set(qs.values_list('id', flat=True)), {orden_1.id})
 		self.assertNotIn(orden_2.id, set(qs.values_list('id', flat=True)))
+
+
+class OrdenesValidacionesPdfTests(TestCase):
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='93939393-3',
+			email='admin_val@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Val',
+			nombre_interno='admin_val',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.cliente = Cliente.objects.create(
+			numero_cliente='CLI-VAL-001',
+			direccion='Dir',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='CENTRO',
+			customer_name='Cliente Val',
+			installation_address='Inst',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-VAL-001',
+			activo=True,
+		)
+		self.client = Client()
+		self.client.login(rut=self.admin.rut, password=self.password)
+		OrdenTrabajo.objects.create(
+			titulo='OT abierta previa',
+			tipo_trabajo='INSTALACION',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			estado='ASIGNADA',
+		)
+
+	def test_bloquea_segunda_ot_abierta_mismo_cliente(self):
+		response = self.client.post(reverse('orden_crear'), {
+			'titulo': 'OT duplicada bloqueada',
+			'descripcion': 'No debe crearse',
+			'tipo_trabajo': 'MANTENCION',
+			'cliente': str(self.cliente.pk),
+		}, follow=False)
+		self.assertEqual(response.status_code, 302)
+		self.assertFalse(OrdenTrabajo.objects.filter(titulo='OT duplicada bloqueada').exists())

@@ -320,9 +320,11 @@ class OrdenTrabajo(models.Model):
                 'mensaje': f'No tienes permiso para cambiar a {nuevo_estado}'
             }
 
+        estado_anterior = self.estado
         self.estado = nuevo_estado
 
         from django.utils import timezone
+        from web.services.audit import AuditEvent, register_audit_event
 
         if nuevo_estado in ['REALIZADA', 'FINALIZADA']:
             if not self.fecha_fin_ejecucion:
@@ -341,6 +343,19 @@ class OrdenTrabajo(models.Model):
             self.fecha_validacion = timezone.now()
 
         self.save()
+
+        register_audit_event(
+            AuditEvent(
+                actor_id=getattr(usuario, 'id', None),
+                action='OT_STATE_CHANGE',
+                entity='OrdenTrabajo',
+                entity_id=str(self.pk),
+                field_name='estado',
+                old_value=estado_anterior,
+                new_value=nuevo_estado,
+                reason='Cambio de estado de orden de trabajo',
+            )
+        )
 
         return {
             'success': True,
