@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
 
 {% block title %}Cola de Pendientes Operativos{% endblock %}
 
@@ -104,7 +105,7 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if reg.estado_sincronizacion == 'PROCESADO' %}
+                                {% if reg.estado_sincronizacion|moreapp_sync_ok %}
                                     <span class="badge bg-success">Procesado</span>
                                 {% elif reg.estado_sincronizacion == 'ALERTA_REVISION' %}
                                     <span class="badge bg-warning delco-badge-warn">Alerta</span>
@@ -197,7 +198,7 @@ document.querySelectorAll('.btn-marcar').forEach(function(btn) {
         const pk = this.dataset.pk;
         const nuevoEstado = this.dataset.nuevoEstado;
 
-        fetch(`/operacional/moreapp/${pk}/marcar-revision/`, {
+        fetch('{% url "moreapp_marcar_revision" 0 %}'.replace('/0/', `/${pk}/`), {
             method: 'POST',
             headers: {
                 'X-CSRFToken': CSRFTOKEN,
@@ -206,7 +207,10 @@ document.querySelectorAll('.btn-marcar').forEach(function(btn) {
             },
             body: `estado_revision=${nuevoEstado}`,
         })
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
         .then(data => {
             if (data.success) {
                 const badge = document.getElementById(`badge-revision-${pk}`);

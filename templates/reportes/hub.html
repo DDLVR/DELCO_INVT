@@ -12,25 +12,24 @@
         </p>
     </div>
 
-    {% if not hay_actividad_operativa %}
+    {% if not mostrar_catalogo %}
     <div class="card border-0 shadow-sm delco-panel-card">
         <div class="card-body text-center py-5">
             <div class="display-6 text-muted mb-3"><i class="bi bi-inbox"></i></div>
             <h3 class="h5 mb-2">Sin reportes operativos por ahora</h3>
             <p class="text-muted mb-0 mx-auto" style="max-width: 520px;">
+                {% if hay_actividad_operativa and not hay_datos_en_reportes %}
+                Hay registros de terreno sin datos exportables aún (por ejemplo, MoreApp sin cliente vinculado en el sistema).
+                Cuando crees OT o proceses trabajos con clientes en la base, los reportes aparecerán aquí.
+                {% else %}
                 No hay informes generados. Aparecerán aquí cuando registres órdenes de trabajo
-                o proceses registros de MoreApp en terreno.
+                o proceses registros de MoreApp en terreno con clientes en el sistema.
+                {% endif %}
                 Las importaciones de clientes siguen en Gestión de Clientes y en Auditoría.
             </p>
         </div>
     </div>
     {% else %}
-    {% if total_filas_reportes == 0 %}
-    <div class="alert alert-secondary border shadow-sm mb-4">
-        Hay actividad registrada, pero ningún reporte arroja filas con los filtros actuales.
-    </div>
-    {% endif %}
-
     <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-body">
             <form method="get" class="row g-3 align-items-end">

@@ -109,3 +109,21 @@ class ReportesSoloActividadOperativaTests(TestCase):
         request.user = self.admin
         response = reportes_hub_view(request)
         self.assertIn('Base completa de clientes', response.content.decode())
+
+    def test_hub_vacio_con_moreapp_sin_cliente(self):
+        from django.test import RequestFactory
+        from ordenes_trabajo.models import IntegracionMoreApp
+        from reportes.views import reportes_hub_view
+
+        IntegracionMoreApp.objects.create(
+            moreapp_submission_id='orphan-moreapp-1',
+            estado_sincronizacion='PROCESADO',
+            datos_procesados={'cliente_codigo': '9999999'},
+            datos_recibidos={},
+        )
+        request = RequestFactory().get('/reportes/')
+        request.user = self.admin
+        response = reportes_hub_view(request)
+        content = response.content.decode()
+        self.assertIn('Sin reportes operativos por ahora', content)
+        self.assertNotIn('Base completa de clientes', content)

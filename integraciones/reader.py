@@ -625,6 +625,13 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
     if cambios:
         equipo.save(update_fields=cambios)
         # Puntos 5 y 10: tipo MOREAPP, origen_sistema MOREAPP
+        from inventario.models import MovimientoInventario
+        if MovimientoInventario.objects.filter(
+            origen_sistema='MOREAPP',
+            observacion=observacion,
+        ).exists():
+            registro.actualizo_equipos = True
+            return True
         _registrar_movimiento_equipo(
             equipo,
             tipo_equipo,
@@ -1767,6 +1774,13 @@ def reprocesar_registro_moreapp(registro) -> Dict[str, Any]:
     registro.actualizo_cliente = False
     registro.actualizo_equipos = False
 
+    from inventario.models import MovimientoInventario
+    submission_tag = f'submission: {registro.moreapp_submission_id}'
+    movimientos_antes = MovimientoInventario.objects.filter(
+        origen_sistema='MOREAPP',
+        observacion__icontains=submission_tag,
+    ).count()
+
     resumen = _aplicar_actualizaciones_operativas(
         registro=registro,
         payload=data,
@@ -1781,14 +1795,22 @@ def reprocesar_registro_moreapp(registro) -> Dict[str, Any]:
         registro.estado_sincronizacion = 'ALERTA_REVISION'
     registro.save()
 
-    movimientos = resumen.get('movimientos_generados', 0)
+    movimientos_despues = MovimientoInventario.objects.filter(
+        origen_sistema='MOREAPP',
+        observacion__icontains=submission_tag,
+    ).count()
+    movimientos = max(0, movimientos_despues - movimientos_antes)
     pendientes = len(resumen.get('pendientes_revision', []))
+    if movimientos:
+        msg = f'Reprocesado: {movimientos} movimiento(s) nuevo(s) de inventario. Pendientes: {pendientes}.'
+    else:
+        msg = (
+            'Sin movimientos nuevos: el inventario de este informe ya estaba aplicado. '
+            f'Pendientes: {pendientes}.'
+        )
     return {
         'success': movimientos > 0 or registro.actualizo_equipos or registro.actualizo_cliente,
-        'message': (
-            f'Reprocesado: {movimientos} movimiento(s) de inventario. '
-            f'Pendientes: {pendientes}.'
-        ),
+        'message': msg,
         'resumen': resumen,
     }
 

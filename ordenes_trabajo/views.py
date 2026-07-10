@@ -817,7 +817,7 @@ def moreapp_webhook_view(request):
         try:
             procesar_moreapp_submission(integracion, payload)
             
-            integracion.estado_sincronizacion = 'EXITOSO'
+            integracion.estado_sincronizacion = 'PROCESADO'
             integracion.fecha_procesamiento = timezone.now()
             integracion.save()
             

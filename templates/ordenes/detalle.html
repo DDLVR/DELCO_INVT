@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Orden #{{ orden.id }}{% endblock %}
 
@@ -169,7 +170,8 @@
                     {% endif %}
                     
                     <!-- Formulario para registrar equipos (solo técnico responsable) -->
-                    {% if es_tecnico_responsable and orden.estado in 'EN_EJECUCION,FINALIZADA' %}
+                    {% if es_tecnico_responsable %}
+                    {% if orden.estado == 'EN_EJECUCION' or orden.estado == 'FINALIZADA' %}
                     <hr>
                     <h6 class="mb-3"><i class="bi bi-plus-circle"></i> Registrar/Actualizar Equipos Usados</h6>
                     <form method="post" action="{% url 'orden_registrar_equipos' orden.id %}" id="formRegistrarEquipos">
@@ -343,6 +345,7 @@
                     });
                     </script>
                     {% endif %}
+                    {% endif %}
                 </div>
             </div>
 
@@ -488,7 +491,7 @@
                             <br><small class="text-success"><i class="bi bi-check-circle"></i> Revisado</small>
                             {% endif %}
                         </div>
-                        <span class="badge bg-{% if sync.estado_sincronizacion == 'PROCESADO' %}success{% elif sync.estado_sincronizacion == 'ERROR' or sync.estado_sincronizacion == 'ERROR_JSON' %}danger{% else %}warning text-dark{% endif %}">
+                        <span class="badge bg-{% if sync.estado_sincronizacion|moreapp_sync_ok %}success{% elif sync.estado_sincronizacion == 'ERROR' or sync.estado_sincronizacion == 'ERROR_JSON' %}danger{% else %}warning text-dark{% endif %}">
                             {{ sync.get_estado_sincronizacion_display }}
                         </span>
                     </div>
