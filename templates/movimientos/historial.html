@@ -39,7 +39,7 @@
             <li class="mb-1"><span class="text-muted">Serie:</span> <strong>{{ equipo.serie }}</strong></li>
             <li class="mb-1"><span class="text-muted">Marca:</span> {{ equipo.marca|default:"—" }}</li>
             <li class="mb-1"><span class="text-muted">Modelo:</span> {{ equipo.modelo|default:"—" }}</li>
-            <li class="mb-1"><span class="text-muted">Cliente:</span> {{ equipo.cliente.razon_social|default:"—" }}</li>
+            <li class="mb-1"><span class="text-muted">Cliente:</span> {{ equipo.cliente.customer_name|default:"—" }}</li>
             <li class="mb-1"><span class="text-muted">Estado:</span> {{ equipo.estado_inventario.nombre|default:"—" }}</li>
           </ul>
           {% elif tipo_equipo == 'SIM' %}

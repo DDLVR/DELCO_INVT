@@ -91,7 +91,7 @@
     <!-- Filtros -->
     <div class="row mb-3">
         <div class="col-12">
-            <div class="card bg-light">
+            <div class="card bg-body-secondary border-0">
                 <div class="card-body">
                     <form method="get" class="row g-2 align-items-end">
                         <input type="hidden" name="tipo" value="{{ tipo }}">
@@ -331,7 +331,7 @@
                     </table>
                 </div>
                 {% if page_obj.paginator.num_pages > 1 %}
-                <div class="card-footer bg-white">
+                <div class="card-footer bg-body">
                     <nav aria-label="Paginación inventario">
                         <ul class="pagination pagination-sm mb-0 justify-content-center">
                             {% if page_obj.has_previous %}

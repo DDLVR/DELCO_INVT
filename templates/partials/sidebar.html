@@ -1,6 +1,6 @@
-<div class="bg-white border-end h-100 p-0 d-flex flex-column">
+<div class="bg-body border-end h-100 p-0 d-flex flex-column delco-sidebar">
   <!-- Header del Sidebar -->
-  <div class="p-3 border-bottom bg-white flex-shrink-0 sidebar-head">
+  <div class="p-3 border-bottom bg-body flex-shrink-0 sidebar-head">
     <div class="fw-semibold"><i class="bi bi-clipboard2 me-1"></i> Menú</div>
     <small class="text-muted">{{ user.rol }}</small>
   </div>
@@ -57,7 +57,7 @@
     {% endif %}
 
     <!-- Reportes MoreApp -->
-    {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
+    {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if 'reportes_moreapp' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}"
          href="{% url 'reportes_moreapp_list' %}">
         <i class="bi bi-cloud-download me-2"></i> Reportes MoreApp
@@ -101,7 +101,7 @@
   </div>
 
   {% if user.is_authenticated %}
-  <div class="sidebar-footer border-top bg-white p-2 flex-shrink-0">
+  <div class="sidebar-footer border-top bg-body p-2 flex-shrink-0">
     <button
       type="button"
       class="btn btn-outline-primary w-100 mb-2 d-flex align-items-center justify-content-center gap-2 js-open-profile"
@@ -116,67 +116,3 @@
   </div>
   {% endif %}
 </div>
-
-<style>
-  .list-group-item {
-    border: none;
-    border-bottom: 1px solid #f0f0f0;
-    padding: 12px 14px;
-    color: #333;
-    text-decoration: none;
-    transition: all 0.18s ease;
-  }
-
-  .list-group-item:hover {
-    background-color: #f8f9fa;
-    padding-left: 18px;
-  }
-
-  .list-group-item.active {
-    background-color: #667eea !important;
-    border-left: 4px solid #667eea;
-    font-weight: 600;
-  }
-
-  .app-nav-link {
-    display: flex;
-    align-items: center;
-    min-height: 48px;
-    font-size: 0.98rem;
-  }
-
-  .app-nav-link i {
-    width: 1.15rem;
-    text-align: center;
-    flex: 0 0 1.15rem;
-  }
-
-  .sidebar-head {
-    position: sticky;
-    top: 0;
-    z-index: 2;
-  }
-
-  .sidebar-footer {
-    position: sticky;
-    bottom: 0;
-    z-index: 2;
-  }
-
-  @media (max-width: 991.98px) {
-    .app-nav-link {
-      min-height: 52px;
-      font-size: 1rem;
-      padding-top: 0.7rem;
-      padding-bottom: 0.7rem;
-    }
-
-    .list-group-item:hover {
-      padding-left: 14px;
-    }
-
-    .sidebar-footer .btn {
-      min-height: 42px;
-    }
-  }
-</style>

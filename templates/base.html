@@ -1,9 +1,18 @@
 {% load static %}
 <!doctype html>
-<html lang="es">
+<html lang="es" data-bs-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('delco-theme');
+        var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-bs-theme', theme);
+      } catch (e) { /* ignore */ }
+    })();
+  </script>
   <title>{% block title %}Sistema Operativo{% endblock %}</title>
 
   <!-- Favicon -->
@@ -45,21 +54,35 @@
       display: flex;
       flex: 1;
       min-height: 0;
-      min-width: 1080px;
+      min-width: 0;
     }
 
     .sidebar {
       flex-shrink: 0;
       overflow-y: auto;
-      width: 250px;
+      width: 240px;
       display: flex;
       flex-direction: column;
     }
 
     main {
       flex: 1;
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: hidden;
       overflow-y: auto;
-      padding: 20px;
+      padding: 16px;
+    }
+
+    @media (max-width: 991.98px) {
+      main {
+        padding: 12px;
+      }
+
+      .sidebar {
+        width: 220px;
+      }
     }
 
     .sidebar {
@@ -83,7 +106,7 @@
   </style>
 </head>
 
-<body class="bg-light">
+<body class="bg-body-tertiary delco-app overflow-x-hidden">
 
   <!-- Navbar -->
   {% include "partials/navbar.html" %}
@@ -391,6 +414,23 @@
 
   // Auto-mostrar mensajes Django como toasts al cargar la página
   document.addEventListener('DOMContentLoaded', function () {
+    var themeBtn = document.getElementById('delcoThemeToggle');
+    var themeIcon = document.getElementById('delcoThemeIcon');
+    function applyThemeIcon(theme) {
+      if (!themeIcon) return;
+      themeIcon.className = theme === 'dark' ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
+    }
+    applyThemeIcon(document.documentElement.getAttribute('data-bs-theme') || 'light');
+    if (themeBtn) {
+      themeBtn.addEventListener('click', function () {
+        var current = document.documentElement.getAttribute('data-bs-theme') || 'light';
+        var next = current === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-bs-theme', next);
+        try { localStorage.setItem('delco-theme', next); } catch (e) { /* ignore */ }
+        applyThemeIcon(next);
+      });
+    }
+
     var profileModalEl = document.getElementById('profileModal');
 
     function openProfileModalSafe() {

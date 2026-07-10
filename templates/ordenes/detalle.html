@@ -39,7 +39,7 @@
                     <span>{{ paso_operativo.mensaje }}</span>
                 </div>
                 {% if paso_operativo.accion_url and paso_operativo.accion_label %}
-                <a href="{{ paso_operativo.accion_url }}" class="btn btn-sm btn-outline-dark">{{ paso_operativo.accion_label }}</a>
+                <a href="{{ paso_operativo.accion_url }}" class="btn btn-sm btn-outline-secondary">{{ paso_operativo.accion_label }}</a>
                 {% endif %}
             </div>
         </div>
@@ -84,7 +84,7 @@
                             <p class="mb-0">
                                 {% if orden.cliente %}
                                     <strong>{{ orden.cliente.numero_cliente }}</strong><br>
-                                    <small>{{ orden.cliente.razon_social }}</small>
+                                    <small>{{ orden.cliente.customer_name }}</small>
                                 {% else %}
                                     <em class="text-muted">Sin cliente asignado</em>
                                 {% endif %}
@@ -115,7 +115,7 @@
                         <div class="row">
                             {% if orden.medidor %}
                             <div class="col-md-4 mb-3">
-                                <div class="border rounded p-2 bg-light">
+                                <div class="border rounded p-2 bg-body-secondary">
                                     <label class="text-muted small">📏 Medidor</label>
                                     <p class="mb-0">
                                         <strong>Serie: {{ orden.medidor.serie }}</strong><br>
@@ -131,7 +131,7 @@
                             
                             {% if orden.simcard %}
                             <div class="col-md-4 mb-3">
-                                <div class="border rounded p-2 bg-light">
+                                <div class="border rounded p-2 bg-body-secondary">
                                     <label class="text-muted small">📱 SIM Card</label>
                                     <p class="mb-0">
                                         <strong>IMEI: {{ orden.simcard.imei }}</strong><br>
@@ -147,7 +147,7 @@
                             
                             {% if orden.modem %}
                             <div class="col-md-4 mb-3">
-                                <div class="border rounded p-2 bg-light">
+                                <div class="border rounded p-2 bg-body-secondary">
                                     <label class="text-muted small">📡 Módem</label>
                                     <p class="mb-0">
                                         <strong>Serie: {{ orden.modem.serie }}</strong><br>
@@ -188,23 +188,7 @@
                                     <input type="text" id="medidor_serie" name="medidor_serie" style="display:none;">
                                      
                                     <!-- Dropdown de sugerencias -->
-                                    <ul id="medidores_list" style="
-                                        position: absolute;
-                                        top: 100%;
-                                        left: 0;
-                                        right: 0;
-                                        background: white;
-                                        border: 1px solid #ddd;
-                                        border-top: none;
-                                        max-height: 200px;
-                                        overflow-y: auto;
-                                        display: none;
-                                        list-style: none;
-                                        padding: 0;
-                                        margin: 0;
-                                        z-index: 1000;
-                                        border-radius: 0 0 4px 4px;
-                                    ">
+                                    <ul id="medidores_list" class="delco-autocomplete-list">
                                     </ul>
                                 </div>
                                 <small class="text-muted d-block mt-1">

@@ -69,7 +69,7 @@
                                 <option value="">-- Sin cliente asignado --</option>
                                 {% for cliente in clientes %}
                                 <option value="{{ cliente.id }}">
-                                    🏢 {{ cliente.numero_cliente }} - {{ cliente.razon_social|truncatewords:5 }}
+                                    🏢 {{ cliente.numero_cliente }} - {{ cliente.customer_name|truncatewords:5 }}
                                 </option>
                                 {% endfor %}
                             </select>

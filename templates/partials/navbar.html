@@ -10,7 +10,10 @@
       <ul class="navbar-nav ms-auto">
         {% if user.is_authenticated %}
           <li class="nav-item d-flex align-items-center">
-            <span class="nav-link text-light small opacity-75">{{ user.nombre_interno }} ({{ user.rol }})</span>
+            <button type="button" class="btn btn-sm btn-outline-light me-2" id="delcoThemeToggle" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema">
+              <i class="bi bi-moon-stars-fill" id="delcoThemeIcon"></i>
+            </button>
+            <span class="nav-link text-light small opacity-75 mb-0">{{ user.nombre_interno }} ({{ user.rol }})</span>
           </li>
         {% else %}
           <li class="nav-item">

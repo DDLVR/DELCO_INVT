@@ -3,7 +3,7 @@
 {% block title %}Órdenes de Trabajo{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-5">
+<div class="container-fluid py-3">
     <div class="row mb-4">
         <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
             <div>
@@ -59,7 +59,7 @@
                     Por validar <span class="badge bg-dark">{{ colas_conteo.validar }}</span>
                 </a>
             </div>
-            <p class="text-muted small mt-2 mb-0">Flujo: Delco crea → técnico ejecuta → MoreApp informa → Delco valida.</p>
+            <p class="text-muted small mt-2 mb-0">Flujo: Delco crea → técnico ejecuta → MoreApp informa → Delco valida. Para ver el detalle de una OT, haz clic en <strong>Ver</strong> o en el <strong>#ID</strong>.</p>
         </div>
     </div>
     {% endif %}
@@ -67,7 +67,7 @@
     <!-- Filtros -->
     <div class="row mb-4">
         <div class="col-12">
-            <div class="card bg-light">
+            <div class="card bg-body-secondary border-0">
                 <div class="card-body">
                     <form method="get" class="row g-3 align-items-end">
                         <div class="col-md-2">
@@ -134,8 +134,8 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="table-responsive">
-                    <table id="tablaOrdenes" class="table table-hover mb-0">
+                <div class="table-responsive delco-table-wrap">
+                    <table id="tablaOrdenes" class="table table-hover table-sm delco-table-compact mb-0">
                         <thead class="table-delco">
                             <tr>
                                 {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
@@ -143,14 +143,14 @@
                                 {% endif %}
                                 <th>ID</th>
                                 <th>Título</th>
-                                <th>Tipo</th>
+                                <th class="d-none d-lg-table-cell">Tipo</th>
                                 <th>Estado</th>
-                                <th>Cliente</th>
-                                <th>Técnico</th>
-                                <th>MoreApp</th>
+                                <th class="d-none d-md-table-cell">Cliente</th>
+                                <th class="d-none d-lg-table-cell">Técnico</th>
+                                <th class="d-none d-md-table-cell">MoreApp</th>
                                 <th>Fecha Creación</th>
-                                <th>Fecha Asignación</th>
-                                <th>Alerta</th>
+                                <th class="d-none d-xl-table-cell">Fecha Asignación</th>
+                                <th class="d-none d-lg-table-cell">Alerta</th>
                                 <th>Acciones</th>
                             </tr>
                         </thead>
@@ -160,17 +160,19 @@
                                 {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
                                 <td><input type="checkbox" class="check-orden" value="{{ orden.id }}"></td>
                                 {% endif %}
-                                <td><strong>#{{ orden.id }}</strong></td>
+                                <td>
+                                    <a href="{% url 'orden_detalle' orden.id %}" class="text-decoration-none fw-bold">#{{ orden.id }}</a>
+                                </td>
                                 <td>{{ orden.titulo }}</td>
-                                <td><span class="badge bg-secondary">{{ orden.get_tipo_trabajo_display }}</span></td>
+                                <td class="d-none d-lg-table-cell"><span class="badge bg-secondary">{{ orden.get_tipo_trabajo_display }}</span></td>
                                 <td>
                                     <span class="badge bg-{% if orden.estado == 'REALIZADA' or orden.estado == 'FINALIZADA' %}success{% elif orden.estado == 'REALIZADA_PENDIENTE_COMPROBACION' %}info{% elif orden.estado == 'CANCELADA' %}danger{% elif orden.estado == 'EN_EJECUCION' %}primary{% elif orden.estado == 'ASIGNADA' %}warning text-dark{% elif orden.estado == 'PENDIENTE_VALIDACION' %}warning{% else %}secondary{% endif %}">
                                         {{ orden.get_estado_display }}
                                     </span>
                                 </td>
-                                <td>{{ orden.cliente.numero_cliente|default:"-" }}</td>
-                                <td>{{ orden.tecnico_responsable.nombre_interno|default:"Sin asignar" }}</td>
-                                <td>
+                                <td class="d-none d-md-table-cell">{{ orden.cliente.numero_cliente|default:"-" }}</td>
+                                <td class="d-none d-lg-table-cell">{{ orden.tecnico_responsable.nombre_interno|default:"Sin asignar" }}</td>
+                                <td class="d-none d-md-table-cell">
                                     {% if orden.moreapp_count %}
                                     <span class="badge bg-success" title="Informes MoreApp vinculados">{{ orden.moreapp_count }}</span>
                                     {% elif orden.estado == 'ASIGNADA' or orden.estado == 'EN_EJECUCION' %}
@@ -180,8 +182,8 @@
                                     {% endif %}
                                 </td>
                                 <td>{{ orden.fecha_creacion|date:"d/m/Y H:i" }}</td>
-                                <td>{{ orden.fecha_asignacion|date:"d/m/Y H:i"|default:"-" }}</td>
-                                <td>
+                                <td class="d-none d-xl-table-cell">{{ orden.fecha_asignacion|date:"d/m/Y H:i"|default:"-" }}</td>
+                                <td class="d-none d-lg-table-cell">
                                     {% if orden.alerta_duplicado %}
                                     <span class="text-warning" title="{{ orden.descripcion_alerta_duplicado|escape }}">
                                         <i class="bi bi-exclamation-triangle-fill"></i>
@@ -510,7 +512,8 @@ $(document).ready(function() {
     const dtOptions = {
         language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json' },
         pageLength: 25,
-        order: [[{% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}7{% else %}6{% endif %}, 'desc']],
+        autoWidth: false,
+        order: [[{% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}8{% else %}7{% endif %}, 'desc']],
         columnDefs: [{ targets: -1, orderable: false, searchable: false }]
     };
     {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
