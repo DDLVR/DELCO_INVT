@@ -109,18 +109,32 @@ class OrdenesRolesTests(TestCase):
 
 		self.assertEqual(OrdenTrabajo.objects.count(), 0)
 
-	def test_auditor_equivale_supervisor_para_validar_estado(self):
+	def test_administrativo_puede_validar_estado(self):
 		orden = OrdenTrabajo.objects.create(
-			titulo='OT validacion auditor',
-			descripcion='Validar rol auditor como supervisor',
+			titulo='OT validacion administrativo',
+			descripcion='Validar rol administrativo',
 			tipo_trabajo='INSPECCION',
 			creada_por=self.admin,
 			estado='PENDIENTE_VALIDACION',
 		)
 
-		self.assertTrue(orden.puede_cambiar_estado(self.auditor, 'VALIDADA'))
+		self.assertTrue(orden.puede_cambiar_estado(self.administrativo, 'VALIDADA'))
+		self.assertTrue(orden.puede_cambiar_estado(self.administrativo, 'OBSERVADA'))
+		self.assertTrue(orden.puede_cambiar_estado(self.administrativo, 'ASIGNADA'))
+		self.assertTrue(orden.puede_cambiar_estado(self.admin, 'VALIDADA'))
+		self.assertTrue(orden.puede_cambiar_estado(self.admin, 'OBSERVADA'))
+
+	def test_auditor_no_puede_validar_pero_si_observar(self):
+		orden = OrdenTrabajo.objects.create(
+			titulo='OT sin validacion auditor',
+			descripcion='Auditor observa pero no valida',
+			tipo_trabajo='INSPECCION',
+			creada_por=self.admin,
+			estado='PENDIENTE_VALIDACION',
+		)
+
+		self.assertFalse(orden.puede_cambiar_estado(self.auditor, 'VALIDADA'))
 		self.assertTrue(orden.puede_cambiar_estado(self.auditor, 'OBSERVADA'))
-		self.assertFalse(orden.puede_cambiar_estado(self.auditor, 'ASIGNADA'))
 
 	def test_listado_filtra_por_rol_correctamente(self):
 		orden_t1 = OrdenTrabajo.objects.create(
@@ -271,6 +285,28 @@ class OrdenesBasicasWorkflowTests(TestCase):
 		self.assertEqual(orden.tecnico_responsable, self.tecnico)
 		self.assertEqual(orden.estado, 'ASIGNADA')
 
+	def test_reimportar_mismo_excel_no_duplica_ordenes(self):
+		archivo = self._excel_ordenes([
+			[
+				'CLI-OT-002',
+				'OT MoreApp #212 — Cliente prueba',
+				'Descripcion',
+				'MANTENCION',
+				'tecnico_ot',
+				'ASIGNADA',
+				'correlativo: 212 | formulario: Mantenimiento',
+			],
+		])
+		primera = importar_ordenes_excel(archivo, self.admin)
+		segunda = importar_ordenes_excel(archivo, self.admin)
+
+		self.assertEqual(primera.exitosas, 1)
+		self.assertEqual(segunda.exitosas, 1)
+		self.assertEqual(
+			OrdenTrabajo.objects.filter(titulo='OT MoreApp #212 — Cliente prueba').count(),
+			1,
+		)
+
 	def test_tecnico_ve_solo_sus_ordenes_en_listado(self):
 		orden_1 = OrdenTrabajo.objects.create(
 			titulo='OT Tec',
@@ -302,6 +338,97 @@ class OrdenesBasicasWorkflowTests(TestCase):
 		qs = _queryset_ordenes_filtrado(req, aplicar_filtros=False)
 		self.assertEqual(set(qs.values_list('id', flat=True)), {orden_1.id})
 		self.assertNotIn(orden_2.id, set(qs.values_list('id', flat=True)))
+
+
+@override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
+class OrdenesValidacionAdministrativoTests(TestCase):
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='94949494-4',
+			email='admin_valadm@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Val',
+			nombre_interno='admin_valadm',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.administrativo = Usuario.objects.create_user(
+			rut='95959595-5',
+			email='admvo_val@delco.cl',
+			password=self.password,
+			nombre='Admvo',
+			apellido='Val',
+			nombre_interno='admvo_val',
+			rol='ADMINISTRATIVO',
+			is_active=True,
+		)
+		self.tecnico = Usuario.objects.create_user(
+			rut='96969696-6',
+			email='tecnico_val@delco.cl',
+			password=self.password,
+			nombre='Tecnico',
+			apellido='Val',
+			nombre_interno='tecnico_val',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.cliente = Cliente.objects.create(
+			numero_cliente='CLI-VALADM-001',
+			direccion='Dir val',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='CENTRO',
+			customer_name='Cliente val',
+			installation_address='Inst val',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-VAL-001',
+			activo=True,
+		)
+		self.orden = OrdenTrabajo.objects.create(
+			titulo='OT validacion flujo',
+			descripcion='Prueba validacion administrativo',
+			tipo_trabajo='INSTALACION',
+			cliente=self.cliente,
+			tecnico_responsable=self.tecnico,
+			creada_por=self.admin,
+			estado='PENDIENTE_VALIDACION',
+		)
+		self.client = Client()
+
+	def test_validar_no_cierra_automaticamente(self):
+		self.assertTrue(self.client.login(rut=self.administrativo.rut, password=self.password))
+		response = self.client.post(
+			reverse('cambiar_estado_orden', args=[self.orden.pk]),
+			{'nuevo_estado': 'VALIDADA'},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.orden.refresh_from_db()
+		self.assertEqual(self.orden.estado, 'VALIDADA')
+		self.assertEqual(self.orden.validada_por, self.administrativo)
+
+	def test_observada_crea_orden_derivada(self):
+		self.assertTrue(self.client.login(rut=self.administrativo.rut, password=self.password))
+		response = self.client.post(
+			reverse('cambiar_estado_orden', args=[self.orden.pk]),
+			{
+				'nuevo_estado': 'OBSERVADA',
+				'observacion_validacion': 'Falta foto del medidor instalado',
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.orden.refresh_from_db()
+		self.assertEqual(self.orden.estado, 'OBSERVADA')
+		self.assertIn('Falta foto', self.orden.observacion_validacion)
+
+		derivada = self.orden.ordenes_derivadas.get()
+		self.assertEqual(derivada.orden_origen_id, self.orden.pk)
+		self.assertEqual(derivada.cliente_id, self.cliente.pk)
+		self.assertEqual(derivada.tecnico_responsable_id, self.tecnico.pk)
+		self.assertEqual(derivada.estado, 'ASIGNADA')
+		self.assertEqual(response.url, reverse('orden_detalle', args=[derivada.pk]))
 
 
 class OrdenesValidacionesPdfTests(TestCase):

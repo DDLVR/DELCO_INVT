@@ -243,7 +243,16 @@ class OrdenTrabajo(models.Model):
         null=True,
         blank=True,
         related_name='ordenes_validadas',
-        limit_choices_to={'rol': 'AUDITOR'}
+        limit_choices_to={'rol': 'ADMINISTRATIVO'}
+    )
+
+    orden_origen = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ordenes_derivadas',
+        help_text='OT anterior cuando esta orden se creó por observación en validación',
     )
 
     # Fechas
@@ -289,7 +298,12 @@ class OrdenTrabajo(models.Model):
     def puede_cambiar_estado(self, usuario, nuevo_estado):
         """Valida si usuario puede cambiar a nuevo_estado"""
 
-        # ADMIN y ADMINISTRATIVO pueden todo
+        if nuevo_estado == 'VALIDADA':
+            return usuario.rol in ['ADMIN', 'ADMINISTRATIVO']
+        if nuevo_estado == 'OBSERVADA':
+            return usuario.rol in ['ADMIN', 'ADMINISTRATIVO', 'AUDITOR']
+
+        # ADMIN y ADMINISTRATIVO pueden todo lo demás
         if usuario.rol in ['ADMIN', 'ADMINISTRATIVO']:
             return True
 
@@ -305,10 +319,6 @@ class OrdenTrabajo(models.Model):
             if nuevo_estado in ['REASIGNADA', 'MANTENIMIENTO']:
                 if not self.tecnico_solicito_reasignacion:
                     return True
-        
-        # AUDITOR cumple rol de supervisor para validacion operativa
-        if usuario.rol == 'AUDITOR' and nuevo_estado in ['VALIDADA', 'OBSERVADA']:
-            return True
 
         return False
 
@@ -341,8 +351,10 @@ class OrdenTrabajo(models.Model):
 
         if nuevo_estado == 'VALIDADA':
             self.validada_por = usuario
-            from django.utils import timezone
             self.fecha_validacion = timezone.now()
+
+        if nuevo_estado == 'OBSERVADA' and razon:
+            self.observacion_validacion = razon
 
         self.save()
 
