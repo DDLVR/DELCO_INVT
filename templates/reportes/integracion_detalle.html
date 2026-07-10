@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
 
 {% block title %}Detalle — {{ registro.nombre_formulario|default:registro.moreapp_submission_id }}{% endblock %}
 
@@ -25,7 +26,7 @@
         <i class="bi bi-exclamation-triangle-fill"></i> Alerta doble trabajo
       </span>
       {% endif %}
-      {% if registro.estado_sincronizacion == 'PROCESADO' %}
+      {% if registro.estado_sincronizacion|moreapp_sync_ok %}
         <span class="badge bg-success fs-6 align-self-center">Procesado</span>
       {% elif registro.estado_sincronizacion == 'DUPLICADO' %}
         <span class="badge bg-secondary fs-6 align-self-center">Duplicado</span>
@@ -57,6 +58,7 @@
       </form>
       {% endif %}
       {# Punto 9: acciones guiadas según estado_revision #}
+      {% if mostrar_panel_operativo %}
       {% if registro.estado_revision == 'PENDIENTE' or registro.estado_revision == 'CON_ADVERTENCIA' %}
       <form method="post"
             action="{% url 'moreapp_marcar_revision' registro.pk %}"
@@ -67,6 +69,7 @@
           <i class="bi bi-check2-circle"></i> Marcar revisado
         </button>
       </form>
+      {% endif %}
       {% endif %}
     </div>
   </div>
@@ -662,32 +665,25 @@
           {% endif %}
 
           {% if bloqueos_operativos %}
-          <h6 class="mb-2">Bloqueos operativos detectados</h6>
+          <h6 class="mb-2">Alertas y pendientes operativos</h6>
           <div class="list-group mb-3">
             {% for b in bloqueos_operativos %}
-            <div class="list-group-item list-group-item-danger">
-              <div class="fw-semibold">
-                <i class="bi bi-shield-exclamation"></i>
-                {% if b.tipo_equipo %}{{ b.tipo_equipo }}{% else %}Registro{% endif %}
-                {% if b.identificador %}- {{ b.identificador }}{% endif %}
+            <div class="list-group-item {% if b.origen == 'regla_operativa' %}list-group-item-danger{% elif b.origen == 'pendiente_revision' %}list-group-item-warning{% else %}list-group-item-secondary{% endif %}">
+              <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                <span class="badge {{ b.origen_badge }}">
+                  <i class="bi {{ b.origen_icon }}"></i> {{ b.origen_label }}
+                </span>
+                {% if b.tipo_equipo %}
+                <span class="badge delco-badge-muted">{{ b.tipo_equipo }}{% if b.identificador %}: {{ b.identificador }}{% endif %}</span>
+                {% endif %}
               </div>
-              <div class="small mb-1">{{ b.motivo }}</div>
-              <span class="badge bg-dark">Origen: {{ b.origen }}</span>
-            </div>
-            {% endfor %}
-          </div>
-          {% endif %}
-
-          {% if pendientes_revision %}
-          <h6 class="mb-2">Equipos no encontrados en base (revisión administrativa)</h6>
-          <div class="list-group">
-            {% for p in pendientes_revision %}
-            <div class="list-group-item">
-              <div class="fw-semibold">{{ p.tipo_equipo }}: {{ p.identificador }}</div>
-              <div class="text-muted mb-2">{{ p.motivo }}</div>
-              <a href="{{ p.inventario_url }}" class="btn btn-outline-primary btn-sm">
+              <div class="fw-semibold mb-1">{{ b.motivo }}</div>
+              <div class="small text-muted mb-2">{{ b.origen_detalle }}</div>
+              {% if b.inventario_url %}
+              <a href="{{ b.inventario_url }}" class="btn btn-outline-primary btn-sm">
                 <i class="bi bi-search"></i> Revisar en inventario
               </a>
+              {% endif %}
             </div>
             {% endfor %}
           </div>

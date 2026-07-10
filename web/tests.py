@@ -574,3 +574,51 @@ class AuditoriaExtendidaPunto12Tests(TestCase):
 				field_name='estado',
 			).exists()
 		)
+
+
+@override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
+class MoreAppEliminarMasivoTests(TestCase):
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='87878787-8',
+			email='admin_bulk_moreapp@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Bulk',
+			nombre_interno='admin_bulk_moreapp',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.client = Client()
+		self.client.login(rut=self.admin.rut, password=self.password)
+
+	def _crear_registro(self, submission_id):
+		from ordenes_trabajo.models import IntegracionMoreApp
+		return IntegracionMoreApp.objects.create(
+			moreapp_submission_id=submission_id,
+			estado_sincronizacion='PROCESADO',
+			datos_recibidos={},
+			datos_procesados={},
+		)
+
+	def test_admin_puede_eliminar_varios_registros(self):
+		from ordenes_trabajo.models import IntegracionMoreApp
+
+		reg1 = self._crear_registro('bulk-test-1')
+		reg2 = self._crear_registro('bulk-test-2')
+		reg3 = self._crear_registro('bulk-test-3')
+
+		response = self.client.post(reverse('reportes_moreapp_eliminar_masivo'), {
+			'ids': [str(reg1.pk), str(reg2.pk)],
+		})
+		self.assertEqual(response.status_code, 302)
+		self.assertFalse(IntegracionMoreApp.objects.filter(pk=reg1.pk).exists())
+		self.assertFalse(IntegracionMoreApp.objects.filter(pk=reg2.pk).exists())
+		self.assertTrue(IntegracionMoreApp.objects.filter(pk=reg3.pk).exists())
+
+	def test_eliminar_masivo_sin_seleccion_muestra_advertencia(self):
+		response = self.client.post(reverse('reportes_moreapp_eliminar_masivo'), {})
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response.url, reverse('reportes_moreapp_list'))

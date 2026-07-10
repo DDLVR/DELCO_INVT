@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
 
 {% block title %}Reportes — Integraciones MoreApp{% endblock %}
 
@@ -23,12 +24,14 @@
         <span>Gráficos</span>
         <i class="bi bi-chevron-down small icono-chevron" style="transition: transform 0.2s;"></i>
       </button>
+      {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
       <form method="post" action="{% url 'reportes_moreapp_sincronizar' %}" class="d-inline">
         {% csrf_token %}
         <button type="submit" class="btn btn-primary btn-sm">
           <i class="bi bi-arrow-repeat"></i> Sincronizar ahora
         </button>
       </form>
+      {% endif %}
     </div>
   </div>
 
@@ -198,11 +201,46 @@
 
   <!-- Tabla -->
   <div class="card shadow-sm delco-panel-card">
+    {% if puede_eliminar_reportes and registros %}
+    <form id="form-eliminar-masivo-moreapp" method="post" action="{% url 'reportes_moreapp_eliminar_masivo' %}">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    </form>
+    <div class="card-header bg-transparent border-bottom py-2 d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <div class="d-flex align-items-center gap-2">
+        <span id="bulk-selection-count" class="text-muted small">0 seleccionados</span>
+        <button type="button"
+                id="btn-seleccionar-pagina"
+                class="btn btn-sm btn-outline-secondary py-0">
+          Seleccionar página
+        </button>
+        <button type="button"
+                id="btn-limpiar-seleccion"
+                class="btn btn-sm btn-outline-secondary py-0 d-none">
+          Limpiar
+        </button>
+      </div>
+      <button type="button"
+              id="btn-eliminar-seleccionados"
+              class="btn btn-sm btn-outline-danger"
+              disabled>
+        <i class="bi bi-trash"></i> Eliminar seleccionados
+      </button>
+    </div>
+    {% endif %}
     <div class="card-body p-0">
       <div class="table-responsive delco-table-wrap">
         <table class="table table-hover table-sm delco-table-compact mb-0" id="tablaRegistros">
           <thead class="table-delco">
             <tr>
+              {% if puede_eliminar_reportes %}
+              <th class="text-center" style="width:2.5rem;">
+                <input type="checkbox"
+                       class="form-check-input m-0"
+                       id="chk-seleccionar-todos"
+                       title="Seleccionar todos en esta página">
+              </th>
+              {% endif %}
               <th>#</th>
               <th>Formulario</th>
               <th>Cliente</th>
@@ -220,6 +258,16 @@
             {% for reg in registros %}
             {% with d=reg.datos_procesados %}
             <tr class="{% if reg.alerta_doble_trabajo %}table-warning{% elif reg.estado_sincronizacion == 'ERROR_JSON' or reg.estado_sincronizacion == 'ERROR_LECTURA' %}table-danger{% endif %} delco-row-detalle" data-href="{% url 'reportes_moreapp_detalle' reg.pk %}">
+              {% if puede_eliminar_reportes %}
+              <td class="text-center" onclick="event.stopPropagation();">
+                <input type="checkbox"
+                       class="form-check-input m-0 chk-registro-moreapp"
+                       name="ids"
+                       value="{{ reg.pk }}"
+                       form="form-eliminar-masivo-moreapp"
+                       aria-label="Seleccionar registro #{{ reg.numero_correlativo|default:reg.pk }}">
+              </td>
+              {% endif %}
               <td class="small">
                 <a href="{% url 'reportes_moreapp_detalle' reg.pk %}" class="text-decoration-none fw-semibold">#{{ reg.numero_correlativo|default:reg.pk }}</a>
               </td>
@@ -238,7 +286,7 @@
               <td class="small">{{ reg.tecnico_visible|default:"—" }}</td>
               <td class="small text-nowrap">{{ reg.fecha_visible|date:"d/m/Y H:i" }}</td>
               <td>
-                {% if reg.estado_sincronizacion == 'PROCESADO' %}
+                {% if reg.estado_sincronizacion|moreapp_sync_ok %}
                   <span class="badge bg-success">Procesado</span>
                 {% elif reg.estado_sincronizacion == 'ALERTA_REVISION' %}
                   <span class="badge bg-warning text-dark">Alerta</span>
@@ -303,7 +351,7 @@
             {% endwith %}
             {% empty %}
             <tr>
-              <td colspan="10" class="text-center text-muted py-4">
+              <td colspan="{% if puede_eliminar_reportes %}12{% else %}11{% endif %}" class="text-center text-muted py-4">
                 <i class="bi bi-inbox fs-4 d-block mb-2"></i>
                 No hay registros{% if q or estado_actual or alerta_actual or bloqueo_actual or revision_actual or formulario_actual or kpi_actual %} con los filtros aplicados{% endif %}.
               </td>
@@ -321,6 +369,7 @@
   </div>
 
 </div>
+{% endblock %}
 
 {% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
@@ -328,6 +377,7 @@
 (function() {
   const COLORES_ESTADO = {
     'PROCESADO':       '#198754',
+    'EXITOSO':         '#198754',
     'ALERTA_REVISION': '#ffc107',
     'DUPLICADO':       '#6c757d',
     'ERROR_JSON':      '#dc3545',
@@ -337,6 +387,7 @@
   };
   const LABELS_ESTADO = {
     'PROCESADO':       'Procesado',
+    'EXITOSO':         'Procesado',
     'ALERTA_REVISION': 'Alerta revisión',
     'DUPLICADO':       'Duplicado',
     'ERROR_JSON':      'Error JSON',
@@ -540,8 +591,6 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 });
 </script>
-{% endblock %}
-
 {% if puede_eliminar_reportes %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
@@ -556,6 +605,80 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     });
   });
+
+  const formMasivo = document.getElementById('form-eliminar-masivo-moreapp');
+  const chkTodos = document.getElementById('chk-seleccionar-todos');
+  const btnEliminar = document.getElementById('btn-eliminar-seleccionados');
+  const btnSeleccionarPagina = document.getElementById('btn-seleccionar-pagina');
+  const btnLimpiar = document.getElementById('btn-limpiar-seleccion');
+  const contador = document.getElementById('bulk-selection-count');
+  const checkboxes = () => Array.from(document.querySelectorAll('.chk-registro-moreapp'));
+
+  function actualizarSeleccionMasiva() {
+    const marcados = checkboxes().filter(function(chk) { return chk.checked; });
+    const total = marcados.length;
+    if (contador) {
+      contador.textContent = total + ' seleccionado' + (total === 1 ? '' : 's');
+    }
+    if (btnEliminar) {
+      btnEliminar.disabled = total === 0;
+    }
+    if (btnLimpiar) {
+      btnLimpiar.classList.toggle('d-none', total === 0);
+    }
+    if (chkTodos) {
+      const visibles = checkboxes();
+      chkTodos.indeterminate = total > 0 && total < visibles.length;
+      chkTodos.checked = visibles.length > 0 && total === visibles.length;
+    }
+  }
+
+  checkboxes().forEach(function(chk) {
+    chk.addEventListener('change', actualizarSeleccionMasiva);
+  });
+
+  if (chkTodos) {
+    chkTodos.addEventListener('change', function() {
+      const marcar = chkTodos.checked;
+      checkboxes().forEach(function(chk) { chk.checked = marcar; });
+      actualizarSeleccionMasiva();
+    });
+  }
+
+  if (btnSeleccionarPagina) {
+    btnSeleccionarPagina.addEventListener('click', function() {
+      checkboxes().forEach(function(chk) { chk.checked = true; });
+      actualizarSeleccionMasiva();
+    });
+  }
+
+  if (btnLimpiar) {
+    btnLimpiar.addEventListener('click', function() {
+      checkboxes().forEach(function(chk) { chk.checked = false; });
+      actualizarSeleccionMasiva();
+    });
+  }
+
+  if (btnEliminar && formMasivo) {
+    btnEliminar.addEventListener('click', async function() {
+      const total = checkboxes().filter(function(chk) { return chk.checked; }).length;
+      if (total === 0) {
+        return;
+      }
+      const mensaje = '¿Eliminar ' + total + ' registro(s) MoreApp seleccionado(s)? Esta acción no se puede deshacer.';
+      const confirmado = await window.showConfirm(
+        mensaje,
+        'Eliminar seleccionados',
+        'Sí, eliminar',
+        'Cancelar'
+      );
+      if (confirmado) {
+        formMasivo.submit();
+      }
+    });
+  }
+
+  actualizarSeleccionMasiva();
 });
 </script>
 {% endif %}

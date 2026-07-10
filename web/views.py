@@ -3870,6 +3870,123 @@ def api_obtener_medidor(request, medidor_id):
         return JsonResponse({'error': str(e)}, status=400)
 
 
+_ORIGEN_BLOQUEO_META = {
+    'pendiente_revision': {
+        'label': 'Equipo no encontrado',
+        'detalle': 'El identificador del informe no existe en inventario.',
+        'badge': 'bg-warning text-dark',
+        'icon': 'bi-search',
+    },
+    'regla_operativa': {
+        'label': 'Regla operativa',
+        'detalle': 'El cambio de estado fue bloqueado por una regla de negocio.',
+        'badge': 'bg-danger',
+        'icon': 'bi-shield-exclamation',
+    },
+    'doble_trabajo': {
+        'label': 'Posible doble trabajo',
+        'detalle': 'Conflicto de instalación o actividad reciente en el mismo cliente.',
+        'badge': 'bg-warning text-dark',
+        'icon': 'bi-people',
+    },
+    'alerta_operativa': {
+        'label': 'Alerta operativa',
+        'detalle': 'Inconsistencia detectada al cruzar datos del terreno con el sistema.',
+        'badge': 'bg-secondary',
+        'icon': 'bi-exclamation-triangle',
+    },
+}
+
+
+def _url_inventario_bloqueo(tipo_equipo: str, identificador: str) -> str:
+    tipo = str(tipo_equipo or '').upper().strip()
+    ident = str(identificador or '').strip()
+    if not ident:
+        return ''
+    if tipo == 'MEDIDOR':
+        return f'/inventario/?tipo=medidor&campo=serie&q={quote_plus(ident)}'
+    if tipo == 'MODEM':
+        return f'/inventario/?tipo=modem&campo=serie&q={quote_plus(ident)}'
+    if tipo == 'SIM':
+        return f'/inventario/?tipo=sim&campo=direccion_ip&q={quote_plus(ident)}'
+    return ''
+
+
+def _clasificar_origen_alerta(motivo: str) -> str:
+    texto = str(motivo or '').lower()
+    if 'doble trabajo' in texto or 'ya instalado' in texto or 'otro cliente' in texto:
+        return 'doble_trabajo'
+    if 'no se puede instalar' in texto or 'bloqueo_operativo' in texto:
+        return 'regla_operativa'
+    if 'no encontrad' in texto:
+        return 'pendiente_revision'
+    return 'alerta_operativa'
+
+
+def _enriquecer_bloqueo_operativo(item: dict) -> dict:
+    origen = item.get('origen') or 'alerta_operativa'
+    meta = _ORIGEN_BLOQUEO_META.get(origen, _ORIGEN_BLOQUEO_META['alerta_operativa'])
+    tipo_equipo = str(item.get('tipo_equipo', '')).upper().strip()
+    identificador = str(item.get('identificador', '')).strip()
+    motivo = str(item.get('motivo', '')).strip()
+    enriquecido = {
+        **item,
+        'origen': origen,
+        'origen_label': meta['label'],
+        'origen_detalle': meta['detalle'],
+        'origen_badge': meta['badge'],
+        'origen_icon': meta['icon'],
+        'tipo_equipo': tipo_equipo,
+        'identificador': identificador,
+        'motivo': motivo,
+        'inventario_url': _url_inventario_bloqueo(tipo_equipo, identificador),
+    }
+    return enriquecido
+
+
+def _parsear_parte_descripcion_alerta(parte: str) -> dict:
+    texto = str(parte or '').strip()
+    if not texto:
+        return {}
+
+    if texto.upper().startswith('BLOQUEO_OPERATIVO |'):
+        cuerpo = texto.split('|', 1)[1].strip() if '|' in texto else texto
+        contexto = ''
+        if ' | CONTEXTO:' in cuerpo:
+            cuerpo, contexto = cuerpo.split(' | CONTEXTO:', 1)
+            contexto = contexto.strip()
+
+        motivo = cuerpo.strip()
+        tipo_equipo = ''
+        identificador = ''
+        if ':' in cuerpo:
+            cabecera, motivo = cuerpo.split(':', 1)
+            motivo = motivo.strip()
+            partes = cabecera.strip().split(None, 1)
+            if partes:
+                tipo_equipo = partes[0].upper()
+            if len(partes) > 1:
+                identificador = partes[1].strip()
+
+        item = {
+            'origen': 'regla_operativa',
+            'tipo_equipo': tipo_equipo,
+            'identificador': identificador,
+            'motivo': motivo,
+        }
+        if contexto:
+            item['motivo'] = f'{motivo} (contexto: {contexto})'
+        return item
+
+    origen = _clasificar_origen_alerta(texto)
+    return {
+        'origen': origen,
+        'tipo_equipo': '',
+        'identificador': '',
+        'motivo': texto,
+    }
+
+
 def _extraer_bloqueos_operativos_registro(registro):
     """Devuelve lista normalizada de bloqueos/alertas operativas (incluye históricos)."""
     bloqueos = []
@@ -3894,22 +4011,23 @@ def _extraer_bloqueos_operativos_registro(registro):
     descripcion = str(registro.descripcion_alerta or '').strip()
     if descripcion:
         for parte in [x.strip() for x in descripcion.split('|') if x.strip()]:
-            bloqueos.append({
-                'origen': 'descripcion_alerta',
-                'tipo_equipo': '',
-                'identificador': '',
-                'motivo': parte,
-            })
+            parsed = _parsear_parte_descripcion_alerta(parte)
+            if parsed:
+                bloqueos.append(parsed)
 
-    # Deduplicar por texto de motivo
     vistos = set()
     resultado = []
     for item in bloqueos:
-        key = item.get('motivo', '')
-        if not key or key in vistos:
+        key = (
+            item.get('origen', ''),
+            item.get('tipo_equipo', ''),
+            item.get('identificador', ''),
+            item.get('motivo', ''),
+        )
+        if not item.get('motivo') or key in vistos:
             continue
         vistos.add(key)
-        resultado.append(item)
+        resultado.append(_enriquecer_bloqueo_operativo(item))
     return resultado
 
 
@@ -4050,28 +4168,11 @@ def reportes_moreapp_detalle(request, pk):
     datos_procesados = registro.datos_procesados if isinstance(registro.datos_procesados, dict) else {}
     resultado_operativo = datos_procesados.get('resultado_operativo', {}) if isinstance(datos_procesados, dict) else {}
 
-    pendientes_revision = []
-    if isinstance(resultado_operativo, dict):
-        for pendiente in resultado_operativo.get('pendientes_revision', []):
-            tipo_equipo = str(pendiente.get('tipo_equipo', '')).upper()
-            identificador = str(pendiente.get('identificador', '')).strip()
-            motivo = str(pendiente.get('motivo', '')).strip()
-            if not identificador:
-                continue
-
-            if tipo_equipo == 'MEDIDOR':
-                inventario_url = f'/inventario/?tipo=medidor&campo=serie&q={quote_plus(identificador)}'
-            elif tipo_equipo == 'MODEM':
-                inventario_url = f'/inventario/?tipo=modem&campo=serie&q={quote_plus(identificador)}'
-            else:
-                inventario_url = f'/inventario/?tipo=sim&campo=direccion_ip&q={quote_plus(identificador)}'
-
-            pendientes_revision.append({
-                'tipo_equipo': tipo_equipo,
-                'identificador': identificador,
-                'motivo': motivo,
-                'inventario_url': inventario_url,
-            })
+    bloqueos_operativos = _extraer_bloqueos_operativos_registro(registro)
+    pendientes_revision = [
+        bloqueo for bloqueo in bloqueos_operativos
+        if bloqueo.get('origen') == 'pendiente_revision'
+    ]
 
     movimientos_operativos = list(
         MovimientoInventario.objects.filter(
@@ -4100,8 +4201,6 @@ def reportes_moreapp_detalle(request, pk):
         registro_delete_url = f'/reportes/moreapp/{registro.pk}/eliminar/'
     else:
         registro_delete_url = ''
-
-    bloqueos_operativos = _extraer_bloqueos_operativos_registro(registro)
 
     return render(request, 'reportes/integracion_detalle.html', {
         'registro': registro,
@@ -4172,6 +4271,44 @@ def reportes_moreapp_eliminar(request, pk):
     identificador = registro.moreapp_submission_id
     registro.delete()
     messages.success(request, f'Registro MoreApp {identificador} eliminado correctamente.')
+
+    destino = request.POST.get('next', '').strip()
+    if destino:
+        return redirect(destino)
+    return redirect('reportes_moreapp_list')
+
+
+@login_required
+@role_required(['ADMIN'])
+@require_POST
+def reportes_moreapp_eliminar_masivo(request):
+    """Elimina varios registros MoreApp seleccionados en la lista."""
+    from ordenes_trabajo.models import IntegracionMoreApp
+
+    ids = []
+    for raw in request.POST.getlist('ids'):
+        try:
+            ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    if not ids:
+        messages.warning(request, 'No seleccionaste ningún registro para eliminar.')
+        destino = request.POST.get('next', '').strip()
+        return redirect(destino or 'reportes_moreapp_list')
+
+    registros = IntegracionMoreApp.objects.filter(pk__in=ids)
+    total = registros.count()
+    if total == 0:
+        messages.warning(request, 'Los registros seleccionados ya no existen.')
+        destino = request.POST.get('next', '').strip()
+        return redirect(destino or 'reportes_moreapp_list')
+
+    registros.delete()
+    messages.success(
+        request,
+        f'Se eliminaron {total} registro(s) MoreApp correctamente.',
+    )
 
     destino = request.POST.get('next', '').strip()
     if destino:

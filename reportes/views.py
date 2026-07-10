@@ -32,17 +32,16 @@ def reportes_hub_view(request):
     from reportes.operational_scope import hay_actividad_operativa
 
     tiene_actividad = hay_actividad_operativa()
-    if not tiene_actividad:
-        catalog = []
-        total_filas = 0
+    hay_datos_en_reportes = total_filas > 0
 
     return render(request, 'reportes/hub.html', {
         'catalog': catalog,
         'filters': request.GET,
         'tecnicos': Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno'),
         'hay_actividad_operativa': tiene_actividad,
+        'hay_datos_en_reportes': hay_datos_en_reportes,
         'total_filas_reportes': total_filas,
-        'mostrar_catalogo': tiene_actividad and bool(catalog),
+        'mostrar_catalogo': tiene_actividad and hay_datos_en_reportes,
     })
 
 

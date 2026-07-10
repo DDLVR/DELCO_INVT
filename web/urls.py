@@ -8,6 +8,7 @@ from .views import (
     registro_errores_view, importacion_errores_view, importacion_corregir_fila_view,
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
     reportes_moreapp_list, reportes_moreapp_detalle, reportes_moreapp_sincronizar, reportes_moreapp_eliminar,
+    reportes_moreapp_eliminar_masivo,
     pendientes_operativos_view, moreapp_marcar_revision_view, moreapp_reprocesar_view,
     auditoria_list_view,
     api_buscar_medidores, api_obtener_medidor,
@@ -103,6 +104,7 @@ urlpatterns = [
     path('reportes/moreapp/<int:pk>/', reportes_moreapp_detalle, name='reportes_moreapp_detalle'),
     path('reportes/moreapp/sincronizar/', reportes_moreapp_sincronizar, name='reportes_moreapp_sincronizar'),
     path('reportes/moreapp/<int:pk>/eliminar/', reportes_moreapp_eliminar, name='reportes_moreapp_eliminar'),
+    path('reportes/moreapp/eliminar-masivo/', reportes_moreapp_eliminar_masivo, name='reportes_moreapp_eliminar_masivo'),
 
     # Vistas operativas (Puntos 2, 8, 9, 11)
     path('operacional/pendientes/', pendientes_operativos_view, name='pendientes_operativos'),
