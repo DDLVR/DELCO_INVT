@@ -1,117 +1,75 @@
 <div class="bg-body border-end h-100 p-0 d-flex flex-column delco-sidebar">
-  <!-- Header del Sidebar -->
-  <div class="p-3 border-bottom bg-body flex-shrink-0 sidebar-head">
-    <div class="fw-semibold"><i class="bi bi-clipboard2 me-1"></i> Menú</div>
-    <small class="text-muted">{{ user.rol }}</small>
-  </div>
-
-  <!-- Contenido Scrolleable -->
-  <div class="list-group list-group-flush flex-grow-1" style="overflow-y: auto;">
-    <!-- Dashboard -->
+  <div class="list-group list-group-flush flex-grow-1 delco-sidebar-nav">
     <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'dashboard' %}active bg-primary text-white{% endif %}" href="{% url 'dashboard' %}">
       <i class="bi bi-house me-2"></i> Dashboard
     </a>
 
-    <!-- Gestión de Clientes -->
+    <div class="delco-nav-section">Operación</div>
     {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR,TECNICO' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'clientes_list' or request.resolver_match.url_name == 'cliente_crear' or request.resolver_match.url_name == 'cliente_editar' %}active bg-primary text-white{% endif %}" href="{% url 'clientes_list' %}">
         <i class="bi bi-building me-2"></i>
-        {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
-          Gestión de Clientes
-        {% else %}
-          Clientes
-        {% endif %}
+        {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}Clientes{% else %}Clientes{% endif %}
       </a>
-    {% endif %}
-
-    <!-- Inventario -->
-    {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR,TECNICO' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'inventario_list' %}active bg-primary text-white{% endif %}" href="{% url 'inventario_list' %}">
         <i class="bi bi-box me-2"></i> Inventario
       </a>
-    {% endif %}
-
-    <!-- Órdenes de Trabajo -->
-    {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR,TECNICO' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name in 'ordenes_list,orden_crear,orden_detalle,cambiar_estado_orden' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
-        <i class="bi bi-clipboard-check me-2"></i> Órdenes de Trabajo
+        <i class="bi bi-clipboard-check me-2"></i> Órdenes de trabajo
       </a>
-      {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
-      <a class="list-group-item list-group-item-action app-nav-link ms-3" style="font-size: 0.88rem;" href="{% url 'orden_crear' %}">
-        <i class="bi bi-plus-circle me-2"></i> Nueva Orden
-      </a>
-      {% endif %}
     {% endif %}
-
-    <!-- Movimientos -->
     {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'movimientos_list' or request.resolver_match.url_name == 'movimientos_detalle' or request.resolver_match.url_name == 'movimientos_historial_equipo' %}active bg-primary text-white{% endif %}" href="{% url 'movimientos_list' %}">
         <i class="bi bi-arrow-left-right me-2"></i> Movimientos
       </a>
     {% endif %}
 
+    {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}
+    <div class="delco-nav-section">MoreApp y reportes</div>
     {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'pendientes_operativos' %}active bg-primary text-white{% endif %}" href="{% url 'pendientes_operativos' %}">
         <i class="bi bi-list-check me-2"></i> Pendientes MoreApp
       </a>
     {% endif %}
-
-    <!-- Reportes MoreApp -->
-    {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}
-      <a class="list-group-item list-group-item-action app-nav-link {% if 'reportes_moreapp' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}"
-         href="{% url 'reportes_moreapp_list' %}">
+      <a class="list-group-item list-group-item-action app-nav-link {% if 'reportes_moreapp' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}" href="{% url 'reportes_moreapp_list' %}">
         <i class="bi bi-cloud-download me-2"></i> Reportes MoreApp
       </a>
-    {% endif %}
-
-    {% if user.rol in 'ADMIN,ADMINISTRATIVO,AUDITOR,GERENCIA' %}
-      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'reportes_hub' %}active bg-primary text-white{% endif %}"
-         href="{% url 'reportes_hub' %}">
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'reportes_hub' %}active bg-primary text-white{% endif %}" href="{% url 'reportes_hub' %}">
         <i class="bi bi-file-earmark-bar-graph me-2"></i> Reportes operativos
       </a>
     {% endif %}
 
     {% if user.rol in 'ADMIN,ADMINISTRATIVO,AUDITOR,GERENCIA' %}
-      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'auditoria_list' %}active bg-primary text-white{% endif %}"
-         href="{% url 'auditoria_list' %}">
+    <div class="delco-nav-section">Control</div>
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'auditoria_list' %}active bg-primary text-white{% endif %}" href="{% url 'auditoria_list' %}">
         <i class="bi bi-shield-check me-2"></i> Auditoría
       </a>
-    {% endif %}
-
-    {% if user.rol in 'ADMIN,ADMINISTRATIVO,AUDITOR,GERENCIA' %}
-      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'catalogo_diagnostico_list' %}active bg-primary text-white{% endif %}"
-         href="{% url 'catalogo_diagnostico_list' %}">
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'catalogo_diagnostico_list' %}active bg-primary text-white{% endif %}" href="{% url 'catalogo_diagnostico_list' %}">
         <i class="bi bi-journal-medical me-2"></i> Catálogo diagnóstico
       </a>
     {% endif %}
 
-    <!-- Gestión de Usuarios (Solo Admin) -->
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+    <div class="delco-nav-section">Administración</div>
     {% if user.rol == 'ADMIN' %}
-      <hr class="my-2">
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'usuarios_list' %}active bg-primary text-white{% endif %}" href="{% url 'usuarios_list' %}">
         <i class="bi bi-people me-2"></i> Usuarios
       </a>
     {% endif %}
-
-    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'registro_errores' or request.resolver_match.url_name == 'importacion_errores' %}active bg-primary text-white{% endif %}" href="{% url 'registro_errores' %}">
-        <i class="bi bi-exclamation-octagon me-2"></i> Registro de Errores
+        <i class="bi bi-exclamation-octagon me-2"></i> Registro de errores
       </a>
     {% endif %}
   </div>
 
   {% if user.is_authenticated %}
   <div class="sidebar-footer border-top bg-body p-2 flex-shrink-0">
-    <button
-      type="button"
-      class="btn btn-outline-primary w-100 mb-2 d-flex align-items-center justify-content-center gap-2 js-open-profile"
-      title="Ver perfil">
+    <button type="button" class="btn btn-outline-primary w-100 mb-2 d-flex align-items-center justify-content-center gap-2 js-open-profile" title="Ver perfil">
       <i class="bi bi-person-circle"></i>
-      Ver perfil
+      <span class="delco-sidebar-label">Perfil</span>
     </button>
     <a class="btn btn-outline-danger w-100 d-flex align-items-center justify-content-center gap-2" href="{% url 'logout' %}">
       <i class="bi bi-box-arrow-right"></i>
-      Cerrar sesión
+      <span class="delco-sidebar-label">Salir</span>
     </a>
   </div>
   {% endif %}

@@ -60,9 +60,10 @@
     .sidebar {
       flex-shrink: 0;
       overflow-y: auto;
-      width: 240px;
+      width: 220px;
       display: flex;
       flex-direction: column;
+      transition: width 0.2s ease, border-color 0.2s ease;
     }
 
     main {
@@ -107,6 +108,7 @@
 </head>
 
 <body class="bg-body-tertiary delco-app overflow-x-hidden">
+<script>try{if(localStorage.getItem('delco-sidebar-collapsed')==='1'){document.body.classList.add('delco-sidebar-collapsed');}}catch(e){}</script>
 
   <!-- Navbar -->
   {% include "partials/navbar.html" %}
@@ -428,6 +430,28 @@
         document.documentElement.setAttribute('data-bs-theme', next);
         try { localStorage.setItem('delco-theme', next); } catch (e) { /* ignore */ }
         applyThemeIcon(next);
+      });
+    }
+
+    var appBody = document.body;
+    var sidebarToggle = document.getElementById('delcoSidebarToggle');
+    var sidebarToggleIcon = document.getElementById('delcoSidebarToggleIcon');
+    function applySidebarState(collapsed) {
+      if (!appBody) return;
+      appBody.classList.toggle('delco-sidebar-collapsed', collapsed);
+      if (sidebarToggleIcon) {
+        sidebarToggleIcon.className = collapsed ? 'bi bi-layout-sidebar' : 'bi bi-layout-sidebar-inset';
+      }
+    }
+    try {
+      var sidebarCollapsed = localStorage.getItem('delco-sidebar-collapsed') === '1';
+      applySidebarState(sidebarCollapsed);
+    } catch (e) { /* ignore */ }
+    if (sidebarToggle) {
+      sidebarToggle.addEventListener('click', function () {
+        var next = !appBody.classList.contains('delco-sidebar-collapsed');
+        applySidebarState(next);
+        try { localStorage.setItem('delco-sidebar-collapsed', next ? '1' : '0'); } catch (e) { /* ignore */ }
       });
     }
 

@@ -4,7 +4,7 @@
 {% block title %}Dashboard - Administrador{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-5">
+<div class="container-fluid py-4">
     {{ medidores_por_estado|json_script:"datos-medidores-estado" }}
     {{ sims_por_estado|json_script:"datos-sims-estado" }}
     {{ modems_por_estado|json_script:"datos-modems-estado" }}
@@ -14,517 +14,350 @@
     {{ moreapp_formulario_breakdown|json_script:"datos-moreapp-formulario" }}
     {{ moreapp_adv_breakdown|json_script:"datos-moreapp-adv" }}
 
-    <!-- Panel de gráficos consolidado (SUPERIOR) -->
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="card border-0 shadow-sm" style="background: linear-gradient(120deg, #0b2342 0%, #124b79 55%, #0f7173 100%);">
-                <div class="card-body text-white py-3">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-                        <div>
-                            <h4 class="mb-1"><i class="bi bi-graph-up-arrow"></i> Dashboard Gráfico Consolidado</h4>
-                            <p class="mb-0 text-white-50 small">Inventario, movimientos y MoreApp en una sola vista operativa.</p>
-                        </div>
-                        <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm btn-light">
-                            <i class="bi bi-cloud-download"></i> Ver reportes detallados
-                        </a>
-                    </div>
-                </div>
+    <!-- Encabezado: accesos rápidos + alertas de calidad -->
+    <div class="card delco-dash-hero shadow-sm mb-3">
+        <div class="card-body py-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                <h1 class="h5 mb-0"><i class="bi bi-speedometer2"></i> Dashboard</h1>
+                <span class="small delco-dash-hero-muted">Accesos rápidos</span>
             </div>
-        </div>
-    </div>
+            <div class="delco-dash-quickbar d-flex flex-wrap gap-2">
+                {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+                <a href="{% url 'clientes_list' %}" class="btn btn-sm delco-dash-btn"><i class="bi bi-building"></i> Clientes</a>
+                {% endif %}
+                <a href="{% url 'inventario_list' %}" class="btn btn-sm delco-dash-btn"><i class="bi bi-box-seam"></i> Inventario</a>
+                {% if ordenes_habilitadas %}
+                <a href="{% url 'ordenes_list' %}" class="btn btn-sm delco-dash-btn"><i class="bi bi-clipboard-check"></i> Órdenes</a>
+                <a href="{% url 'orden_crear' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-plus-circle"></i> Nueva OT</a>
+                {% endif %}
+                <a href="{% url 'movimientos_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-arrow-left-right"></i> Movimientos</a>
+                <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-cloud-download"></i> MoreApp</a>
+                <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-list-task"></i> Pendientes</a>
+                {% if rol == 'ADMIN' %}
+                <a href="{% url 'usuarios_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-people"></i> Usuarios</a>
+                {% endif %}
+            </div>
 
-    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
-    <div class="row g-3 mb-4">
-        <div class="col-md-4">
-            <a href="{% url 'clientes_list' %}" class="card border-0 shadow-sm text-decoration-none h-100">
-                <div class="card-body">
-                    <h5 class="card-title text-primary mb-2"><i class="bi bi-building"></i> Gestión de Clientes</h5>
-                    <p class="card-text text-muted small mb-0">Consultar, crear, editar e importar fichas de clientes.</p>
+            {% if clientes_ip_duplicada or clientes_medidor_duplicado or clientes_pendientes_stb or clientes_pendientes_sci4 or clientes_reincidentes or ordenes_cerradas_sin_ejecutar %}
+            <div class="delco-dash-alerts-panel delco-panel-card rounded mt-3 overflow-hidden">
+                <div class="card-header delco-card-header-warn py-2">
+                    <i class="bi bi-shield-exclamation me-1"></i> Alertas de calidad de datos
                 </div>
-            </a>
-        </div>
-        <div class="col-md-4">
-            <a href="{% url 'inventario_list' %}" class="card border-0 shadow-sm text-decoration-none h-100">
-                <div class="card-body">
-                    <h5 class="card-title text-success mb-2"><i class="bi bi-box"></i> Inventario</h5>
-                    <p class="card-text text-muted small mb-0">Medidores, SIM y módems: stock, estados y asignaciones.</p>
-                </div>
-            </a>
-        </div>
-        <div class="col-md-4">
-            <a href="{% url 'ordenes_list' %}" class="card border-0 shadow-sm text-decoration-none h-100">
-                <div class="card-body">
-                    <h5 class="card-title text-warning mb-2"><i class="bi bi-clipboard-check"></i> Órdenes de Trabajo</h5>
-                    <p class="card-text text-muted small mb-0">Crear, asignar y dar seguimiento a trabajos en terreno.</p>
-                </div>
-            </a>
-        </div>
-    </div>
-    {% endif %}
-
-    <div class="row g-3 mb-4">
-        <div class="col-lg-3 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header text-white" style="background: linear-gradient(120deg, #1f6feb 0%, #58a6ff 100%);">Inventario Medidores</div>
-                <div class="card-body py-2"><canvas id="graficaMedidoresEstado" style="max-height:190px;"></canvas></div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header text-white" style="background: linear-gradient(120deg, #0e7490 0%, #06b6d4 100%);">Inventario SIM</div>
-                <div class="card-body py-2"><canvas id="graficaSimsEstado" style="max-height:190px;"></canvas></div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header text-white" style="background: linear-gradient(120deg, #6d28d9 0%, #8b5cf6 100%);">Inventario Módems</div>
-                <div class="card-body py-2"><canvas id="graficaModemsEstado" style="max-height:190px;"></canvas></div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header text-white" style="background: linear-gradient(120deg, #0f766e 0%, #14b8a6 100%);">Movimientos por Tipo</div>
-                <div class="card-body py-2"><canvas id="graficaMovTipo" style="max-height:190px;"></canvas></div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header text-white" style="background: linear-gradient(120deg, #b45309 0%, #f59e0b 100%);">Movimientos por Origen</div>
-                <div class="card-body py-2"><canvas id="graficaMovOrigen" style="max-height:190px;"></canvas></div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header text-white" style="background: linear-gradient(120deg, #be123c 0%, #f43f5e 100%);">MoreApp Sincronización</div>
-                <div class="card-body py-2"><canvas id="graficaMoreappSinc" style="max-height:190px;"></canvas></div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header text-white" style="background: linear-gradient(120deg, #1d4ed8 0%, #3b82f6 100%);">MoreApp Formularios</div>
-                <div class="card-body py-2"><canvas id="graficaMoreappForm" style="max-height:190px;"></canvas></div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6">
-            <div class="card border-0 shadow-sm h-100">
-                <div class="card-header text-white" style="background: linear-gradient(120deg, #b91c1c 0%, #ef4444 100%);">MoreApp Advertencias</div>
-                <div class="card-body py-2"><canvas id="graficaMoreappAdv" style="max-height:190px;"></canvas></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Inventario (RESUMEN) -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <h4 class="mb-3"><i class="bi bi-box-seam"></i> Resumen de Inventario</h4>
-        </div>
-    </div>
-
-    <div class="row mb-4">
-        <!-- Medidores -->
-        <div class="col-lg-4 mb-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-header text-white" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);">
-                    <h5 class="mb-0"><i class="bi bi-speedometer"></i> Medidores</h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h3 class="mb-0">{{ total_medidores }}</h3>
-                        <span class="badge bg-primary fs-6">Total</span>
-                    </div>
-                    {% if medidores_por_estado %}
-                    <ul class="list-group list-group-flush mt-2 mb-3">
-                        {% for item in medidores_por_estado %}
-                        <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
-                            <span>{{ item.estado_inventario__nombre|default:"Sin estado" }}</span>
-                            <span class="badge bg-primary rounded-pill">{{ item.cantidad }}</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <p class="text-muted">Sin datos de estado.</p>
-                    {% endif %}
-                    <a href="{% url 'inventario_list' %}?tipo=medidor" class="btn btn-sm btn-outline-primary w-100">
-                        <i class="bi bi-eye"></i> Ver Medidores
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- SIM Cards -->
-        <div class="col-lg-4 mb-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-header text-white" style="background: linear-gradient(135deg, #2c5282 0%, #4a90e2 100%);">
-                    <h5 class="mb-0"><i class="bi bi-sim"></i> SIM Cards</h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h3 class="mb-0">{{ total_sims }}</h3>
-                        <span class="badge bg-info fs-6">Total</span>
-                    </div>
-                    {% if sims_por_estado %}
-                    <ul class="list-group list-group-flush mt-2 mb-3">
-                        {% for item in sims_por_estado %}
-                        <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
-                            <span>{{ item.estado_inventario__nombre|default:"Sin estado" }}</span>
-                            <span class="badge bg-info rounded-pill">{{ item.cantidad }}</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <p class="text-muted">Sin datos de estado.</p>
-                    {% endif %}
-                    <a href="{% url 'inventario_list' %}?tipo=sim" class="btn btn-sm btn-outline-info w-100">
-                        <i class="bi bi-eye"></i> Ver SIM Cards
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- Módems -->
-        <div class="col-lg-4 mb-3">
-            <div class="card shadow-sm h-100">
-                <div class="card-header text-white" style="background-color: #0f2438;">
-                    <h5 class="mb-0"><i class="bi bi-router"></i> Módems</h5>
-                </div>
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h3 class="mb-0">{{ total_modems }}</h3>
-                        <span class="badge bg-secondary fs-6">Total</span>
-                    </div>
-                    {% if modems_por_estado %}
-                    <ul class="list-group list-group-flush mt-2 mb-3">
-                        {% for item in modems_por_estado %}
-                        <li class="list-group-item px-0 d-flex justify-content-between align-items-center">
-                            <span>{{ item.estado_inventario__nombre|default:"Sin estado" }}</span>
-                            <span class="badge bg-secondary rounded-pill">{{ item.cantidad }}</span>
-                        </li>
-                        {% endfor %}
-                    </ul>
-                    {% else %}
-                    <p class="text-muted">Sin datos de estado.</p>
-                    {% endif %}
-                    <a href="{% url 'inventario_list' %}?tipo=modem" class="btn btn-sm btn-outline-secondary w-100">
-                        <i class="bi bi-eye"></i> Ver Módems
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- KPIs Principales (DEBAJO de Inventario) -->
-    <div class="row mb-4">
-        {% if ordenes_habilitadas %}
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card shadow-sm h-100" style="border-left: 4px solid #1a3a5c;">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-muted mb-1">Órdenes Totales</h6>
-                            <h2 class="mb-0" style="color: #1a3a5c;">{{ total_ordenes }}</h2>
-                        </div>
-                        <div style="color: #1a3a5c;">
-                            <i class="bi bi-clipboard-check" style="font-size: 2.5rem;"></i>
-                        </div>
-                    </div>
-                    <hr>
-                    <small class="text-muted"><i class="bi bi-clock"></i> {{ ordenes_pendientes }} pendientes</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card border-success shadow-sm h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-muted mb-1">Completadas</h6>
-                            <h2 class="mb-0 text-success">{{ ordenes_completadas }}</h2>
-                        </div>
-                        <div class="text-success"><i class="bi bi-check-circle" style="font-size: 2.5rem;"></i></div>
-                    </div>
-                    <hr>
-                    <small class="text-muted"><i class="bi bi-x-circle"></i> {{ ordenes_canceladas }} canceladas</small>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card border-info shadow-sm h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-muted mb-1">Usuarios Activos</h6>
-                            <h2 class="mb-0 text-info">{{ usuarios_activos }}</h2>
-                        </div>
-                        <div class="text-info"><i class="bi bi-people" style="font-size: 2.5rem;"></i></div>
-                    </div>
-                    <hr>
-                    <small class="text-muted"><i class="bi bi-wrench"></i> {{ total_tecnicos }} técnicos</small>
-                </div>
-            </div>
-        </div>
-        <div class="col-lg-3 col-md-6 mb-3">
-            <div class="card border-warning shadow-sm h-100">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="text-muted mb-1">Total Clientes</h6>
-                            <h2 class="mb-0 text-warning">{{ total_clientes }}</h2>
-                        </div>
-                        <div class="text-warning"><i class="bi bi-building" style="font-size: 2.5rem;"></i></div>
-                    </div>
-                    <hr>
-                    <small class="text-muted"><i class="bi bi-person-badge"></i> {{ total_administrativos }} admins</small>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Acciones Rápidas -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header text-white" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);">
-                    <h5 class="mb-0"><i class="bi bi-lightning-fill"></i> Acciones Rápidas</h5>
-                </div>
-                <div class="card-body">
+                <div class="card-body py-2">
                     <div class="row g-2">
-                        {% if ordenes_habilitadas and ot_colas %}
-                        <div class="col-12 mb-2">
-                            <h6 class="text-muted mb-2"><i class="bi bi-diagram-3"></i> Cola operativa de órdenes</h6>
-                            <div class="d-flex flex-wrap gap-2">
-                                <a href="{% url 'ordenes_list' %}?cola=sin_asignar" class="btn btn-sm btn-outline-warning">Sin asignar ({{ ot_colas.sin_asignar }})</a>
-                                <a href="{% url 'ordenes_list' %}?cola=esperando_moreapp" class="btn btn-sm btn-outline-primary">Sin MoreApp ({{ ot_colas.esperando_moreapp }})</a>
-                                <a href="{% url 'ordenes_list' %}?cola=post_moreapp" class="btn btn-sm btn-outline-info">Post-MoreApp ({{ ot_colas.post_moreapp }})</a>
-                                <a href="{% url 'ordenes_list' %}?cola=validar" class="btn btn-sm btn-outline-success">Por validar ({{ ot_colas.validar }})</a>
-                                {% if moreapp_sin_ot %}
-                                <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm btn-outline-danger">MoreApp sin OT ({{ moreapp_sin_ot }})</a>
-                                {% endif %}
+                        {% if clientes_ip_duplicada %}
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <div class="card border-danger delco-panel-card h-100 text-center mb-0">
+                                <div class="card-body py-2 px-1">
+                                    <div class="fs-5 fw-bold text-danger">{{ clientes_ip_duplicada }}</div>
+                                    <small class="text-muted">IP repetida</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if clientes_medidor_duplicado %}
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <div class="card border-danger delco-panel-card h-100 text-center mb-0">
+                                <div class="card-body py-2 px-1">
+                                    <div class="fs-5 fw-bold text-danger">{{ clientes_medidor_duplicado }}</div>
+                                    <small class="text-muted">Medidor repetido</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if clientes_pendientes_stb %}
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <div class="card border-warning delco-panel-card h-100 text-center mb-0">
+                                <div class="card-body py-2 px-1">
+                                    <div class="fs-5 fw-bold text-warning">{{ clientes_pendientes_stb }}</div>
+                                    <small class="text-muted">Pend. STB</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if clientes_pendientes_sci4 %}
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <div class="card border-warning delco-panel-card h-100 text-center mb-0">
+                                <div class="card-body py-2 px-1">
+                                    <div class="fs-5 fw-bold text-warning">{{ clientes_pendientes_sci4 }}</div>
+                                    <small class="text-muted">Pend. SCi4</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if clientes_reincidentes %}
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <div class="card border-warning delco-panel-card h-100 text-center mb-0">
+                                <div class="card-body py-2 px-1">
+                                    <div class="fs-5 fw-bold text-warning">{{ clientes_reincidentes }}</div>
+                                    <small class="text-muted">Reincidentes</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% if ordenes_cerradas_sin_ejecutar %}
+                        <div class="col-6 col-md-4 col-lg-2">
+                            <div class="card border-secondary delco-panel-card h-100 text-center mb-0">
+                                <div class="card-body py-2 px-1">
+                                    <div class="fs-5 fw-bold text-secondary">{{ ordenes_cerradas_sin_ejecutar }}</div>
+                                    <small class="text-muted">OT sin ejecutar</small>
+                                </div>
                             </div>
                         </div>
                         {% endif %}
                     </div>
-                    <div class="row">
-                        {% if ordenes_habilitadas %}
-                        <div class="col-md-4 mb-2">
-                            <a href="{% url 'ordenes_list' %}" class="btn w-100 text-white" style="background-color: #1a3a5c;">
-                                <i class="bi bi-clipboard-check"></i> Ver Órdenes
-                            </a>
-                        </div>
-                        {% endif %}
-                        <div class="col-md-4 mb-2">
-                            <a href="{% url 'inventario_list' %}" class="btn w-100 text-white" style="background-color: #2c5282;">
-                                <i class="bi bi-box-seam"></i> Inventario
-                            </a>
-                        </div>
-                        <div class="col-md-4 mb-2">
-                            <a href="{% url 'movimientos_list' %}" class="btn w-100 text-white" style="background-color: #0f7173;">
-                                <i class="bi bi-arrow-left-right"></i> Movimientos
-                            </a>
-                        </div>
-                        {% if rol == 'ADMIN' %}
-                        <div class="col-md-6 mb-2">
-                            <a href="{% url 'usuarios_list' %}" class="btn w-100 text-white" style="background-color: #4a90e2;">
-                                <i class="bi bi-people"></i> Gestionar Usuarios
-                            </a>
-                        </div>
-                        {% endif %}
-                        {% if rol == 'ADMIN' or rol == 'ADMINISTRATIVO' %}
-                        {% url 'clientes_list' as clientes_list_url %}
-                        {% if clientes_list_url %}
-                        <div class="col-md-6 mb-2">
-                            <a href="{{ clientes_list_url }}" class="btn btn-warning w-100">
-                                <i class="bi bi-building"></i>
-                                {% if rol == 'ADMIN' %}
-                                    Gestionar Clientes
-                                {% else %}
-                                    Ver Clientes
-                                {% endif %}
-                            </a>
-                        </div>
-                        {% endif %}
-                        {% endif %}
-                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 1. Gráficos (primero) -->
+    <div class="delco-dash-section-title"><i class="bi bi-pie-chart text-primary"></i> Gráficos</div>
+    <div class="row g-3 mb-4" id="panelGraficosDash">
+        <div class="col-lg-3 col-md-6">
+            <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
+                <div class="card-header card-header-delco py-2">Medidores por estado</div>
+                <div class="card-body py-2"><canvas id="graficaMedidoresEstado" style="max-height:200px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
+                <div class="card-header card-header-delco py-2">SIM por estado</div>
+                <div class="card-body py-2"><canvas id="graficaSimsEstado" style="max-height:200px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
+                <div class="card-header card-header-delco py-2">Módems por estado</div>
+                <div class="card-body py-2"><canvas id="graficaModemsEstado" style="max-height:200px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
+                <div class="card-header card-header-delco py-2">Movimientos por tipo</div>
+                <div class="card-body py-2"><canvas id="graficaMovTipo" style="max-height:200px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
+                <div class="card-header card-header-delco py-2">Movimientos por origen</div>
+                <div class="card-body py-2"><canvas id="graficaMovOrigen" style="max-height:200px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
+                <div class="card-header card-header-delco py-2">MoreApp sincronización</div>
+                <div class="card-body py-2"><canvas id="graficaMoreappSinc" style="max-height:200px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
+                <div class="card-header card-header-delco py-2">MoreApp formularios</div>
+                <div class="card-body py-2"><canvas id="graficaMoreappForm" style="max-height:200px;"></canvas></div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6">
+            <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
+                <div class="card-header card-header-delco py-2">MoreApp advertencias</div>
+                <div class="card-body py-2"><canvas id="graficaMoreappAdv" style="max-height:200px;"></canvas></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Indicadores clave -->
+    <div class="delco-dash-section-title"><i class="bi bi-bar-chart text-primary"></i> Indicadores clave</div>
+    <div class="row g-3 mb-4">
+        {% if ordenes_habilitadas %}
+        <div class="col-6 col-lg-3">
+            <div class="card shadow-sm delco-panel-card delco-dash-kpi h-100">
+                <div class="card-body py-3">
+                    <div class="text-muted small mb-1">Órdenes totales</div>
+                    <div class="delco-kpi-value text-primary">{{ total_ordenes }}</div>
+                    <div class="small text-muted mt-1"><i class="bi bi-clock"></i> {{ ordenes_pendientes }} pendientes</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card shadow-sm delco-panel-card h-100 border-success">
+                <div class="card-body py-3">
+                    <div class="text-muted small mb-1">Completadas</div>
+                    <div class="delco-kpi-value text-success">{{ ordenes_completadas }}</div>
+                    <div class="small text-muted mt-1"><i class="bi bi-x-circle"></i> {{ ordenes_canceladas }} canceladas</div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        <div class="col-6 col-lg-3">
+            <div class="card shadow-sm delco-panel-card h-100 border-info">
+                <div class="card-body py-3">
+                    <div class="text-muted small mb-1">Usuarios activos</div>
+                    <div class="delco-kpi-value text-info">{{ usuarios_activos }}</div>
+                    <div class="small text-muted mt-1"><i class="bi bi-wrench"></i> {{ total_tecnicos }} técnicos</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-lg-3">
+            <div class="card shadow-sm delco-panel-card h-100 border-warning">
+                <div class="card-body py-3">
+                    <div class="text-muted small mb-1">Clientes</div>
+                    <div class="delco-kpi-value text-warning">{{ total_clientes }}</div>
+                    <div class="small text-muted mt-1"><i class="bi bi-person-badge"></i> {{ total_administrativos }} admins</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Movimientos de Inventario -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <h4 class="mb-3"><i class="bi bi-arrow-left-right"></i> Movimientos de Inventario</h4>
-        </div>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card shadow-sm">
-                <div class="card-header text-white" style="background: linear-gradient(135deg, #0f7173 0%, #1a9a9e 100%);">
-                    <h5 class="mb-0"><i class="bi bi-calendar-day"></i> Resumen</h5>
-                </div>
+    <!-- 3. Operación del día -->
+    {% if ordenes_habilitadas and ot_colas or moreapp_pendientes or moreapp_con_advertencia or moreapp_envejecidos %}
+    <div class="delco-dash-section-title"><i class="bi bi-lightning-charge text-warning"></i> Operación del día</div>
+    <div class="row g-3 mb-4">
+        {% if ordenes_habilitadas and ot_colas %}
+        <div class="col-lg-{% if moreapp_pendientes or moreapp_con_advertencia or moreapp_envejecidos %}7{% else %}12{% endif %}">
+            <div class="card shadow-sm delco-panel-card h-100">
+                <div class="card-header card-header-delco py-2"><i class="bi bi-diagram-3 me-1"></i> Cola operativa de órdenes</div>
                 <div class="card-body">
-                    <div class="row text-center">
-                        <div class="col-6 mb-3">
-                            <h2 class="text-primary mb-0">{{ movimientos_hoy|default:0 }}</h2>
-                            <small class="text-muted">Movimientos hoy</small>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{% url 'ordenes_list' %}?cola=sin_asignar" class="btn btn-sm btn-outline-warning">Sin asignar <span class="badge bg-warning text-dark ms-1">{{ ot_colas.sin_asignar }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=en_campo" class="btn btn-sm btn-outline-info">En campo <span class="badge bg-info text-dark ms-1">{{ ot_colas.en_campo }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=esperando_moreapp" class="btn btn-sm btn-outline-primary">Sin MoreApp <span class="badge bg-primary ms-1">{{ ot_colas.esperando_moreapp }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=post_moreapp" class="btn btn-sm btn-outline-secondary">Post-MoreApp <span class="badge bg-secondary ms-1">{{ ot_colas.post_moreapp }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=validar" class="btn btn-sm btn-outline-success">Por validar <span class="badge bg-success ms-1">{{ ot_colas.validar }}</span></a>
+                        {% if moreapp_sin_ot %}
+                        <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm btn-outline-danger">MoreApp sin OT <span class="badge bg-danger ms-1">{{ moreapp_sin_ot }}</span></a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if moreapp_pendientes or moreapp_con_advertencia or moreapp_envejecidos %}
+        <div class="col-lg-{% if ordenes_habilitadas and ot_colas %}5{% else %}12{% endif %}">
+            <div class="card shadow-sm delco-panel-card h-100">
+                <div class="card-header delco-card-header-warn py-2"><i class="bi bi-exclamation-triangle me-1"></i> Alertas MoreApp</div>
+                <div class="card-body">
+                    <div class="d-flex flex-column gap-2">
+                        {% if moreapp_envejecidos %}
+                        <div class="d-flex justify-content-between align-items-center border rounded p-2 delco-timeline-item">
+                            <div><span class="fw-bold text-danger">{{ moreapp_envejecidos }}</span> <span class="small text-muted">sin revisar &gt; 7 días</span></div>
+                            <a href="{% url 'reportes_moreapp_list' %}?revision=PENDIENTE" class="btn btn-sm btn-outline-danger">Revisar</a>
                         </div>
-                        <div class="col-6 mb-3">
-                            <h2 class="text-info mb-0">{{ movimientos_recientes|default:0 }}</h2>
-                            <small class="text-muted">Últimos 7 días</small>
+                        {% endif %}
+                        {% if moreapp_con_advertencia %}
+                        <div class="d-flex justify-content-between align-items-center border rounded p-2 delco-timeline-item">
+                            <div><span class="fw-bold text-warning">{{ moreapp_con_advertencia }}</span> <span class="small text-muted">con advertencias</span></div>
+                            <a href="{% url 'reportes_moreapp_list' %}?revision=CON_ADVERTENCIA" class="btn btn-sm btn-outline-warning">Ver</a>
+                        </div>
+                        {% endif %}
+                        {% if moreapp_pendientes %}
+                        <div class="d-flex justify-content-between align-items-center border rounded p-2 delco-timeline-item">
+                            <div><span class="fw-bold text-primary">{{ moreapp_pendientes }}</span> <span class="small text-muted">pendientes de revisión</span></div>
+                            <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm btn-outline-primary">Cola</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- 4. Inventario y movimientos -->
+    <div class="row g-3 mb-4">
+        <div class="col-lg-8">
+            <div class="delco-dash-section-title"><i class="bi bi-box-seam"></i> Resumen de inventario</div>
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="card shadow-sm delco-panel-card h-100">
+                        <div class="card-header card-header-delco py-2"><i class="bi bi-speedometer"></i> Medidores</div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="delco-kpi-value text-primary" style="font-size:1.5rem;">{{ total_medidores }}</span>
+                                <span class="badge bg-primary">Total</span>
+                            </div>
+                            {% if medidores_por_estado %}
+                            <ul class="list-group list-group-flush small">
+                                {% for item in medidores_por_estado|slice:":3" %}
+                                <li class="list-group-item px-0 d-flex justify-content-between">
+                                    <span>{{ item.estado_inventario__nombre|default:"Sin estado" }}</span>
+                                    <span class="badge bg-primary rounded-pill">{{ item.cantidad }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+                            <a href="{% url 'inventario_list' %}?tipo=medidor" class="btn btn-sm btn-outline-primary w-100 mt-2">Ver medidores</a>
                         </div>
                     </div>
-                    <div class="d-grid">
-                        <a href="{% url 'movimientos_list' %}" class="btn btn-outline-primary">
-                            <i class="bi bi-list-ul"></i> Ver Todos los Movimientos
-                        </a>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm delco-panel-card h-100">
+                        <div class="card-header card-header-delco py-2"><i class="bi bi-sim"></i> SIM Cards</div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="delco-kpi-value text-info" style="font-size:1.5rem;">{{ total_sims }}</span>
+                                <span class="badge bg-info text-dark">Total</span>
+                            </div>
+                            {% if sims_por_estado %}
+                            <ul class="list-group list-group-flush small">
+                                {% for item in sims_por_estado|slice:":3" %}
+                                <li class="list-group-item px-0 d-flex justify-content-between">
+                                    <span>{{ item.estado_inventario__nombre|default:"Sin estado" }}</span>
+                                    <span class="badge bg-info text-dark rounded-pill">{{ item.cantidad }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+                            <a href="{% url 'inventario_list' %}?tipo=sim" class="btn btn-sm btn-outline-info w-100 mt-2">Ver SIM</a>
+                        </div>
                     </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card shadow-sm delco-panel-card h-100">
+                        <div class="card-header card-header-delco py-2"><i class="bi bi-router"></i> Módems</div>
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="delco-kpi-value text-secondary" style="font-size:1.5rem;">{{ total_modems }}</span>
+                                <span class="badge bg-secondary">Total</span>
+                            </div>
+                            {% if modems_por_estado %}
+                            <ul class="list-group list-group-flush small">
+                                {% for item in modems_por_estado|slice:":3" %}
+                                <li class="list-group-item px-0 d-flex justify-content-between">
+                                    <span>{{ item.estado_inventario__nombre|default:"Sin estado" }}</span>
+                                    <span class="badge bg-secondary rounded-pill">{{ item.cantidad }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                            {% endif %}
+                            <a href="{% url 'inventario_list' %}?tipo=modem" class="btn btn-sm btn-outline-secondary w-100 mt-2">Ver módems</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="delco-dash-section-title"><i class="bi bi-arrow-left-right"></i> Movimientos</div>
+            <div class="card shadow-sm delco-panel-card h-100">
+                <div class="card-header delco-card-header-muted py-2">Última actividad</div>
+                <div class="card-body text-center d-flex flex-column justify-content-center">
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <div class="delco-kpi-value text-primary" style="font-size:1.75rem;">{{ movimientos_hoy|default:0 }}</div>
+                            <div class="small text-muted">Hoy</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="delco-kpi-value text-info" style="font-size:1.75rem;">{{ movimientos_recientes|default:0 }}</div>
+                            <div class="small text-muted">7 días</div>
+                        </div>
+                    </div>
+                    <a href="{% url 'movimientos_list' %}" class="btn btn-outline-primary btn-sm">Ver movimientos</a>
                 </div>
             </div>
         </div>
     </div>
 
 </div>
-
-{# ---- Alertas de calidad de datos (Puntos 4, 7, 13) ---- #}
-{% if clientes_ip_duplicada or clientes_medidor_duplicado or clientes_pendientes_stb or clientes_pendientes_sci4 or clientes_reincidentes or ordenes_cerradas_sin_ejecutar %}
-<div class="container-fluid pb-4">
-    <div class="row">
-        <div class="col-12">
-            <h4 class="mb-3"><i class="bi bi-shield-exclamation text-danger"></i> Alertas operativas</h4>
-        </div>
-    </div>
-    <div class="row mb-3">
-        {% if clientes_ip_duplicada %}
-        <div class="col-md-4 col-lg-2 mb-3">
-            <div class="card border-danger shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h3 class="text-danger mb-0">{{ clientes_ip_duplicada }}</h3>
-                    <small class="text-muted">Clientes con IP repetida</small>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        {% if clientes_medidor_duplicado %}
-        <div class="col-md-4 col-lg-2 mb-3">
-            <div class="card border-danger shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h3 class="text-danger mb-0">{{ clientes_medidor_duplicado }}</h3>
-                    <small class="text-muted">Clientes con medidor repetido</small>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        {% if clientes_pendientes_stb %}
-        <div class="col-md-4 col-lg-2 mb-3">
-            <div class="card border-warning shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h3 class="text-warning mb-0">{{ clientes_pendientes_stb }}</h3>
-                    <small class="text-muted">Pendientes STB</small>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        {% if clientes_pendientes_sci4 %}
-        <div class="col-md-4 col-lg-2 mb-3">
-            <div class="card border-warning shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h3 class="text-warning mb-0">{{ clientes_pendientes_sci4 }}</h3>
-                    <small class="text-muted">Pendientes SCi4</small>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        {% if clientes_reincidentes %}
-        <div class="col-md-4 col-lg-2 mb-3">
-            <div class="card border-warning shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h3 class="text-warning mb-0">{{ clientes_reincidentes }}</h3>
-                    <small class="text-muted">Clientes reincidentes (6 meses)</small>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        {% if ordenes_cerradas_sin_ejecutar %}
-        <div class="col-md-4 col-lg-2 mb-3">
-            <div class="card border-secondary shadow-sm h-100">
-                <div class="card-body text-center">
-                    <h3 class="text-secondary mb-0">{{ ordenes_cerradas_sin_ejecutar }}</h3>
-                    <small class="text-muted">OT cerradas sin ejecutar</small>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-</div>
-{% endif %}
-
-{# ---- Panel operativo MoreApp (Puntos 6, 11) ---- #}
-{% if moreapp_pendientes or moreapp_con_advertencia or moreapp_envejecidos %}
-<div class="container-fluid pb-4">
-    <div class="row">
-        <div class="col-12">
-            <h4 class="mb-3"><i class="bi bi-exclamation-triangle-fill text-warning"></i> Alertas MoreApp</h4>
-        </div>
-    </div>
-    <div class="row mb-3">
-        {% if moreapp_envejecidos %}
-        <div class="col-md-4 mb-3">
-            <div class="card border-danger shadow-sm h-100">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <i class="bi bi-hourglass-split text-danger" style="font-size:2rem;"></i>
-                    <div>
-                        <h3 class="mb-0 text-danger">{{ moreapp_envejecidos }}</h3>
-                        <small class="text-muted">Sin revisar &gt; 7 días</small>
-                    </div>
-                </div>
-                <div class="card-footer p-2">
-                    <a href="{% url 'reportes_moreapp_list' %}?revision=PENDIENTE" class="btn btn-sm btn-danger w-100">
-                        <i class="bi bi-arrow-right-circle"></i> Revisar ahora
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        {% if moreapp_con_advertencia %}
-        <div class="col-md-4 mb-3">
-            <div class="card border-warning shadow-sm h-100">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <i class="bi bi-exclamation-circle-fill text-warning" style="font-size:2rem;"></i>
-                    <div>
-                        <h3 class="mb-0 text-warning">{{ moreapp_con_advertencia }}</h3>
-                        <small class="text-muted">Con advertencias</small>
-                    </div>
-                </div>
-                <div class="card-footer p-2">
-                    <a href="{% url 'reportes_moreapp_list' %}?revision=CON_ADVERTENCIA" class="btn btn-sm btn-warning w-100">
-                        <i class="bi bi-arrow-right-circle"></i> Ver advertencias
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        {% if moreapp_pendientes %}
-        <div class="col-md-4 mb-3">
-            <div class="card border-primary shadow-sm h-100">
-                <div class="card-body d-flex align-items-center gap-3">
-                    <i class="bi bi-clock-fill text-primary" style="font-size:2rem;"></i>
-                    <div>
-                        <h3 class="mb-0 text-primary">{{ moreapp_pendientes }}</h3>
-                        <small class="text-muted">Pendientes de revisión</small>
-                    </div>
-                </div>
-                <div class="card-footer p-2">
-                    <a href="{% url 'reportes_moreapp_list' %}?revision=PENDIENTE" class="btn btn-sm btn-primary w-100">
-                        <i class="bi bi-list-check"></i> Cola de pendientes
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-    </div>
-</div>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
@@ -533,62 +366,45 @@
 document.addEventListener('DOMContentLoaded', function() {
     const autoRefreshSeconds = Number('{{ moreapp_auto_refresh_seconds|default:300 }}') || 300;
     if (autoRefreshSeconds >= 60) {
-        window.setInterval(function() {
-            window.location.reload();
-        }, autoRefreshSeconds * 1000);
+        window.setInterval(function() { window.location.reload(); }, autoRefreshSeconds * 1000);
     }
 
     const ESTADO_SYNC_LABELS = {
-        'PROCESADO': 'Procesado',
-        'ALERTA_REVISION': 'Alerta revisión',
-        'DUPLICADO': 'Duplicado',
-        'ERROR_JSON': 'Error JSON',
-        'ERROR_LECTURA': 'Error lectura',
-        'PENDIENTE': 'Pendiente',
-        'ERROR': 'Error',
+        'PROCESADO': 'Procesado', 'ALERTA_REVISION': 'Alerta revisión', 'DUPLICADO': 'Duplicado',
+        'ERROR_JSON': 'Error JSON', 'ERROR_LECTURA': 'Error lectura', 'PENDIENTE': 'Pendiente', 'ERROR': 'Error',
     };
     const ESTADO_SYNC_COLORS = {
-        'PROCESADO': '#16a34a',
-        'ALERTA_REVISION': '#f59e0b',
-        'DUPLICADO': '#64748b',
-        'ERROR_JSON': '#dc2626',
-        'ERROR_LECTURA': '#ef4444',
-        'PENDIENTE': '#0ea5e9',
-        'ERROR': '#991b1b',
+        'PROCESADO': '#16a34a', 'ALERTA_REVISION': '#f59e0b', 'DUPLICADO': '#64748b',
+        'ERROR_JSON': '#dc2626', 'ERROR_LECTURA': '#ef4444', 'PENDIENTE': '#0ea5e9', 'ERROR': '#991b1b',
     };
     const MOV_TIPO_LABELS = {
-        'ENTREGA': 'Entrega',
-        'RECEPCION': 'Recepción',
-        'INSTALACION': 'Instalación',
-        'RETIRO': 'Retiro',
-        'DEVOLUCION': 'Devolución',
-        'ELIMINACION': 'Eliminación',
+        'ENTREGA': 'Entrega', 'RECEPCION': 'Recepción', 'INSTALACION': 'Instalación',
+        'RETIRO': 'Retiro', 'DEVOLUCION': 'Devolución', 'ELIMINACION': 'Eliminación',
     };
     const MOV_TIPO_COLORS = {
-        'ENTREGA': '#22c55e',
-        'RECEPCION': '#0ea5e9',
-        'INSTALACION': '#2563eb',
-        'RETIRO': '#f59e0b',
-        'DEVOLUCION': '#ef4444',
-        'ELIMINACION': '#7c3aed',
+        'ENTREGA': '#22c55e', 'RECEPCION': '#0ea5e9', 'INSTALACION': '#2563eb',
+        'RETIRO': '#f59e0b', 'DEVOLUCION': '#ef4444', 'ELIMINACION': '#7c3aed',
     };
     const ADV_COLORS = {
-        'Sin equipo en inventario': '#f97316',
-        'Bloqueo de regla operativa': '#e11d48',
-        'Doble trabajo / conflicto': '#facc15',
+        'Sin equipo en inventario': '#f97316', 'Bloqueo de regla operativa': '#e11d48', 'Doble trabajo / conflicto': '#facc15',
     };
     const PALETTE_BASE = ['#1d4ed8', '#0ea5e9', '#14b8a6', '#22c55e', '#eab308', '#f97316', '#ef4444', '#a855f7', '#64748b'];
 
-    function crearDonut({ canvasId, jsonId, emptyMessage, labelGetter, valueGetter, colorGetter, legendBottom=true }) {
+    function chartSliceBorderColor() {
+        return document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#1a1f26' : '#ffffff';
+    }
+    function chartLegendColor() {
+        return document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#dee2e6' : '#666666';
+    }
+
+    function crearDonut({ canvasId, jsonId, emptyMessage, labelGetter, valueGetter, colorGetter }) {
         const canvas = document.getElementById(canvasId);
         const dataScript = document.getElementById(jsonId);
-        if (!canvas || !dataScript) {
-            return;
-        }
+        if (!canvas || !dataScript) return;
 
         const raw = JSON.parse(dataScript.textContent || '[]');
         if (!raw.length) {
-            canvas.closest('.card-body').innerHTML = '<p class="text-muted text-center mb-0">' + emptyMessage + '</p>';
+            canvas.closest('.card-body').innerHTML = '<p class="text-muted text-center mb-0 small">' + emptyMessage + '</p>';
             return;
         }
 
@@ -601,7 +417,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 datasets: [{
                     data: values,
                     backgroundColor: raw.map((item, idx) => colorGetter(item, idx)),
-                    borderColor: '#ffffff',
+                    borderColor: chartSliceBorderColor(),
                     borderWidth: 2,
                     hoverOffset: 8,
                 }],
@@ -611,15 +427,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 cutout: '58%',
                 plugins: {
                     legend: {
-                        position: legendBottom ? 'bottom' : 'right',
-                        labels: { font: { size: 11 }, padding: 12, boxWidth: 14 }
+                        position: 'bottom',
+                        labels: { font: { size: 10 }, padding: 8, boxWidth: 12, color: chartLegendColor() }
                     },
                     tooltip: {
                         callbacks: {
                             label: function(ctx) {
                                 const valor = ctx.parsed || 0;
                                 const pct = total > 0 ? ((valor / total) * 100).toFixed(1) : '0.0';
-                                return '  ' + valor + ' registros (' + pct + '%)';
+                                return '  ' + valor + ' (' + pct + '%)';
                             }
                         }
                     }
@@ -628,70 +444,30 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    crearDonut({
-        canvasId: 'graficaMedidoresEstado',
-        jsonId: 'datos-medidores-estado',
-        emptyMessage: 'No hay medidores registrados',
-        labelGetter: item => item.estado_inventario__nombre || 'Sin estado',
-        valueGetter: item => item.cantidad || 0,
-        colorGetter: (_, idx) => PALETTE_BASE[idx % PALETTE_BASE.length],
-    });
-    crearDonut({
-        canvasId: 'graficaSimsEstado',
-        jsonId: 'datos-sims-estado',
-        emptyMessage: 'No hay SIM cards registradas',
-        labelGetter: item => item.estado_inventario__nombre || 'Sin estado',
-        valueGetter: item => item.cantidad || 0,
-        colorGetter: (_, idx) => PALETTE_BASE[(idx + 2) % PALETTE_BASE.length],
-    });
-    crearDonut({
-        canvasId: 'graficaModemsEstado',
-        jsonId: 'datos-modems-estado',
-        emptyMessage: 'No hay módems registrados',
-        labelGetter: item => item.estado_inventario__nombre || 'Sin estado',
-        valueGetter: item => item.cantidad || 0,
-        colorGetter: (_, idx) => PALETTE_BASE[(idx + 4) % PALETTE_BASE.length],
-    });
-    crearDonut({
-        canvasId: 'graficaMovTipo',
-        jsonId: 'datos-mov-tipo',
-        emptyMessage: 'Sin movimientos registrados',
-        labelGetter: item => MOV_TIPO_LABELS[item.tipo] || item.tipo || 'Sin tipo',
-        valueGetter: item => item.c || 0,
-        colorGetter: item => MOV_TIPO_COLORS[item.tipo] || '#64748b',
-    });
-    crearDonut({
-        canvasId: 'graficaMovOrigen',
-        jsonId: 'datos-mov-origen',
-        emptyMessage: 'Sin origen de sistema',
-        labelGetter: item => item.origen_sistema || 'No informado',
-        valueGetter: item => item.c || 0,
-        colorGetter: (_, idx) => PALETTE_BASE[(idx + 1) % PALETTE_BASE.length],
-    });
-    crearDonut({
-        canvasId: 'graficaMoreappSinc',
-        jsonId: 'datos-moreapp-sinc',
-        emptyMessage: 'Sin datos de sincronización',
-        labelGetter: item => ESTADO_SYNC_LABELS[item.estado_sincronizacion] || item.estado_sincronizacion || 'Sin estado',
-        valueGetter: item => item.c || 0,
-        colorGetter: item => ESTADO_SYNC_COLORS[item.estado_sincronizacion] || '#64748b',
-    });
-    crearDonut({
-        canvasId: 'graficaMoreappForm',
-        jsonId: 'datos-moreapp-formulario',
-        emptyMessage: 'Sin formularios sincronizados',
-        labelGetter: item => item.nombre_formulario || '(Sin nombre)',
-        valueGetter: item => item.c || 0,
-        colorGetter: (_, idx) => PALETTE_BASE[(idx + 3) % PALETTE_BASE.length],
-    });
-    crearDonut({
-        canvasId: 'graficaMoreappAdv',
-        jsonId: 'datos-moreapp-adv',
-        emptyMessage: 'Sin advertencias registradas',
-        labelGetter: item => item.categoria || 'Sin categoría',
-        valueGetter: item => item.count || 0,
-        colorGetter: item => ADV_COLORS[item.categoria] || '#64748b',
-    });
+    crearDonut({ canvasId: 'graficaMedidoresEstado', jsonId: 'datos-medidores-estado', emptyMessage: 'Sin medidores',
+        labelGetter: i => i.estado_inventario__nombre || 'Sin estado', valueGetter: i => i.cantidad || 0,
+        colorGetter: (_, idx) => PALETTE_BASE[idx % PALETTE_BASE.length] });
+    crearDonut({ canvasId: 'graficaSimsEstado', jsonId: 'datos-sims-estado', emptyMessage: 'Sin SIM',
+        labelGetter: i => i.estado_inventario__nombre || 'Sin estado', valueGetter: i => i.cantidad || 0,
+        colorGetter: (_, idx) => PALETTE_BASE[(idx + 2) % PALETTE_BASE.length] });
+    crearDonut({ canvasId: 'graficaModemsEstado', jsonId: 'datos-modems-estado', emptyMessage: 'Sin módems',
+        labelGetter: i => i.estado_inventario__nombre || 'Sin estado', valueGetter: i => i.cantidad || 0,
+        colorGetter: (_, idx) => PALETTE_BASE[(idx + 4) % PALETTE_BASE.length] });
+    crearDonut({ canvasId: 'graficaMovTipo', jsonId: 'datos-mov-tipo', emptyMessage: 'Sin movimientos',
+        labelGetter: i => MOV_TIPO_LABELS[i.tipo] || i.tipo, valueGetter: i => i.c || 0,
+        colorGetter: i => MOV_TIPO_COLORS[i.tipo] || '#64748b' });
+    crearDonut({ canvasId: 'graficaMovOrigen', jsonId: 'datos-mov-origen', emptyMessage: 'Sin origen',
+        labelGetter: i => i.origen_sistema || 'No informado', valueGetter: i => i.c || 0,
+        colorGetter: (_, idx) => PALETTE_BASE[(idx + 1) % PALETTE_BASE.length] });
+    crearDonut({ canvasId: 'graficaMoreappSinc', jsonId: 'datos-moreapp-sinc', emptyMessage: 'Sin sync',
+        labelGetter: i => ESTADO_SYNC_LABELS[i.estado_sincronizacion] || i.estado_sincronizacion,
+        valueGetter: i => i.c || 0, colorGetter: i => ESTADO_SYNC_COLORS[i.estado_sincronizacion] || '#64748b' });
+    crearDonut({ canvasId: 'graficaMoreappForm', jsonId: 'datos-moreapp-formulario', emptyMessage: 'Sin formularios',
+        labelGetter: i => i.nombre_formulario || '(Sin nombre)', valueGetter: i => i.c || 0,
+        colorGetter: (_, idx) => PALETTE_BASE[(idx + 3) % PALETTE_BASE.length] });
+    crearDonut({ canvasId: 'graficaMoreappAdv', jsonId: 'datos-moreapp-adv', emptyMessage: 'Sin advertencias',
+        labelGetter: i => i.categoria || 'Sin categoría', valueGetter: i => i.count || 0,
+        colorGetter: i => ADV_COLORS[i.categoria] || '#64748b' });
 });
 </script>
 {% endblock %}
