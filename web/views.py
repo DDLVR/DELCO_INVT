@@ -3218,7 +3218,7 @@ def movimientos_detalle_view(request, movimiento_id):
                 'tipo': 'Medidor',
                 'identificador': item.medidor.serie,
                 'descripcion': ' | '.join(filter(None, [item.medidor.marca, item.medidor.caja, item.medidor.get_tipo_medidor_display()])),
-                'cliente': getattr(getattr(item.medidor, 'cliente', None), 'razon_social', '') or getattr(getattr(item.medidor, 'cliente', None), 'numero_cliente', '') or '—',
+                'cliente': getattr(getattr(item.medidor, 'cliente', None), 'customer_name', '') or getattr(getattr(item.medidor, 'cliente', None), 'numero_cliente', '') or '—',
                 'estado': getattr(getattr(item.medidor, 'estado_inventario', None), 'nombre', '') or '—',
                 'historial_tipo': 'MEDIDOR',
                 'historial_id': item.medidor.id,
@@ -3229,7 +3229,7 @@ def movimientos_detalle_view(request, movimiento_id):
                 'tipo': 'SIM',
                 'identificador': item.simcard.imei or item.simcard.abonado or str(item.simcard.id),
                 'descripcion': ' | '.join(filter(None, [item.simcard.operador, item.simcard.abonado, item.simcard.direccion_ip])),
-                'cliente': getattr(getattr(item.simcard, 'cliente', None), 'razon_social', '') or getattr(getattr(item.simcard, 'cliente', None), 'numero_cliente', '') or '—',
+                'cliente': getattr(getattr(item.simcard, 'cliente', None), 'customer_name', '') or getattr(getattr(item.simcard, 'cliente', None), 'numero_cliente', '') or '—',
                 'estado': getattr(getattr(item.simcard, 'estado_inventario', None), 'nombre', '') or '—',
                 'historial_tipo': 'SIM',
                 'historial_id': item.simcard.id,
@@ -3240,7 +3240,7 @@ def movimientos_detalle_view(request, movimiento_id):
                 'tipo': 'Módem',
                 'identificador': item.modem.serie or item.modem.imei or str(item.modem.id),
                 'descripcion': ' | '.join(filter(None, [item.modem.marca, item.modem.modelo, item.modem.imei])),
-                'cliente': getattr(getattr(item.modem, 'cliente', None), 'razon_social', '') or getattr(getattr(item.modem, 'cliente', None), 'numero_cliente', '') or '—',
+                'cliente': getattr(getattr(item.modem, 'cliente', None), 'customer_name', '') or getattr(getattr(item.modem, 'cliente', None), 'numero_cliente', '') or '—',
                 'estado': getattr(getattr(item.modem, 'estado_inventario', None), 'nombre', '') or '—',
                 'historial_tipo': 'MODEM',
                 'historial_id': item.modem.id,
@@ -3667,7 +3667,7 @@ def usuario_eliminar_view(request, pk):
 # REPORTES — Integraciones MoreApp
 # ─────────────────────────────────────────────────────────────────────────────
 
-ROLES_REPORTES_LECTURA = ('ADMIN', 'ADMINISTRATIVO', 'AUDITOR')
+ROLES_REPORTES_LECTURA = ('ADMIN', 'ADMINISTRATIVO', 'AUDITOR', 'GERENCIA')
 ROLES_REPORTES_GESTION = ('ADMIN', 'ADMINISTRATIVO')
 
 
