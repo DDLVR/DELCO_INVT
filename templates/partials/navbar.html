@@ -1,12 +1,16 @@
 {% load static %}
 <nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-  <div class="container-fluid">
+  <div class="container-fluid d-flex align-items-center">
     <a class="navbar-brand fw-semibold d-flex align-items-center" href="{% url 'dashboard' %}" style="gap: 10px;">
       <img src="{% static 'img/delco.png' %}" alt="Delco" style="height: 35px; width: auto;">
       <span>DelcoLtda</span>
     </a>
 
-    <div class="navbar-collapse d-block" id="navbarTop">
+    <button type="button" class="btn btn-sm btn-outline-light me-2" id="delcoSidebarToggle" title="Mostrar u ocultar menú" aria-label="Menú">
+      <i class="bi bi-layout-sidebar-inset" id="delcoSidebarToggleIcon"></i>
+    </button>
+
+    <div class="navbar-collapse d-block flex-grow-1" id="navbarTop">
       <ul class="navbar-nav ms-auto">
         {% if user.is_authenticated %}
           <li class="nav-item d-flex align-items-center">

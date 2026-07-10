@@ -19,19 +19,24 @@
   <!-- Filtro select por rol -->
   <div class="row mb-3">
     <div class="col-md-4">
-      <label for="filtro-rol" class="form-label">Filtrar por rol:</label>
-      <select id="filtro-rol" class="form-select">
-        <option value="">Todos</option>
-        {% for rol in roles_order %}
-          <option value="{{ rol }}">{{ rol }}</option>
-        {% endfor %}
-      </select>
+      <div class="card delco-form-section border-0">
+        <div class="card-body py-3">
+          <label for="filtro-rol" class="form-label mb-2">Filtrar por rol:</label>
+          <select id="filtro-rol" class="form-select">
+            <option value="">Todos</option>
+            {% for rol in roles_order %}
+              <option value="{{ rol }}">{{ rol }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="table-responsive">
-    <table class="table table-hover">
-      <thead class="table-light">
+  <div class="card shadow-sm delco-panel-card">
+    <div class="table-responsive delco-table-wrap">
+    <table class="table table-hover table-sm delco-table-compact mb-0">
+      <thead class="table-delco">
         <tr>
           <th>#</th>
           <th>RUT</th>
@@ -130,6 +135,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </div>
 </div>
 
@@ -151,31 +157,6 @@
     </div>
   </div>
 
-
-<style>
-  .nav-link {
-    color: #666 !important;
-    border-bottom: 3px solid transparent;
-  }
-  
-  .nav-link.active {
-    color: #667eea !important;
-    border-bottom: 3px solid #667eea !important;
-    background: transparent !important;
-  }
-
-  .table {
-    margin-bottom: 0;
-  }
-
-  .table tbody tr:hover {
-    background-color: #f8f9fa;
-  }
-
-  .badge {
-    font-size: 12px;
-  }
-</style>
 
 <script>
 // Filtro select por rol y popups de edición/borrado

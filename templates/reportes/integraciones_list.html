@@ -39,7 +39,7 @@
   <div class="collapse mb-3" id="panelGraficos">
     <div class="row g-2">
       <div class="col-md-4">
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm delco-panel-card">
           <div class="card-header bg-transparent border-bottom py-1 small fw-semibold">
             <i class="bi bi-pie-chart-fill me-1 text-primary"></i> Estado de sincronización
           </div>
@@ -49,7 +49,7 @@
         </div>
       </div>
       <div class="col-md-4">
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm delco-panel-card">
           <div class="card-header bg-transparent border-bottom py-1 small fw-semibold">
             <i class="bi bi-pie-chart-fill me-1 text-success"></i> Tipo de formulario / trabajo
           </div>
@@ -59,7 +59,7 @@
         </div>
       </div>
       <div class="col-md-4">
-        <div class="card border-0 shadow-sm">
+        <div class="card border-0 shadow-sm delco-panel-card">
           <div class="card-header bg-transparent border-bottom py-1 small fw-semibold">
             <i class="bi bi-pie-chart-fill me-1 text-warning"></i> Desglose de advertencias
           </div>
@@ -72,24 +72,10 @@
   </div>
 
   <!-- KPIs -->
-  <style>
-    .card-kpi-reporte {
-      transition: transform .15s ease, box-shadow .15s ease;
-      cursor: pointer;
-    }
-    .card-kpi-reporte:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 .5rem 1rem rgba(0, 0, 0, .08) !important;
-    }
-    .ring-active {
-      outline: 2px solid #0d6efd;
-      outline-offset: 1px;
-    }
-  </style>
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
       <a href="{% url 'reportes_moreapp_list' %}" class="text-decoration-none text-reset d-block h-100">
-      <div class="card card-kpi-reporte border-0 shadow-sm h-100 {% if not kpi_actual %}ring-active{% endif %}">
+      <div class="card card-kpi-reporte border-0 shadow-sm h-100 delco-panel-card {% if not kpi_actual %}ring-active{% endif %}">
         <div class="card-body text-center">
           <div class="fs-2 fw-bold text-primary">{{ total }}</div>
           <div class="text-muted small">Total registros</div>
@@ -99,7 +85,7 @@
     </div>
     <div class="col-6 col-md-3">
       <a href="{% url 'reportes_moreapp_list' %}?kpi=adv_equipo" class="text-decoration-none text-reset d-block h-100">
-      <div class="card card-kpi-reporte border-0 shadow-sm h-100 {% if kpi_actual == 'adv_equipo' %}ring-active{% endif %}">
+      <div class="card card-kpi-reporte border-0 shadow-sm h-100 delco-panel-card {% if kpi_actual == 'adv_equipo' %}ring-active{% endif %}">
         <div class="card-body text-center">
           <div class="fs-2 fw-bold text-warning">{{ adv_counts.equipo }}</div>
           <div class="text-muted small">Sin equipo en inventario</div>
@@ -109,7 +95,7 @@
     </div>
     <div class="col-6 col-md-3">
       <a href="{% url 'reportes_moreapp_list' %}?kpi=adv_regla" class="text-decoration-none text-reset d-block h-100">
-      <div class="card card-kpi-reporte border-0 shadow-sm h-100 {% if kpi_actual == 'adv_regla' %}ring-active{% endif %}">
+      <div class="card card-kpi-reporte border-0 shadow-sm h-100 delco-panel-card {% if kpi_actual == 'adv_regla' %}ring-active{% endif %}">
         <div class="card-body text-center">
           <div class="fs-2 fw-bold text-danger">{{ adv_counts.regla }}</div>
           <div class="text-muted small">Bloqueo de regla operativa</div>
@@ -119,9 +105,9 @@
     </div>
     <div class="col-6 col-md-3">
       <a href="{% url 'reportes_moreapp_list' %}?kpi=adv_doble" class="text-decoration-none text-reset d-block h-100">
-      <div class="card card-kpi-reporte border-0 shadow-sm h-100 {% if kpi_actual == 'adv_doble' %}ring-active{% endif %}">
+      <div class="card card-kpi-reporte border-0 shadow-sm h-100 delco-panel-card {% if kpi_actual == 'adv_doble' %}ring-active{% endif %}">
         <div class="card-body text-center">
-          <div class="fs-2 fw-bold text-dark">{{ adv_counts.doble }}</div>
+          <div class="fs-2 fw-bold text-body">{{ adv_counts.doble }}</div>
           <div class="text-muted small">Doble trabajo / conflicto</div>
         </div>
       </div>
@@ -130,7 +116,7 @@
   </div>
 
   <!-- Filtros -->
-  <div class="card shadow-sm mb-4">
+  <div class="card shadow-sm mb-4 delco-panel-card">
     <div class="card-body">
       <div class="mb-3">
         <label class="form-label mb-2 small fw-semibold">Formularios</label>
@@ -152,7 +138,7 @@
                   value="{{ f.nombre_formulario }}"
                   class="btn btn-sm {% if formulario_actual == f.nombre_formulario %}btn-primary{% else %}btn-outline-primary{% endif %}">
             {{ f.nombre_formulario|default:"(Sin nombre)" }}
-            <span class="badge bg-light text-dark ms-1">{{ f.total }}</span>
+            <span class="badge delco-badge-muted ms-1">{{ f.total }}</span>
           </button>
           {% endfor %}
         </form>
@@ -211,7 +197,7 @@
   </div>
 
   <!-- Tabla -->
-  <div class="card shadow-sm">
+  <div class="card shadow-sm delco-panel-card">
     <div class="card-body p-0">
       <div class="table-responsive delco-table-wrap">
         <table class="table table-hover table-sm delco-table-compact mb-0" id="tablaRegistros">
@@ -265,7 +251,7 @@
                 {% elif reg.estado_sincronizacion == 'PENDIENTE' %}
                   <span class="badge bg-info text-dark">Pendiente</span>
                 {% else %}
-                  <span class="badge bg-light text-dark">{{ reg.estado_sincronizacion }}</span>
+                  <span class="badge delco-badge-muted">{{ reg.estado_sincronizacion }}</span>
                 {% endif %}
               </td>
               <td>
@@ -363,6 +349,12 @@
     '#fd7e14','#ffc107','#198754','#20c997','#0dcaf0',
     '#adb5bd','#343a40',
   ];
+  function chartSliceBorderColor() {
+    return document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#1a1f26' : '#ffffff';
+  }
+  function chartLegendColor() {
+    return document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#dee2e6' : '#666666';
+  }
 
   document.addEventListener('DOMContentLoaded', function() {
     const autoRefreshSeconds = Number('{{ moreapp_auto_refresh_seconds|default:300 }}') || 300;
@@ -397,7 +389,7 @@
             data: rawEstado.map(d => d.c),
             backgroundColor: rawEstado.map(d => COLORES_ESTADO[d.estado_sincronizacion] || '#dee2e6'),
             borderWidth: 2,
-            borderColor: '#ffffff',
+            borderColor: chartSliceBorderColor(),
             hoverOffset: 8,
           }]
         },
@@ -407,7 +399,7 @@
           plugins: {
             legend: {
               position: 'bottom',
-              labels: { font: { size: 11 }, padding: 12, boxWidth: 14 }
+              labels: { font: { size: 11 }, padding: 12, boxWidth: 14, color: chartLegendColor() }
             },
             tooltip: {
               callbacks: {
@@ -453,7 +445,7 @@
             data: rawFormula.map(d => d.c),
             backgroundColor: rawFormula.map((_, i) => PALETTE[i % PALETTE.length]),
             borderWidth: 2,
-            borderColor: '#ffffff',
+            borderColor: chartSliceBorderColor(),
             hoverOffset: 8,
           }]
         },
@@ -463,7 +455,7 @@
           plugins: {
             legend: {
               position: 'bottom',
-              labels: { font: { size: 11 }, padding: 12, boxWidth: 14 }
+              labels: { font: { size: 11 }, padding: 12, boxWidth: 14, color: chartLegendColor() }
             },
             tooltip: {
               callbacks: {
@@ -505,7 +497,7 @@
             data: rawAdv.map(d => d.count),
             backgroundColor: COLORES_ADV,
             borderWidth: 2,
-            borderColor: '#ffffff',
+            borderColor: chartSliceBorderColor(),
             hoverOffset: 8,
           }]
         },
@@ -515,7 +507,7 @@
           plugins: {
             legend: {
               position: 'bottom',
-              labels: { font: { size: 11 }, padding: 12, boxWidth: 14 }
+              labels: { font: { size: 11 }, padding: 12, boxWidth: 14, color: chartLegendColor() }
             },
             tooltip: {
               callbacks: {

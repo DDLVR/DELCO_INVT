@@ -11,7 +11,7 @@
     </div>
   </div>
 
-  <div class="card shadow-sm">
+  <div class="card shadow-sm delco-panel-card">
     <div class="card-body p-4">
       <form method="post">
         {% csrf_token %}
@@ -132,8 +132,8 @@
 
   <!-- Sección de Cambio de Contraseña para ADMIN (solo si el usuario NO es admin) -->
   {% if usuario.rol != 'ADMIN' %}
-  <div class="card mt-4">
-    <div class="card-header bg-light">
+  <div class="card mt-4 delco-panel-card">
+    <div class="card-header delco-card-header-muted">
       <h5 class="mb-0">🔐 Cambio de Contraseña</h5>
     </div>
     <div class="card-body">

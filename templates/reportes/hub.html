@@ -13,7 +13,7 @@
     </div>
 
     {% if not hay_actividad_operativa %}
-    <div class="card border-0 shadow-sm">
+    <div class="card border-0 shadow-sm delco-panel-card">
         <div class="card-body text-center py-5">
             <div class="display-6 text-muted mb-3"><i class="bi bi-inbox"></i></div>
             <h3 class="h5 mb-2">Sin reportes operativos por ahora</h3>
@@ -26,12 +26,12 @@
     </div>
     {% else %}
     {% if total_filas_reportes == 0 %}
-    <div class="alert alert-light border shadow-sm mb-4">
+    <div class="alert alert-secondary border shadow-sm mb-4">
         Hay actividad registrada, pero ningún reporte arroja filas con los filtros actuales.
     </div>
     {% endif %}
 
-    <div class="card shadow-sm mb-4">
+    <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-body">
             <form method="get" class="row g-3 align-items-end">
                 <div class="col-md-3">
@@ -61,10 +61,10 @@
         </div>
     </div>
 
-    <div class="card shadow-sm">
+    <div class="card shadow-sm delco-panel-card">
         <div class="table-responsive">
             <table class="table table-hover mb-0">
-                <thead class="table-light">
+                <thead class="table-delco">
                     <tr>
                         <th>Reporte</th>
                         <th>Descripción</th>
@@ -86,9 +86,9 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if item.supports_date_range %}<span class="badge bg-light text-dark border me-1">Fechas</span>{% endif %}
-                            {% if item.supports_tecnico %}<span class="badge bg-light text-dark border me-1">Técnico</span>{% endif %}
-                            {% if item.supports_empresa %}<span class="badge bg-light text-dark border me-1">Empresa</span>{% endif %}
+                            {% if item.supports_date_range %}<span class="badge delco-badge-muted me-1">Fechas</span>{% endif %}
+                            {% if item.supports_tecnico %}<span class="badge delco-badge-muted me-1">Técnico</span>{% endif %}
+                            {% if item.supports_empresa %}<span class="badge delco-badge-muted me-1">Empresa</span>{% endif %}
                         </td>
                         <td class="text-end">
                             <a class="btn btn-sm btn-success"

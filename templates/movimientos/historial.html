@@ -28,8 +28,8 @@
   <div class="row g-3">
     <!-- Info del equipo -->
     <div class="col-lg-3">
-      <div class="card shadow-sm">
-        <div class="card-header text-white small fw-semibold" style="background:linear-gradient(135deg,#1a3a5c,#2c5282);">
+      <div class="card shadow-sm delco-panel-card">
+        <div class="card-header card-header-delco small fw-semibold">
           <i class="bi bi-info-circle me-1"></i> Información del Equipo
         </div>
         <div class="card-body">
@@ -72,26 +72,19 @@
 
     <!-- Timeline -->
     <div class="col-lg-9">
-      <div class="card shadow-sm">
-        <div class="card-header py-2 small fw-semibold">
+      <div class="card shadow-sm delco-panel-card">
+        <div class="card-header delco-card-header-muted py-2 small fw-semibold">
           <i class="bi bi-list-ul me-1"></i> Timeline de movimientos
         </div>
-        <div class="card-body" style="max-height:75vh; overflow-y:auto;">
+        <div class="card-body delco-timeline-scroll">
           {% if items %}
           <div class="timeline">
             {% for item in items %}
             <div class="d-flex mb-3">
               <!-- Icono -->
               <div class="flex-shrink-0">
-                <div class="rounded-circle d-flex align-items-center justify-content-center text-white"
-                     style="width:42px;height:42px;
-                     background:{% if item.movimiento.tipo == 'ENTREGA' %}#198754
-                     {% elif item.movimiento.tipo == 'RECEPCION' %}#0dcaf0
-                     {% elif item.movimiento.tipo == 'INSTALACION' %}#0d6efd
-                     {% elif item.movimiento.tipo == 'RETIRO' %}#ffc107
-                     {% elif item.movimiento.tipo == 'DEVOLUCION' %}#dc3545
-                     {% elif item.movimiento.tipo == 'IMPORTACION' %}#5b5bd6
-                     {% else %}#6c757d{% endif %};">
+                <div class="rounded-circle d-flex align-items-center justify-content-center text-white delco-timeline-icon
+                     delco-timeline-icon--{{ item.movimiento.tipo|lower }}">
                   <i class="bi
                     {% if item.movimiento.tipo == 'ENTREGA' %}bi-box-arrow-right
                     {% elif item.movimiento.tipo == 'RECEPCION' %}bi-box-arrow-in-left
@@ -101,12 +94,12 @@
                     {% else %}bi-circle-fill{% endif %}"></i>
                 </div>
                 {% if not forloop.last %}
-                <div style="margin-left:20px; height:16px; border-left:2px dashed #dee2e6;"></div>
+                <div class="delco-timeline-connector"></div>
                 {% endif %}
               </div>
               <!-- Contenido -->
               <div class="flex-grow-1 ms-3">
-                <div class="card border-0 bg-light">
+                <div class="card delco-timeline-item">
                   <div class="card-body py-2 px-3">
                     <div class="d-flex justify-content-between align-items-start">
                       <div>
@@ -115,8 +108,8 @@
                         {% elif item.movimiento.tipo == 'INSTALACION' %}<span class="badge bg-primary">{{ item.movimiento.get_tipo_display }}</span>
                         {% elif item.movimiento.tipo == 'RETIRO' %}<span class="badge bg-warning text-dark">{{ item.movimiento.get_tipo_display }}</span>
                         {% elif item.movimiento.tipo == 'DEVOLUCION' %}<span class="badge bg-danger">{{ item.movimiento.get_tipo_display }}</span>
-                        {% elif item.movimiento.tipo == 'IMPORTACION' %}<span class="badge" style="background:#5b5bd6;">{{ item.movimiento.get_tipo_display }}</span>
-                        {% elif item.movimiento.tipo == 'MOREAPP' %}<span class="badge" style="background:#0891b2;">{{ item.movimiento.get_tipo_display }}</span>
+                        {% elif item.movimiento.tipo == 'IMPORTACION' %}<span class="badge badge-delco-import">{{ item.movimiento.get_tipo_display }}</span>
+                        {% elif item.movimiento.tipo == 'MOREAPP' %}<span class="badge badge-delco-moreapp">{{ item.movimiento.get_tipo_display }}</span>
                         {% else %}<span class="badge bg-secondary">{{ item.movimiento.get_tipo_display }}</span>{% endif %}
                         <span class="text-muted small ms-2"><i class="bi bi-calendar3 me-1"></i>{{ item.movimiento.fecha_hora|date:"d/m/Y H:i" }}</span>
                       </div>
@@ -157,7 +150,7 @@
                       {% endif %}
                       {% if item.reporte_moreapp %}
                       <div class="col-12 mt-1">
-                        <div class="border rounded p-2 bg-white" style="border-color:#0891b2 !important;">
+                        <div class="border rounded p-2 delco-moreapp-link-box">
                           <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
                             <div class="small">
                               <i class="bi bi-link-45deg text-info me-1"></i>
@@ -172,7 +165,7 @@
                               {% elif item.reporte_moreapp.estado_revision == 'DESCARTADO' %}
                                 <span class="badge bg-secondary"><i class="bi bi-x-circle me-1"></i>Descartado</span>
                               {% else %}
-                                <span class="badge bg-light text-dark border"><i class="bi bi-clock me-1"></i>Pendiente</span>
+                                <span class="badge delco-badge-muted"><i class="bi bi-clock me-1"></i>Pendiente</span>
                               {% endif %}
                               <a href="{% url 'reportes_moreapp_detalle' item.reporte_moreapp.id %}"
                                  class="btn btn-sm btn-info text-white py-0 px-2" target="_blank">

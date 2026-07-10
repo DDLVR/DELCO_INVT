@@ -34,7 +34,7 @@
       {% elif registro.estado_sincronizacion == 'ALERTA_REVISION' %}
         <span class="badge bg-warning text-dark fs-6 align-self-center">Revisión</span>
       {% else %}
-        <span class="badge bg-light text-dark fs-6 align-self-center">{{ registro.estado_sincronizacion }}</span>
+        <span class="badge delco-badge-muted fs-6 align-self-center">{{ registro.estado_sincronizacion }}</span>
       {% endif %}
       {% if mostrar_panel_operativo and registro.datos_recibidos.data %}
       <form method="post" action="{% url 'moreapp_reprocesar' registro.pk %}">
@@ -95,7 +95,7 @@
     {% if d.formulario_canonico == 'LECTURA' %}
 
       <!-- LECTURA: Cliente + Suministro -->
-      <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-header bg-primary text-white py-2">
           <h6 class="mb-0"><i class="bi bi-person-fill"></i> Cliente</h6>
         </div>
@@ -116,7 +116,7 @@
       </div>
 
       <!-- LECTURA: Medidor -->
-      <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-header bg-dark text-white py-2">
           <h6 class="mb-0"><i class="bi bi-speedometer2"></i> Medidor</h6>
         </div>
@@ -137,7 +137,7 @@
       </div>
 
       <!-- LECTURA: Visita -->
-      <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-header bg-secondary text-white py-2">
           <h6 class="mb-0"><i class="bi bi-clipboard2-check"></i> Visita</h6>
         </div>
@@ -161,8 +161,8 @@
 
       <!-- LECTURA: Contacto en terreno (sólo si hay datos) -->
       {% if d.contacto_nombre or d.contacto_telefono or d.contacto_correo %}
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-warning text-dark py-2">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header delco-card-header-warn py-2">
           <h6 class="mb-0"><i class="bi bi-telephone-fill"></i> Contacto en terreno</h6>
         </div>
         <div class="card-body">
@@ -179,8 +179,8 @@
       {% endif %}
 
       <!-- LECTURA: Técnico -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-info text-dark py-2">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header delco-card-header-info py-2">
           <h6 class="mb-0"><i class="bi bi-person-badge"></i> Técnico responsable</h6>
         </div>
         <div class="card-body">
@@ -192,8 +192,8 @@
       </div>
 
       {% if d.observacion %}
-      <div class="card shadow-sm mb-4">
-        <div class="card-header py-2">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header delco-card-header-muted py-2">
           <h6 class="mb-0"><i class="bi bi-chat-left-text"></i> Observación</h6>
         </div>
         <div class="card-body">
@@ -205,7 +205,7 @@
     {% elif d.formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3' %}
 
       <!-- MANTENIMIENTO: Cliente -->
-      <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-header bg-primary text-white py-2">
           <h6 class="mb-0"><i class="bi bi-person-fill"></i> Cliente</h6>
         </div>
@@ -228,7 +228,7 @@
       </div>
 
       <!-- MANTENIMIENTO: Equipo / Empalme -->
-      <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-header bg-dark text-white py-2">
           <h6 class="mb-0"><i class="bi bi-cpu"></i> Equipo y Empalme</h6>
         </div>
@@ -261,7 +261,7 @@
       </div>
 
       <!-- MANTENIMIENTO: Diagnóstico / Trabajo -->
-      <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-header bg-secondary text-white py-2">
           <h6 class="mb-0"><i class="bi bi-clipboard2-pulse"></i> Diagnóstico y Trabajo</h6>
         </div>
@@ -290,7 +290,7 @@
       </div>
 
       <!-- MANTENIMIENTO: Telemetría -->
-      <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-header bg-success text-white py-2">
           <h6 class="mb-0"><i class="bi bi-router"></i> Telemetría</h6>
         </div>
@@ -312,8 +312,8 @@
 
       <!-- MANTENIMIENTO: Contacto -->
       {% if d.contacto_nombre or d.contacto_telefono or d.contacto_correo or d.nombre_autoriza %}
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-warning text-dark py-2">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header delco-card-header-warn py-2">
           <h6 class="mb-0"><i class="bi bi-telephone-fill"></i> Contacto y Autorización</h6>
         </div>
         <div class="card-body">
@@ -332,8 +332,8 @@
       {% endif %}
 
       <!-- MANTENIMIENTO: Técnicos -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-info text-dark py-2">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header delco-card-header-info py-2">
           <h6 class="mb-0"><i class="bi bi-person-badge"></i> Técnicos</h6>
         </div>
         <div class="card-body">
@@ -347,8 +347,8 @@
       </div>
 
       {% if d.observacion %}
-      <div class="card shadow-sm mb-4">
-        <div class="card-header py-2">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header delco-card-header-muted py-2">
           <h6 class="mb-0"><i class="bi bi-chat-left-text"></i> Observación</h6>
         </div>
         <div class="card-body">
@@ -493,7 +493,7 @@
       <!-- Vista genérica para otros formularios (Mantenimiento, Registro Medidores, etc.) -->
 
       <!-- Datos del cliente -->
-      <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-header bg-primary text-white py-2">
           <h6 class="mb-0"><i class="bi bi-person-fill"></i> Cliente</h6>
         </div>
@@ -512,7 +512,7 @@
       </div>
 
       <!-- Datos del trabajo -->
-      <div class="card shadow-sm mb-4">
+      <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-header bg-secondary text-white py-2">
           <h6 class="mb-0"><i class="bi bi-tools"></i> Trabajo</h6>
         </div>
@@ -535,8 +535,8 @@
       </div>
 
       <!-- Técnicos -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header bg-info text-dark py-2">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header delco-card-header-info py-2">
           <h6 class="mb-0"><i class="bi bi-person-badge"></i> Técnicos</h6>
         </div>
         <div class="card-body">
@@ -550,8 +550,8 @@
       </div>
 
       {% if d.observacion %}
-      <div class="card shadow-sm mb-4">
-        <div class="card-header py-2">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header delco-card-header-muted py-2">
           <h6 class="mb-0"><i class="bi bi-chat-left-text"></i> Observación</h6>
         </div>
         <div class="card-body">
@@ -568,8 +568,8 @@
     <div class="col-lg-5">
 
       <!-- Metadata de sincronización -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header py-2">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header delco-card-header-muted py-2">
           <h6 class="mb-0"><i class="bi bi-info-circle"></i> Metadata</h6>
         </div>
         <div class="card-body">
@@ -593,8 +593,8 @@
       </div>
 
       <!-- Payload JSON raw -->
-      <div class="card shadow-sm mb-4">
-        <div class="card-header py-2 d-flex justify-content-between align-items-center">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header delco-card-header-muted py-2 d-flex justify-content-between align-items-center">
           <h6 class="mb-0"><i class="bi bi-code-slash"></i> JSON recibido</h6>
           <button class="btn btn-xs btn-outline-secondary btn-sm py-0 px-2"
                   type="button" data-bs-toggle="collapse" data-bs-target="#collapseJson">
@@ -610,7 +610,7 @@
       </div>
 
       {% if mostrar_panel_operativo %}
-      <div class="card shadow-sm mb-4 border-warning">
+      <div class="card shadow-sm mb-4 border-warning delco-panel-card">
         <div class="card-header py-2 bg-warning-subtle">
           <h6 class="mb-0"><i class="bi bi-activity"></i> Panel operativo de integración (interno)</h6>
         </div>
@@ -656,7 +656,7 @@
             </table>
           </div>
           {% else %}
-          <div class="alert alert-light border mb-3">
+          <div class="alert alert-secondary border mb-3">
             No se encontraron movimientos trazables para este submission.
           </div>
           {% endif %}
@@ -697,7 +697,7 @@
           </div>
           {% endif %}
           {% else %}
-          <div class="alert alert-light mb-0">No hay resumen operativo disponible para este registro.</div>
+          <div class="alert alert-secondary mb-0">No hay resumen operativo disponible para este registro.</div>
           {% endif %}
         </div>
       </div>

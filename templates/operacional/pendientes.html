@@ -6,64 +6,68 @@
 {% block content %}
 <div class="container-fluid py-4">
 
-    <div class="d-flex align-items-center justify-content-between mb-4">
-        <h3 class="mb-0">
-            <i class="bi bi-list-check"></i> Pendientes Operativos MoreApp
-        </h3>
-        <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
-            <i class="bi bi-arrow-left"></i> Dashboard
-        </a>
+    <div class="row mb-3 align-items-center">
+        <div class="col">
+            <h1 class="mb-1 h3"><i class="bi bi-list-check"></i> Pendientes Operativos MoreApp</h1>
+            <p class="text-muted mb-0 small">Cola de revisión operativa: pendientes, advertencias y acciones rápidas.</p>
+        </div>
+        <div class="col-auto">
+            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left"></i> Dashboard
+            </a>
+            <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-cloud-download"></i> Todos los registros
+            </a>
+        </div>
     </div>
 
-    {# ── Filtros rápidos con contadores (Punto 6) ─────────────────── #}
-    <div class="row mb-4 g-2">
-        <div class="col-auto">
-            <a href="?estado=PENDIENTE"
-               class="btn btn-sm {% if estado_filtro == 'PENDIENTE' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                <i class="bi bi-clock"></i> Pendientes
-                <span class="badge bg-light text-primary ms-1">{{ contadores.PENDIENTE }}</span>
-            </a>
+    {# Filtros rápidos con contadores #}
+    <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-body py-3">
+            <label class="form-label mb-2 small fw-semibold">Estado de revisión</label>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <a href="?estado=PENDIENTE"
+                   class="btn btn-sm {% if estado_filtro == 'PENDIENTE' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    <i class="bi bi-clock"></i> Pendientes
+                    <span class="badge delco-badge-muted ms-1">{{ contadores.PENDIENTE }}</span>
+                </a>
+                <a href="?estado=CON_ADVERTENCIA"
+                   class="btn btn-sm {% if estado_filtro == 'CON_ADVERTENCIA' %}btn-warning{% else %}btn-outline-warning{% endif %}">
+                    <i class="bi bi-exclamation-triangle"></i> Con advertencia
+                    <span class="badge delco-badge-muted ms-1">{{ contadores.CON_ADVERTENCIA }}</span>
+                </a>
+                <a href="?estado=REVISADO"
+                   class="btn btn-sm {% if estado_filtro == 'REVISADO' %}btn-success{% else %}btn-outline-success{% endif %}">
+                    <i class="bi bi-check-circle"></i> Revisados
+                    <span class="badge delco-badge-muted ms-1">{{ contadores.REVISADO }}</span>
+                </a>
+                <a href="?estado=DESCARTADO"
+                   class="btn btn-sm {% if estado_filtro == 'DESCARTADO' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                    <i class="bi bi-x-circle"></i> Descartados
+                    <span class="badge delco-badge-muted ms-1">{{ contadores.DESCARTADO }}</span>
+                </a>
+                <a href="?estado=TODOS"
+                   class="btn btn-sm {% if estado_filtro == 'TODOS' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+                    <i class="bi bi-grid"></i> Todos
+                </a>
+                {% if contadores.envejecidos %}
+                <span class="badge bg-danger ms-md-2">
+                    <i class="bi bi-hourglass-split"></i> {{ contadores.envejecidos }} sin revisar &gt;7 días
+                </span>
+                {% endif %}
+            </div>
         </div>
-        <div class="col-auto">
-            <a href="?estado=CON_ADVERTENCIA"
-               class="btn btn-sm {% if estado_filtro == 'CON_ADVERTENCIA' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-                <i class="bi bi-exclamation-triangle"></i> Con advertencia
-                <span class="badge bg-light text-warning ms-1">{{ contadores.CON_ADVERTENCIA }}</span>
-            </a>
-        </div>
-        <div class="col-auto">
-            <a href="?estado=REVISADO"
-               class="btn btn-sm {% if estado_filtro == 'REVISADO' %}btn-success{% else %}btn-outline-success{% endif %}">
-                <i class="bi bi-check-circle"></i> Revisados
-                <span class="badge bg-light text-success ms-1">{{ contadores.REVISADO }}</span>
-            </a>
-        </div>
-        <div class="col-auto">
-            <a href="?estado=DESCARTADO"
-               class="btn btn-sm {% if estado_filtro == 'DESCARTADO' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-                <i class="bi bi-x-circle"></i> Descartados
-                <span class="badge bg-light text-secondary ms-1">{{ contadores.DESCARTADO }}</span>
-            </a>
-        </div>
-        <div class="col-auto">
-            <a href="?estado=TODOS" class="btn btn-sm {% if estado_filtro == 'TODOS' %}btn-dark{% else %}btn-outline-dark{% endif %}">
-                <i class="bi bi-grid"></i> Todos
-            </a>
-        </div>
-        {% if contadores.envejecidos %}
-        <div class="col-auto ms-auto">
-            <span class="badge bg-danger fs-6 align-self-center">
-                <i class="bi bi-hourglass-split"></i> {{ contadores.envejecidos }} sin revisar &gt;7 días
-            </span>
-        </div>
-        {% endif %}
     </div>
 
-    {# ── Tabla de registros ───────────────────────────────────────── #}
-    <div class="card shadow-sm">
+    {# Tabla de registros #}
+    <div class="card shadow-sm delco-panel-card">
+        <div class="card-header delco-card-header-muted py-2 d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-table me-1"></i> Registros en cola</span>
+            <span class="small text-muted">{{ registros|length }} en esta vista</span>
+        </div>
         <div class="card-body p-0">
-            <div class="table-responsive">
-                <table class="table table-hover table-striped mb-0 align-middle">
+            <div class="table-responsive delco-table-wrap">
+                <table class="table table-hover table-sm delco-table-compact mb-0 align-middle">
                     <thead class="table-delco">
                         <tr>
                             <th>ID</th>
@@ -74,7 +78,7 @@
                             <th>Estado sincr.</th>
                             <th>Revisión</th>
                             <th>Bloqueo</th>
-                            <th>Acciones</th>
+                            <th class="text-end">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -84,11 +88,12 @@
                             {% if reg.estado_revision == 'CON_ADVERTENCIA' %}class="table-warning"
                             {% elif reg.fecha_recepcion < umbral_7d and reg.estado_revision == 'PENDIENTE' %}class="table-danger"
                             {% endif %}>
-                            <td class="fw-bold">{{ reg.pk }}</td>
-                            <td><small>{{ reg.nombre_formulario|truncatechars:35 }}</small></td>
-                            <td><code class="small">{{ reg.moreapp_submission_id|truncatechars:20 }}</code></td>
-                            <td><small>{{ reg.fecha_recepcion|date:"d/m/Y H:i" }}</small></td>
-                            {# Punto 11: indicador de envejecimiento #}
+                            <td class="fw-bold">
+                                <a href="{% url 'reportes_moreapp_detalle' reg.pk %}" class="text-decoration-none">#{{ reg.pk }}</a>
+                            </td>
+                            <td class="small">{{ reg.nombre_formulario|truncatechars:35 }}</td>
+                            <td><code class="small delco-code-inline">{{ reg.moreapp_submission_id|truncatechars:20 }}</code></td>
+                            <td class="small text-nowrap">{{ reg.fecha_recepcion|date:"d/m/Y H:i" }}</td>
                             <td>
                                 {% if reg.fecha_recepcion < umbral_7d and reg.estado_revision == 'PENDIENTE' %}
                                     <span class="badge bg-danger">
@@ -99,19 +104,25 @@
                                 {% endif %}
                             </td>
                             <td>
-                                <span class="badge
-                                    {% if reg.estado_sincronizacion == 'EXITOSO' %}bg-success
-                                    {% elif reg.estado_sincronizacion in 'ERROR,ERROR_JSON,ERROR_LECTURA' %}bg-danger
-                                    {% elif reg.estado_sincronizacion == 'ALERTA_REVISION' %}bg-warning text-dark
-                                    {% else %}bg-secondary{% endif %}">
-                                    {{ reg.get_estado_sincronizacion_display|default:reg.estado_sincronizacion }}
-                                </span>
+                                {% if reg.estado_sincronizacion == 'PROCESADO' %}
+                                    <span class="badge bg-success">Procesado</span>
+                                {% elif reg.estado_sincronizacion == 'ALERTA_REVISION' %}
+                                    <span class="badge bg-warning delco-badge-warn">Alerta</span>
+                                {% elif reg.estado_sincronizacion == 'DUPLICADO' %}
+                                    <span class="badge delco-badge-muted">Duplicado</span>
+                                {% elif reg.estado_sincronizacion == 'ERROR_JSON' or reg.estado_sincronizacion == 'ERROR_LECTURA' or reg.estado_sincronizacion == 'ERROR' %}
+                                    <span class="badge bg-danger">Error</span>
+                                {% elif reg.estado_sincronizacion == 'PENDIENTE' %}
+                                    <span class="badge bg-info delco-badge-info">Pendiente</span>
+                                {% else %}
+                                    <span class="badge delco-badge-muted">{{ reg.get_estado_sincronizacion_display|default:reg.estado_sincronizacion }}</span>
+                                {% endif %}
                             </td>
                             <td>
                                 <span id="badge-revision-{{ reg.pk }}" class="badge
                                     {% if reg.estado_revision == 'REVISADO' %}bg-success
-                                    {% elif reg.estado_revision == 'CON_ADVERTENCIA' %}bg-warning text-dark
-                                    {% elif reg.estado_revision == 'DESCARTADO' %}bg-secondary
+                                    {% elif reg.estado_revision == 'CON_ADVERTENCIA' %}bg-warning delco-badge-warn
+                                    {% elif reg.estado_revision == 'DESCARTADO' %}delco-badge-muted
                                     {% else %}bg-primary{% endif %}">
                                     {{ reg.get_estado_revision_display }}
                                 </span>
@@ -122,11 +133,10 @@
                                         <i class="bi bi-shield-exclamation"></i> {{ reg.bloqueos_operativos|length }}
                                     </span>
                                 {% else %}
-                                    <span class="text-muted small">-</span>
+                                    <span class="text-muted small">—</span>
                                 {% endif %}
                             </td>
-                            {# Punto 9: acciones guiadas contextuales #}
-                            <td>
+                            <td class="text-end">
                                 <div class="btn-group btn-group-sm">
                                     <a href="{% url 'reportes_moreapp_detalle' reg.pk %}"
                                        class="btn btn-outline-primary" title="Ver detalle">
@@ -156,7 +166,7 @@
                         {% endwith %}
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center text-muted py-4">
+                            <td colspan="9" class="text-center text-muted py-5">
                                 <i class="bi bi-check2-all fs-3 d-block mb-2"></i>
                                 Sin registros con este filtro.
                             </td>
@@ -174,6 +184,13 @@
 {% block extra_js %}
 <script>
 const CSRFTOKEN = '{{ csrf_token }}';
+
+const BADGE_REVISION_CLASS = {
+    'REVISADO': 'badge bg-success',
+    'CON_ADVERTENCIA': 'badge bg-warning delco-badge-warn',
+    'DESCARTADO': 'badge delco-badge-muted',
+    'PENDIENTE': 'badge bg-primary',
+};
 
 document.querySelectorAll('.btn-marcar').forEach(function(btn) {
     btn.addEventListener('click', function() {
@@ -195,14 +212,8 @@ document.querySelectorAll('.btn-marcar').forEach(function(btn) {
                 const badge = document.getElementById(`badge-revision-${pk}`);
                 if (badge) {
                     badge.textContent = data.estado_revision_display;
-                    badge.className = 'badge ' + {
-                        'REVISADO': 'bg-success',
-                        'CON_ADVERTENCIA': 'bg-warning text-dark',
-                        'DESCARTADO': 'bg-secondary',
-                        'PENDIENTE': 'bg-primary',
-                    }[data.estado_revision] || 'bg-secondary';
+                    badge.className = BADGE_REVISION_CLASS[data.estado_revision] || 'badge delco-badge-muted';
                 }
-                // Deshabilitar el botón que acaba de usarse
                 this.disabled = true;
             } else {
                 alert('Error al actualizar: ' + (data.error || 'desconocido'));
