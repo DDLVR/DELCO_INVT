@@ -21,6 +21,7 @@ from .utils import (
     exportar_ordenes_excel,
     asignar_ordenes_masivo,
     aplicar_alerta_duplicado,
+    crear_orden_derivada_por_observacion,
     guardar_informe_pdf,
     detectar_duplicado_orden,
     aplicar_cola_ordenes,
@@ -258,10 +259,9 @@ def orden_detalle_view(request, pk):
     elif paso_operativo.get('accion_label') == 'Ver informes MoreApp':
         paso_operativo['accion_url'] = '/reportes/moreapp/'
 
-    puede_validar = (
-        usuario.rol == 'AUDITOR'
-        and orden.estado in ('PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION')
-    )
+    estados_revision = ('PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION')
+    puede_validar = usuario.rol in ['ADMIN', 'ADMINISTRATIVO'] and orden.estado in estados_revision
+    puede_observar = usuario.rol == 'AUDITOR' and orden.estado in estados_revision
 
     context = {
         'orden': orden,
@@ -271,6 +271,9 @@ def orden_detalle_view(request, pk):
         'paso_operativo': paso_operativo,
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'puede_validar': puede_validar,
+        'puede_observar': puede_observar,
+        'puede_finalizar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'] and orden.estado == 'VALIDADA',
+        'ordenes_derivadas': orden.ordenes_derivadas.order_by('-fecha_creacion'),
         'puede_eliminar': usuario.rol == 'ADMIN',
         'es_tecnico_responsable': orden.tecnico_responsable == usuario if orden.tecnico_responsable else False,
         'puede_editar_observaciones': puede_editar_observaciones_orden(orden, usuario),
@@ -304,20 +307,36 @@ def cambiar_estado_orden_view(request, pk):
     """
     orden = get_object_or_404(OrdenTrabajo, pk=pk)
     nuevo_estado = request.POST.get('nuevo_estado')
-    
-    # Validar que el usuario tiene permiso
+    observacion = request.POST.get('observacion_validacion', '').strip()
+
     if not orden.puede_cambiar_estado(request.user, nuevo_estado):
         messages.error(request, 'No tienes permiso para cambiar este estado')
         return redirect('orden_detalle', pk=pk)
-    
-    # Cambiar estado
-    resultado = orden.cambiar_estado(request.user, nuevo_estado)
-    
+
+    if nuevo_estado == 'OBSERVADA' and not observacion:
+        messages.error(request, 'Debe indicar el motivo de la observación antes de rechazar.')
+        return redirect('orden_detalle', pk=pk)
+
+    resultado = orden.cambiar_estado(request.user, nuevo_estado, razon=observacion)
+
     if resultado['success']:
-        messages.success(request, resultado['mensaje'])
+        if nuevo_estado == 'VALIDADA':
+            messages.success(
+                request,
+                'Orden validada. Use Acciones → Finalizada para cerrar el trabajo en la plataforma.',
+            )
+        elif nuevo_estado == 'OBSERVADA':
+            nueva = crear_orden_derivada_por_observacion(orden, request.user, observacion)
+            messages.warning(
+                request,
+                f'Orden observada. Se creó la OT derivada #{nueva.pk} para reintento en terreno.',
+            )
+            return redirect('orden_detalle', pk=nueva.pk)
+        else:
+            messages.success(request, resultado['mensaje'])
     else:
         messages.error(request, resultado['mensaje'])
-    
+
     return redirect('orden_detalle', pk=pk)
 
 

@@ -4,6 +4,7 @@ detección de duplicados e integración con informes de clientes.
 """
 import json
 import os
+import re
 import unicodedata
 from datetime import timedelta
 from pathlib import Path
@@ -162,6 +163,44 @@ def _parse_id_orden(valor) -> Optional[int]:
         return int(float(texto))
     except (ValueError, TypeError):
         return None
+
+
+def _extraer_correlativo_moreapp(observaciones: str) -> Optional[str]:
+    match = re.search(r'correlativo:\s*(\d+)', observaciones or '', flags=re.I)
+    return match.group(1) if match else None
+
+
+def _buscar_orden_existente_en_importacion(
+    cliente: Cliente,
+    titulo: str,
+    observaciones: str,
+    orden_id: Optional[int] = None,
+) -> Optional[OrdenTrabajo]:
+    """Evita crear OT duplicadas al reimportar el mismo Excel."""
+    if orden_id:
+        encontrada = OrdenTrabajo.objects.filter(pk=orden_id).first()
+        if encontrada:
+            return encontrada
+
+    titulo_norm = (titulo or '')[:200]
+    if titulo_norm:
+        encontrada = OrdenTrabajo.objects.filter(
+            cliente=cliente,
+            titulo=titulo_norm,
+        ).order_by('-id').first()
+        if encontrada:
+            return encontrada
+
+    correlativo = _extraer_correlativo_moreapp(observaciones)
+    if correlativo:
+        encontrada = OrdenTrabajo.objects.filter(
+            cliente=cliente,
+            observaciones_tecnicas__icontains=f'correlativo: {correlativo}',
+        ).order_by('-id').first()
+        if encontrada:
+            return encontrada
+
+    return None
 
 
 def _resolver_tecnico(texto: str) -> Optional[Usuario]:
@@ -330,8 +369,12 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                 with transaction.atomic():
                     orden = None
                     ot_validation = None
-                    if orden_id:
-                        orden = OrdenTrabajo.objects.filter(pk=orden_id).first()
+                    orden = _buscar_orden_existente_en_importacion(
+                        cliente,
+                        titulo,
+                        observaciones_tecnicas,
+                        orden_id,
+                    )
 
                     if orden:
                         orden.cliente = cliente
@@ -676,13 +719,20 @@ def paso_operativo_ot(orden, moreapp_count: int = 0, sync_advertencia: bool = Fa
         paso.update(
             nivel='warning',
             titulo='Paso 5 — Validación Delco',
-            mensaje='La orden está lista para que auditoría u oficina la valide.',
+            mensaje='La orden está lista para que el administrativo la valide.',
         )
     elif estado == 'VALIDADA':
         paso.update(
             nivel='success',
             titulo='Orden validada',
-            mensaje='Delco validó el trabajo. Puede finalizar la orden cuando corresponda.',
+            mensaje='Trabajo aprobado. Use Acciones → Finalizada para cerrar el ciclo en la plataforma.',
+            accion_label='Cerrar orden',
+        )
+    elif estado == 'OBSERVADA':
+        paso.update(
+            nivel='warning',
+            titulo='Orden observada',
+            mensaje='La validación rechazó el trabajo. Revise la OT derivada creada para el reintento en terreno.',
         )
     elif estado == 'FINALIZADA':
         paso.update(
@@ -698,3 +748,32 @@ def paso_operativo_ot(orden, moreapp_count: int = 0, sync_advertencia: bool = Fa
         )
 
     return paso
+
+
+def crear_orden_derivada_por_observacion(
+    orden: OrdenTrabajo,
+    usuario: Usuario,
+    observacion: str,
+) -> OrdenTrabajo:
+    """Crea una OT nueva vinculada cuando la validación marca OBSERVADA."""
+    motivo = (observacion or '').strip()
+    titulo_base = (orden.titulo or f'OT #{orden.pk}')[:150]
+    nueva = OrdenTrabajo(
+        titulo=f'OT derivada — {titulo_base}'[:200],
+        descripcion=(
+            f'Orden derivada de OT #{orden.pk} por observación en validación.\n'
+            f'Motivo: {motivo}'
+        ),
+        tipo_trabajo=orden.tipo_trabajo,
+        cliente=orden.cliente,
+        tecnico_responsable=orden.tecnico_responsable,
+        creada_por=usuario,
+        orden_origen=orden,
+        observaciones_tecnicas=f'Derivada de OT #{orden.pk}. Motivo: {motivo}',
+        estado='ASIGNADA' if orden.tecnico_responsable_id else 'CREADA',
+    )
+    if nueva.estado == 'ASIGNADA':
+        nueva.fecha_asignacion = timezone.now()
+    nueva.save()
+    aplicar_alerta_duplicado(nueva)
+    return nueva
