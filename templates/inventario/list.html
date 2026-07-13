@@ -261,7 +261,7 @@
                                 <th>FECHA RECEPCIÓN</th>
                                 <th>FECHA ENTREGA</th>
                                 <th>Caja</th>
-                                <th>TÉCNICO</th>
+                                <th>TÉCNICO RESPONSABLE</th>
                                 {% endif %}
                                 <th>Estado</th>
                                 <th>Cliente</th>
@@ -293,18 +293,20 @@
                                 <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
                                 {% elif tipo == 'medidor' %}
                                 <td>{{ equipo.serie }}</td>
-                                <td>{{ equipo.marca|default:"-" }}</td>
-                                <td>{{ equipo.caja|default:"-" }}</td>
-                                <td>{{ equipo.modulo|default:"-" }}</td>
+                                <td>{% if equipo.marca %}{{ equipo.marca }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                <td>{% if equipo.caja %}{{ equipo.caja }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                <td>
+                                    {% if equipo.modulo is True %}SI{% elif equipo.modulo is False %}NO{% else %}<span class="text-muted">No hay</span>{% endif %}
+                                </td>
                                 <td>
                                     <span class="badge {% if equipo.tipo_medidor == 'INDIRECTO' %}bg-primary{% else %}bg-secondary{% endif %}">
-                                        {{ equipo.get_tipo_medidor_display|default:"-" }}
+                                        {{ equipo.get_tipo_medidor_display|default:"No hay" }}
                                     </span>
                                 </td>
-                                <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
-                                <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
-                                <td>{{ equipo.tecnico_display|default:"-" }}</td>
-                                <td>{{ equipo.proyecto|default:"-" }}</td>
+                                <td>{% if equipo.fecha_recepcion %}{{ equipo.fecha_recepcion|date:"d/m/Y" }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                <td>{% if equipo.fecha_entrega %}{{ equipo.fecha_entrega|date:"d/m/Y" }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                <td>{% if equipo.tecnico_display %}{{ equipo.tecnico_display }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                <td>{% if equipo.proyecto %}{{ equipo.proyecto }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
                                 {% elif tipo == 'sim' %}
                                 <td><strong>{{ equipo.imei|default:"Sin IMEI" }}</strong></td>
                                 <td>{% if equipo.operador %}{{ equipo.operador }}{% else %}<span class="text-muted">Sin operador</span>{% endif %}</td>
@@ -316,29 +318,37 @@
                                 <td>{% if equipo.fecha_entrega %}{{ equipo.fecha_entrega|date:"d/m/Y" }}{% else %}<span class="text-muted">Sin fecha entrega</span>{% endif %}</td>
                                 <td>{% if equipo.proyecto %}{{ equipo.proyecto }}{% else %}<span class="text-muted">Sin proyecto</span>{% endif %}</td>
                                 {% elif tipo == 'modem' %}
-                                <td>{{ equipo.marca|default:"-" }}</td>
-                                <td>{{ equipo.modelo|default:"-" }}</td>
-                                <td><strong>{{ equipo.imei|default:"-" }}</strong></td>
+                                <td>{% if equipo.marca %}{{ equipo.marca }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                <td>{% if equipo.modelo %}{{ equipo.modelo }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                <td><strong>{% if equipo.imei %}{{ equipo.imei }}{% else %}<span class="text-muted">No hay</span>{% endif %}</strong></td>
                                 <td>{{ equipo.serie }}</td>
-                                <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
-                                <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
-                                <td>{{ equipo.caja|default:"-" }}</td>
-                                <td>{{ equipo.tecnico_display|default:"-" }}</td>
+                                <td>{% if equipo.fecha_recepcion %}{{ equipo.fecha_recepcion|date:"d/m/Y" }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                <td>{% if equipo.fecha_entrega %}{{ equipo.fecha_entrega|date:"d/m/Y" }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                <td>{% if equipo.caja %}{{ equipo.caja }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                <td>{% if equipo.tecnico_display %}{{ equipo.tecnico_display }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
                                 {% endif %}
                                 <td>
                                     <span class="badge bg-{% if equipo.estado_inventario %}{% if equipo.estado_inventario.nombre == 'Instalado' %}success{% elif equipo.estado_inventario.nombre == 'En Trayecto' %}primary{% elif equipo.estado_inventario.nombre == 'Retirado' or equipo.estado_inventario.nombre == 'Devuelta' %}warning{% elif equipo.estado_inventario.nombre == 'En reparación' or equipo.estado_inventario.nombre == 'Con Problemas' %}info{% elif equipo.estado_inventario.nombre == 'Sin Conexión' %}dark{% elif equipo.estado_inventario.nombre == 'Dado de baja' %}danger{% elif equipo.estado_inventario.nombre == 'En peaje' %}dark{% else %}secondary{% endif %}{% else %}secondary{% endif %}">
-                                        {% if tipo == 'todos' %}{{ equipo.estado_nombre|default:"Sin estado" }}{% else %}{{ equipo.estado_inventario.nombre|default:"Sin estado" }}{% endif %}
+                                        {% if tipo == 'todos' %}
+                                            {{ equipo.estado_nombre|default:"Sin estado" }}
+                                        {% elif tipo == 'medidor' or tipo == 'modem' %}
+                                            {{ equipo.estado_inventario.nombre|default:"No hay" }}
+                                        {% else %}
+                                            {{ equipo.estado_inventario.nombre|default:"Sin estado" }}
+                                        {% endif %}
                                     </span>
                                 </td>
                                 <td>
                                     {% if tipo == 'todos' %}
-                                        {% if equipo.cliente_numero %}{{ equipo.cliente_numero }}{% else %}<span class="text-muted">Sin cliente</span>{% endif %}
+                                        {% if equipo.cliente_numero %}{{ equipo.cliente_numero }}{% else %}<span class="text-muted">No hay</span>{% endif %}
+                                    {% elif tipo == 'medidor' or tipo == 'modem' %}
+                                        {% if equipo.cliente_display %}{{ equipo.cliente_display }}{% else %}<span class="text-muted">No hay</span>{% endif %}
                                     {% else %}
                                         {% if equipo.cliente_display %}{{ equipo.cliente_display }}{% else %}<span class="text-muted">Sin cliente</span>{% endif %}
                                     {% endif %}
                                 </td>
                                 {% if tipo == 'modem' %}
-                                <td>{{ equipo.proyecto|default:"-" }}</td>
+                                <td>{% if equipo.proyecto %}{{ equipo.proyecto }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
                                 {% endif %}
                                 {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
                                 <td class="text-center">
@@ -456,10 +466,11 @@
                 <div class="tab-content" id="ayudaTabContent">
                     <div class="tab-pane fade {% if tipo == 'medidor' %}show active{% endif %}" id="ayuda-medidores" role="tabpanel">
                         <h6 class="mb-2">Formato requerido (12 columnas)</h6>
-                        <p class="small text-muted mb-2">Orden exacto: <code>#, Fecha Recepción, Bodega, Marca, Caja, Medidor, Módulo, Tipo Medidor, Fecha Entrega, Entregado A, Estado, Cliente</code></p>
+                        <p class="small text-muted mb-2">Orden exacto: <code>#, FECHA DE RECEPCION, BODEGA, MARCA, CAJA, MEDIDOR, MODULO, FECHA DE ENTREGA, ENTREGADO A:, ESTADO, CLIENTE, Tipo Medidor</code></p>
                         <div class="alert alert-light border small mb-2">
                             <strong>Obligatorio:</strong> Fecha Recepción, Medidor (serie) y Tipo Medidor.<br>
                             <strong>Tipo Medidor válido:</strong> DIRECTO o INDIRECTO.<br>
+                            <strong>Estados del maestro:</strong> Disponible → En bodega, Trayecto → En Trayecto, Instalado → Instalado.<br>
                             <strong>Estados válidos:</strong> En bodega, Instalado, Retirado, En reparación, Dado de baja.
                         </div>
                         <div class="alert alert-secondary small mb-0">
@@ -481,9 +492,11 @@
 
                     <div class="tab-pane fade {% if tipo == 'modem' %}show active{% endif %}" id="ayuda-modems" role="tabpanel">
                         <h6 class="mb-2">Formato requerido (18 columnas)</h6>
-                        <p class="small text-muted mb-2">Orden exacto: <code>MARCA, MODELO, IMEI, SERIE, Fecha Recepción, Fecha Entrega, Caja, Técnico Responsable, Cliente, Medidor, IP, Puerto, Marca, Obs, Retirado, Serie, Irregularidad, Proyecto</code></p>
+                        <p class="small text-muted mb-2">Orden exacto: <code>ID, MARCA, MODELO, IMEI, SERIE, Fecha de Recepción, Fecha Entrega, Caja, Técnico Responsable, Cliente, Medidor, IP, Puerto, Marca, Obs, Retirado, Serie, Irregularidad, Proyecto, Status</code></p>
                         <div class="alert alert-light border small mb-2">
                             <strong>Obligatorio:</strong> MARCA y SERIE.<br>
+                            <strong>Caja:</strong> en el maestro solo se escribe en la 1ª fila del grupo (ej. 5 módems); al importar se propaga a las filas siguientes. Se guarda el texto completo (ej. <code>Caja 260318 014</code>).<br>
+                            <strong>Estado/Obs:</strong> la columna Estado del Excel se muestra en Obs y también define el estado de inventario (Instalado, Trayecto, etc.).<br>
                             <strong>Importante:</strong> no mover columnas ni cambiar encabezados.
                         </div>
                         <div class="alert alert-secondary small mb-0">
@@ -1492,14 +1505,14 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 }
             } else if (equipoTipo === 'modem') {
                 // Módem - Cargar campos verdes (solo lectura)
-                document.getElementById('modemMarca').value = equipoData.marca || '-';
-                document.getElementById('modemModelo').value = equipoData.modelo || '-';
-                document.getElementById('modemImei').value = equipoData.imei || '-';
-                document.getElementById('modemSerie').value = equipoData.serie || '-';
-                document.getElementById('modemFechaRecepcion').value = equipoData.fecha_recepcion || '-';
-                document.getElementById('modemFechaEntrega').value = equipoData.fecha_entrega || '-';
-                document.getElementById('modemCaja').value = equipoData.caja || '-';
-                document.getElementById('modemTecnico').value = equipoData.tecnico_responsable || '-';
+                document.getElementById('modemMarca').value = equipoData.marca || 'No hay';
+                document.getElementById('modemModelo').value = equipoData.modelo || 'No hay';
+                document.getElementById('modemImei').value = equipoData.imei || 'No hay';
+                document.getElementById('modemSerie').value = equipoData.serie || 'No hay';
+                document.getElementById('modemFechaRecepcion').value = equipoData.fecha_recepcion || 'No hay';
+                document.getElementById('modemFechaEntrega').value = equipoData.fecha_entrega || 'No hay';
+                document.getElementById('modemCaja').value = equipoData.caja || 'No hay';
+                document.getElementById('modemTecnico').value = equipoData.tecnico_responsable || 'No hay';
                 
                 // Cargar campos amarillos (modificables)
                 const clienteModem = document.getElementById('modemCliente');
@@ -1563,14 +1576,14 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 const medidorEntregadoAInfo = document.getElementById('medidorEntregadoAInfo');
                 const medidorObservaciones = document.getElementById('medidorObservaciones');
 
-                if (medidorFechaRecepcion) medidorFechaRecepcion.value = equipoData.fecha_recepcion || '-';
-                if (medidorBodega) medidorBodega.value = equipoData.bodega || '-';
-                if (medidorMarca) medidorMarca.value = equipoData.marca || '-';
-                if (medidorCaja) medidorCaja.value = equipoData.caja || '-';
-                if (medidorSerie) medidorSerie.value = equipoData.serie || '-';
-                if (medidorModulo) medidorModulo.value = equipoData.modulo || '-';
-                if (medidorEntregadoAInfo) medidorEntregadoAInfo.value = equipoData.entregado_a_info || '-';
-                if (medidorObservaciones) medidorObservaciones.value = equipoData.observaciones || '-';
+                if (medidorFechaRecepcion) medidorFechaRecepcion.value = equipoData.fecha_recepcion || 'No hay';
+                if (medidorBodega) medidorBodega.value = equipoData.bodega || 'No hay';
+                if (medidorMarca) medidorMarca.value = equipoData.marca || 'No hay';
+                if (medidorCaja) medidorCaja.value = equipoData.caja || 'No hay';
+                if (medidorSerie) medidorSerie.value = equipoData.serie || 'No hay';
+                if (medidorModulo) medidorModulo.value = (equipoData.modulo !== undefined && equipoData.modulo !== null && equipoData.modulo !== '') ? equipoData.modulo : 'No hay';
+                if (medidorEntregadoAInfo) medidorEntregadoAInfo.value = equipoData.entregado_a_info || 'No hay';
+                if (medidorObservaciones) medidorObservaciones.value = equipoData.observaciones || 'No hay';
                 
                 if (fechaInput) {
                     fechaInput.value = equipoData.fecha_entrega || obtenerFechaHoy();
@@ -1930,7 +1943,7 @@ $(document).ready(function() {
             paging: false,
             searching: false,
             info: false,
-            order: [[0, 'desc']],
+            order: [[0, 'asc']],
             autoWidth: false,
             columnDefs: [
                 {
