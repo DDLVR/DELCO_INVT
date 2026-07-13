@@ -183,6 +183,14 @@ def _as_text_id(valor) -> str:
     return str(valor).strip().strip("'").strip('"').strip()
 
 
+def _normalizar_caja_modem(valor) -> str:
+    """
+    Conserva el texto de caja del Excel (ej. 'Caja 1', 'Caja 260318 014').
+    Solo limpia espacios / basura; no se altera el número de lote.
+    """
+    return _as_text_id(valor)
+
+
 def _reconstruir_ipv4_desde_digitos(digits: str) -> list[str]:
     """Reconstruye candidatos IPv4 cuando Excel guardó la IP como entero sin puntos."""
     n = len(digits)
@@ -354,6 +362,10 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
         tipo = tipo_equipo.upper()
         cache_clientes = {}
         cache_medidores = {}
+        # En Maestro Módem, "Caja N" solo aparece en la 1ª fila del grupo (~5 equipos);
+        # las siguientes vienen vacías y heredan la misma caja.
+        caja_modem_actual = ''
+        imeis_modem_en_import = {}
 
         def buscar_medidor(serie_medidor):
             serie_m = _as_text_id(serie_medidor)
@@ -414,7 +426,11 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         modulo = None
 
                     estado_obj = _resolver_estado_inventario(get_val(valores, 'estado'), 'En bodega')
-                    cliente_obj = obtener_o_crear_cliente(get_val(valores, 'cliente'), cache_clientes)
+                    cliente_raw = get_val(valores, 'cliente')
+                    cliente_obj = obtener_o_crear_cliente(cliente_raw, cache_clientes)
+                    cliente_texto = _as_text_id(cliente_raw)
+                    if cliente_texto.upper() in {'#N/A', 'N/A', 'NONE', 'NULL'}:
+                        cliente_texto = ''
                     entregado_a_info = _as_text_id(get_val(valores, 'entregado_a', 'entregado_a_'))
                     bodega_ref = _as_text_id(get_val(valores, 'bodega'))
                     correlativo = get_val(valores, 'numero', '#')
@@ -427,13 +443,18 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         'modulo': modulo,
                         'tipo_medidor': tipo_medidor,
                         'fecha_entrega': fecha_entrega,
-                        'entregado_a_info': entregado_a_info,
                         'estado_inventario': estado_obj,
-                        'cliente': cliente_obj,
                         'ubicacion_actual': bodega,
                     }
-                    if correlativo:
-                        defaults['observaciones'] = f'Correlativo: {correlativo}'
+                    if entregado_a_info:
+                        defaults['entregado_a_info'] = entregado_a_info
+                    if cliente_obj is not None:
+                        defaults['cliente'] = cliente_obj
+                        defaults['cliente_otro'] = ''
+                    elif cliente_texto:
+                        defaults['cliente_otro'] = cliente_texto
+                    if correlativo not in (None, ''):
+                        defaults['observaciones'] = f'Correlativo: {_as_text_id(correlativo)}'
 
                     medidor, created = _con_reintento_sqlite(
                         lambda: Medidor.objects.update_or_create(serie=serie, defaults=defaults)
@@ -546,10 +567,19 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         get_val(valores, 'fecha_entrega', 'fecha_de_entrega'),
                         'Fecha Entrega',
                     )
-                    caja = _as_text_id(get_val(valores, 'caja')) or None
+                    caja_raw = _normalizar_caja_modem(get_val(valores, 'caja'))
+                    if caja_raw:
+                        caja_modem_actual = caja_raw
+                    caja = caja_modem_actual or None
                     tecnico = _as_text_id(get_val(valores, 'tecnico_responsable', 'tecnico'))
-                    cliente_obj = obtener_o_crear_cliente(get_val(valores, 'cliente'), cache_clientes)
-                    medidor_obj = buscar_medidor(get_val(valores, 'medidor'))
+                    cliente_raw = get_val(valores, 'cliente')
+                    cliente_obj = obtener_o_crear_cliente(cliente_raw, cache_clientes)
+                    cliente_texto = _as_text_id(cliente_raw)
+                    if cliente_texto.upper() in {'#N/A', 'N/A', 'NONE', 'NULL'}:
+                        cliente_texto = ''
+                    medidor_raw = get_val(valores, 'medidor')
+                    medidor_obj = buscar_medidor(medidor_raw)
+                    medidor_texto = _as_text_id(medidor_raw) if not medidor_obj else ''
 
                     ip = _normalizar_direccion_ip(get_val(valores, 'ip', 'direccion_ip'))
                     puerto = _as_text_id(get_val(valores, 'puerto'))
@@ -560,7 +590,13 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         if i1 < len(valores):
                             marca_secundaria = _as_text_id(valores[i1])
 
-                    observaciones = _as_text_id(get_val(valores, 'obs', 'observaciones', 'observacion'))
+                    # En el maestro la columna se llama "Estado" (antes Obs): es texto libre
+                    # que se muestra como Obs en la página. Status suele venir vacío.
+                    texto_estado_obs = _as_text_id(
+                        get_val(valores, 'obs', 'observaciones', 'observacion', 'estado')
+                    )
+                    status_col = _as_text_id(get_val(valores, 'status'))
+                    observaciones = texto_estado_obs
                     retirado = _as_text_id(get_val(valores, 'retirado'))
                     serie_secundaria = ''
                     if headers_norm.count('serie') > 1:
@@ -570,17 +606,22 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     irregularidad = _as_text_id(get_val(valores, 'irregularidad'))
                     proyecto = _as_text_id(get_val(valores, 'proyecto'))
 
-                    estado_raw = get_val(valores, 'status', 'estado') or observaciones
+                    # Estado de inventario: Status si existe; si no, se infiere del texto Estado/Obs
+                    estado_raw = status_col or texto_estado_obs
                     estado_obj = _resolver_estado_inventario(estado_raw, 'En bodega')
 
                     if imei:
-                        conflicto = Modem.objects.filter(imei=imei).exclude(serie=serie).only('serie').first()
-                        if conflicto:
-                            # No bloquear la serie: conserva el IMEI en el primer modem y deja este sin IMEI.
+                        # Duplicado dentro del mismo Excel: el primero conserva el IMEI.
+                        otra_serie = imeis_modem_en_import.get(imei)
+                        if otra_serie and otra_serie != serie:
                             observaciones = (
-                                f'{observaciones} | IMEI {imei} ya usado en serie {conflicto.serie}'
+                                f'{observaciones} | IMEI duplicado en Excel (también serie {otra_serie})'
                             ).strip(' |')
                             imei = None
+                        else:
+                            # Si el IMEI estaba en otro módem de BD, se libera (la serie del Excel manda).
+                            Modem.objects.filter(imei=imei).exclude(serie=serie).update(imei=None)
+                            imeis_modem_en_import[imei] = serie
 
                     defaults = {
                         'marca': marca,
@@ -590,8 +631,6 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         'fecha_entrega': fecha_entrega,
                         'caja': caja,
                         'tecnico_responsable': tecnico,
-                        'cliente': cliente_obj,
-                        'medidor': medidor_obj,
                         'observaciones': observaciones,
                         'ip': ip,
                         'puerto': puerto,
@@ -603,6 +642,16 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         'estado_inventario': estado_obj,
                         'ubicacion_actual': bodega,
                     }
+                    if cliente_obj is not None:
+                        defaults['cliente'] = cliente_obj
+                        defaults['cliente_otro'] = ''
+                    elif cliente_texto:
+                        defaults['cliente_otro'] = cliente_texto
+                    if medidor_obj is not None:
+                        defaults['medidor'] = medidor_obj
+                        defaults['medidor_otro'] = ''
+                    elif medidor_texto:
+                        defaults['medidor_otro'] = medidor_texto
                     modem, created = _con_reintento_sqlite(
                         lambda: Modem.objects.update_or_create(serie=serie, defaults=defaults)
                     )
@@ -1358,9 +1407,12 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
     
     # Encabezados según tipo
     if tipo_equipo.upper() == 'MEDIDORES':
-        # Debe coincidir con el formato de importación de medidores
-        headers = ['#', 'Fecha Recepción', 'Bodega', 'Marca', 'Caja', 'Medidor', 'Módulo', 'Tipo Medidor', 'Fecha Entrega', 'Entregado A', 'Estado', 'Cliente']
-        col_widths = [6, 16, 18, 15, 12, 16, 12, 14, 16, 20, 15, 15]
+        # Mismo orden/nombres que el maestro Excel de medidores
+        headers = [
+            '#', 'FECHA DE RECEPCION', 'BODEGA', 'MARCA', 'CAJA', 'MEDIDOR', 'MODULO',
+            'FECHA DE ENTREGA', 'ENTREGADO A:', 'ESTADO', 'CLIENTE', 'Tipo Medidor',
+        ]
+        col_widths = [6, 18, 12, 12, 12, 14, 10, 16, 18, 14, 14, 14]
     elif tipo_equipo.upper() == 'SIM':
         headers = ['IMEI', 'OPERADOR', 'ABONADO', 'DIRECCIÓN IP', 'APN', 'FECHA RECEPCIÓN', 'ENTREGADO A', 'FECHA ENTREGA', 'ESTADO', 'CLIENTE', 'MEDIDOR']
         col_widths = [18, 15, 18, 18, 25, 18, 18, 18, 15, 15, 15]
@@ -1391,15 +1443,19 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
                 indice,
                 equipo.fecha_recepcion.strftime('%d-%m-%Y') if equipo.fecha_recepcion else '',
                 equipo.bodega or '',
-                equipo.marca,
+                equipo.marca or '',
                 equipo.caja or '',
                 equipo.serie,
                 'SI' if getattr(equipo, 'modulo', None) is True else ('NO' if getattr(equipo, 'modulo', None) is False else ''),
-                equipo.get_tipo_medidor_display() if getattr(equipo, 'tipo_medidor', None) else '',
                 equipo.fecha_entrega.strftime('%d-%m-%Y') if equipo.fecha_entrega else '',
-                equipo.entregado_a.nombre_interno if equipo.entregado_a else (equipo.entregado_a_info or ''),
+                (
+                    equipo.entregado_a.nombre_interno if getattr(equipo, 'entregado_a', None) else ''
+                ) or (equipo.entregado_a_info or '') or (getattr(equipo, 'entregado_a_otro', '') or ''),
                 equipo.estado_inventario.nombre if equipo.estado_inventario else '',
-                equipo.cliente.numero_cliente if equipo.cliente else ''
+                (
+                    equipo.cliente.numero_cliente if getattr(equipo, 'cliente', None) else ''
+                ) or (getattr(equipo, 'cliente_otro', '') or ''),
+                getattr(equipo, 'tipo_medidor', '') or '',
             ]
         elif tipo_equipo.upper() == 'SIM':
             row = [

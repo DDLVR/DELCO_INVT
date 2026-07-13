@@ -695,7 +695,7 @@ def inventario_list_view(request):
             tipo_label='Módem',
             identificador=equipo.serie,
             descripcion=' | '.join(filter(None, [equipo.marca, equipo.modelo, equipo.imei, equipo.caja])),
-            tecnico_display=getattr(getattr(equipo, 'entregado_a', None), 'nombre_interno', '') or getattr(equipo, 'entregado_a_otro', '') or getattr(equipo, 'tecnico_responsable', '') or '',
+            tecnico_display=getattr(equipo, 'tecnico_responsable', '') or getattr(getattr(equipo, 'entregado_a', None), 'nombre_interno', '') or getattr(equipo, 'entregado_a_otro', '') or '',
             estado_nombre=getattr(getattr(equipo, 'estado_inventario', None), 'nombre', '') or '',
             estado_inventario=getattr(equipo, 'estado_inventario', None),
             cliente_numero=getattr(getattr(equipo, 'cliente', None), 'numero_cliente', '') or getattr(equipo, 'cliente_otro', '') or '',
@@ -707,7 +707,7 @@ def inventario_list_view(request):
     if tipo == 'medidor':
         equipos = Medidor.objects.select_related(
             'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
-        ).all().order_by('-id')
+        ).all().order_by('serie')
         titulo = 'Medidores'
     elif tipo == 'sim':
         equipos = SimCard.objects.select_related(
@@ -835,7 +835,6 @@ def inventario_list_view(request):
                 'serie': 'serie__icontains',
                 'marca': 'marca__icontains',
                 'caja': 'caja__icontains',
-                'modulo': 'modulo__icontains',
                 'tipo_medidor': 'tipo_medidor__icontains',
                 'entregado_a': 'entregado_a__nombre_interno__icontains',
                 'proyecto': 'proyecto__icontains',
@@ -845,7 +844,6 @@ def inventario_list_view(request):
                 'serie__icontains',
                 'marca__icontains',
                 'caja__icontains',
-                'modulo__icontains',
                 'tipo_medidor__icontains',
                 'entregado_a__nombre_interno__icontains',
                 'proyecto__icontains',
@@ -897,7 +895,15 @@ def inventario_list_view(request):
             ]
 
         if tipo != 'todos':
-            if campo_busqueda in campos_por_tipo:
+            if tipo == 'medidor' and campo_busqueda == 'modulo':
+                val = busqueda.lower()
+                if val in {'si', 'sí', 'true', '1', 'yes'}:
+                    equipos = equipos.filter(modulo=True)
+                elif val in {'no', 'false', '0'}:
+                    equipos = equipos.filter(modulo=False)
+                else:
+                    equipos = equipos.none()
+            elif campo_busqueda in campos_por_tipo:
                 equipos = equipos.filter(**{campos_por_tipo[campo_busqueda]: busqueda})
             else:
                 query = Q()
@@ -906,6 +912,12 @@ def inventario_list_view(request):
                 ids_estado = _ids_estado_por_busqueda(busqueda)
                 if ids_estado:
                     query |= Q(estado_inventario_id__in=ids_estado)
+                if tipo == 'medidor':
+                    val = busqueda.lower()
+                    if val in {'si', 'sí', 'true', '1', 'yes'}:
+                        query |= Q(modulo=True)
+                    elif val in {'no', 'false', '0'}:
+                        query |= Q(modulo=False)
                 equipos = equipos.filter(query)
 
     total_filtrado = len(equipos)
@@ -943,9 +955,9 @@ def inventario_list_view(request):
                 )
             else:
                 equipo.tecnico_display = (
-                    getattr(getattr(equipo, 'entregado_a', None), 'nombre_interno', '')
+                    getattr(equipo, 'tecnico_responsable', '')
+                    or getattr(getattr(equipo, 'entregado_a', None), 'nombre_interno', '')
                     or getattr(equipo, 'entregado_a_otro', '')
-                    or getattr(equipo, 'tecnico_responsable', '')
                     or ''
                 )
                 equipo.cliente_display = (
@@ -1847,19 +1859,19 @@ def inventario_exportar_view(request):
     
     # Obtener datos base
     if tipo == 'medidor':
-        equipos = Medidor.objects.select_related('entregado_a', 'estado_inventario', 'cliente', 'en_custodia_de', 'ubicacion_actual')
+        equipos = Medidor.objects.select_related('entregado_a', 'estado_inventario', 'cliente', 'en_custodia_de', 'ubicacion_actual').order_by('serie')
         tipo_nombre = 'MEDIDORES'
         nombre_seccion = 'Medidores'
     elif tipo == 'sim':
-        equipos = SimCard.objects.select_related('estado_inventario', 'cliente', 'medidor', 'ubicacion_actual', 'en_custodia_de')
+        equipos = SimCard.objects.select_related('estado_inventario', 'cliente', 'medidor', 'ubicacion_actual', 'en_custodia_de').order_by('imei')
         tipo_nombre = 'SIM'
         nombre_seccion = 'SIM-Cards'
     elif tipo == 'modem':
-        equipos = Modem.objects.select_related('cliente', 'medidor', 'entregado_a', 'estado_inventario', 'en_custodia_de', 'ubicacion_actual')
+        equipos = Modem.objects.select_related('cliente', 'medidor', 'entregado_a', 'estado_inventario', 'en_custodia_de', 'ubicacion_actual').order_by('serie')
         tipo_nombre = 'MODEMS'
         nombre_seccion = 'Modems'
     else:
-        equipos = Medidor.objects.select_related('entregado_a', 'estado_inventario', 'cliente', 'en_custodia_de', 'ubicacion_actual')
+        equipos = Medidor.objects.select_related('entregado_a', 'estado_inventario', 'cliente', 'en_custodia_de', 'ubicacion_actual').order_by('serie')
         tipo_nombre = 'MEDIDORES'
         nombre_seccion = 'Medidores'
     
