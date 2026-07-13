@@ -622,3 +622,93 @@ class MoreAppEliminarMasivoTests(TestCase):
 		response = self.client.post(reverse('reportes_moreapp_eliminar_masivo'), {})
 		self.assertEqual(response.status_code, 302)
 		self.assertEqual(response.url, reverse('reportes_moreapp_list'))
+
+
+@override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
+class MoreAppAvisoTests(TestCase):
+	"""P4: aviso visible al administrativo cuando hay MoreApp por revisar."""
+
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='77777777-7',
+			email='admin_aviso@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Aviso',
+			nombre_interno='admin_aviso',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.tecnico = Usuario.objects.create_user(
+			rut='76767676-6',
+			email='tecnico_aviso@delco.cl',
+			password=self.password,
+			nombre='Tecnico',
+			apellido='Aviso',
+			nombre_interno='tecnico_aviso',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.factory = RequestFactory()
+
+	def _crear_registro(self, submission_id, estado_revision='PENDIENTE'):
+		from ordenes_trabajo.models import IntegracionMoreApp
+
+		return IntegracionMoreApp.objects.create(
+			moreapp_submission_id=submission_id,
+			estado_sincronizacion='PROCESADO',
+			estado_revision=estado_revision,
+			nombre_formulario='Mantenimiento Telemetria V3',
+			numero_correlativo=200,
+			datos_recibidos={},
+			datos_procesados={},
+		)
+
+	def _request_as(self, user, path='/'):
+		request = self.factory.get(path)
+		request.user = user
+		middleware = SessionMiddleware(lambda req: None)
+		middleware.process_request(request)
+		request.session.save()
+		return request
+
+	def test_aviso_activo_para_admin_con_pendientes(self):
+		from web.moreapp_avisos import construir_aviso_moreapp
+
+		self._crear_registro('aviso-pend-1')
+		self._crear_registro('aviso-adv-1', estado_revision='CON_ADVERTENCIA')
+		aviso = construir_aviso_moreapp(self._request_as(self.admin))
+		self.assertTrue(aviso['activo'])
+		self.assertEqual(aviso['por_revisar'], 2)
+		self.assertEqual(aviso['pendientes'], 1)
+		self.assertEqual(aviso['advertencias'], 1)
+		self.assertTrue(len(aviso['recientes']) >= 1)
+
+	def test_aviso_inactivo_para_tecnico(self):
+		from web.moreapp_avisos import construir_aviso_moreapp
+
+		self._crear_registro('aviso-tec-1')
+		aviso = construir_aviso_moreapp(self._request_as(self.tecnico))
+		self.assertFalse(aviso['activo'])
+		self.assertEqual(aviso['por_revisar'], 0)
+
+	def test_visitar_pendientes_marca_aviso_como_visto(self):
+		from web.moreapp_avisos import (
+			SESSION_KEY_VISTO,
+			construir_aviso_moreapp,
+			marcar_aviso_moreapp_visto,
+		)
+
+		self._crear_registro('aviso-visto-1')
+		request = self._request_as(self.admin, '/operacional/pendientes/')
+		self.assertIsNone(request.session.get(SESSION_KEY_VISTO))
+
+		marcar_aviso_moreapp_visto(request)
+		self.assertIsNotNone(request.session.get(SESSION_KEY_VISTO))
+
+		aviso = construir_aviso_moreapp(request)
+		self.assertEqual(aviso['nuevos'], 0)
+		self.assertTrue(aviso['activo'])
+		self.assertEqual(aviso['por_revisar'], 1)

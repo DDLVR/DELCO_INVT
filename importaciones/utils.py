@@ -3,9 +3,11 @@ Utilidades para importación desde Excel
 """
 
 import json
-import openpyxl
 import logging
+import re
 import unicodedata
+
+import openpyxl
 from importaciones.models import ImportacionExcel, ImportacionExcelError
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion, MovimientoInventario, MovimientoItem
 from clientes.models import Cliente
@@ -20,31 +22,245 @@ from web.services.validators import (
 from web.services.audit import AuditEvent, register_audit_event
 
 
+from django.db import OperationalError, transaction
+from django.db.utils import IntegrityError
+
 logger = logging.getLogger(__name__)
+
+
+def _con_reintento_sqlite(callable_fn, intentos=6, espera=0.4):
+    """Reintenta operaciones cuando SQLite responde database is locked."""
+    import time
+
+    ultimo = None
+    for i in range(intentos):
+        try:
+            return callable_fn()
+        except OperationalError as exc:
+            ultimo = exc
+            if 'locked' not in str(exc).lower() or i == intentos - 1:
+                raise
+            time.sleep(espera * (i + 1))
+    raise ultimo
+
+
+def _normalizar_header_equipo(valor) -> str:
+    if valor is None:
+        return ''
+    texto = str(valor).strip().lower()
+    texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('ascii')
+    texto = texto.replace(':', '').replace('#', 'numero')
+    texto = texto.replace(' ', '_')
+    while '__' in texto:
+        texto = texto.replace('__', '_')
+    return texto
+
+
+def _seleccionar_hoja_equipos(wb, tipo_equipo: str):
+    """Elige la hoja de datos real (evita pivotes tipo Consolidado)."""
+    tipo = (tipo_equipo or '').upper()
+    preferidas = {
+        'MEDIDORES': ('medidor', 'directo', 'indirecto'),
+        'SIM': ('sim',),
+        'MODEMS': ('modem', 'modem', 'maestro modem'),
+    }
+    excluidas = ('consolidado', 'hoja1', 'hoja2', 'hoja3', 'hoja4', 'resumen', 'pivot')
+
+    nombres = list(wb.sheetnames)
+    if len(nombres) == 1:
+        return wb[nombres[0]]
+
+    claves = preferidas.get(tipo, ())
+    for nombre in nombres:
+        n = _normalizar_header_equipo(nombre).replace('_', ' ')
+        if any(n.startswith(ex) or n == ex for ex in excluidas):
+            continue
+        if any(clave in n for clave in claves):
+            return wb[nombre]
+
+    # Fallback: primera hoja que no sea consolidado/hoja auxiliar
+    for nombre in nombres:
+        n = _normalizar_header_equipo(nombre).replace('_', ' ')
+        if not any(n.startswith(ex) or n == ex for ex in excluidas):
+            return wb[nombre]
+    return wb.active
+
+
+def _resolver_estado_inventario(nombre_estado, default_nombre='En bodega'):
+    """Mapea estados del Excel a EstadoInventario del sistema."""
+    if nombre_estado is None or str(nombre_estado).strip() == '':
+        estado = EstadoInventario.objects.filter(nombre=default_nombre).first()
+        if not estado:
+            estado = EstadoInventario.objects.create(nombre=default_nombre)
+        return estado
+
+    texto = str(nombre_estado).strip()
+    texto_n = _normalizar_header_equipo(texto).replace('_', ' ')
+
+    aliases = {
+        'disponible': 'En bodega',
+        'bodega': 'En bodega',
+        'en bodega': 'En bodega',
+        'instalado': 'Instalado',
+        'trayecto': 'En Trayecto',
+        'en trayecto': 'En Trayecto',
+        'retirado': 'Retirado',
+        'devuelta': 'Devuelta',
+        'devuelto': 'Devuelta',
+        'sin conexion': 'Sin Conexión',
+        'con problemas': 'Con Problemas',
+        'mal estado': 'Dado de baja',
+        'custodia': 'En custodia técnico',
+        'en custodia tecnico': 'En custodia técnico',
+        'peaje': 'En peaje',
+        'en peaje': 'En peaje',
+        'reparacion': 'En reparación',
+        'en reparacion': 'En reparación',
+        'revision': 'En revisión',
+        'en revision': 'En revisión',
+        'dado de baja': 'Dado de baja',
+        'malo': 'Dado de baja',
+    }
+    for clave, destino in aliases.items():
+        if clave in texto_n:
+            estado = EstadoInventario.objects.filter(nombre=destino).first()
+            if not estado:
+                estado = EstadoInventario.objects.create(nombre=destino)
+            return estado
+
+    estado = EstadoInventario.objects.filter(nombre__iexact=texto).first()
+    if estado:
+        return estado
+    estado = EstadoInventario.objects.filter(nombre__icontains=texto).first()
+    if estado:
+        return estado
+
+    estado = EstadoInventario.objects.filter(nombre=default_nombre).first()
+    if not estado:
+        estado = EstadoInventario.objects.create(nombre=default_nombre)
+    return estado
+
+
+def _parse_fecha_flexible(valor, nombre_columna='Fecha'):
+    from datetime import datetime, date
+    if valor is None or valor == '':
+        return None
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date):
+        return valor
+    if hasattr(valor, 'date') and not isinstance(valor, (str, bytes)):
+        try:
+            return valor.date()
+        except Exception:
+            pass
+
+    texto = str(valor).strip()
+    if 'datetime.datetime' in texto:
+        import re
+        match = re.search(r'datetime\.datetime\s*\(\s*(\d+),\s*(\d+),\s*(\d+)', texto)
+        if match:
+            y, m, d = match.groups()
+            return date(int(y), int(m), int(d))
+
+    for fmt in ('%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y', '%Y/%m/%d'):
+        try:
+            return datetime.strptime(texto, fmt).date()
+        except Exception:
+            continue
+    raise ValueError(f'Columna "{nombre_columna}": formato no válido. Valor recibido: {valor}')
+
+
+def _as_text_id(valor) -> str:
+    if valor is None:
+        return ''
+    if isinstance(valor, float):
+        if valor.is_integer():
+            return str(int(valor))
+        return str(valor).strip()
+    if isinstance(valor, int):
+        return str(valor)
+    return str(valor).strip().strip("'").strip('"').strip()
+
+
+def _reconstruir_ipv4_desde_digitos(digits: str) -> list[str]:
+    """Reconstruye candidatos IPv4 cuando Excel guardó la IP como entero sin puntos."""
+    n = len(digits)
+    candidatos = []
+    for a in range(1, 4):
+        for b in range(1, 4):
+            for c in range(1, 4):
+                d = n - a - b - c
+                if d < 1 or d > 3:
+                    continue
+                parts = [digits[0:a], digits[a:a + b], digits[a + b:a + b + c], digits[a + b + c:]]
+                if any(len(p) > 1 and p[0] == '0' for p in parts):
+                    continue
+                octets = [int(p) for p in parts]
+                if all(0 <= o <= 255 for o in octets):
+                    candidatos.append('.'.join(str(o) for o in octets))
+    vistos = set()
+    unicos = []
+    for ip in candidatos:
+        if ip not in vistos:
+            vistos.add(ip)
+            unicos.append(ip)
+    return unicos
+
+
+def _normalizar_direccion_ip(valor) -> str:
+    """
+    Normaliza IP desde Excel.
+    Excel a veces convierte 10.118.170.179 en el entero 10118170179.
+    """
+    if valor is None:
+        return ''
+    if isinstance(valor, float) and valor.is_integer():
+        valor = int(valor)
+    texto = str(valor).strip().strip("'").strip('"')
+    if not texto or texto.upper() in {'NONE', 'NULL', 'N/A', '#N/A'}:
+        return ''
+
+    if re.fullmatch(r'\d{1,3}(\.\d{1,3}){3}', texto):
+        partes = [int(p) for p in texto.split('.')]
+        if all(0 <= p <= 255 for p in partes):
+            return '.'.join(str(p) for p in partes)
+        return texto
+
+    digits = re.sub(r'\D', '', texto)
+    if re.fullmatch(r'\d{8,12}', digits) and '.' not in texto:
+        candidatos = _reconstruir_ipv4_desde_digitos(digits)
+        if not candidatos:
+            return texto
+        preferidos = [ip for ip in candidatos if ip.startswith('10.118.')]
+        if not preferidos:
+            preferidos = [ip for ip in candidatos if ip.startswith('10.')]
+        if not preferidos:
+            preferidos = candidatos
+        preferidos.sort(
+            key=lambda ip: (len(ip.split('.')[2]), int(ip.split('.')[2])),
+            reverse=True,
+        )
+        return preferidos[0]
+
+    return texto
 
 
 def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
     """
     Importa equipos (Medidores, SIM, Módems) desde archivo Excel.
-    
-    Formato esperado:
-    - Medidores: serie, marca, modelo, identificador_interno (opcional)
-    - SIM: msisdn, proveedor, serie_plastico, ip_fija (opcional)
-    - Módems: fecha_recepcion, bodega, marca, caja, serie, modulo
-    
-    Retorna: ImportacionExcel instance
-    """
-    from datetime import datetime
 
+    - Elige la hoja correcta (no pivotes).
+    - Mapea columnas por encabezado.
+    - Si el equipo ya existe (serie/IMEI), ACTUALIZA en vez de duplicar.
+    """
     def error_columna(columna, mensaje, valor=None):
-        """Genera un mensaje homogéneo y legible para errores por columna."""
         base = f'Columna "{columna}": {mensaje}'
         if valor is not None and str(valor).strip() != '':
             return f'{base}. Valor recibido: {valor}'
         return base
 
     def fila_a_texto(headers_fila, valores_fila):
-        """Convierte una fila en texto columna: valor para facilitar corrección."""
         data = {}
         for i, valor in enumerate(valores_fila):
             nombre_columna = headers_fila[i] if i < len(headers_fila) else None
@@ -52,7 +268,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
             data[nombre_columna] = valor
         return json.dumps(data, ensure_ascii=False, default=str)
 
-    def registrar_movimiento_importacion(equipo_obj, tipo_item, estado_obj_local, detalle, fila):
+    def registrar_movimiento_importacion(equipo_obj, tipo_item, detalle, fila):
         try:
             movimiento = MovimientoInventario.objects.create(
                 tipo='IMPORTACION',
@@ -74,674 +290,363 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                 item_kwargs['modem'] = equipo_obj
             MovimientoItem.objects.create(**item_kwargs)
         except Exception:
-            # No interrumpir importación si falla el registro de trazabilidad
             pass
-    
-    # Crear registro de importación
+
+    def obtener_o_crear_cliente(numero, cache_clientes):
+        if numero is None or str(numero).strip() == '':
+            return None
+        num = _as_text_id(numero)
+        if not num or num.upper() in {'#N/A', 'N/A', 'NONE', 'NULL'}:
+            return None
+        if num in cache_clientes:
+            return cache_clientes[num]
+
+        def _get():
+            cliente = Cliente.objects.filter(numero_cliente=num).first()
+            if cliente:
+                return cliente
+            return Cliente.objects.create(
+                numero_cliente=num,
+                direccion=f'Cliente {num}',
+                comuna='Por definir',
+            )
+
+        cliente = _con_reintento_sqlite(_get)
+        cache_clientes[num] = cliente
+        return cliente
+
     importacion = ImportacionExcel.objects.create(
         tipo='EQUIPOS',
         archivo_original=archivo.name if hasattr(archivo, 'name') else 'Upload',
         usuario=usuario,
     )
-    
-    try:
-        # Cargar workbook
-        wb = openpyxl.load_workbook(archivo)
-        ws = wb.active
 
-        def normalizar_header(valor):
-            """Normaliza encabezados para mapear columnas de forma robusta."""
-            if valor is None:
-                return ''
-            texto = str(valor).strip().lower()
-            texto = unicodedata.normalize('NFKD', texto).encode('ascii', 'ignore').decode('ascii')
-            texto = texto.replace(':', '').replace('#', 'numero')
-            texto = texto.replace(' ', '_')
-            while '__' in texto:
-                texto = texto.replace('__', '_')
-            return texto
-        
-        # Leer headers de la primera fila para debugging (sin imprimir a stdout)
+    try:
+        wb = openpyxl.load_workbook(archivo, data_only=True)
+        ws = _seleccionar_hoja_equipos(wb, tipo_equipo)
+
         headers = [cell.value for cell in ws[1]]
-        logger.debug('Headers encontrados en importacion: %s', headers)
-        headers_norm = [normalizar_header(h) for h in headers]
+        headers_norm = [_normalizar_header_equipo(h) for h in headers]
+        logger.debug('Hoja equipos=%s headers=%s', ws.title, headers)
 
         def idx_col(*aliases):
             for alias in aliases:
-                alias_n = normalizar_header(alias)
+                alias_n = _normalizar_header_equipo(alias)
                 if alias_n in headers_norm:
                     return headers_norm.index(alias_n)
             return None
 
-        medidores_cols = {
-            'correlativo': idx_col('numero', '#'),
-            'fecha_recepcion': idx_col('fecha_recepcion', 'fecha_de_recepcion'),
-            'bodega': idx_col('bodega'),
-            'marca': idx_col('marca'),
-            'caja': idx_col('caja'),
-            'serie': idx_col('medidor', 'serie'),
-            'modulo': idx_col('modulo'),
-            'fecha_entrega': idx_col('fecha_de_entrega', 'fecha_entrega'),
-            'entregado_a': idx_col('entregado_a', 'entregado_a_'),
-            'estado': idx_col('estado'),
-            'cliente': idx_col('cliente'),
-            'tipo_medidor': idx_col('tipo_medidor', 'tipo_de_medidor'),
-        }
-        
-        # Ubicación por defecto (Bodega)
+        def get_val(valores, *aliases):
+            i = idx_col(*aliases)
+            if i is None or i >= len(valores):
+                return None
+            return valores[i]
+
         bodega = Ubicacion.objects.filter(nombre__icontains='Bodega').first()
         if not bodega:
-            bodega = Ubicacion.objects.create(
-                tipo='BODEGA_DELCO',
-                nombre='Bodega Principal'
-            )
-        
-        # Estado por defecto (Bodega)
-        estado = EstadoInventario.objects.filter(nombre='En bodega').first()
-        if not estado:
-            estado = EstadoInventario.objects.create(nombre='En bodega')
-        
+            bodega = Ubicacion.objects.create(tipo='BODEGA_DELCO', nombre='Bodega Principal')
+
         contador_filas = 0
         exitosas = 0
         fallidas = 0
-        
-        # Iterar filas (saltando header)
-        for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), start=2):
-            contador_filas += 1
-            
-            try:
-                valores = [cell.value for cell in row]
-                
-                # Debug opcional de primera fila sin uso de print (evita errores de encoding en hosting)
-                if idx == 2:
-                    logger.debug('Primera fila de datos (fila %s): %s', idx, valores)
-                
-                # Validar que la fila no esté vacía (al menos las primeras 3 columnas deben tener datos)
-                if not any(valores[:3]):
-                    continue
-                
-                # Si la primera columna está vacía, probablemente terminaron los datos reales
-                if not valores[0]:
-                    continue
-                
-                # Procesar según tipo de equipo
-                if tipo_equipo.upper() == 'MEDIDORES':
-                    # Mapear por nombre de columna para soportar cambios de orden.
-                    def get_val(campo):
-                        idx_c = medidores_cols.get(campo)
-                        if idx_c is None or idx_c >= len(valores):
-                            return None
-                        return valores[idx_c]
+        creadas = 0
+        actualizadas = 0
+        tipo = tipo_equipo.upper()
+        cache_clientes = {}
+        cache_medidores = {}
 
-                    # Saltar filas vacías o de plantilla (con formato pero sin datos reales).
-                    fecha_recepcion_raw = get_val('fecha_recepcion')
-                    serie_raw = get_val('serie')
-                    tipo_medidor_raw = get_val('tipo_medidor')
-                    if not any([
-                        fecha_recepcion_raw,
-                        serie_raw,
-                        tipo_medidor_raw,
-                    ]):
+        def buscar_medidor(serie_medidor):
+            serie_m = _as_text_id(serie_medidor)
+            if not serie_m:
+                return None
+            if serie_m in cache_medidores:
+                return cache_medidores[serie_m]
+            obj = Medidor.objects.filter(serie=serie_m).first()
+            cache_medidores[serie_m] = obj
+            return obj
+
+        for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), start=2):
+            valores = [cell.value for cell in row]
+            if not any(v is not None and str(v).strip() != '' for v in valores):
+                continue
+
+            contador_filas += 1
+            try:
+                if tipo == 'MEDIDORES':
+                    fecha_recepcion_raw = get_val(valores, 'fecha_recepcion', 'fecha_de_recepcion')
+                    serie_raw = get_val(valores, 'medidor', 'serie')
+                    tipo_medidor_raw = get_val(valores, 'tipo_medidor', 'tipo_de_medidor')
+                    if not any([fecha_recepcion_raw, serie_raw, tipo_medidor_raw]):
+                        contador_filas -= 1
                         continue
 
-                    correlativo = get_val('correlativo')
-                    fecha_recepcion = fecha_recepcion_raw
-                    bodega_ref = get_val('bodega')
-                    marca = get_val('marca')
-                    caja = get_val('caja')
-                    serie = serie_raw
-                    modulo = get_val('modulo')
-                    tipo_medidor = tipo_medidor_raw
-                    fecha_entrega = get_val('fecha_entrega')
-                    entregado_a_nombre = get_val('entregado_a')
-                    estado_nombre = get_val('estado')
-                    cliente_numero = get_val('cliente')
-
-                    # Validar campos obligatorios reales
                     faltantes = []
-                    if not fecha_recepcion:
+                    if not fecha_recepcion_raw:
                         faltantes.append('Fecha Recepción')
-                    if not serie:
+                    if not serie_raw:
                         faltantes.append('Medidor/Serie')
-                    if not tipo_medidor:
+                    if not tipo_medidor_raw:
                         faltantes.append('Tipo Medidor')
                     if faltantes:
-                        raise ValueError(
-                            f'Faltan columnas requeridas: {", ".join(faltantes)}'
-                        )
+                        raise ValueError(f'Faltan columnas requeridas: {", ".join(faltantes)}')
 
-                    # Convertir serie y caja a string (pero serie debe ser igual a columna Medidor)
-                    serie = str(serie).strip() if serie else None
-                    caja = str(caja).strip() if caja else None
-                    marca = str(marca).strip() if marca else None  # Igual a planilla
-                    tipo_medidor = str(tipo_medidor).strip().upper() if tipo_medidor else ''
-
-                    if tipo_medidor in ['D', 'DIR', 'DIRECTO']:
+                    serie = _as_text_id(serie_raw)
+                    marca = _as_text_id(get_val(valores, 'marca')) or None
+                    caja = _as_text_id(get_val(valores, 'caja')) or None
+                    tipo_medidor = _as_text_id(tipo_medidor_raw).upper()
+                    if tipo_medidor in {'D', 'DIR', 'DIRECTO'}:
                         tipo_medidor = 'DIRECTO'
-                    elif tipo_medidor in ['I', 'IND', 'INDIRECTO']:
+                    elif tipo_medidor in {'I', 'IND', 'INDIRECTO'}:
                         tipo_medidor = 'INDIRECTO'
                     else:
-                        raise ValueError(
-                            error_columna(
-                                'Tipo Medidor',
-                                'valor inválido. Valores válidos: DIRECTO o INDIRECTO',
-                                tipo_medidor,
-                            )
-                        )
+                        raise ValueError(error_columna('Tipo Medidor', 'valores válidos: DIRECTO o INDIRECTO', tipo_medidor))
 
-                    # Convertir fecha de recepción de forma tolerante
-                    from datetime import datetime, date
-                    if isinstance(fecha_recepcion, datetime):
-                        fecha_recepcion = fecha_recepcion.date()
-                    elif isinstance(fecha_recepcion, date):
-                        pass
-                    else:
-                        # Si es string tipo 'datetime.datetime(YYYY, MM, DD, ...)', convertir a DD/MM/YYYY (robusto)
-                        if isinstance(fecha_recepcion, str) and 'datetime.datetime' in fecha_recepcion:
-                            import re
-                            fr = fecha_recepcion.replace("'", "").replace('"', '').replace('\\u0027', '').replace('\\', '').strip()
-                            match = re.search(r'datetime\.datetime\s*\(\s*(\d+),\s*(\d+),\s*(\d+)', fr)
-                            if match:
-                                y, m, d = match.groups()
-                                fecha_recepcion = f"{int(d):02d}/{int(m):02d}/{y}"
-                        formatos = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
-                        convertido = False
-                        for fmt in formatos:
-                            try:
-                                fecha_recepcion = datetime.strptime(str(fecha_recepcion).strip(), fmt).date()
-                                convertido = True
-                                break
-                            except Exception:
-                                continue
-                        if not convertido:
-                            raise ValueError(
-                                error_columna(
-                                    'Fecha Recepción',
-                                    'formato no válido. Usa DD/MM/AAAA o DD-MM-AAAA',
-                                    fecha_recepcion,
-                                )
-                            )
+                    fecha_recepcion = _parse_fecha_flexible(fecha_recepcion_raw, 'Fecha Recepción')
+                    fecha_entrega = _parse_fecha_flexible(get_val(valores, 'fecha_de_entrega', 'fecha_entrega'), 'Fecha Entrega')
 
-                    # Convertir modulo desde texto SI/NO a booleano para el modelo
+                    modulo = get_val(valores, 'modulo')
                     if isinstance(modulo, str):
-                        modulo = modulo.strip().lower()
-                        if modulo in ['si', 'sí', 'yes', 'true', '1']:
-                            modulo = True
-                        elif modulo in ['no', 'false', '0']:
-                            modulo = False
-                        else:
-                            modulo = None
+                        m = modulo.strip().lower()
+                        modulo = True if m in {'si', 'sí', 'yes', 'true', '1'} else False if m in {'no', 'false', '0'} else None
                     elif isinstance(modulo, (int, bool)):
                         modulo = bool(modulo)
                     else:
                         modulo = None
 
-                    # Validar unicidad de serie
-                    if Medidor.objects.filter(serie=serie).exists():
-                        raise ValueError(
-                            error_columna(
-                                'Medidor/Serie',
-                                'ya existe en base de datos',
-                                serie,
-                            )
-                        )
+                    estado_obj = _resolver_estado_inventario(get_val(valores, 'estado'), 'En bodega')
+                    cliente_obj = obtener_o_crear_cliente(get_val(valores, 'cliente'), cache_clientes)
+                    entregado_a_info = _as_text_id(get_val(valores, 'entregado_a', 'entregado_a_'))
+                    bodega_ref = _as_text_id(get_val(valores, 'bodega'))
+                    correlativo = get_val(valores, 'numero', '#')
 
-                    # Buscar estado si viene
-                    estado_obj = None
-                    if estado_nombre:
-                        estado_nombre_str = str(estado_nombre).strip()
-                        estado_obj = EstadoInventario.objects.filter(nombre__icontains=estado_nombre_str).first()
-                    if not estado_obj:
-                        estado_obj = estado
-
-                    # Cliente por número (desde planilla)
-                    cliente_obj = None
-                    if cliente_numero:
-                        cliente_num_str = str(cliente_numero).strip()
-                        cliente_obj = Cliente.objects.filter(numero_cliente=cliente_num_str).first()
-                        if not cliente_obj:
-                            cliente_obj = Cliente.objects.create(
-                                numero_cliente=cliente_num_str,
-                                direccion=f'Cliente {cliente_num_str}',
-                                comuna='Por definir'
-                            )
-
-                    # Buscar usuario entregado_a si viene
-
-                    # Guardar el valor textual de ENTREGADO A en entregado_a_info, no buscar usuario ni relacionar con clientes
-                    entregado_a_info = str(entregado_a_nombre).strip() if entregado_a_nombre else ''
-
-                    # Convertir fecha_entrega si viene, de forma tolerante
-                    if fecha_entrega:
-                        if isinstance(fecha_entrega, datetime):
-                            fecha_entrega = fecha_entrega.date()
-                        elif isinstance(fecha_entrega, date):
-                            pass
-                        else:
-                            if isinstance(fecha_entrega, str) and 'datetime.datetime' in fecha_entrega:
-                                import re
-                                fe = fecha_entrega.replace("'", "").replace('"', '').replace('\\u0027', '').replace('\\', '').strip()
-                                match = re.search(r'datetime\.datetime\s*\(\s*(\d+),\s*(\d+),\s*(\d+)', fe)
-                                if match:
-                                    y, m, d = match.groups()
-                                    fecha_entrega = f"{int(d):02d}/{int(m):02d}/{y}"
-                            formatos = ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d', '%m/%d/%Y']
-                            convertido = False
-                            for fmt in formatos:
-                                try:
-                                    fecha_entrega = datetime.strptime(str(fecha_entrega).strip(), fmt).date()
-                                    convertido = True
-                                    break
-                                except Exception:
-                                    continue
-                            if not convertido:
-                                raise ValueError(
-                                    error_columna(
-                                        'Fecha Entrega',
-                                        'formato no válido. Usa DD/MM/AAAA o DD-MM-AAAA',
-                                        fecha_entrega,
-                                    )
-                                )
-
-                    # Crear medidor
-                    medidor = Medidor.objects.create(
-                        fecha_recepcion=fecha_recepcion,
-                        bodega=str(bodega_ref).strip() if bodega_ref else '',
-                        marca=marca,
-                        caja=caja,
-                        serie=serie,
-                        modulo=modulo,
-                        tipo_medidor=tipo_medidor,
-                        fecha_entrega=fecha_entrega,
-                        entregado_a=None,
-                        entregado_a_info=entregado_a_info,
-                        estado_inventario=estado_obj,
-                        cliente=cliente_obj,
-                        ubicacion_actual=bodega
-                    )
-                    registrar_movimiento_importacion(
-                        medidor,
-                        'MEDIDOR',
-                        estado_obj,
-                        f'Serie {medidor.serie}',
-                        idx,
-                    )
-                    # Guardar trazas textuales de cliente/correlativo en observaciones
-                    observaciones = []
+                    defaults = {
+                        'fecha_recepcion': fecha_recepcion,
+                        'bodega': bodega_ref,
+                        'marca': marca or '',
+                        'caja': caja,
+                        'modulo': modulo,
+                        'tipo_medidor': tipo_medidor,
+                        'fecha_entrega': fecha_entrega,
+                        'entregado_a_info': entregado_a_info,
+                        'estado_inventario': estado_obj,
+                        'cliente': cliente_obj,
+                        'ubicacion_actual': bodega,
+                    }
                     if correlativo:
-                        observaciones.append(f"Correlativo: {correlativo}")
-                    if observaciones:
-                        medidor.observaciones = ' | '.join(observaciones)
-                        medidor.save()
-                
-                elif tipo_equipo.upper() == 'SIM':
-                    # Nuevo formato según imagen del usuario:
-                    # Columnas: IMEI, OPERADOR, ABONADO, DIRECCIÓN IP, APN, FECHA DE RECEPCIÓN, ENTREGADO A
-                    #          FECHA ENTREGA, ESTADO, CLIENTE, MEDIDOR
-                    
-                    # Asegurar que tenemos al menos 11 columnas
-                    while len(valores) < 11:
-                        valores.append(None)
-                    
-                    imei = valores[0]
-                    operador = valores[1]
-                    abonado = valores[2]
-                    direccion_ip = valores[3]
-                    apn = valores[4]
-                    fecha_recepcion = valores[5]
-                    entregado_a_nombre = valores[6]
-                    
-                    # Campos verdes (opcionales)
-                    fecha_entrega = valores[7] if len(valores) > 7 else None
-                    estado_nombre = valores[8] if len(valores) > 8 else None
-                    cliente_numero = valores[9] if len(valores) > 9 else None
-                    medidor_serie = valores[10] if len(valores) > 10 else None
-                    
-                    # Validar campos obligatorios amarillos
+                        defaults['observaciones'] = f'Correlativo: {correlativo}'
+
+                    medidor, created = _con_reintento_sqlite(
+                        lambda: Medidor.objects.update_or_create(serie=serie, defaults=defaults)
+                    )
+                    if created:
+                        creadas += 1
+                        registrar_movimiento_importacion(medidor, 'MEDIDOR', f'Serie {serie}', idx)
+                    else:
+                        actualizadas += 1
+
+                elif tipo == 'SIM':
+                    imei = _as_text_id(get_val(valores, 'imei', 'icc', 'iccid'))
+                    operador = _as_text_id(get_val(valores, 'operador'))
+                    abonado = _as_text_id(get_val(valores, 'abonado', 'msisdn', 'telefono'))
+                    apn = _as_text_id(get_val(valores, 'apn'))
+                    fecha_recepcion_raw = get_val(valores, 'fecha_de_recepcion', 'fecha_recepcion')
+
                     if not imei:
                         raise ValueError(error_columna('IMEI', 'valor obligatorio'))
                     if not operador:
                         raise ValueError(error_columna('OPERADOR', 'valor obligatorio'))
+                    # ABONADO puede venir vacío en maestros parciales; IMEI es la llave.
                     if not abonado:
-                        raise ValueError(error_columna('ABONADO', 'valor obligatorio'))
+                        abonado = ''
                     if not apn:
-                        raise ValueError(error_columna('APN', 'valor obligatorio'))
-                    if not fecha_recepcion:
-                        raise ValueError(error_columna('FECHA RECEPCIÓN', 'valor obligatorio'))
-                    
-                    # Función helper para limpiar valores
-                    def limpiar_valor(val):
-                        if val is None:
-                            return ''
-                        # Convertir a string
-                        val_str = str(val)
-                        # Remover comillas al inicio y final
-                        val_str = val_str.strip().strip("'").strip('"').strip()
-                        return val_str
-                    
-                    # Convertir a string y limpiar - IMPORTANTE para números grandes
-                    # Excel puede enviar números grandes como float (ej: 5.697373194e+10)
-                    if isinstance(imei, (int, float)):
-                        imei = f"{int(imei)}"  # Convertir a entero y luego a string sin notación científica
+                        apn = ''
+                    if not fecha_recepcion_raw:
+                        # Permitir sin fecha: usar None
+                        fecha_recepcion = None
                     else:
-                        imei = limpiar_valor(imei)
-                    
-                    operador = limpiar_valor(operador)
-                    
-                    # ABONADO puede ser número muy grande (ej: 56973719416)
-                    if isinstance(abonado, (int, float)):
-                        abonado = f"{int(abonado)}"  # Convertir sin notación científica
+                        fecha_recepcion = _parse_fecha_flexible(fecha_recepcion_raw, 'FECHA RECEPCIÓN')
+                    fecha_entrega = _parse_fecha_flexible(
+                        get_val(valores, 'fecha_entrega', 'fecha_de_entrega'),
+                        'FECHA ENTREGA',
+                    )
+                    estado_obj = _resolver_estado_inventario(get_val(valores, 'estado'), 'Instalado')
+                    cliente_raw = get_val(valores, 'cliente')
+                    cliente_obj = obtener_o_crear_cliente(cliente_raw, cache_clientes)
+                    cliente_texto = _as_text_id(cliente_raw)
+                    if cliente_texto.upper() in {'#N/A', 'N/A', 'NONE', 'NULL'}:
+                        cliente_texto = ''
+                    medidor_raw = get_val(valores, 'medidor')
+                    medidor_obj = buscar_medidor(medidor_raw)
+                    medidor_texto = _as_text_id(medidor_raw) if not medidor_obj else ''
+                    entregado_a_nombre = _as_text_id(get_val(valores, 'entregado_a', 'entregado_a_'))
+                    direccion_ip = _normalizar_direccion_ip(get_val(valores, 'direccion_ip', 'ip'))
+
+                    defaults = {
+                        'operador': operador,
+                        'abonado': abonado,
+                        'direccion_ip': direccion_ip,
+                        'apn': apn,
+                        'fecha_recepcion': fecha_recepcion,
+                        'entregado_a_nombre': entregado_a_nombre,
+                        'fecha_entrega': fecha_entrega,
+                        'estado_inventario': estado_obj,
+                        'ubicacion_actual': bodega,
+                    }
+                    if cliente_obj is not None:
+                        defaults['cliente'] = cliente_obj
+                        defaults['cliente_otro'] = ''
+                    elif cliente_texto:
+                        defaults['cliente_otro'] = cliente_texto
+                    if medidor_obj is not None:
+                        defaults['medidor'] = medidor_obj
+                        defaults['medidor_otro'] = ''
+                    elif medidor_texto:
+                        defaults['medidor_otro'] = medidor_texto
+                    sim, created = _con_reintento_sqlite(
+                        lambda: SimCard.objects.update_or_create(imei=imei, defaults=defaults)
+                    )
+                    if created:
+                        creadas += 1
+                        registrar_movimiento_importacion(sim, 'SIM', f'IMEI {imei}', idx)
                     else:
-                        abonado = limpiar_valor(abonado)
-                    
-                    # Verificar nuevamente después de limpiar
-                    if not abonado or abonado == '':
-                        raise ValueError(
-                            error_columna(
-                                'ABONADO',
-                                'quedó vacío después de limpieza. Guárdalo como texto en Excel',
-                            )
-                        )
-                    
-                    direccion_ip = limpiar_valor(direccion_ip) if direccion_ip else ''
-                    apn = limpiar_valor(apn)
-                    entregado_a_nombre = limpiar_valor(entregado_a_nombre) if entregado_a_nombre else ''
-                    
-                    # Verificar duplicados
-                    if SimCard.objects.filter(imei=imei).exists():
-                        raise ValueError(
-                            error_columna(
-                                'IMEI',
-                                'ya existe en base de datos',
-                                imei,
-                            )
-                        )
-                    
-                    # Convertir fecha de recepción (Excel date o string)
-                    try:
-                        if isinstance(fecha_recepcion, datetime):
-                            fecha_recepcion = fecha_recepcion.date()
-                        elif hasattr(fecha_recepcion, 'date'):  # Si es un objeto datetime de openpyxl
-                            fecha_recepcion = fecha_recepcion.date()
-                        elif isinstance(fecha_recepcion, str):
-                            from datetime import datetime
-                            # Intentar varios formatos
-                            fecha_ok = False
-                            for fmt in ['%d-%m-%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']:
-                                try:
-                                    fecha_recepcion = datetime.strptime(fecha_recepcion.strip(), fmt).date()
-                                    fecha_ok = True
-                                    break
-                                except:
-                                    continue
-                            if not fecha_ok:
-                                raise ValueError(f'Formato de FECHA DE RECEPCIÓN no válido: {fecha_recepcion}')
-                        else:
-                            raise ValueError(f'Tipo de fecha no reconocido: {type(fecha_recepcion)}')
-                    except Exception as e:
-                            raise ValueError(error_columna('FECHA RECEPCIÓN', str(e), fecha_recepcion))
-                    
-                    # Convertir fecha de entrega si viene
-                    if fecha_entrega:
-                        try:
-                            if isinstance(fecha_entrega, datetime):
-                                fecha_entrega = fecha_entrega.date()
-                            elif hasattr(fecha_entrega, 'date'):
-                                fecha_entrega = fecha_entrega.date()
-                            elif isinstance(fecha_entrega, str):
-                                from datetime import datetime
-                                for fmt in ['%d-%m-%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']:
-                                    try:
-                                        fecha_entrega = datetime.strptime(fecha_entrega.strip(), fmt).date()
-                                        break
-                                    except:
-                                        continue
-                        except:
-                            fecha_entrega = None
-                    
-                    # Buscar estado si viene
-                    estado_obj = None
-                    if estado_nombre:
-                        estado_nombre_str = str(estado_nombre).strip()
-                        estado_obj = EstadoInventario.objects.filter(
-                            nombre__icontains=estado_nombre_str
-                        ).first()
-                    
-                    # Si no hay estado especificado, usar "Instalado" por defecto
-                    if not estado_obj:
-                        estado_obj = EstadoInventario.objects.filter(nombre='Instalado').first()
-                        if not estado_obj:
-                            estado_obj = EstadoInventario.objects.create(nombre='Instalado')
-                    
-                    # Buscar cliente si viene (por numero_cliente)
-                    cliente_obj = None
-                    if cliente_numero:
-                        try:
-                            cliente_num_str = str(cliente_numero).strip()
-                            # Buscar por numero_cliente (campo correcto en modelo Cliente)
-                            cliente_obj = Cliente.objects.filter(
-                                numero_cliente=cliente_num_str
-                            ).first()
-                            
-                            # Si no existe, crear el cliente
-                            if not cliente_obj:
-                                cliente_obj = Cliente.objects.create(
-                                    numero_cliente=cliente_num_str,
-                                    direccion=f'Cliente {cliente_num_str}',
-                                    comuna='Por definir'
-                                )
-                        except:
-                            pass  # Si falla, continuar sin cliente
-                    
-                    # Buscar medidor si viene
-                    medidor_obj = None
-                    if medidor_serie:
-                        medidor_serie_str = str(medidor_serie).strip()
-                        medidor_obj = Medidor.objects.filter(
-                            serie=medidor_serie_str
-                        ).first()
-                    
-                    # Crear SIM Card
-                    sim = SimCard.objects.create(
-                        imei=imei,
-                        operador=operador,
-                        abonado=abonado,
-                        direccion_ip=direccion_ip,
-                        apn=apn,
-                        fecha_recepcion=fecha_recepcion,
-                        entregado_a_nombre=entregado_a_nombre,
-                        fecha_entrega=fecha_entrega,
-                        estado_inventario=estado_obj,
-                        cliente=cliente_obj,
-                        medidor=medidor_obj,
-                        ubicacion_actual=bodega
-                    )
-                    registrar_movimiento_importacion(
-                        sim,
-                        'SIM',
-                        estado_obj,
-                        f'IMEI {sim.imei}',
-                        idx,
-                    )
-                
-                elif tipo_equipo.upper() == 'MODEMS':
-                    # Formato según imagen del usuario:
-                    # VERDE (Excel): MARCA, MODELO, IMEI, SERIE, Fecha Recepción, Fecha Entrega, Caja, Técnico
-                    # AZUL (admin): Cliente, Medidor, IP, Puerto, Marca, Obs, Retirado, Serie, Irregularidad, Proyecto
-                    
-                    # Asegurar que tenemos suficientes columnas
-                    while len(valores) < 18:
-                        valores.append(None)
-                    
-                    # Columnas VERDES (0-7)
-                    marca = valores[0]
-                    modelo = valores[1]
-                    imei = valores[2]
-                    serie = valores[3]
-                    fecha_recepcion = valores[4]
-                    fecha_entrega = valores[5]
-                    caja = valores[6]
-                    tecnico_responsable = valores[7]
-                    
-                    # Columnas editables/azules (8-17)
-                    cliente_numero = valores[8] if len(valores) > 8 else None
-                    medidor_serie = valores[9] if len(valores) > 9 else None
-                    ip = valores[10] if len(valores) > 10 else None
-                    puerto = valores[11] if len(valores) > 11 else None
-                    marca_secundaria = valores[12] if len(valores) > 12 else None
-                    observaciones = valores[13] if len(valores) > 13 else None
-                    retirado = valores[14] if len(valores) > 14 else None
-                    serie_secundaria = valores[15] if len(valores) > 15 else None
-                    irregularidad = valores[16] if len(valores) > 16 else None
-                    proyecto = valores[17] if len(valores) > 17 else None
-                    
-                    # Validar campos obligatorios
+                        actualizadas += 1
+
+                elif tipo == 'MODEMS':
+                    marca = _as_text_id(get_val(valores, 'marca'))
+                    # Hay dos columnas "Marca" en el maestro; la primera es fabricante del módem.
+                    # Si idx encuentra la secundaria, preferimos la primera aparición real.
+                    if headers_norm.count('marca') > 1:
+                        i0 = headers_norm.index('marca')
+                        if i0 < len(valores):
+                            marca = _as_text_id(valores[i0]) or marca
+
+                    modelo = _as_text_id(get_val(valores, 'modelo'))
+                    imei = _as_text_id(get_val(valores, 'imei')) or None
+                    serie = _as_text_id(get_val(valores, 'serie'))
+                    # Primera columna Serie (no la secundaria "Serie" de retirado)
+                    if headers_norm.count('serie') > 1:
+                        i0 = headers_norm.index('serie')
+                        if i0 < len(valores):
+                            serie = _as_text_id(valores[i0]) or serie
+
                     if not marca:
-                        raise ValueError(error_columna('MARCA', 'valor obligatorio'))
+                        # Filas vacías / basura del maestro
+                        if not serie and not imei:
+                            contador_filas -= 1
+                            continue
+                        marca = 'SIN MARCA'
                     if not serie:
                         raise ValueError(error_columna('SERIE', 'valor obligatorio'))
-                    
-                    # Función helper para limpiar valores
-                    def limpiar_valor(val):
-                        if val is None:
-                            return ''
-                        val_str = str(val).strip().strip("'").strip('"').strip()
-                        return val_str
-                    
-                    # Limpiar valores verdes
-                    marca = limpiar_valor(marca)
-                    modelo = limpiar_valor(modelo)
-                    
-                    if isinstance(imei, (int, float)):
-                        imei = f"{int(imei)}"
+
+                    fecha_recepcion = _parse_fecha_flexible(
+                        get_val(valores, 'fecha_de_recepcion', 'fecha_recepcion'),
+                        'Fecha de Recepción',
+                    )
+                    fecha_entrega = _parse_fecha_flexible(
+                        get_val(valores, 'fecha_entrega', 'fecha_de_entrega'),
+                        'Fecha Entrega',
+                    )
+                    caja = _as_text_id(get_val(valores, 'caja')) or None
+                    tecnico = _as_text_id(get_val(valores, 'tecnico_responsable', 'tecnico'))
+                    cliente_obj = obtener_o_crear_cliente(get_val(valores, 'cliente'), cache_clientes)
+                    medidor_obj = buscar_medidor(get_val(valores, 'medidor'))
+
+                    ip = _normalizar_direccion_ip(get_val(valores, 'ip', 'direccion_ip'))
+                    puerto = _as_text_id(get_val(valores, 'puerto'))
+                    # Marca secundaria = segunda columna "Marca" si existe
+                    marca_secundaria = ''
+                    if headers_norm.count('marca') > 1:
+                        i1 = [i for i, h in enumerate(headers_norm) if h == 'marca'][1]
+                        if i1 < len(valores):
+                            marca_secundaria = _as_text_id(valores[i1])
+
+                    observaciones = _as_text_id(get_val(valores, 'obs', 'observaciones', 'observacion'))
+                    retirado = _as_text_id(get_val(valores, 'retirado'))
+                    serie_secundaria = ''
+                    if headers_norm.count('serie') > 1:
+                        i1 = [i for i, h in enumerate(headers_norm) if h == 'serie'][1]
+                        if i1 < len(valores):
+                            serie_secundaria = _as_text_id(valores[i1])
+                    irregularidad = _as_text_id(get_val(valores, 'irregularidad'))
+                    proyecto = _as_text_id(get_val(valores, 'proyecto'))
+
+                    estado_raw = get_val(valores, 'status', 'estado') or observaciones
+                    estado_obj = _resolver_estado_inventario(estado_raw, 'En bodega')
+
+                    if imei:
+                        conflicto = Modem.objects.filter(imei=imei).exclude(serie=serie).only('serie').first()
+                        if conflicto:
+                            # No bloquear la serie: conserva el IMEI en el primer modem y deja este sin IMEI.
+                            observaciones = (
+                                f'{observaciones} | IMEI {imei} ya usado en serie {conflicto.serie}'
+                            ).strip(' |')
+                            imei = None
+
+                    defaults = {
+                        'marca': marca,
+                        'modelo': modelo,
+                        'imei': imei,
+                        'fecha_recepcion': fecha_recepcion,
+                        'fecha_entrega': fecha_entrega,
+                        'caja': caja,
+                        'tecnico_responsable': tecnico,
+                        'cliente': cliente_obj,
+                        'medidor': medidor_obj,
+                        'observaciones': observaciones,
+                        'ip': ip,
+                        'puerto': puerto,
+                        'marca_secundaria': marca_secundaria,
+                        'retirado': retirado,
+                        'serie_secundaria': serie_secundaria,
+                        'irregularidad': irregularidad,
+                        'proyecto': proyecto,
+                        'estado_inventario': estado_obj,
+                        'ubicacion_actual': bodega,
+                    }
+                    modem, created = _con_reintento_sqlite(
+                        lambda: Modem.objects.update_or_create(serie=serie, defaults=defaults)
+                    )
+                    if created:
+                        creadas += 1
+                        registrar_movimiento_importacion(modem, 'MODEM', f'Serie {serie}', idx)
                     else:
-                        imei = limpiar_valor(imei)
-                    
-                    serie = limpiar_valor(serie)
-                    caja = limpiar_valor(caja)
-                    tecnico_responsable = limpiar_valor(tecnico_responsable)
-                    
-                    # Verificar duplicados
-                    if Modem.objects.filter(serie=serie).exists():
-                        raise ValueError(error_columna('SERIE', 'ya existe en base de datos', serie))
-                    if imei and Modem.objects.filter(imei=imei).exists():
-                        raise ValueError(error_columna('IMEI', 'ya existe en base de datos', imei))
-                    
-                    # Convertir fechas
-                    try:
-                        if isinstance(fecha_recepcion, datetime):
-                            fecha_recepcion = fecha_recepcion.date()
-                        elif hasattr(fecha_recepcion, 'date'):
-                            fecha_recepcion = fecha_recepcion.date()
-                        elif isinstance(fecha_recepcion, str):
-                            from datetime import datetime
-                            for fmt in ['%d-%m-%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']:
-                                try:
-                                    fecha_recepcion = datetime.strptime(fecha_recepcion.strip(), fmt).date()
-                                    break
-                                except:
-                                    continue
-                    except:
-                        fecha_recepcion = None
-                    
-                    if fecha_entrega:
-                        try:
-                            if isinstance(fecha_entrega, datetime):
-                                fecha_entrega = fecha_entrega.date()
-                            elif hasattr(fecha_entrega, 'date'):
-                                fecha_entrega = fecha_entrega.date()
-                            elif isinstance(fecha_entrega, str):
-                                from datetime import datetime
-                                for fmt in ['%d-%m-%Y', '%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y']:
-                                    try:
-                                        fecha_entrega = datetime.strptime(fecha_entrega.strip(), fmt).date()
-                                        break
-                                    except:
-                                        continue
-                        except:
-                            fecha_entrega = None
-                    
-                    # Buscar cliente
-                    cliente_obj = None
-                    if cliente_numero:
-                        try:
-                            cliente_num_str = str(cliente_numero).strip()
-                            cliente_obj = Cliente.objects.filter(numero_cliente=cliente_num_str).first()
-                            if not cliente_obj:
-                                cliente_obj = Cliente.objects.create(
-                                    numero_cliente=cliente_num_str,
-                                    direccion=f'Cliente {cliente_num_str}',
-                                    comuna='Por definir'
-                                )
-                        except:
-                            pass
-                    
-                    # Buscar medidor
-                    medidor_obj = None
-                    if medidor_serie:
-                        medidor_serie_str = str(medidor_serie).strip()
-                        medidor_obj = Medidor.objects.filter(serie=medidor_serie_str).first()
-                    
-                    # Crear estado por defecto
-                    estado_obj = EstadoInventario.objects.filter(nombre='BODEGA').first()
-                    if not estado_obj:
-                        estado_obj = EstadoInventario.objects.create(nombre='BODEGA')
-                    
-                    # Crear Modem
-                    modem = Modem.objects.create(
-                        marca=marca,
-                        modelo=modelo,
-                        imei=imei if imei else None,
-                        serie=serie,
-                        fecha_recepcion=fecha_recepcion,
-                        fecha_entrega=fecha_entrega,
-                        caja=caja,
-                        tecnico_responsable=tecnico_responsable,
-                        cliente=cliente_obj,
-                        medidor=medidor_obj,
-                        observaciones=limpiar_valor(observaciones),
-                        ip=limpiar_valor(ip),
-                        puerto=limpiar_valor(puerto),
-                        marca_secundaria=limpiar_valor(marca_secundaria),
-                        retirado=limpiar_valor(retirado),
-                        serie_secundaria=limpiar_valor(serie_secundaria),
-                        irregularidad=limpiar_valor(irregularidad),
-                        proyecto=limpiar_valor(proyecto),
-                        estado_inventario=estado_obj,
-                        ubicacion_actual=bodega
-                    )
-                    registrar_movimiento_importacion(
-                        modem,
-                        'MODEM',
-                        estado_obj,
-                        f'Serie {modem.serie}',
-                        idx,
-                    )
-                
+                        actualizadas += 1
+                else:
+                    raise ValueError(f'Tipo de equipo no soportado: {tipo_equipo}')
+
                 exitosas += 1
-            
-            except Exception as e:
+            except (IntegrityError, OperationalError) as exc:
                 fallidas += 1
                 ImportacionExcelError.objects.create(
                     importacion=importacion,
                     numero_fila=idx,
-                    motivo=str(e),
-                    data_cruda=fila_a_texto(headers, valores)
+                    motivo=str(exc),
+                    data_cruda=fila_a_texto(headers, valores),
                 )
-        
-        # Finalizar importación
+            except Exception as exc:
+                fallidas += 1
+                ImportacionExcelError.objects.create(
+                    importacion=importacion,
+                    numero_fila=idx,
+                    motivo=str(exc),
+                    data_cruda=fila_a_texto(headers, valores),
+                )
+
         importacion.total_filas = contador_filas
         importacion.exitosas = exitosas
         importacion.fallidas = fallidas
         importacion.estado = 'COMPLETADO'
-        importacion.observaciones = f'Se importaron {exitosas} de {contador_filas} equipos'
+        importacion.observaciones = (
+            f'Hoja "{ws.title}": {exitosas}/{contador_filas} OK '
+            f'(nuevos: {creadas}, actualizados: {actualizadas}, fallidos: {fallidas})'
+        )
         importacion.save()
-    
-    except Exception as e:
+
+    except Exception as exc:
         importacion.estado = 'ERROR'
-        importacion.observaciones = f'Error en importación: {str(e)}'
+        importacion.observaciones = f'Error en importación: {str(exc)}'
         importacion.save()
-    
+
     return importacion
 
 
@@ -1420,6 +1325,15 @@ def exportar_clientes_excel(clientes):
     return wb
 
 
+def _serie_medidor_display(equipo) -> str:
+    """Serie de medidor vinculada o texto importado (medidor_otro)."""
+    medidor = getattr(equipo, 'medidor', None)
+    serie = getattr(medidor, 'serie', None) if medidor else None
+    if serie:
+        return str(serie).strip()
+    return str(getattr(equipo, 'medidor_otro', '') or '').strip()
+
+
 def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
     """
     Exporta equipos a archivo Excel.
@@ -1498,8 +1412,8 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
                 equipo.entregado_a_nombre or '',
                 equipo.fecha_entrega.strftime('%d-%m-%Y') if equipo.fecha_entrega else '',
                 equipo.estado_inventario.nombre if equipo.estado_inventario else '',
-                equipo.cliente.numero_cliente if equipo.cliente else '',
-                equipo.medidor.serie if equipo.medidor else ''
+                equipo.cliente.numero_cliente if equipo.cliente else (getattr(equipo, 'cliente_otro', '') or ''),
+                _serie_medidor_display(equipo),
             ]
         elif tipo_equipo.upper() == 'MODEMS':
             # VERDE: MARCA, MODELO, IMEI, SERIE, Fecha Recepción, Fecha Entrega, Caja, Técnico
@@ -1514,8 +1428,8 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
                 equipo.fecha_entrega.strftime('%d-%m-%Y') if equipo.fecha_entrega else '',
                 equipo.caja or '',
                 equipo.tecnico_responsable or '',
-                equipo.cliente.numero_cliente if equipo.cliente else '',
-                equipo.medidor.serie if equipo.medidor else '',
+                equipo.cliente.numero_cliente if equipo.cliente else (getattr(equipo, 'cliente_otro', '') or ''),
+                _serie_medidor_display(equipo),
                 equipo.ip or '',
                 equipo.puerto or '',
                 equipo.marca_secundaria or '',
@@ -1552,8 +1466,10 @@ def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
             return float(valor)
         return str(valor)
 
-    def etiqueta_relacion(campo, relacionado):
+    def etiqueta_relacion(campo, relacionado, obj=None):
         if relacionado is None:
+            if campo.name == 'medidor' and obj is not None:
+                return getattr(obj, 'medidor_otro', '') or ''
             return ''
 
         if campo.name == 'cliente':
@@ -1590,7 +1506,9 @@ def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
             headers.append(f'{campo.name}_label')
             columnas.append((
                 f'{campo.name}_label',
-                lambda obj, campo_rel=campo: normalizar_valor(etiqueta_relacion(campo_rel, getattr(obj, campo_rel.name, None)))
+                lambda obj, campo_rel=campo: normalizar_valor(
+                    etiqueta_relacion(campo_rel, getattr(obj, campo_rel.name, None), obj)
+                )
             ))
         else:
             headers.append(campo.name)

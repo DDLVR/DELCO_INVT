@@ -77,7 +77,7 @@
               <div class="form-check form-switch mt-2">
                 <input class="form-check-input" type="checkbox" id="tablaSoloDuplicados">
                 <label class="form-check-label small fw-semibold text-danger" for="tablaSoloDuplicados">
-                  Mostrar solo duplicados (Numero Cliente o Serie Medidor)
+                  Mostrar solo duplicados (Numero Cliente)
                 </label>
               </div>
             </div>
@@ -226,7 +226,6 @@
         <script>
         var dataTableClientes = null;
         var duplicadosNumeroSet = new Set();
-        var duplicadosSerieSet = new Set();
         var duplicadosImportacionSet = new Set();
         var duplicadosImportacionDetalle = [];
         var btnImportarClientes = null;
@@ -266,6 +265,26 @@
               });
             } catch (errInner) { console.warn('Error mid-debugging table structure', errInner); }
 
+            function extraerTextoDeCelda(valorCelda) {
+              var div = document.createElement('div');
+              div.innerHTML = valorCelda == null ? '' : String(valorCelda);
+              return (div.textContent || div.innerText || '').trim();
+            }
+
+            // Orden natural para Numero Cliente: 920 antes que 1000 (no alfabético).
+            function valorOrdenNatural(texto) {
+              var t = String(texto || '').trim();
+              if (!t) return '';
+              var digitos = t.replace(/[^\d]/g, '');
+              if (digitos) {
+                var n = Number(digitos);
+                if (!isNaN(n)) {
+                  return String(n).padStart(20, '0') + '|' + t.toLowerCase();
+                }
+              }
+              return t.toLowerCase();
+            }
+
             dataTableClientes = $('#tablaClientes').DataTable({
               language: {
                 url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
@@ -284,9 +303,16 @@
                 {
                   targets: 1,
                   orderable: false,
-                  searchable: false,
-                  render: function(data, type, row, meta) {
-                    return meta.row + meta.settings._iDisplayStart + 1;
+                  searchable: false
+                },
+                {
+                  targets: 4,
+                  render: function(data, type) {
+                    var texto = extraerTextoDeCelda(data);
+                    if (type === 'sort' || type === 'type') {
+                      return valorOrdenNatural(texto);
+                    }
+                    return data;
                   }
                 },
                 {
@@ -294,7 +320,14 @@
                   orderable: false,
                   searchable: false
                 }
-              ]
+              ],
+              drawCallback: function() {
+                var api = this.api();
+                var start = api.page.info().start;
+                api.column(1, { page: 'current' }).nodes().each(function(cell, i) {
+                  cell.innerHTML = start + i + 1;
+                });
+              }
             });
 
             function renderDuplicadosImportacion() {
@@ -307,37 +340,20 @@
               // No-op: ahora se inyectan antes de inicializar DataTables.
             }
 
-            function extraerTextoDeCelda(valorCelda) {
-              var div = document.createElement('div');
-              div.innerHTML = valorCelda == null ? '' : String(valorCelda);
-              return (div.textContent || div.innerText || '').trim();
-            }
-
             function recalcularDuplicadosNumero() {
               if (!dataTableClientes) return;
               var frecuenciasNumero = {};
-              var frecuenciasSerie = {};
               duplicadosNumeroSet = new Set();
-              duplicadosSerieSet = new Set();
               dataTableClientes.rows().every(function() {
                 var data = this.data();
                 var numero = extraerTextoDeCelda(data[4]);
-                var serie = extraerTextoDeCelda(data[10]);
                 if (numero) {
                   frecuenciasNumero[numero] = (frecuenciasNumero[numero] || 0) + 1;
-                }
-                if (serie) {
-                  frecuenciasSerie[serie] = (frecuenciasSerie[serie] || 0) + 1;
                 }
               });
               Object.keys(frecuenciasNumero).forEach(function(numero) {
                 if (frecuenciasNumero[numero] > 1) {
                   duplicadosNumeroSet.add(numero);
-                }
-              });
-              Object.keys(frecuenciasSerie).forEach(function(serie) {
-                if (frecuenciasSerie[serie] > 1) {
-                  duplicadosSerieSet.add(serie);
                 }
               });
             }
@@ -349,8 +365,7 @@
                 var check = document.getElementById('tablaSoloDuplicados');
                 if (!check || !check.checked) return true;
                 var numero = extraerTextoDeCelda(data[4]);
-                var serie = extraerTextoDeCelda(data[10]);
-                return duplicadosNumeroSet.has(numero) || duplicadosSerieSet.has(serie) || duplicadosImportacionSet.has(numero);
+                return duplicadosNumeroSet.has(numero) || duplicadosImportacionSet.has(numero);
               });
               filtroDuplicadosRegistrado = true;
             }
@@ -360,8 +375,7 @@
               dataTableClientes.rows({ page: 'current' }).every(function() {
                 var data = this.data();
                 var numero = extraerTextoDeCelda(data[4]);
-                var serie = extraerTextoDeCelda(data[10]);
-                var esDuplicado = duplicadosNumeroSet.has(numero) || duplicadosSerieSet.has(serie) || duplicadosImportacionSet.has(numero);
+                var esDuplicado = duplicadosNumeroSet.has(numero) || duplicadosImportacionSet.has(numero);
                 var nodo = this.node();
                 if (!nodo) return;
                 var celdaNumero = nodo.querySelector('td:nth-child(5)');
@@ -369,7 +383,7 @@
                 celdaNumero.classList.toggle('text-danger', esDuplicado);
                 celdaNumero.classList.toggle('fw-bold', esDuplicado);
                 celdaNumero.style.color = esDuplicado ? '#dc3545' : '';
-                celdaNumero.title = esDuplicado ? 'Duplicado detectado en importación/tabla' : '';
+                celdaNumero.title = esDuplicado ? 'Numero Cliente duplicado' : '';
               });
             }
 

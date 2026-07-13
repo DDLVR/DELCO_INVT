@@ -14,6 +14,25 @@
                     <span class="badge bg-secondary">Directos: {{ total_medidores_directos }}</span>
                     <span class="badge bg-primary">Indirectos: {{ total_medidores_indirectos }}</span>
                 </div>
+                {% elif tipo == 'sim' and sim_resumen %}
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge bg-info text-dark">Total: {{ sim_resumen.total }}</span>
+                    {% for item in sim_resumen.por_estado %}
+                    <a href="?tipo=sim&estado={{ item.estado_inventario_id }}&per_page={{ per_page }}"
+                       class="badge text-decoration-none {% if estado_seleccionado == item.estado_inventario_id|stringformat:'s' %}bg-primary{% else %}bg-secondary{% endif %}">
+                        {{ item.estado_inventario__nombre|default:"Sin estado" }}: {{ item.total }}
+                    </a>
+                    {% endfor %}
+                </div>
+                <div class="d-flex flex-wrap gap-2 mt-1">
+                    <span class="badge bg-light text-dark border">Con IP: {{ sim_resumen.con_ip }}</span>
+                    <span class="badge bg-light text-dark border">Con abonado: {{ sim_resumen.con_abonado }}</span>
+                    <span class="badge bg-light text-dark border">Con entrega: {{ sim_resumen.con_entregado }}</span>
+                    <span class="badge bg-light text-dark border">Con cliente: {{ sim_resumen.con_cliente }}</span>
+                </div>
+                <p class="text-muted small mb-0 mt-1">
+                    Haz clic en una categoría de estado para filtrar. Las SIM <strong>Devuelta</strong> suelen venir sin IP / entrega / cliente.
+                </p>
                 {% elif tipo == 'todos' %}
                 <div class="text-muted small">Vista consolidada de medidores, SIM y módems en una sola lista.</div>
                 {% else %}
@@ -103,6 +122,15 @@
                                 {% endfor %}
                             </select>
                         </div>
+                        <div class="col-md-2">
+                            <label for="filtroEstado" class="form-label mb-1">Estado</label>
+                            <select id="filtroEstado" name="estado" class="form-select form-select-sm" onchange="this.form.submit()">
+                                <option value="">Todos</option>
+                                {% for estado in estados_disponibles %}
+                                <option value="{{ estado.id }}" {% if estado_seleccionado == estado.id|stringformat:'s' %}selected{% endif %}>{{ estado.nombre }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                         <div class="col-md-3">
                             <label for="tablaBuscarCampo" class="form-label mb-1">Buscar en</label>
                             <select id="tablaBuscarCampo" name="campo" class="form-select form-select-sm">
@@ -149,7 +177,7 @@
                         </div>
                         <div class="col-md-5">
                             <label for="tablaBuscar" class="form-label mb-1">Buscar</label>
-                            <input type="text" id="tablaBuscar" name="q" value="{{ busqueda|default:'' }}" class="form-control form-control-sm" placeholder="Escribe para filtrar...">
+                            <input type="text" id="tablaBuscar" name="q" value="{{ busqueda|default:'' }}" class="form-control form-control-sm" placeholder="{% if campo_busqueda == 'estado' %}Ej: Devuelta, Sin Conexion, Trayecto...{% else %}Escribe para filtrar...{% endif %}">
                         </div>
                         <div class="col-md-2">
                             <label for="filtroProyecto" class="form-label mb-1">Proyecto</label>
@@ -278,15 +306,15 @@
                                 <td>{{ equipo.tecnico_display|default:"-" }}</td>
                                 <td>{{ equipo.proyecto|default:"-" }}</td>
                                 {% elif tipo == 'sim' %}
-                                <td><strong>{{ equipo.imei|default:"-" }}</strong></td>
-                                <td>{{ equipo.operador|default:"-" }}</td>
-                                <td>{{ equipo.abonado|default:"-" }}</td>
-                                <td>{{ equipo.direccion_ip|default:"-" }}</td>
-                                <td>{{ equipo.apn|default:"-" }}</td>
-                                <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
-                                <td>{{ equipo.tecnico_display|default:"-" }}</td>
-                                <td>{{ equipo.fecha_entrega|date:"d/m/Y"|default:"-" }}</td>
-                                <td>{{ equipo.proyecto|default:"-" }}</td>
+                                <td><strong>{{ equipo.imei|default:"Sin IMEI" }}</strong></td>
+                                <td>{% if equipo.operador %}{{ equipo.operador }}{% else %}<span class="text-muted">Sin operador</span>{% endif %}</td>
+                                <td>{% if equipo.abonado %}{{ equipo.abonado }}{% else %}<span class="text-muted">Sin abonado</span>{% endif %}</td>
+                                <td>{% if equipo.direccion_ip %}{{ equipo.direccion_ip }}{% else %}<span class="text-muted">Sin IP asignada</span>{% endif %}</td>
+                                <td>{% if equipo.apn %}{{ equipo.apn }}{% else %}<span class="text-muted">Sin APN</span>{% endif %}</td>
+                                <td>{% if equipo.fecha_recepcion %}{{ equipo.fecha_recepcion|date:"d/m/Y" }}{% else %}<span class="text-muted">Sin fecha recepción</span>{% endif %}</td>
+                                <td>{% if equipo.tecnico_display %}{{ equipo.tecnico_display }}{% else %}<span class="text-muted">Sin entrega</span>{% endif %}</td>
+                                <td>{% if equipo.fecha_entrega %}{{ equipo.fecha_entrega|date:"d/m/Y" }}{% else %}<span class="text-muted">Sin fecha entrega</span>{% endif %}</td>
+                                <td>{% if equipo.proyecto %}{{ equipo.proyecto }}{% else %}<span class="text-muted">Sin proyecto</span>{% endif %}</td>
                                 {% elif tipo == 'modem' %}
                                 <td>{{ equipo.marca|default:"-" }}</td>
                                 <td>{{ equipo.modelo|default:"-" }}</td>
@@ -298,11 +326,17 @@
                                 <td>{{ equipo.tecnico_display|default:"-" }}</td>
                                 {% endif %}
                                 <td>
-                                    <span class="badge bg-{% if equipo.estado_inventario %}{% if equipo.estado_inventario.nombre == 'Instalado' %}success{% elif equipo.estado_inventario.nombre == 'En Trayecto' %}primary{% elif equipo.estado_inventario.nombre == 'Retirado' %}warning{% elif equipo.estado_inventario.nombre == 'En reparación' %}info{% elif equipo.estado_inventario.nombre == 'Dado de baja' %}danger{% elif equipo.estado_inventario.nombre == 'En peaje' %}dark{% else %}secondary{% endif %}{% else %}secondary{% endif %}">
-                                        {% if tipo == 'todos' %}{{ equipo.estado_nombre|default:"-" }}{% else %}{{ equipo.estado_inventario.nombre|default:"-" }}{% endif %}
+                                    <span class="badge bg-{% if equipo.estado_inventario %}{% if equipo.estado_inventario.nombre == 'Instalado' %}success{% elif equipo.estado_inventario.nombre == 'En Trayecto' %}primary{% elif equipo.estado_inventario.nombre == 'Retirado' or equipo.estado_inventario.nombre == 'Devuelta' %}warning{% elif equipo.estado_inventario.nombre == 'En reparación' or equipo.estado_inventario.nombre == 'Con Problemas' %}info{% elif equipo.estado_inventario.nombre == 'Sin Conexión' %}dark{% elif equipo.estado_inventario.nombre == 'Dado de baja' %}danger{% elif equipo.estado_inventario.nombre == 'En peaje' %}dark{% else %}secondary{% endif %}{% else %}secondary{% endif %}">
+                                        {% if tipo == 'todos' %}{{ equipo.estado_nombre|default:"Sin estado" }}{% else %}{{ equipo.estado_inventario.nombre|default:"Sin estado" }}{% endif %}
                                     </span>
                                 </td>
-                                <td>{% if tipo == 'todos' %}{{ equipo.cliente_numero|default:"-" }}{% else %}{{ equipo.cliente_display|default:"-" }}{% endif %}</td>
+                                <td>
+                                    {% if tipo == 'todos' %}
+                                        {% if equipo.cliente_numero %}{{ equipo.cliente_numero }}{% else %}<span class="text-muted">Sin cliente</span>{% endif %}
+                                    {% else %}
+                                        {% if equipo.cliente_display %}{{ equipo.cliente_display }}{% else %}<span class="text-muted">Sin cliente</span>{% endif %}
+                                    {% endif %}
+                                </td>
                                 {% if tipo == 'modem' %}
                                 <td>{{ equipo.proyecto|default:"-" }}</td>
                                 {% endif %}
@@ -942,33 +976,33 @@
                                     </div>
                                     <div class="col-md-6 mb-2">
                                         <label class="form-label"><strong>OPERADOR:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="simOperador" readonly>
+                                        <input type="text" class="form-control-plaintext text-muted" id="simOperador" readonly placeholder="Sin operador">
                                     </div>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-2">
                                         <label class="form-label"><strong>ABONADO:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="simAbonado" readonly>
+                                        <input type="text" class="form-control-plaintext text-muted" id="simAbonado" readonly placeholder="Sin abonado">
                                     </div>
                                     <div class="col-md-6 mb-2">
                                         <label class="form-label"><strong>DIRECCIÓN IP:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="simDireccionIp" readonly>
+                                        <input type="text" class="form-control-plaintext text-muted" id="simDireccionIp" readonly placeholder="Sin IP asignada">
                                     </div>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-2">
                                         <label class="form-label"><strong>APN:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="simApn" readonly>
+                                        <input type="text" class="form-control-plaintext text-muted" id="simApn" readonly placeholder="Sin APN">
                                     </div>
                                     <div class="col-md-6 mb-2">
                                         <label class="form-label"><strong>FECHA RECEPCIÓN:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="simFechaRecepcion" readonly>
+                                        <input type="text" class="form-control-plaintext text-muted" id="simFechaRecepcion" readonly placeholder="Sin fecha recepción">
                                     </div>
                                 </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-2">
                                         <label class="form-label"><strong>ENTREGADO A:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="simEntregadoANombre" readonly>
+                                        <input type="text" class="form-control-plaintext text-muted" id="simEntregadoANombre" readonly placeholder="Sin entrega">
                                     </div>
                                 </div>
                             </div>
@@ -1015,6 +1049,7 @@
                                             <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
                                             {% endfor %}
                                         </select>
+                                        <small id="simClienteHint" class="text-muted d-none">Sin cliente asignado en el maestro</small>
                                         <div class="mt-2 d-none" id="simClienteOtroWrapper">
                                             <input type="text" class="form-control" id="simClienteTexto" name="cliente_otro" placeholder="Ingrese cliente manual">
                                             <small class="text-muted">Se guarda como texto, sin crear cliente en la base.</small>
@@ -1399,13 +1434,14 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
             
             if (equipoTipo === 'sim') {
                 // SIM Card - Cargar campos amarillos (solo lectura)
-                document.getElementById('simImei').value = equipoData.imei || '-';
-                document.getElementById('simOperador').value = equipoData.operador || '-';
-                document.getElementById('simAbonado').value = equipoData.abonado || '-';
-                document.getElementById('simDireccionIp').value = equipoData.direccion_ip || '-';
-                document.getElementById('simApn').value = equipoData.apn || '-';
-                document.getElementById('simFechaRecepcion').value = equipoData.fecha_recepcion || '-';
-                document.getElementById('simEntregadoANombre').value = equipoData.entregado_a_nombre || '-';
+                const vacio = (valor, mensaje) => (valor && String(valor).trim() !== '' && valor !== '-') ? valor : mensaje;
+                document.getElementById('simImei').value = vacio(equipoData.imei, 'Sin IMEI');
+                document.getElementById('simOperador').value = vacio(equipoData.operador, 'Sin operador');
+                document.getElementById('simAbonado').value = vacio(equipoData.abonado, 'Sin abonado');
+                document.getElementById('simDireccionIp').value = vacio(equipoData.direccion_ip, 'Sin IP asignada');
+                document.getElementById('simApn').value = vacio(equipoData.apn, 'Sin APN');
+                document.getElementById('simFechaRecepcion').value = vacio(equipoData.fecha_recepcion, 'Sin fecha recepción');
+                document.getElementById('simEntregadoANombre').value = vacio(equipoData.entregado_a_nombre, 'Sin entrega');
                 
                 // Cargar campos verdes (modificables)
                 const fechaEntregaSim = document.getElementById('simFechaEntrega');
@@ -1427,6 +1463,13 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 }
                 if (clienteSIMOtro) {
                     clienteSIMOtro.value = equipoData.cliente_otro || '';
+                }
+                // Indicador visual si no hay cliente vinculado
+                const simClienteHint = document.getElementById('simClienteHint');
+                if (simClienteHint) {
+                    const tieneCliente = !!(equipoData.cliente_id || (equipoData.cliente_otro && String(equipoData.cliente_otro).trim()));
+                    simClienteHint.textContent = tieneCliente ? '' : 'Sin cliente asignado en el maestro';
+                    simClienteHint.classList.toggle('d-none', tieneCliente);
                 }
                 if (medidorSIM && equipoData.medidor_id) {
                     medidorSIM.value = equipoData.medidor_id;

@@ -242,7 +242,13 @@ def dashboard_view(request):
     
     # ADMIN y ADMINISTRATIVO: Vista general de todo
     if rol in ['ADMIN', 'ADMINISTRATIVO']:
-        _ejecutar_autosync_moreapp_si_corresponde()
+        sync_stats = _ejecutar_autosync_moreapp_si_corresponde()
+        if sync_stats and int(sync_stats.get('nuevos') or 0) > 0:
+            messages.info(
+                request,
+                f'LLegaron {sync_stats["nuevos"]} informe(s) MoreApp nuevos. '
+                'Revise la cola de pendientes para validar el trabajo.',
+            )
 
         if _ordenes_trabajo_habilitadas():
             from ordenes_trabajo.models import OrdenTrabajo, IntegracionMoreApp
@@ -458,6 +464,9 @@ def pendientes_operativos_view(request):
     from ordenes_trabajo.models import IntegracionMoreApp
     from django.utils import timezone
     from datetime import timedelta
+    from web.moreapp_avisos import marcar_aviso_moreapp_visto
+
+    marcar_aviso_moreapp_visto(request)
 
     estado = request.GET.get('estado', 'PENDIENTE')
     if estado not in ('PENDIENTE', 'CON_ADVERTENCIA', 'REVISADO', 'DESCARTADO', 'TODOS'):
@@ -563,6 +572,42 @@ def moreapp_reprocesar_view(request, pk):
 
 # ========== VISTAS DE INVENTARIO ==========
 
+def _texto_sin_acentos(valor: str) -> str:
+    import unicodedata
+    texto = unicodedata.normalize('NFKD', str(valor or ''))
+    return ''.join(ch for ch in texto if not unicodedata.combining(ch)).casefold().strip()
+
+
+def _ids_estado_por_busqueda(texto: str):
+    """Resuelve nombres de estado (con/sin acentos) a IDs de EstadoInventario."""
+    busq = _texto_sin_acentos(texto)
+    if not busq:
+        return []
+
+    aliases = {
+        'trayecto': 'en trayecto',
+        'bodega': 'en bodega',
+        'devuelto': 'devuelta',
+        'sin conexion': 'sin conexion',
+        'problemas': 'con problemas',
+        'reparacion': 'en reparacion',
+        'baja': 'dado de baja',
+    }
+    busq = aliases.get(busq, busq)
+
+    exactos = []
+    parciales = []
+    for estado in EstadoInventario.objects.all().only('id', 'nombre'):
+        nombre_n = _texto_sin_acentos(estado.nombre)
+        if not nombre_n:
+            continue
+        if nombre_n == busq:
+            exactos.append(estado.id)
+        elif len(busq) >= 3 and (busq in nombre_n or nombre_n.startswith(busq)):
+            parciales.append(estado.id)
+    return exactos or parciales
+
+
 @login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR', 'TECNICO'])
 def inventario_list_view(request):
@@ -580,11 +625,18 @@ def inventario_list_view(request):
     per_page_raw = request.GET.get('per_page', '100')
     busqueda = request.GET.get('q', '').strip()
     campo_busqueda = request.GET.get('campo', 'all').strip()
-    estado_filtro = request.GET.get('estado', '')
+    estado_filtro = request.GET.get('estado', '').strip()
     ubicacion_filtro = request.GET.get('ubicacion', '')
     proyecto_filtro = request.GET.get('proyecto', '').strip()
     caja_filtro = request.GET.get('caja', '').strip()
     tipo_medidor_filtro = request.GET.get('tipo_medidor', '').strip()
+
+    # Si buscan por texto de estado, resolver a IDs (soporta Sin Conexion / Sin Conexión)
+    estado_ids_busqueda = []
+    if busqueda and campo_busqueda == 'estado':
+        estado_ids_busqueda = _ids_estado_por_busqueda(busqueda)
+        if len(estado_ids_busqueda) == 1 and not estado_filtro:
+            estado_filtro = str(estado_ids_busqueda[0])
 
     # Tamaño de página permitido (optimizado)
     per_page_options = [10, 25, 50, 100]
@@ -660,7 +712,7 @@ def inventario_list_view(request):
     elif tipo == 'sim':
         equipos = SimCard.objects.select_related(
             'estado_inventario', 'ubicacion_actual', 'cliente', 'en_custodia_de', 'medidor'
-        ).all().order_by('-id')
+        ).all().order_by('imei')
         titulo = 'SIM Cards'
     elif tipo == 'modem':
         equipos = Modem.objects.select_related(
@@ -700,7 +752,13 @@ def inventario_list_view(request):
     
     # Aplicar filtros
     if estado_filtro and tipo != 'todos':
-        equipos = equipos.filter(estado_inventario_id=estado_filtro)
+        if str(estado_filtro).isdigit():
+            equipos = equipos.filter(estado_inventario_id=int(estado_filtro))
+        else:
+            ids_estado = _ids_estado_por_busqueda(estado_filtro)
+            equipos = equipos.filter(estado_inventario_id__in=ids_estado) if ids_estado else equipos.none()
+    elif estado_ids_busqueda and tipo != 'todos' and campo_busqueda == 'estado':
+        equipos = equipos.filter(estado_inventario_id__in=estado_ids_busqueda)
     
     if ubicacion_filtro and tipo != 'todos':
         equipos = equipos.filter(ubicacion_actual_id=ubicacion_filtro)
@@ -716,9 +774,18 @@ def inventario_list_view(request):
 
     if tipo == 'todos':
         if estado_filtro:
-            medidores_qs = medidores_qs.filter(estado_inventario_id=estado_filtro)
-            sims_qs = sims_qs.filter(estado_inventario_id=estado_filtro)
-            modems_qs = modems_qs.filter(estado_inventario_id=estado_filtro)
+            if str(estado_filtro).isdigit():
+                estado_q = Q(estado_inventario_id=int(estado_filtro))
+            else:
+                ids_estado = _ids_estado_por_busqueda(estado_filtro)
+                estado_q = Q(estado_inventario_id__in=ids_estado) if ids_estado else Q(pk__in=[])
+            medidores_qs = medidores_qs.filter(estado_q)
+            sims_qs = sims_qs.filter(estado_q)
+            modems_qs = modems_qs.filter(estado_q)
+        elif estado_ids_busqueda:
+            medidores_qs = medidores_qs.filter(estado_inventario_id__in=estado_ids_busqueda)
+            sims_qs = sims_qs.filter(estado_inventario_id__in=estado_ids_busqueda)
+            modems_qs = modems_qs.filter(estado_inventario_id__in=estado_ids_busqueda)
 
         if ubicacion_filtro:
             medidores_qs = medidores_qs.filter(ubicacion_actual_id=ubicacion_filtro)
@@ -745,7 +812,8 @@ def inventario_list_view(request):
         equipos.sort(key=lambda item: item.id, reverse=True)
 
     # Búsqueda global por servidor (evita filtrar solo el bloque cargado)
-    if busqueda:
+    # Si campo=estado, el filtro ya se resolvió arriba por IDs (con/sin acentos).
+    if busqueda and campo_busqueda != 'estado':
         if tipo == 'todos':
             filtro = busqueda.lower()
             if campo_busqueda == 'tipo':
@@ -756,8 +824,6 @@ def inventario_list_view(request):
                 equipos = [equipo for equipo in equipos if filtro in (equipo.descripcion or '').lower()]
             elif campo_busqueda == 'tecnico':
                 equipos = [equipo for equipo in equipos if filtro in (equipo.tecnico_display or '').lower()]
-            elif campo_busqueda == 'estado':
-                equipos = [equipo for equipo in equipos if filtro in (equipo.estado_nombre or '').lower()]
             elif campo_busqueda == 'cliente':
                 equipos = [equipo for equipo in equipos if filtro in (equipo.cliente_numero or '').lower()]
             elif campo_busqueda == 'proyecto':
@@ -773,7 +839,6 @@ def inventario_list_view(request):
                 'tipo_medidor': 'tipo_medidor__icontains',
                 'entregado_a': 'entregado_a__nombre_interno__icontains',
                 'proyecto': 'proyecto__icontains',
-                'estado': 'estado_inventario__nombre__icontains',
                 'cliente': 'cliente__numero_cliente__icontains',
             }
             campos_all = [
@@ -795,7 +860,6 @@ def inventario_list_view(request):
                 'direccion_ip': 'direccion_ip__icontains',
                 'entregado_a': 'entregado_a_nombre__icontains',
                 'proyecto': 'proyecto__icontains',
-                'estado': 'estado_inventario__nombre__icontains',
                 'cliente': 'cliente__numero_cliente__icontains',
             }
             campos_all = [
@@ -817,7 +881,6 @@ def inventario_list_view(request):
                 'serie': 'serie__icontains',
                 'caja': 'caja__icontains',
                 'tecnico': 'tecnico_responsable__icontains',
-                'estado': 'estado_inventario__nombre__icontains',
                 'cliente': 'cliente__numero_cliente__icontains',
                 'proyecto': 'proyecto__icontains',
             }
@@ -833,13 +896,17 @@ def inventario_list_view(request):
                 'proyecto__icontains',
             ]
 
-        if campo_busqueda in campos_por_tipo:
-            equipos = equipos.filter(**{campos_por_tipo[campo_busqueda]: busqueda})
-        else:
-            query = Q()
-            for lookup in campos_all:
-                query |= Q(**{lookup: busqueda})
-            equipos = equipos.filter(query)
+        if tipo != 'todos':
+            if campo_busqueda in campos_por_tipo:
+                equipos = equipos.filter(**{campos_por_tipo[campo_busqueda]: busqueda})
+            else:
+                query = Q()
+                for lookup in campos_all:
+                    query |= Q(**{lookup: busqueda})
+                ids_estado = _ids_estado_por_busqueda(busqueda)
+                if ids_estado:
+                    query |= Q(estado_inventario_id__in=ids_estado)
+                equipos = equipos.filter(query)
 
     total_filtrado = len(equipos)
     paginador = Paginator(equipos, per_page)
@@ -894,10 +961,29 @@ def inventario_list_view(request):
     # Obtener opciones para filtros (solo estados de negocio definidos)
     if tipo in ('medidor', 'modem'):
         estados_permitidos = ['En bodega', 'En Trayecto', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja', 'En peaje']
+        estados_disponibles = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
+        estados_disponibles.sort(key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99)
+    elif tipo == 'sim':
+        estados_permitidos = [
+            'En bodega', 'En Trayecto', 'Instalado', 'Retirado',
+            'Devuelta', 'Sin Conexión', 'Con Problemas',
+            'En reparación', 'Dado de baja',
+        ]
+        ids_usados = SimCard.objects.exclude(estado_inventario_id__isnull=True).values_list(
+            'estado_inventario_id', flat=True
+        ).distinct()
+        estados_disponibles = list(
+            EstadoInventario.objects.filter(
+                Q(nombre__in=estados_permitidos) | Q(id__in=ids_usados)
+            ).distinct()
+        )
+        estados_disponibles.sort(
+            key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99
+        )
     else:
         estados_permitidos = ['En bodega', 'En Trayecto', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja']
-    estados_disponibles = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
-    estados_disponibles.sort(key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99)
+        estados_disponibles = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
+        estados_disponibles.sort(key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99)
     ubicaciones_disponibles = Ubicacion.objects.all()
     usuarios = Usuario.objects.filter(rol='TECNICO')  # Solo técnicos
     clientes = Cliente.objects.all()
@@ -907,6 +993,24 @@ def inventario_list_view(request):
         + list(SimCard.objects.exclude(proyecto='').values_list('proyecto', flat=True))
         + list(Modem.objects.exclude(proyecto='').values_list('proyecto', flat=True))
     ))
+
+    sim_resumen = None
+    if tipo == 'sim':
+        base_sim = SimCard.objects.all()
+        total_sim = base_sim.count()
+        por_estado = list(
+            base_sim.values('estado_inventario_id', 'estado_inventario__nombre')
+            .annotate(total=Count('id'))
+            .order_by('-total')
+        )
+        sim_resumen = {
+            'total': total_sim,
+            'con_ip': base_sim.exclude(Q(direccion_ip='') | Q(direccion_ip__isnull=True)).count(),
+            'con_abonado': base_sim.exclude(Q(abonado='') | Q(abonado__isnull=True)).count(),
+            'con_entregado': base_sim.exclude(Q(entregado_a_nombre='') | Q(entregado_a_nombre__isnull=True)).count(),
+            'con_cliente': base_sim.filter(cliente_id__isnull=False).count(),
+            'por_estado': por_estado,
+        }
     
     context = {
         'equipos': equipos,
@@ -917,7 +1021,7 @@ def inventario_list_view(request):
         'usuarios': usuarios,
         'clientes': clientes,
         'medidores': medidores,
-        'estado_seleccionado': estado_filtro,
+        'estado_seleccionado': str(estado_filtro).strip() if estado_filtro else '',
         'ubicacion_seleccionada': ubicacion_filtro,
         'proyecto_seleccionado': proyecto_filtro,
         'caja_seleccionada': caja_filtro,
@@ -926,6 +1030,7 @@ def inventario_list_view(request):
         'tipo_medidor_choices': Medidor.TIPO_MEDIDOR_CHOICES,
         'total_medidores_directos': Medidor.objects.filter(tipo_medidor='DIRECTO').count(),
         'total_medidores_indirectos': Medidor.objects.filter(tipo_medidor='INDIRECTO').count(),
+        'sim_resumen': sim_resumen,
         'busqueda': busqueda,
         'campo_busqueda': campo_busqueda,
         'total_filtrado': total_filtrado,
@@ -3672,9 +3777,13 @@ ROLES_REPORTES_GESTION = ('ADMIN', 'ADMINISTRATIVO')
 
 
 def _ejecutar_autosync_moreapp_si_corresponde():
-    """Ejecuta lectura automática MoreApp en intervalos para evitar depender solo del botón manual."""
+    """Ejecuta lectura automática MoreApp en intervalos para evitar depender solo del botón manual.
+
+    Returns:
+        dict | None: estadísticas de leer_carpetas() si corrió, o None si se omitió/falló.
+    """
     if not getattr(settings, 'MOREAPP_AUTO_SYNC_ENABLED', True):
-        return
+        return None
 
     from django.core.cache import cache
     from django.utils import timezone
@@ -3688,14 +3797,15 @@ def _ejecutar_autosync_moreapp_si_corresponde():
     ahora_ts = timezone.now().timestamp()
     ultimo_ts = cache.get(key)
     if ultimo_ts and (ahora_ts - float(ultimo_ts)) < intervalo:
-        return
+        return None
 
     # Throttle simple para evitar múltiples ejecuciones simultáneas entre requests.
     cache.set(key, ahora_ts, timeout=intervalo)
     try:
-        leer_carpetas()
+        return leer_carpetas()
     except Exception:
         logger.exception('Fallo en autosincronización MoreApp')
+        return None
 
 
 def _categorias_advertencia_registro(registro):
