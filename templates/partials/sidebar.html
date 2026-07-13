@@ -28,6 +28,9 @@
     {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'pendientes_operativos' %}active bg-primary text-white{% endif %}" href="{% url 'pendientes_operativos' %}">
         <i class="bi bi-list-check me-2"></i> Pendientes MoreApp
+        {% if moreapp_aviso.activo %}
+        <span class="badge {% if moreapp_aviso.nuevos %}bg-danger{% else %}bg-warning text-dark{% endif %} ms-1">{{ moreapp_aviso.por_revisar }}</span>
+        {% endif %}
       </a>
     {% endif %}
       <a class="list-group-item list-group-item-action app-nav-link {% if 'reportes_moreapp' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}" href="{% url 'reportes_moreapp_list' %}">

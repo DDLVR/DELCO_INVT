@@ -14,6 +14,48 @@
     {{ moreapp_formulario_breakdown|json_script:"datos-moreapp-formulario" }}
     {{ moreapp_adv_breakdown|json_script:"datos-moreapp-adv" }}
 
+    {% if moreapp_aviso.activo %}
+    <div class="alert {% if moreapp_aviso.nuevos %}alert-danger{% else %}alert-warning{% endif %} border shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-start gap-3" role="alert">
+        <div>
+            <div class="fw-semibold mb-1">
+                <i class="bi bi-bell-fill me-1"></i>
+                {% if moreapp_aviso.nuevos %}
+                Hay {{ moreapp_aviso.nuevos }} informe(s) MoreApp nuevos por revisar
+                {% else %}
+                Hay {{ moreapp_aviso.por_revisar }} informe(s) MoreApp pendientes de revisión
+                {% endif %}
+            </div>
+            <div class="small mb-0">
+                Pendientes: <strong>{{ moreapp_aviso.pendientes }}</strong>
+                · Con advertencia: <strong>{{ moreapp_aviso.advertencias }}</strong>
+                {% if moreapp_aviso.llegaron_hoy %}
+                · Últimas 24 h: <strong>{{ moreapp_aviso.llegaron_hoy }}</strong>
+                {% endif %}
+            </div>
+            {% if moreapp_aviso.recientes %}
+            <ul class="small mb-0 mt-2 ps-3">
+                {% for item in moreapp_aviso.recientes %}
+                <li>
+                    #{{ item.numero_correlativo|default:item.id }}
+                    {% if item.nombre_formulario %}— {{ item.nombre_formulario }}{% endif %}
+                    {% if item.orden_id %}· OT #{{ item.orden_id }}{% else %}· sin OT{% endif %}
+                    · {{ item.estado_revision }}
+                </li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+        </div>
+        <div class="d-flex flex-column gap-2">
+            <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm {% if moreapp_aviso.nuevos %}btn-danger{% else %}btn-warning{% endif %}">
+                Abrir cola de pendientes
+            </a>
+            <a href="{% url 'ordenes_list' %}?cola=validar" class="btn btn-sm btn-outline-secondary">
+                OT por validar
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Encabezado: accesos rápidos + alertas de calidad -->
     <div class="card delco-dash-hero shadow-sm mb-3">
         <div class="card-body py-3">
@@ -32,7 +74,12 @@
                 {% endif %}
                 <a href="{% url 'movimientos_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-arrow-left-right"></i> Movimientos</a>
                 <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-cloud-download"></i> MoreApp</a>
-                <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-list-task"></i> Pendientes</a>
+                <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm delco-dash-btn-outline">
+                    <i class="bi bi-list-task"></i> Pendientes
+                    {% if moreapp_aviso.activo %}
+                    <span class="badge {% if moreapp_aviso.nuevos %}bg-danger{% else %}bg-warning text-dark{% endif %} ms-1">{{ moreapp_aviso.por_revisar }}</span>
+                    {% endif %}
+                </a>
                 {% if rol == 'ADMIN' %}
                 <a href="{% url 'usuarios_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-people"></i> Usuarios</a>
                 {% endif %}
