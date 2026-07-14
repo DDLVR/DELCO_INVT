@@ -9,6 +9,9 @@ dist/
 *.egg-info/
 staticfiles/
 *.zip
+# Entornos virtuales (usar venv38 = Python 3.8, como Hostingplus)
+venv/
+venv38/
 # Archivos locales y temporales
 db.sqlite3
 delete

@@ -191,7 +191,7 @@ def _normalizar_caja_modem(valor) -> str:
     return _as_text_id(valor)
 
 
-def _reconstruir_ipv4_desde_digitos(digits: str) -> list[str]:
+def _reconstruir_ipv4_desde_digitos(digits: str):
     """Reconstruye candidatos IPv4 cuando Excel guardó la IP como entero sin puntos."""
     n = len(digits)
     candidatos = []

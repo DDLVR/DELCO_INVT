@@ -18,7 +18,7 @@ def as_text(value) -> str:
     return str(value).strip()
 
 
-def extraer_cliente(data: dict) -> tuple[str, str, str]:
+def extraer_cliente(data: dict):
     for key in ('cliente', 'cliente1', 'CLIENTE'):
         if as_text(data.get(key)):
             return as_text(data.get(key)), '', ''
@@ -125,7 +125,7 @@ def main():
             formulario,
         ])
 
-    vistos_cliente: dict[str, list] = {}
+    vistos_cliente = {}
     for row in rows:
         vistos_cliente.setdefault(row[0], []).append(row)
     sin_repetir = []
