@@ -143,8 +143,8 @@ def _identificador_operativo_util(valor: Any, modo: str = 'general') -> str:
 def _as_text(valor: Any) -> str:
     """Convierte a texto seguro para MySQL en Hostingplus.
 
-    MoreApp a veces envía � (U+FFFD) u otros chars fuera de latin1; sin filtrar
-    PyMySQL lanza DataError 1366 Incorrect string value en columnas viejas.
+    MoreApp a veces envía � (U+FFFD) u el mojibake latin1 de esos bytes
+    (EF BF BD). Sin filtrar, PyMySQL lanza DataError 1366.
     """
     if valor is None:
         return ''
@@ -152,7 +152,15 @@ def _as_text(valor: Any) -> str:
         texto = valor.decode('utf-8', errors='replace')
     else:
         texto = str(valor)
-    texto = texto.replace('\x00', '').replace('\ufffd', '')
+
+    # Null, BOM, replacement char y su mojibake típico (EF BF BD como 3 chars)
+    texto = (
+        texto.replace('\x00', '')
+        .replace('\ufeff', '')
+        .replace('\ufffd', '')
+        .replace('\u00ef\u00bf\u00bd', '')
+        .replace(chr(0xEF) + chr(0xBF) + chr(0xBD), '')
+    )
     texto = ''.join(
         ch for ch in texto
         if ch in '\t\n\r' or unicodedata.category(ch)[0] != 'C'
@@ -162,13 +170,59 @@ def _as_text(valor: Any) -> str:
     # Columnas de clientes en producción pueden ser latin1 (1 byte).
     seguro = []
     for ch in texto:
-        if ord(ch) < 256:
+        o = ord(ch)
+        if o < 128:
+            seguro.append(ch)
+            continue
+        if o < 256:
+            # latin1 imprimible; evita secuencias problemáticas al reinterpretarse
             seguro.append(ch)
             continue
         for part in unicodedata.normalize('NFKD', ch):
-            if ord(part) < 256 and not unicodedata.combining(part):
+            po = ord(part)
+            if po < 256 and not unicodedata.combining(part):
                 seguro.append(part)
-    return ''.join(seguro).strip()
+    limpio = ''.join(seguro).strip()
+    # Segunda pasada: quitar trío EF BF BD si reapareció
+    while True:
+        idx = limpio.find(chr(0xEF) + chr(0xBF) + chr(0xBD))
+        if idx < 0:
+            break
+        limpio = limpio[:idx] + limpio[idx + 3:]
+    return limpio.strip()
+
+
+def _sanitizar_cliente_para_mysql(cliente_obj) -> None:
+    """Limpia Char/Text del cliente in-place antes de save (defensa extra)."""
+    campos_texto = (
+        'numero_cliente', 'direccion', 'comuna', 'referencia', 'tipo_suministro',
+        'pod', 'sector', 'city', 'customer_name', 'installation_address',
+        'proyecto', 'meter_manufacturer_id', 'meter_serial_n_1', 'empresa',
+        'ip', 'puerto', 'modem', 'estado_telemetria', 'note', 'trabajo',
+        'sim_operador', 'sim_iccid', 'sim_abonado',
+    )
+    for campo in campos_texto:
+        if not hasattr(cliente_obj, campo):
+            continue
+        actual = getattr(cliente_obj, campo, None)
+        if actual is None or actual == '':
+            continue
+        limpio = _as_text(actual)
+        if limpio != actual:
+            setattr(cliente_obj, campo, limpio)
+
+
+def _as_text_mysql_strict(valor: Any) -> str:
+    """Texto para columnas de dirección/comuna: ASCII tras quitar acentos (máxima compatibilidad Hostingplus)."""
+    texto = _as_text(valor)
+    if not texto:
+        return ''
+    texto = unicodedata.normalize('NFKD', texto)
+    texto = ''.join(
+        ch for ch in texto
+        if not unicodedata.combining(ch) and ord(ch) < 128
+    )
+    return ' '.join(texto.split())
 
 
 def _valor_campo_fuentes(fuentes, aliases):
@@ -758,22 +812,30 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
 
     if cliente_obj:
         cambios_cliente = []
-        direccion = _as_text(datos_norm.get('cliente_direccion', ''))
-        comuna = _as_text(datos_norm.get('cliente_comuna', ''))
-        if direccion and cliente_obj.direccion != direccion:
+        # STRICT: dirección/comuna a ASCII limpio (evita 1366 en columnas latin1 del host)
+        direccion = _as_text_mysql_strict(datos_norm.get('cliente_direccion', ''))
+        comuna = _as_text_mysql_strict(datos_norm.get('cliente_comuna', ''))
+        if direccion and _as_text_mysql_strict(cliente_obj.direccion) != direccion:
             cliente_obj.direccion = direccion
             cambios_cliente.append('direccion')
-        if comuna and cliente_obj.comuna != comuna:
+        if comuna and _as_text_mysql_strict(cliente_obj.comuna) != comuna:
             cliente_obj.comuna = comuna
             cambios_cliente.append('comuna')
-        empresa = _as_text(datos_norm.get('empresa', ''))
-        if empresa and cliente_obj.empresa != empresa:
+        empresa = _as_text_mysql_strict(datos_norm.get('empresa', ''))
+        if empresa and _as_text_mysql_strict(getattr(cliente_obj, 'empresa', '') or '') != empresa:
             cliente_obj.empresa = empresa
             cambios_cliente.append('empresa')
         if not cliente_obj.activo:
             cliente_obj.activo = True
             cambios_cliente.append('activo')
         if cambios_cliente:
+            _sanitizar_cliente_para_mysql(cliente_obj)
+            if 'direccion' in cambios_cliente:
+                cliente_obj.direccion = _as_text_mysql_strict(cliente_obj.direccion)
+            if 'comuna' in cambios_cliente:
+                cliente_obj.comuna = _as_text_mysql_strict(cliente_obj.comuna)
+            if 'empresa' in cambios_cliente:
+                cliente_obj.empresa = _as_text_mysql_strict(cliente_obj.empresa)
             cliente_obj.save(update_fields=cambios_cliente)
             registro.actualizo_cliente = True
 
