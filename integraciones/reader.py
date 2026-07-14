@@ -619,15 +619,21 @@ def _intentar_asignar_cliente_equipo(
 
 def _asignar_medidor_actual_si_disponible(cliente_obj, medidor, registro, registrar_pendiente=None) -> bool:
     """
-    Asigna medidor_actual solo si no está tomado por otro cliente.
-    Si otro cliente lo tiene: alerta crítica y no modifica.
+    Asigna medidor_actual solo si está libre (nadie más lo tiene).
+    Si hay conflicto: ALERTA CRÍTICA y NO modifica nada (sin liberar/reasignar).
+    Nunca deja escapar IntegrityError: el sync no debe caer en 500.
     """
+    from django.db import DatabaseError, IntegrityError, transaction
     from clientes.models import Cliente
 
     if not cliente_obj or not medidor:
         return False
 
     if cliente_obj.medidor_actual_id == medidor.pk:
+        return False
+
+    # Si el medidor ya pertenece (FK) a otro cliente, no tocar medidor_actual
+    if _equipo_asignado_a_otro_cliente(medidor, cliente_obj):
         return False
 
     otro = (
@@ -649,22 +655,31 @@ def _asignar_medidor_actual_si_disponible(cliente_obj, medidor, registro, regist
         )
         return False
 
-    # También si el medidor ya pertenece (FK) a otro cliente, no tocar medidor_actual
-    if _equipo_asignado_a_otro_cliente(medidor, cliente_obj):
-        return False
-
-    from django.db import IntegrityError, transaction
-
+    # Asignar solo si sigue libre. Sin liberar a terceros (regla: sin auto-corrección).
     try:
         with transaction.atomic():
-            # Por si quedó huérfano único en DB
-            Cliente.objects.filter(medidor_actual_id=medidor.pk).exclude(pk=cliente_obj.pk).update(
-                medidor_actual=None
-            )
+            if Cliente.objects.filter(medidor_actual_id=medidor.pk).exclude(pk=cliente_obj.pk).exists():
+                _registrar_alerta_critica_asignacion(
+                    registro,
+                    'MEDIDOR',
+                    _identificador_equipo(medidor, 'MEDIDOR'),
+                    (
+                        f'Ya es medidor_actual de otro cliente. '
+                        f'No se asignó a {_cliente_label(cliente_obj)}. Corregir manualmente.'
+                    ),
+                    registrar_pendiente=registrar_pendiente,
+                )
+                return False
             Cliente.objects.filter(pk=cliente_obj.pk).update(medidor_actual_id=medidor.pk)
         cliente_obj.medidor_actual_id = medidor.pk
         return True
-    except IntegrityError:
+    except (IntegrityError, DatabaseError) as exc:
+        logger.exception(
+            'Error asignando medidor_actual medidor_id=%s cliente_id=%s: %s',
+            medidor.pk,
+            cliente_obj.pk,
+            exc,
+        )
         _registrar_alerta_critica_asignacion(
             registro,
             'MEDIDOR',
@@ -1705,12 +1720,24 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
 
                 stats['carpetas_revisadas'] += 1
 
-                resultado = _procesar_json(
-                    json_path=json_path,
-                    ruta_carpeta=correlativo_path,
-                    numero_correlativo=int(correlativo) if correlativo.isdigit() else None,
-                    dry_run=dry_run,
-                )
+                try:
+                    resultado = _procesar_json(
+                        json_path=json_path,
+                        ruta_carpeta=correlativo_path,
+                        numero_correlativo=int(correlativo) if correlativo.isdigit() else None,
+                        dry_run=dry_run,
+                    )
+                except Exception as exc:
+                    logger.exception('Error no controlado procesando %s', json_path)
+                    resultado = {
+                        'json_path': json_path,
+                        'ruta_carpeta': correlativo_path,
+                        'correlativo': int(correlativo) if correlativo.isdigit() else None,
+                        'resultado': 'error',
+                        'submission_id': None,
+                        'alerta': True,
+                        'mensaje': f'Error no controlado: {exc}',
+                    }
                 stats['detalle'].append(resultado)
 
                 if resultado['resultado'] == 'nuevo':
@@ -1719,6 +1746,8 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
                         stats['alertas'] += 1
                 elif resultado['resultado'] == 'duplicado':
                     stats['duplicados'] += 1
+                    if resultado.get('alerta'):
+                        stats['alertas'] += 1
                 elif resultado['resultado'] == 'error':
                     stats['errores'] += 1
 
@@ -1802,41 +1831,66 @@ def _procesar_json(json_path: str, ruta_carpeta: str,
     # --- Deduplicación por id ---
     existente = IntegracionMoreApp.objects.filter(moreapp_submission_id=submission_id).first()
     if existente:
-        datos_norm = _extraer_datos_normalizados(data)
-        resumen_operativo = _aplicar_actualizaciones_operativas(
-            registro=existente,
-            payload=data,
-            datos_norm=datos_norm,
-            nombre_formulario=nombre_formulario,
-        )
-        existente.datos_recibidos = data
-        existente.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
-        existente.nombre_formulario = nombre_formulario
-        existente.numero_correlativo = numero_correlativo
-        existente.ruta_carpeta = ruta_carpeta
-        existente.fecha_procesamiento = timezone.now()
-        existente.save(
-            update_fields=[
-                'datos_recibidos',
-                'datos_procesados',
-                'nombre_formulario',
-                'numero_correlativo',
-                'ruta_carpeta',
-                'fecha_procesamiento',
-                'actualizo_cliente',
-                'actualizo_equipos',
-                'estado_revision',
-                'alerta_doble_trabajo',
-                'descripcion_alerta',
-            ]
-        )
-        resultado['resultado'] = 'duplicado'
-        resultado['alerta'] = bool(existente.alerta_doble_trabajo)
-        resultado['mensaje'] = (
-            existente.descripcion_alerta
-            if existente.alerta_doble_trabajo and existente.descripcion_alerta
-            else f'Ya existe registro con id={submission_id}'
-        )
+        try:
+            datos_norm = _extraer_datos_normalizados(data)
+            resumen_operativo = _aplicar_actualizaciones_operativas(
+                registro=existente,
+                payload=data,
+                datos_norm=datos_norm,
+                nombre_formulario=nombre_formulario,
+            )
+            existente.datos_recibidos = data
+            existente.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
+            existente.nombre_formulario = nombre_formulario
+            existente.numero_correlativo = numero_correlativo
+            existente.ruta_carpeta = ruta_carpeta
+            existente.fecha_procesamiento = timezone.now()
+            existente.save(
+                update_fields=[
+                    'datos_recibidos',
+                    'datos_procesados',
+                    'nombre_formulario',
+                    'numero_correlativo',
+                    'ruta_carpeta',
+                    'fecha_procesamiento',
+                    'actualizo_cliente',
+                    'actualizo_equipos',
+                    'estado_revision',
+                    'alerta_doble_trabajo',
+                    'descripcion_alerta',
+                ]
+            )
+            resultado['resultado'] = 'duplicado'
+            resultado['alerta'] = bool(existente.alerta_doble_trabajo)
+            resultado['mensaje'] = (
+                existente.descripcion_alerta
+                if existente.alerta_doble_trabajo and existente.descripcion_alerta
+                else f'Ya existe registro con id={submission_id}'
+            )
+        except Exception as exc:
+            logger.exception('Error reprocesando duplicado MoreApp id=%s', submission_id)
+            resultado['resultado'] = 'duplicado'
+            resultado['alerta'] = True
+            resultado['mensaje'] = f'Ya existe id={submission_id}; error operativo: {exc}'
+            try:
+                existente.alerta_doble_trabajo = True
+                detalle = f'ERROR_SYNC | {exc}'
+                if existente.descripcion_alerta:
+                    existente.descripcion_alerta += f' | {detalle}'
+                else:
+                    existente.descripcion_alerta = detalle
+                existente.estado_revision = 'CON_ADVERTENCIA'
+                existente.fecha_procesamiento = timezone.now()
+                existente.save(
+                    update_fields=[
+                        'alerta_doble_trabajo',
+                        'descripcion_alerta',
+                        'estado_revision',
+                        'fecha_procesamiento',
+                    ]
+                )
+            except Exception:
+                logger.exception('No se pudo guardar alerta en duplicado %s', submission_id)
         logger.info('Duplicado omitido: %s', submission_id)
         return resultado
 
@@ -1846,23 +1900,23 @@ def _procesar_json(json_path: str, ruta_carpeta: str,
     # --- Detección alerta doble trabajo ---
     tiene_alerta, desc_alerta = _detectar_alerta_doble_trabajo(submission_id, datos_norm)
 
-    # --- Guardar en BD ---
-    with transaction.atomic():
-        estado = 'ALERTA_REVISION' if tiene_alerta else 'PROCESADO'
-        registro = IntegracionMoreApp.objects.create(
-            moreapp_submission_id=submission_id,
-            nombre_formulario=nombre_formulario,
-            numero_correlativo=numero_correlativo,
-            ruta_carpeta=ruta_carpeta,
-            datos_recibidos=data,
-            datos_procesados=datos_norm,
-            estado_sincronizacion=estado,
-            alerta_doble_trabajo=tiene_alerta,
-            descripcion_alerta=desc_alerta,
-            fecha_procesamiento=timezone.now(),
-        )
+    # --- Guardar en BD (crear primero; updates operativos aparte para no tumbar el sync) ---
+    estado = 'ALERTA_REVISION' if tiene_alerta else 'PROCESADO'
+    registro = IntegracionMoreApp.objects.create(
+        moreapp_submission_id=submission_id,
+        nombre_formulario=nombre_formulario,
+        numero_correlativo=numero_correlativo,
+        ruta_carpeta=ruta_carpeta,
+        datos_recibidos=data,
+        datos_procesados=datos_norm,
+        estado_sincronizacion=estado,
+        alerta_doble_trabajo=tiene_alerta,
+        descripcion_alerta=desc_alerta,
+        fecha_procesamiento=timezone.now(),
+    )
 
-        # Aplicar actualización operativa (cliente/equipos) según formulario y payload
+    resumen_operativo = {}
+    try:
         resumen_operativo = _aplicar_actualizaciones_operativas(
             registro=registro,
             payload=data,
@@ -1880,6 +1934,27 @@ def _procesar_json(json_path: str, ruta_carpeta: str,
                 'descripcion_alerta',
             ]
         )
+    except Exception as exc:
+        logger.exception('Error operativo MoreApp id=%s', submission_id)
+        registro.alerta_doble_trabajo = True
+        registro.estado_revision = 'CON_ADVERTENCIA'
+        detalle = f'ERROR_SYNC | {exc}'
+        if registro.descripcion_alerta:
+            registro.descripcion_alerta += f' | {detalle}'
+        else:
+            registro.descripcion_alerta = detalle
+        registro.datos_procesados = {**datos_norm, 'resultado_operativo': {'error': str(exc)}}
+        try:
+            registro.save(
+                update_fields=[
+                    'datos_procesados',
+                    'estado_revision',
+                    'alerta_doble_trabajo',
+                    'descripcion_alerta',
+                ]
+            )
+        except Exception:
+            logger.exception('No se pudo guardar alerta operativa id=%s', submission_id)
 
     resultado['resultado'] = 'nuevo'
     resultado['alerta'] = bool(registro.alerta_doble_trabajo or resumen_operativo.get('pendientes_revision'))
@@ -1927,58 +2002,65 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
 
     existente = IntegracionMoreApp.objects.filter(moreapp_submission_id=submission_id).first()
     if existente:
-        datos_norm = _extraer_datos_normalizados(data)
-        resumen_operativo = _aplicar_actualizaciones_operativas(
-            registro=existente,
-            payload=data,
-            datos_norm=datos_norm,
-            nombre_formulario=nombre_formulario,
-        )
-        existente.datos_recibidos = data
-        existente.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
-        existente.nombre_formulario = nombre_formulario
-        existente.ruta_carpeta = ruta_context
-        existente.fecha_procesamiento = timezone.now()
-        existente.save(
-            update_fields=[
-                'datos_recibidos',
-                'datos_procesados',
-                'nombre_formulario',
-                'ruta_carpeta',
-                'fecha_procesamiento',
-                'actualizo_cliente',
-                'actualizo_equipos',
-                'estado_revision',
-                'alerta_doble_trabajo',
-                'descripcion_alerta',
-            ]
-        )
-        resultado['resultado'] = 'duplicado'
-        resultado['alerta'] = bool(existente.alerta_doble_trabajo)
-        resultado['mensaje'] = (
-            existente.descripcion_alerta
-            if existente.alerta_doble_trabajo and existente.descripcion_alerta
-            else f'Ya existe registro con id={submission_id}'
-        )
+        try:
+            datos_norm = _extraer_datos_normalizados(data)
+            resumen_operativo = _aplicar_actualizaciones_operativas(
+                registro=existente,
+                payload=data,
+                datos_norm=datos_norm,
+                nombre_formulario=nombre_formulario,
+            )
+            existente.datos_recibidos = data
+            existente.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
+            existente.nombre_formulario = nombre_formulario
+            existente.ruta_carpeta = ruta_context
+            existente.fecha_procesamiento = timezone.now()
+            existente.save(
+                update_fields=[
+                    'datos_recibidos',
+                    'datos_procesados',
+                    'nombre_formulario',
+                    'ruta_carpeta',
+                    'fecha_procesamiento',
+                    'actualizo_cliente',
+                    'actualizo_equipos',
+                    'estado_revision',
+                    'alerta_doble_trabajo',
+                    'descripcion_alerta',
+                ]
+            )
+            resultado['resultado'] = 'duplicado'
+            resultado['alerta'] = bool(existente.alerta_doble_trabajo)
+            resultado['mensaje'] = (
+                existente.descripcion_alerta
+                if existente.alerta_doble_trabajo and existente.descripcion_alerta
+                else f'Ya existe registro con id={submission_id}'
+            )
+        except Exception as exc:
+            logger.exception('Error webhook duplicado MoreApp id=%s', submission_id)
+            resultado['resultado'] = 'duplicado'
+            resultado['alerta'] = True
+            resultado['mensaje'] = f'Ya existe id={submission_id}; error operativo: {exc}'
         return resultado
 
     datos_norm = _extraer_datos_normalizados(data)
     tiene_alerta, desc_alerta = _detectar_alerta_doble_trabajo(submission_id, datos_norm)
 
-    with transaction.atomic():
-        estado = 'ALERTA_REVISION' if tiene_alerta else 'PROCESADO'
-        registro = IntegracionMoreApp.objects.create(
-            moreapp_submission_id=submission_id,
-            nombre_formulario=nombre_formulario,
-            ruta_carpeta=ruta_context,
-            datos_recibidos=data,
-            datos_procesados=datos_norm,
-            estado_sincronizacion=estado,
-            alerta_doble_trabajo=tiene_alerta,
-            descripcion_alerta=desc_alerta,
-            fecha_procesamiento=timezone.now(),
-        )
+    estado = 'ALERTA_REVISION' if tiene_alerta else 'PROCESADO'
+    registro = IntegracionMoreApp.objects.create(
+        moreapp_submission_id=submission_id,
+        nombre_formulario=nombre_formulario,
+        ruta_carpeta=ruta_context,
+        datos_recibidos=data,
+        datos_procesados=datos_norm,
+        estado_sincronizacion=estado,
+        alerta_doble_trabajo=tiene_alerta,
+        descripcion_alerta=desc_alerta,
+        fecha_procesamiento=timezone.now(),
+    )
 
+    resumen_operativo = {}
+    try:
         resumen_operativo = _aplicar_actualizaciones_operativas(
             registro=registro,
             payload=data,
@@ -1996,6 +2078,25 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
                 'descripcion_alerta',
             ]
         )
+    except Exception as exc:
+        logger.exception('Error operativo webhook MoreApp id=%s', submission_id)
+        registro.alerta_doble_trabajo = True
+        registro.estado_revision = 'CON_ADVERTENCIA'
+        detalle = f'ERROR_SYNC | {exc}'
+        if registro.descripcion_alerta:
+            registro.descripcion_alerta += f' | {detalle}'
+        else:
+            registro.descripcion_alerta = detalle
+        try:
+            registro.save(
+                update_fields=[
+                    'estado_revision',
+                    'alerta_doble_trabajo',
+                    'descripcion_alerta',
+                ]
+            )
+        except Exception:
+            logger.exception('No se pudo guardar alerta webhook id=%s', submission_id)
 
     resultado['resultado'] = 'nuevo'
     resultado['alerta'] = bool(registro.alerta_doble_trabajo or resumen_operativo.get('pendientes_revision'))

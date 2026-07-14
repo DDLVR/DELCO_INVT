@@ -4381,20 +4381,35 @@ def reportes_moreapp_sincronizar(request):
     if request.method != 'POST':
         return redirect('reportes_moreapp_list')
 
-    stats = leer_carpetas()
-    detalle = stats.get('detalle', []) if isinstance(stats, dict) else []
+    try:
+        stats = leer_carpetas()
+    except Exception as exc:
+        logger.exception('Sincronización MoreApp falló de forma no controlada')
+        messages.error(
+            request,
+            f'La sincronización falló: {exc}. Revisa el log del servidor e intenta de nuevo.',
+        )
+        return redirect('reportes_moreapp_list')
+
+    if not isinstance(stats, dict):
+        messages.warning(request, 'Sincronización finalizó sin estadísticas.')
+        return redirect('reportes_moreapp_list')
+
+    detalle = stats.get('detalle', []) or []
     errores_detalle = [d for d in detalle if str(d.get('resultado', '')).lower() == 'error']
     bloqueos_detalle = [
         d for d in detalle
-        if 'BLOQUEO_OPERATIVO' in str(d.get('mensaje', '')) or 'pendientes operativos' in str(d.get('mensaje', '')).lower()
+        if 'BLOQUEO_OPERATIVO' in str(d.get('mensaje', ''))
+        or 'ALERTA_CRITICA' in str(d.get('mensaje', ''))
+        or 'pendientes operativos' in str(d.get('mensaje', '')).lower()
     ]
 
     messages.success(
         request,
-        f'Sincronización completada — Nuevos: {stats["nuevos"]} | '
-        f'Duplicados: {stats["duplicados"]} | '
-        f'Alertas: {stats["alertas"]} | '
-        f'Errores: {stats["errores"]}'
+        f'Sincronización completada — Nuevos: {stats.get("nuevos", 0)} | '
+        f'Duplicados: {stats.get("duplicados", 0)} | '
+        f'Alertas: {stats.get("alertas", 0)} | '
+        f'Errores: {stats.get("errores", 0)}'
     )
 
     if errores_detalle:
@@ -4408,7 +4423,7 @@ def reportes_moreapp_sincronizar(request):
         mensajes_bloqueo = '; '.join(str(b.get('mensaje', 'Bloqueo operativo')) for b in bloqueos_detalle[:3])
         messages.warning(
             request,
-            f'Se detectaron bloqueos operativos ({len(bloqueos_detalle)}). {mensajes_bloqueo}'
+            f'Se detectaron alertas/bloqueos ({len(bloqueos_detalle)}). {mensajes_bloqueo}'
         )
 
     return redirect('reportes_moreapp_list')
