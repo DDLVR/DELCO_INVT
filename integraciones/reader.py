@@ -697,8 +697,21 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
             cambios.append('puerto')
 
     if tipo_equipo == 'MEDIDOR' and cliente_obj and cliente_obj.medidor_actual_id != equipo.id:
+        from clientes.models import Cliente
+        from django.db import IntegrityError
+
+        # OneToOne: liberar el mismo medidor si otro cliente lo tiene como actual
+        Cliente.objects.filter(medidor_actual_id=equipo.id).exclude(pk=cliente_obj.pk).update(
+            medidor_actual=None
+        )
         cliente_obj.medidor_actual = equipo
-        cliente_obj.save(update_fields=['medidor_actual'])
+        try:
+            cliente_obj.save(update_fields=['medidor_actual'])
+        except IntegrityError:
+            # Condición de carrera / dato residual: forzar liberación y reintentar
+            Cliente.objects.filter(medidor_actual_id=equipo.id).update(medidor_actual=None)
+            cliente_obj.medidor_actual = equipo
+            cliente_obj.save(update_fields=['medidor_actual'])
 
     if cambios:
         equipo.save(update_fields=cambios)
