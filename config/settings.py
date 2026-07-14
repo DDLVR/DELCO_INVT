@@ -61,7 +61,7 @@ INSTALLED_APPS = [
     # Apps locales
     'usuarios.apps.UsuariosConfig',
     'ordenes_trabajo.apps.OrdenesTrabajoConfig',
-    'web',
+    'web.apps.WebConfig',
     'clientes.apps.ClientesConfig',
     'inventario.apps.InventarioConfig',
     'importaciones.apps.ImportacionesConfig',
