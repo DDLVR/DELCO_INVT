@@ -1641,7 +1641,13 @@ def _detectar_alerta_doble_trabajo(submission_id: str, datos: Dict[str, Any]) ->
     return False, ''
 
 
-def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict[str, Any]:
+def leer_carpetas(
+    base_dir: Optional[str] = None,
+    dry_run: bool = False,
+    reprocesar_duplicados: Optional[bool] = None,
+    max_archivos: Optional[int] = None,
+    max_segundos: Optional[float] = None,
+) -> Dict[str, Any]:
     """
     Recorre la estructura de carpetas de MoreApp y registra los submissions nuevos.
 
@@ -1651,17 +1657,30 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
     Args:
         base_dir: Ruta raíz donde están los registros. Si es None usa DEFAULT o settings.
         dry_run:  Si True, detecta carpetas pero no guarda en BD.
+        reprocesar_duplicados: Si False, un id ya existente se omite sin updates operativos.
+        max_archivos: Tope de registration.json a abrir en esta corrida (None = sin tope).
+        max_segundos: Tope de tiempo de la corrida (None = sin tope).
 
     Returns:
         Dict con estadísticas: nuevos, duplicados, errores, alertas, omitidos.
     """
-    from ordenes_trabajo.models import IntegracionMoreApp
+    import time
 
     base = base_dir or getattr(settings, 'MOREAPP_REGISTROS_DIR', DEFAULT_REGISTROS_BASE)
     incremental_enabled = bool(getattr(settings, 'MOREAPP_INCREMENTAL_SCAN_ENABLED', True)) and not dry_run
     lookback = int(getattr(settings, 'MOREAPP_INCREMENTAL_LOOKBACK', 2) or 2)
     if lookback < 0:
         lookback = 0
+    first_scan_tail = int(getattr(settings, 'MOREAPP_FIRST_SCAN_TAIL', 40) or 40)
+    if first_scan_tail < 1:
+        first_scan_tail = 1
+
+    if reprocesar_duplicados is None:
+        reprocesar_duplicados = True
+
+    t0 = time.monotonic()
+    detener = False
+    motivo_corte = ''
 
     stats = {
         'base_dir': base,
@@ -1672,6 +1691,8 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
         'errores': 0,
         'omitidos': 0,
         'carpetas_revisadas': 0,
+        'incompleto': False,
+        'motivo_corte': '',
         'detalle': [],
     }
 
@@ -1684,11 +1705,15 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
 
     # Recorrer: base / customerId / formName / correlativo /
     for customer_id in os.listdir(base):
+        if detener:
+            break
         customer_path = os.path.join(base, customer_id)
         if not os.path.isdir(customer_path):
             continue
 
         for form_name in os.listdir(customer_path):
+            if detener:
+                break
             form_path = os.path.join(customer_path, form_name)
             if not os.path.isdir(form_path):
                 continue
@@ -1707,10 +1732,22 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
                     c for c in correlativos
                     if (not c.isdigit()) or int(c) >= umbral
                 ]
+            elif len(correlativos) > first_scan_tail:
+                # Sin estado previo: no barrer años de histórico en una sola request HTTP
+                correlativos = correlativos[-first_scan_tail:]
 
             max_exitoso_form = ultimo_correlativo if isinstance(ultimo_correlativo, int) else None
 
             for correlativo in correlativos:
+                if max_archivos is not None and stats['carpetas_revisadas'] >= max_archivos:
+                    detener = True
+                    motivo_corte = f'límite de archivos ({max_archivos})'
+                    break
+                if max_segundos is not None and (time.monotonic() - t0) >= float(max_segundos):
+                    detener = True
+                    motivo_corte = f'límite de tiempo ({max_segundos}s)'
+                    break
+
                 correlativo_path = os.path.join(form_path, correlativo)
                 json_path = os.path.join(correlativo_path, 'registration.json')
 
@@ -1726,6 +1763,7 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
                         ruta_carpeta=correlativo_path,
                         numero_correlativo=int(correlativo) if correlativo.isdigit() else None,
                         dry_run=dry_run,
+                        reprocesar_duplicados=reprocesar_duplicados,
                     )
                 except Exception as exc:
                     logger.exception('Error no controlado procesando %s', json_path)
@@ -1738,7 +1776,13 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
                         'alerta': True,
                         'mensaje': f'Error no controlado: {exc}',
                     }
-                stats['detalle'].append(resultado)
+                # Evitar respuesta enorme: solo errores/alertas/nuevos en detalle
+                if (
+                    resultado.get('resultado') != 'duplicado'
+                    or resultado.get('alerta')
+                    or len(stats['detalle']) < 30
+                ):
+                    stats['detalle'].append(resultado)
 
                 if resultado['resultado'] == 'nuevo':
                     stats['nuevos'] += 1
@@ -1766,15 +1810,31 @@ def leer_carpetas(base_dir: Optional[str] = None, dry_run: bool = False) -> Dict
         except Exception:
             logger.exception('No se pudo guardar estado incremental MoreApp')
 
+    if detener:
+        stats['incompleto'] = True
+        stats['motivo_corte'] = motivo_corte
+        stats['modo'] = f"{stats['modo']}+parcial"
+
     logger.info(
-        'Lectura completada (%s) — revisadas=%d nuevos=%d duplicados=%d alertas=%d errores=%d',
-        stats['modo'], stats['carpetas_revisadas'], stats['nuevos'], stats['duplicados'], stats['alertas'], stats['errores'],
+        'Lectura completada (%s) — revisadas=%d nuevos=%d duplicados=%d alertas=%d errores=%d incompleto=%s',
+        stats['modo'],
+        stats['carpetas_revisadas'],
+        stats['nuevos'],
+        stats['duplicados'],
+        stats['alertas'],
+        stats['errores'],
+        stats['incompleto'],
     )
     return stats
 
 
-def _procesar_json(json_path: str, ruta_carpeta: str,
-                   numero_correlativo: Optional[int], dry_run: bool) -> Dict[str, Any]:
+def _procesar_json(
+    json_path: str,
+    ruta_carpeta: str,
+    numero_correlativo: Optional[int],
+    dry_run: bool,
+    reprocesar_duplicados: bool = True,
+) -> Dict[str, Any]:
     """Procesa un registration.json individual y lo registra en BD."""
     from ordenes_trabajo.models import IntegracionMoreApp
 
@@ -1831,6 +1891,12 @@ def _procesar_json(json_path: str, ruta_carpeta: str,
     # --- Deduplicación por id ---
     existente = IntegracionMoreApp.objects.filter(moreapp_submission_id=submission_id).first()
     if existente:
+        # Ruta rápida: evita timeout en sync HTTP al no reaplicar inventario en cada pasada
+        if not reprocesar_duplicados:
+            resultado['resultado'] = 'duplicado'
+            resultado['alerta'] = bool(existente.alerta_doble_trabajo)
+            resultado['mensaje'] = f'Ya existe registro con id={submission_id}'
+            return resultado
         try:
             datos_norm = _extraer_datos_normalizados(data)
             resumen_operativo = _aplicar_actualizaciones_operativas(
