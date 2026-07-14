@@ -370,20 +370,20 @@ def dashboard_view(request):
         
         # Movimientos de inventario (últimos 7 días)
         from datetime import timedelta
-        fecha_hace_7_dias = datetime.now() - timedelta(days=7)
-        
+        from django.utils import timezone
+        ahora = timezone.now()
+        fecha_hace_7_dias = ahora - timedelta(days=7)
+
         context['movimientos_recientes'] = MovimientoInventario.objects.filter(
             fecha_hora__gte=fecha_hace_7_dias
         ).count()
         context['movimientos_hoy'] = MovimientoInventario.objects.filter(
-            fecha_hora__date=datetime.now().date()
+            fecha_hora__date=timezone.localdate()
         ).count()
 
         # Indicadores operativos (Puntos 6 y 11)
         try:
             from ordenes_trabajo.models import IntegracionMoreApp
-            from django.utils import timezone
-            ahora = timezone.now()
             context['moreapp_pendientes'] = IntegracionMoreApp.objects.filter(
                 estado_revision='PENDIENTE'
             ).count()
@@ -2521,7 +2521,11 @@ def profile_view(request):
         'email': request.user.email,
         'rol': request.user.rol,
         'is_active': request.user.is_active,
-        'date_joined': request.user.date_joined.strftime('%d/%m/%Y %H:%M'),
+        'date_joined': (
+            request.user.fecha_creacion.strftime('%d/%m/%Y %H:%M')
+            if getattr(request.user, 'fecha_creacion', None)
+            else ''
+        ),
     })
 
 
@@ -2688,12 +2692,30 @@ def usuario_reset_password_view(request, pk):
 @login_required
 def clientes_list_view(request):
     """Lista de clientes activos para todos los roles autenticados."""
-    clientes = Cliente.objects.filter(activo=True).exclude(numero_cliente='0').order_by('numero_cliente', 'meter_serial_n_1', 'id')
+    from django.db.models import Count
+
+    clientes = (
+        Cliente.objects.filter(activo=True)
+        .exclude(numero_cliente='0')
+        .order_by('numero_cliente', 'meter_serial_n_1', 'id')
+    )
     ultima_importacion_clientes = ImportacionExcel.objects.filter(tipo='CLIENTES').order_by('-id').first()
+
+    numeros_duplicados = set(
+        Cliente.objects.filter(activo=True)
+        .exclude(numero_cliente__in=['', '0'])
+        .values('numero_cliente')
+        .annotate(c=Count('id'))
+        .filter(c__gt=1)
+        .values_list('numero_cliente', flat=True)
+    )
 
     context = {
         'clientes': clientes,
         'total_clientes': clientes.count(),
+        'numeros_duplicados': numeros_duplicados,
+        'numeros_duplicados_json': json.dumps(sorted(numeros_duplicados)),
+        'total_numeros_duplicados': len(numeros_duplicados),
         'ultima_importacion_total_filas': ultima_importacion_clientes.total_filas if ultima_importacion_clientes else None,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
     }
@@ -3188,14 +3210,26 @@ def movimientos_list_view(request):
     
     if fecha_desde:
         try:
-            fecha_desde_dt = datetime.strptime(fecha_desde, '%Y-%m-%d')
+            from django.utils import timezone as _tz
+            fecha_desde_dt = _tz.make_aware(
+                datetime.strptime(fecha_desde, '%Y-%m-%d'),
+                _tz.get_current_timezone(),
+            )
             movimientos = movimientos.filter(fecha_hora__gte=fecha_desde_dt)
         except ValueError:
             pass
-    
+
     if fecha_hasta:
         try:
-            fecha_hasta_dt = datetime.strptime(fecha_hasta, '%Y-%m-%d')
+            from django.utils import timezone as _tz
+            from datetime import time as _time
+            fecha_hasta_dt = _tz.make_aware(
+                datetime.combine(
+                    datetime.strptime(fecha_hasta, '%Y-%m-%d').date(),
+                    _time.max,
+                ),
+                _tz.get_current_timezone(),
+            )
             movimientos = movimientos.filter(fecha_hora__lte=fecha_hasta_dt)
         except ValueError:
             pass

@@ -13,6 +13,12 @@
             Administra la ficha de cada cliente: datos de instalación, medidor, conexión y estado operativo.
             <span class="mx-2">|</span>
             Registros visibles: <strong id="totalClientesVisibles">{{ total_clientes }}</strong>
+            {% if total_numeros_duplicados %}
+              <span class="mx-2">|</span>
+              <span class="text-danger fw-semibold">
+                Números de cliente duplicados: {{ total_numeros_duplicados }}
+              </span>
+            {% endif %}
           </p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
@@ -120,7 +126,9 @@
             <td>{{ forloop.counter }}</td>
             <td>{{ cliente.sector|default_if_none:'' }}</td>
             <td>{{ cliente.tipo_suministro|default_if_none:'' }}</td>
-            <td><strong>{{ cliente.numero_cliente }}</strong></td>
+            <td class="{% if cliente.numero_cliente in numeros_duplicados %}cliente-numero-duplicado{% endif %}">
+              <strong {% if cliente.numero_cliente in numeros_duplicados %}class="cliente-numero-duplicado" title="Numero Cliente duplicado"{% endif %}>{{ cliente.numero_cliente }}</strong>
+            </td>
             <td>{{ cliente.comuna|default_if_none:'' }}</td>
             <td>{{ cliente.customer_name|default_if_none:'' }}</td>
             <td>{{ cliente.installation_address|default_if_none:'' }}</td>
@@ -225,7 +233,7 @@
         {% block extra_js %}
         <script>
         var dataTableClientes = null;
-        var duplicadosNumeroSet = new Set();
+        var duplicadosNumeroSet = new Set({{ numeros_duplicados_json|safe }});
         var duplicadosImportacionSet = new Set();
         var duplicadosImportacionDetalle = [];
         var btnImportarClientes = null;
@@ -294,6 +302,7 @@
               lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Todos']],
               order: [[4, 'asc']],
               autoWidth: false,
+              deferRender: true,
               columnDefs: [
                 {
                   targets: 0,
@@ -342,8 +351,8 @@
 
             function recalcularDuplicadosNumero() {
               if (!dataTableClientes) return;
+              // Conserva duplicados del servidor y agrega los detectados en la tabla actual.
               var frecuenciasNumero = {};
-              duplicadosNumeroSet = new Set();
               dataTableClientes.rows().every(function() {
                 var data = this.data();
                 var numero = extraerTextoDeCelda(data[4]);
@@ -380,10 +389,12 @@
                 if (!nodo) return;
                 var celdaNumero = nodo.querySelector('td:nth-child(5)');
                 if (!celdaNumero) return;
-                celdaNumero.classList.toggle('text-danger', esDuplicado);
-                celdaNumero.classList.toggle('fw-bold', esDuplicado);
-                celdaNumero.style.color = esDuplicado ? '#dc3545' : '';
+                celdaNumero.classList.toggle('cliente-numero-duplicado', esDuplicado);
                 celdaNumero.title = esDuplicado ? 'Numero Cliente duplicado' : '';
+                var strong = celdaNumero.querySelector('strong');
+                if (strong) {
+                  strong.classList.toggle('cliente-numero-duplicado', esDuplicado);
+                }
               });
             }
 

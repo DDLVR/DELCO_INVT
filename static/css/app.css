@@ -720,6 +720,22 @@ main .table-responsive {
   --bs-table-color-state: var(--bs-body-color);
 }
 
+/* Números de cliente duplicados: deben verse en rojo también en dark/hover */
+.cliente-numero-duplicado,
+.cliente-numero-duplicado strong,
+td.cliente-numero-duplicado,
+td.cliente-numero-duplicado strong {
+  color: #dc3545 !important;
+  font-weight: 700 !important;
+}
+
+[data-bs-theme="dark"] .table-hover > tbody > tr:hover .cliente-numero-duplicado,
+[data-bs-theme="dark"] .table-hover > tbody > tr:hover .cliente-numero-duplicado strong,
+[data-bs-theme="dark"] .table-hover > tbody > tr:hover td.cliente-numero-duplicado,
+[data-bs-theme="dark"] .table-hover > tbody > tr:hover td.cliente-numero-duplicado strong {
+  color: #ff6b7a !important;
+}
+
 [data-bs-theme="dark"] .table-hover > tbody > tr:hover .text-muted {
   color: var(--bs-secondary-color) !important;
 }

@@ -29,12 +29,18 @@ def marcar_aviso_moreapp_visto(request) -> None:
         return
     if getattr(request.user, 'rol', None) not in ROLES_AVISO:
         return
-    request.session[SESSION_KEY_VISTO] = timezone.now().isoformat()
-    request.session.modified = True
+    session = getattr(request, 'session', None)
+    if session is None:
+        return
+    session[SESSION_KEY_VISTO] = timezone.now().isoformat()
+    session.modified = True
 
 
 def _timestamp_visto(request) -> Optional[timezone.datetime]:
-    raw = request.session.get(SESSION_KEY_VISTO)
+    session = getattr(request, 'session', None)
+    if session is None:
+        return None
+    raw = session.get(SESSION_KEY_VISTO)
     if not raw:
         return None
     dt = parse_datetime(str(raw))
