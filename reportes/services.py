@@ -270,7 +270,7 @@ def report_trabajos_pendientes_por_causa(filters: Dict[str, Any]) -> ReportResul
 
 def report_trabajos_diarios(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Fecha', 'OT Creadas', 'OT Ejecutadas']
-    qs = OrdenTrabajo.objects.all()
+    qs = OrdenTrabajo.objects.filter(fecha_creacion__isnull=False)
     if filters.get('fecha_desde'):
         qs = qs.filter(fecha_creacion__gte=_aware_start(filters['fecha_desde']))
     if filters.get('fecha_hasta'):
@@ -284,11 +284,14 @@ def report_trabajos_diarios(filters: Dict[str, Any]) -> ReportResult:
     ejecutadas = {
         item['fecha_fin_ejecucion__date']: item['cantidad']
         for item in ejecutadas_qs.values('fecha_fin_ejecucion__date').annotate(cantidad=Count('id'))
+        if item['fecha_fin_ejecucion__date'] is not None
     }
-    rows = [
-        [item['fecha_creacion__date'].strftime('%Y-%m-%d'), item['cantidad'], ejecutadas.get(item['fecha_creacion__date'], 0)]
-        for item in creadas
-    ]
+    rows = []
+    for item in creadas:
+        fecha = item['fecha_creacion__date']
+        if fecha is None:
+            continue
+        rows.append([fecha.strftime('%Y-%m-%d'), item['cantidad'], ejecutadas.get(fecha, 0)])
     return headers, rows
 
 
