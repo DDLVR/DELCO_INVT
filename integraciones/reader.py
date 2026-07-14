@@ -141,10 +141,34 @@ def _identificador_operativo_util(valor: Any, modo: str = 'general') -> str:
 
 
 def _as_text(valor: Any) -> str:
-    """Convierte cualquier valor a texto seguro para evitar errores con .strip()."""
+    """Convierte a texto seguro para MySQL en Hostingplus.
+
+    MoreApp a veces envía � (U+FFFD) u otros chars fuera de latin1; sin filtrar
+    PyMySQL lanza DataError 1366 Incorrect string value en columnas viejas.
+    """
     if valor is None:
         return ''
-    return str(valor).strip()
+    if isinstance(valor, bytes):
+        texto = valor.decode('utf-8', errors='replace')
+    else:
+        texto = str(valor)
+    texto = texto.replace('\x00', '').replace('\ufffd', '')
+    texto = ''.join(
+        ch for ch in texto
+        if ch in '\t\n\r' or unicodedata.category(ch)[0] != 'C'
+    )
+    texto = ' '.join(texto.split())
+
+    # Columnas de clientes en producción pueden ser latin1 (1 byte).
+    seguro = []
+    for ch in texto:
+        if ord(ch) < 256:
+            seguro.append(ch)
+            continue
+        for part in unicodedata.normalize('NFKD', ch):
+            if ord(part) < 256 and not unicodedata.combining(part):
+                seguro.append(part)
+    return ''.join(seguro).strip()
 
 
 def _valor_campo_fuentes(fuentes, aliases):
