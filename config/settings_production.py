@@ -121,3 +121,13 @@ os.makedirs(os.path.join(str(BASE_DIR), 'logs'), exist_ok=True)
 
 # Crear directorio tmp para Passenger restarts
 os.makedirs(os.path.join(str(BASE_DIR), 'tmp'), exist_ok=True)
+
+# Sync MoreApp por navegador: corto para no chocar con Connection Timeout del hosting
+MOREAPP_WEB_SYNC_MAX_SEGUNDOS = int(os.environ.get('MOREAPP_WEB_SYNC_MAX_SEGUNDOS', '30'))
+MOREAPP_WEB_SYNC_MAX_ARCHIVOS = int(os.environ.get('MOREAPP_WEB_SYNC_MAX_ARCHIVOS', '40'))
+MOREAPP_WEB_SKIP_DUPLICATE_REPROCESS = os.environ.get(
+    'MOREAPP_WEB_SKIP_DUPLICATE_REPROCESS', 'true'
+).strip().lower() == 'true'
+MOREAPP_FIRST_SCAN_TAIL = int(os.environ.get('MOREAPP_FIRST_SCAN_TAIL', '25'))
+MOREAPP_INCREMENTAL_LOOKBACK = int(os.environ.get('MOREAPP_INCREMENTAL_LOOKBACK', '1'))
+

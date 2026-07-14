@@ -208,6 +208,13 @@ MOREAPP_AUTO_REFRESH_SECONDS = int(os.getenv('MOREAPP_AUTO_REFRESH_SECONDS', '30
 ORDENES_TRABAJO_HABILITADAS = os.getenv('ORDENES_TRABAJO_HABILITADAS', 'true').strip().lower() == 'true'
 MOREAPP_INCREMENTAL_SCAN_ENABLED = os.getenv('MOREAPP_INCREMENTAL_SCAN_ENABLED', 'true').strip().lower() == 'true'
 MOREAPP_INCREMENTAL_LOOKBACK = int(os.getenv('MOREAPP_INCREMENTAL_LOOKBACK', '2'))
+# Límites para sync por HTTP (evitar Request Timeout del hosting)
+MOREAPP_WEB_SYNC_MAX_SEGUNDOS = int(os.getenv('MOREAPP_WEB_SYNC_MAX_SEGUNDOS', '35'))
+MOREAPP_WEB_SYNC_MAX_ARCHIVOS = int(os.getenv('MOREAPP_WEB_SYNC_MAX_ARCHIVOS', '60'))
+MOREAPP_WEB_SKIP_DUPLICATE_REPROCESS = os.getenv('MOREAPP_WEB_SKIP_DUPLICATE_REPROCESS', 'true').strip().lower() == 'true'
+# Si no hay estado incremental: solo los últimos N correlativos por formulario
+MOREAPP_FIRST_SCAN_TAIL = int(os.getenv('MOREAPP_FIRST_SCAN_TAIL', '40'))
+
 
 # Modulo de ordenes de trabajo (fase de desactivacion segura)
 ORDENES_TRABAJO_ENABLED = os.getenv('ORDENES_TRABAJO_ENABLED', 'false').strip().lower() == 'true'

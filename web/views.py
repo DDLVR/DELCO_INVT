@@ -3848,7 +3848,14 @@ def _ejecutar_autosync_moreapp_si_corresponde():
     # Throttle simple para evitar múltiples ejecuciones simultáneas entre requests.
     cache.set(key, ahora_ts, timeout=intervalo)
     try:
-        return leer_carpetas()
+        max_segundos = getattr(settings, 'MOREAPP_WEB_SYNC_MAX_SEGUNDOS', 30)
+        max_archivos = getattr(settings, 'MOREAPP_WEB_SYNC_MAX_ARCHIVOS', 40)
+        skip_dup = getattr(settings, 'MOREAPP_WEB_SKIP_DUPLICATE_REPROCESS', True)
+        return leer_carpetas(
+            reprocesar_duplicados=not skip_dup,
+            max_archivos=max_archivos,
+            max_segundos=max_segundos,
+        )
     except Exception:
         logger.exception('Fallo en autosincronización MoreApp')
         return None
@@ -4382,7 +4389,14 @@ def reportes_moreapp_sincronizar(request):
         return redirect('reportes_moreapp_list')
 
     try:
-        stats = leer_carpetas()
+        max_segundos = getattr(settings, 'MOREAPP_WEB_SYNC_MAX_SEGUNDOS', 35)
+        max_archivos = getattr(settings, 'MOREAPP_WEB_SYNC_MAX_ARCHIVOS', 60)
+        skip_dup = getattr(settings, 'MOREAPP_WEB_SKIP_DUPLICATE_REPROCESS', True)
+        stats = leer_carpetas(
+            reprocesar_duplicados=not skip_dup,
+            max_archivos=max_archivos,
+            max_segundos=max_segundos,
+        )
     except Exception as exc:
         logger.exception('Sincronización MoreApp falló de forma no controlada')
         messages.error(
@@ -4409,8 +4423,17 @@ def reportes_moreapp_sincronizar(request):
         f'Sincronización completada — Nuevos: {stats.get("nuevos", 0)} | '
         f'Duplicados: {stats.get("duplicados", 0)} | '
         f'Alertas: {stats.get("alertas", 0)} | '
-        f'Errores: {stats.get("errores", 0)}'
+        f'Errores: {stats.get("errores", 0)} | '
+        f'Revisados: {stats.get("carpetas_revisadas", 0)}'
     )
+
+    if stats.get('incompleto'):
+        messages.warning(
+            request,
+            'Sincronización parcial por límite de tiempo/archivos del hosting'
+            + (f' ({stats.get("motivo_corte")})' if stats.get('motivo_corte') else '')
+            + '. Vuelve a pulsar Sincronizar para continuar con el resto.',
+        )
 
     if errores_detalle:
         mensajes_error = '; '.join(str(e.get('mensaje', 'Error sin detalle')) for e in errores_detalle[:3])
