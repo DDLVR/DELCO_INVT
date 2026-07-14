@@ -142,6 +142,60 @@
                 </div>
             </div>
 
+            {% if orden.cliente %}
+            <!-- Historial de trabajos previos del mismo cliente -->
+            <div class="card mb-3 delco-panel-card">
+                <div class="card-header card-header-delco d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">🕘 Historial del cliente {{ orden.cliente.numero_cliente }}</h5>
+                    <span class="badge bg-secondary">{{ historial_ordenes_cliente|length }} OT previas</span>
+                </div>
+                <div class="card-body p-0">
+                    {% if historial_ordenes_cliente %}
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>OT</th>
+                                    <th>Tipo</th>
+                                    <th>Estado</th>
+                                    <th>Técnico</th>
+                                    <th>Creada</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for prev in historial_ordenes_cliente %}
+                                <tr>
+                                    <td><strong>#{{ prev.id }}</strong></td>
+                                    <td>{{ prev.get_tipo_trabajo_display }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if prev.estado == 'REALIZADA' or prev.estado == 'FINALIZADA' or prev.estado == 'VALIDADA' %}success{% elif prev.estado == 'OBSERVADA' or prev.estado == 'CANCELADA' %}danger{% elif prev.estado == 'REALIZADA_PENDIENTE_COMPROBACION' or prev.estado == 'PENDIENTE_VALIDACION' %}warning text-dark{% else %}secondary{% endif %}">
+                                            {{ prev.get_estado_display }}
+                                        </span>
+                                    </td>
+                                    <td>{{ prev.tecnico_responsable.nombre_interno|default:"—" }}</td>
+                                    <td>
+                                        {% if prev.fecha_creacion %}
+                                            {{ prev.fecha_creacion|date:"d/m/Y H:i" }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="{% url 'orden_detalle' prev.id %}" class="btn btn-sm btn-outline-primary">Ver</a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted mb-0 p-3">No hay órdenes de trabajo anteriores para este cliente.</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
             <!-- Equipos utilizados -->
             <div class="card mb-3 delco-panel-card">
                 <div class="card-header card-header-delco">
