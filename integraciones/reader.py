@@ -541,7 +541,7 @@ def _equipo_puede_instalar_desde_moreapp(equipo, tipo_equipo: str, estado_obj, c
     return not _es_estado_instalado(estado_actual)
 
 
-def _registrar_alerta_operativa(
+def _registrar_alerta_critica_asignacion(
     registro,
     tipo_equipo: str,
     identificador: str,
@@ -549,18 +549,19 @@ def _registrar_alerta_operativa(
     contexto: str = '',
     registrar_pendiente=None,
 ):
-    """Alerta no bloqueante (el sync continúa y corrige la asignación)."""
-    detalle = f'ALERTA_ASIGNACION | {tipo_equipo} {identificador}: {motivo}'
+    """Alerta crítica: no se auto-corrige; queda pendiente de revisión manual."""
+    detalle = f'ALERTA_CRITICA | {tipo_equipo} {identificador}: {motivo}'
     if contexto:
         detalle += f' | CONTEXTO: {contexto}'
-    logger.warning('[MoreApp] %s', detalle)
+    logger.error('[MoreApp] %s', detalle)
     registro.alerta_doble_trabajo = True
+    registro.estado_revision = 'CON_ADVERTENCIA'
     if registro.descripcion_alerta:
         registro.descripcion_alerta += f' | {detalle}'
     else:
         registro.descripcion_alerta = detalle
     if callable(registrar_pendiente):
-        registrar_pendiente(tipo_equipo, identificador, motivo)
+        registrar_pendiente(tipo_equipo, identificador, f'CRITICO: {motivo}')
 
 
 def _cliente_label(cliente_obj) -> str:
@@ -569,7 +570,14 @@ def _cliente_label(cliente_obj) -> str:
     return _as_text(getattr(cliente_obj, 'numero_cliente', None)) or f'#{cliente_obj.pk}'
 
 
-def _reasignar_equipo_a_cliente_con_alerta(
+def _equipo_asignado_a_otro_cliente(equipo, cliente_obj) -> bool:
+    if not cliente_obj or not hasattr(equipo, 'cliente_id'):
+        return False
+    cliente_prev_id = getattr(equipo, 'cliente_id', None)
+    return bool(cliente_prev_id and cliente_prev_id != cliente_obj.id)
+
+
+def _intentar_asignar_cliente_equipo(
     equipo,
     tipo_equipo: str,
     cliente_obj,
@@ -578,79 +586,96 @@ def _reasignar_equipo_a_cliente_con_alerta(
     registrar_pendiente=None,
 ) -> bool:
     """
-    Regla operativa:
-    - Un medidor/módem/SIM solo puede pertenecer a UN cliente a la vez.
-    - Un cliente puede tener VARIOS medidores/módems/SIM.
-    Si el equipo estaba en otro cliente: alerta + se corrige (reasigna).
+    Un equipo (medidor/módem/SIM) solo puede pertenecer a UN cliente.
+    Si ya está en otro: ALERTA CRÍTICA y NO se reasigna (corrección manual).
+    Si está libre o ya es del mismo cliente: se puede asignar/confirmar.
     """
     if not cliente_obj or not hasattr(equipo, 'cliente_id'):
         return False
 
-    cliente_prev_id = getattr(equipo, 'cliente_id', None)
-    if cliente_prev_id and cliente_prev_id != cliente_obj.id:
+    if _equipo_asignado_a_otro_cliente(equipo, cliente_obj):
         from clientes.models import Cliente
 
-        cliente_prev = Cliente.objects.filter(pk=cliente_prev_id).only('id', 'numero_cliente').first()
-        _registrar_alerta_operativa(
+        cliente_prev = Cliente.objects.filter(pk=equipo.cliente_id).only('id', 'numero_cliente').first()
+        _registrar_alerta_critica_asignacion(
             registro,
             tipo_equipo,
             _identificador_equipo(equipo, tipo_equipo),
             (
-                f'Equipo duplicado/reasignado: estaba en cliente {_cliente_label(cliente_prev)} '
-                f'y se corrigió al cliente {_cliente_label(cliente_obj)}'
+                f'Equipo ya asignado al cliente {_cliente_label(cliente_prev)}. '
+                f'MoreApp lo reportó para {_cliente_label(cliente_obj)}. '
+                f'NO se reasignó automáticamente: revisar y corregir manualmente.'
             ),
             contexto=observacion,
             registrar_pendiente=registrar_pendiente,
         )
-        equipo.cliente = cliente_obj
-        return True
+        return False
 
-    if cliente_prev_id != cliente_obj.id:
+    if getattr(equipo, 'cliente_id', None) != cliente_obj.id:
         equipo.cliente = cliente_obj
         return True
     return False
 
 
-def _asignar_medidor_actual_seguro(cliente_obj, medidor, registro, registrar_pendiente=None):
-    """OneToOne medidor_actual: libera conflictos, alerta y asigna sin tumbar el sync."""
-    from django.db import IntegrityError, transaction
+def _asignar_medidor_actual_si_disponible(cliente_obj, medidor, registro, registrar_pendiente=None) -> bool:
+    """
+    Asigna medidor_actual solo si no está tomado por otro cliente.
+    Si otro cliente lo tiene: alerta crítica y no modifica.
+    """
     from clientes.models import Cliente
 
     if not cliente_obj or not medidor:
-        return
+        return False
 
-    medidor_id = medidor.pk
-    otros = list(
-        Cliente.objects.filter(medidor_actual_id=medidor_id)
+    if cliente_obj.medidor_actual_id == medidor.pk:
+        return False
+
+    otro = (
+        Cliente.objects.filter(medidor_actual_id=medidor.pk)
         .exclude(pk=cliente_obj.pk)
         .only('id', 'numero_cliente')
+        .first()
     )
-    for otro in otros:
-        _registrar_alerta_operativa(
+    if otro:
+        _registrar_alerta_critica_asignacion(
             registro,
             'MEDIDOR',
             _identificador_equipo(medidor, 'MEDIDOR'),
             (
-                f'medidor_actual estaba en cliente {_cliente_label(otro)}; '
-                f'se liberó y se asignó a {_cliente_label(cliente_obj)}'
+                f'Ya es medidor_actual del cliente {_cliente_label(otro)}. '
+                f'No se asignó a {_cliente_label(cliente_obj)}. Corregir manualmente.'
             ),
             registrar_pendiente=registrar_pendiente,
         )
+        return False
+
+    # También si el medidor ya pertenece (FK) a otro cliente, no tocar medidor_actual
+    if _equipo_asignado_a_otro_cliente(medidor, cliente_obj):
+        return False
+
+    from django.db import IntegrityError, transaction
 
     try:
         with transaction.atomic():
-            Cliente.objects.filter(medidor_actual_id=medidor_id).update(medidor_actual=None)
-            Cliente.objects.filter(pk=cliente_obj.pk).update(medidor_actual_id=medidor_id)
-        cliente_obj.medidor_actual_id = medidor_id
+            # Por si quedó huérfano único en DB
+            Cliente.objects.filter(medidor_actual_id=medidor.pk).exclude(pk=cliente_obj.pk).update(
+                medidor_actual=None
+            )
+            Cliente.objects.filter(pk=cliente_obj.pk).update(medidor_actual_id=medidor.pk)
+        cliente_obj.medidor_actual_id = medidor.pk
+        return True
     except IntegrityError:
-        logger.exception(
-            'IntegrityError medidor_actual medidor_id=%s cliente_id=%s; reintento forzado',
-            medidor_id,
-            cliente_obj.pk,
+        _registrar_alerta_critica_asignacion(
+            registro,
+            'MEDIDOR',
+            _identificador_equipo(medidor, 'MEDIDOR'),
+            (
+                f'Conflicto de medidor_actual al asignar a {_cliente_label(cliente_obj)}. '
+                f'NO se modificó automáticamente.'
+            ),
+            registrar_pendiente=registrar_pendiente,
         )
-        Cliente.objects.filter(medidor_actual_id=medidor_id).update(medidor_actual=None)
-        Cliente.objects.filter(pk=cliente_obj.pk).update(medidor_actual_id=medidor_id)
-        cliente_obj.medidor_actual_id = medidor_id
+        return False
 
 
 def _registrar_bloqueo_operativo(
@@ -759,18 +784,36 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
     ):
         return False
 
-    # Conflicto de cliente: alerta + corregir (no bloquear). Un equipo = un cliente;
-    # un cliente puede tener varios equipos.
-    conflicto = _validar_conflicto_instalacion(equipo, tipo_equipo, cliente_obj)
-    if conflicto:
-        _registrar_alerta_operativa(
+    # Si el equipo ya pertenece a otro cliente: alerta crítica y NO se toca ese equipo.
+    if _equipo_asignado_a_otro_cliente(equipo, cliente_obj):
+        from clientes.models import Cliente
+
+        cliente_prev = Cliente.objects.filter(pk=equipo.cliente_id).only('id', 'numero_cliente').first()
+        _registrar_alerta_critica_asignacion(
             registro,
             tipo_equipo,
             _identificador_equipo(equipo, tipo_equipo),
-            conflicto + ' — se corrige la asignación al cliente del informe MoreApp',
+            (
+                f'Ya instalado/asignado en cliente {_cliente_label(cliente_prev)}. '
+                f'MoreApp lo reportó para {_cliente_label(cliente_obj)}. '
+                f'Sin cambios automáticos: corregir manualmente.'
+            ),
             contexto=observacion,
             registrar_pendiente=registrar_pendiente,
         )
+        return False
+
+    conflicto = _validar_conflicto_instalacion(equipo, tipo_equipo, cliente_obj)
+    if conflicto:
+        _registrar_alerta_critica_asignacion(
+            registro,
+            tipo_equipo,
+            _identificador_equipo(equipo, tipo_equipo),
+            conflicto + ' — sin reasignación automática; modificar manualmente.',
+            contexto=observacion,
+            registrar_pendiente=registrar_pendiente,
+        )
+        return False
 
     if estado_obj and getattr(equipo, 'estado_inventario_id', None) != estado_obj.id:
         equipo.estado_inventario = estado_obj
@@ -782,7 +825,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
             equipo.ubicacion_actual = destino_cliente
             cambios.append('ubicacion_actual')
 
-    if _reasignar_equipo_a_cliente_con_alerta(
+    if _intentar_asignar_cliente_equipo(
         equipo,
         tipo_equipo,
         cliente_obj,
@@ -815,7 +858,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
             cambios.append('puerto')
 
     if tipo_equipo == 'MEDIDOR' and cliente_obj and cliente_obj.medidor_actual_id != equipo.id:
-        _asignar_medidor_actual_seguro(
+        _asignar_medidor_actual_si_disponible(
             cliente_obj,
             equipo,
             registro,
