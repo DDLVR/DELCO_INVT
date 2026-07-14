@@ -263,12 +263,22 @@ def orden_detalle_view(request, pk):
     puede_validar = usuario.rol in ['ADMIN', 'ADMINISTRATIVO'] and orden.estado in estados_revision
     puede_observar = usuario.rol == 'AUDITOR' and orden.estado in estados_revision
 
+    historial_ordenes_cliente = OrdenTrabajo.objects.none()
+    if orden.cliente_id:
+        historial_ordenes_cliente = (
+            OrdenTrabajo.objects.filter(cliente_id=orden.cliente_id)
+            .exclude(pk=orden.pk)
+            .select_related('tecnico_responsable')
+            .order_by('-fecha_creacion')[:30]
+        )
+
     context = {
         'orden': orden,
         'adjuntos': adjuntos,
         'informes': informes,
         'sincronizaciones': sincronizaciones,
         'paso_operativo': paso_operativo,
+        'historial_ordenes_cliente': historial_ordenes_cliente,
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'puede_validar': puede_validar,
         'puede_observar': puede_observar,
