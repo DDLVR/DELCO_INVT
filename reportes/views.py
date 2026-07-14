@@ -1,12 +1,16 @@
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from django.http import HttpResponseBadRequest
-from django.shortcuts import render
+from django.shortcuts import redirect, render
+import logging
 
 from usuarios.models import Usuario
 from web.decorators import role_required
 
 from .exports import build_excel_response
 from .services import REPORT_CATALOG, parse_report_filters, run_report
+
+logger = logging.getLogger(__name__)
 
 
 @login_required
@@ -15,19 +19,39 @@ def reportes_hub_view(request):
     filters = parse_report_filters(request.GET)
     catalog = []
     total_filas = 0
+    errores_reportes = []
+
     for slug, meta in REPORT_CATALOG.items():
-        _, rows = run_report(slug, filters)
-        row_count = len(rows)
+        title = meta.get('title') or slug
+        had_error = False
+        try:
+            _, rows = run_report(slug, filters)
+            row_count = len(rows)
+        except Exception:
+            logger.exception('Error generando reporte %s en hub', slug)
+            row_count = 0
+            had_error = True
+            errores_reportes.append(title)
+
         total_filas += row_count
         catalog.append({
             'slug': slug,
-            'title': meta['title'],
+            'title': title,
             'description': meta['description'],
             'supports_date_range': meta['supports_date_range'],
             'supports_tecnico': meta['supports_tecnico'],
             'supports_empresa': meta['supports_empresa'],
             'row_count': row_count,
+            'error': had_error,
         })
+
+    if errores_reportes:
+        messages.warning(
+            request,
+            'Algunos reportes no pudieron generarse: '
+            + '; '.join(errores_reportes[:5])
+            + ('…' if len(errores_reportes) > 5 else ''),
+        )
 
     from reportes.operational_scope import hay_actividad_operativa
 
@@ -41,7 +65,7 @@ def reportes_hub_view(request):
         'hay_actividad_operativa': tiene_actividad,
         'hay_datos_en_reportes': hay_datos_en_reportes,
         'total_filas_reportes': total_filas,
-        'mostrar_catalogo': tiene_actividad and hay_datos_en_reportes,
+        'mostrar_catalogo': tiene_actividad and (hay_datos_en_reportes or bool(errores_reportes) or bool(catalog)),
     })
 
 
@@ -52,11 +76,20 @@ def reportes_export_view(request, slug):
         return HttpResponseBadRequest('Reporte no válido')
 
     from reportes.operational_scope import hay_actividad_operativa
-    if not hay_actividad_operativa():
-        headers, rows = run_report(slug, {})
-        return build_excel_response(f'reporte_{slug}.xlsx', headers, [])
+    try:
+        if not hay_actividad_operativa():
+            headers, _rows = run_report(slug, {})
+            return build_excel_response(f'reporte_{slug}.xlsx', headers, [])
 
-    filters = parse_report_filters(request.GET)
-    headers, rows = run_report(slug, filters)
+        filters = parse_report_filters(request.GET)
+        headers, rows = run_report(slug, filters)
+    except Exception:
+        logger.exception('Error exportando reporte %s', slug)
+        messages.error(
+            request,
+            'No se pudo generar el Excel de este reporte. Revisa los logs del servidor.',
+        )
+        return redirect('reportes_hub')
+
     filename = f'reporte_{slug}.xlsx'
     return build_excel_response(filename, headers, rows)

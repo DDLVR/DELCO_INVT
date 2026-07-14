@@ -78,7 +78,9 @@
                         <td class="fw-semibold">{{ item.title }}</td>
                         <td class="text-muted">{{ item.description }}</td>
                         <td>
-                            {% if item.row_count == 0 %}
+                            {% if item.error %}
+                            <span class="badge bg-danger">Error</span>
+                            {% elif item.row_count == 0 %}
                             <span class="badge bg-secondary">0</span>
                             {% else %}
                             <span class="badge bg-primary">{{ item.row_count }}</span>
