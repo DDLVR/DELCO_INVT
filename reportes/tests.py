@@ -37,12 +37,31 @@ class ReportesPunto9Tests(TestCase):
         self.assertNotIn('Base completa de clientes', content)
 
     def test_export_clientes_completos_excel(self):
-        response = self.client.get(reverse('reportes_export', kwargs={'slug': 'clientes_completos'}))
+        response = self.client.get(
+            reverse('reportes_export', kwargs={'slug': 'clientes_completos'}),
+            {'formato': 'excel'},
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response['Content-Type'],
             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
+
+    def test_export_clientes_completos_pdf(self):
+        response = self.client.get(
+            reverse('reportes_export', kwargs={'slug': 'clientes_completos'}),
+            {'formato': 'pdf'},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertTrue(response.content.startswith(b'%PDF'))
+
+    def test_export_formato_invalido(self):
+        response = self.client.get(
+            reverse('reportes_export', kwargs={'slug': 'clientes_completos'}),
+            {'formato': 'csv'},
+        )
+        self.assertEqual(response.status_code, 400)
 
     def test_export_slug_invalido(self):
         response = self.client.get('/reportes/exportar/no-existe/')

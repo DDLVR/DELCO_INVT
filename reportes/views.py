@@ -7,7 +7,7 @@ import logging
 from usuarios.models import Usuario
 from web.decorators import role_required
 
-from .exports import build_excel_response
+from .exports import build_excel_response, build_pdf_response
 from .services import REPORT_CATALOG, parse_report_filters, run_report
 
 logger = logging.getLogger(__name__)
@@ -75,21 +75,36 @@ def reportes_export_view(request, slug):
     if slug not in REPORT_CATALOG:
         return HttpResponseBadRequest('Reporte no válido')
 
+    formato = (request.GET.get('formato') or 'excel').strip().lower()
+    if formato not in ('excel', 'pdf', 'xlsx'):
+        return HttpResponseBadRequest('Formato no válido. Use excel o pdf.')
+    if formato == 'xlsx':
+        formato = 'excel'
+
+    meta = REPORT_CATALOG[slug]
+    titulo = meta.get('title') or slug
+
     from reportes.operational_scope import hay_actividad_operativa
     try:
         if not hay_actividad_operativa():
-            headers, _rows = run_report(slug, {})
-            return build_excel_response(f'reporte_{slug}.xlsx', headers, [])
-
-        filters = parse_report_filters(request.GET)
-        headers, rows = run_report(slug, filters)
+            headers, rows = run_report(slug, {})
+            rows = []
+        else:
+            filters = parse_report_filters(request.GET)
+            headers, rows = run_report(slug, filters)
     except Exception:
-        logger.exception('Error exportando reporte %s', slug)
+        logger.exception('Error exportando reporte %s formato=%s', slug, formato)
         messages.error(
             request,
-            'No se pudo generar el Excel de este reporte. Revisa los logs del servidor.',
+            f'No se pudo generar el {formato.upper()} de este reporte. Revisa los logs del servidor.',
         )
         return redirect('reportes_hub')
 
-    filename = f'reporte_{slug}.xlsx'
-    return build_excel_response(filename, headers, rows)
+    if formato == 'pdf':
+        return build_pdf_response(
+            f'reporte_{slug}.pdf',
+            headers,
+            rows,
+            title=titulo,
+        )
+    return build_excel_response(f'reporte_{slug}.xlsx', headers, rows)

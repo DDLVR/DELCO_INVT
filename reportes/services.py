@@ -1,4 +1,4 @@
-"""Consultas analíticas para reportes operativos exportables a Excel."""
+"""Consultas analíticas para reportes operativos exportables a Excel y PDF."""
 
 from __future__ import annotations
 
