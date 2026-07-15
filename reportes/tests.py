@@ -168,6 +168,13 @@ class ReportesSoloActividadOperativaTests(TestCase):
         self.assertIn('Sin reportes operativos por ahora', content)
         self.assertNotIn('Base completa de clientes', content)
 
+    def test_filtro_periodo_7_dias(self):
+        from reportes.services import parse_report_filters
+        parsed = parse_report_filters({'periodo': '7'})
+        self.assertIsNotNone(parsed['fecha_desde'])
+        self.assertIsNotNone(parsed['fecha_hasta'])
+        self.assertEqual(parsed['periodo'], '7')
+
     def test_hub_muestra_filtros_operativos(self):
         from django.test import RequestFactory
         from reportes.views import reportes_hub_view
@@ -185,5 +192,6 @@ class ReportesSoloActividadOperativaTests(TestCase):
         content = response.content.decode()
         self.assertIn('Aplicar filtros', content)
         self.assertIn('Estado OT', content)
-        self.assertIn('Tipo de trabajo', content)
+        self.assertIn('Período', content)
+        self.assertNotIn('Fecha desde', content)
         self.assertIn('Filtros activos', content)

@@ -34,12 +34,14 @@
         <div class="card-body">
             <form method="get" class="row g-3 align-items-end">
                 <div class="col-md-3">
-                    <label class="form-label">Fecha desde</label>
-                    <input type="date" name="fecha_desde" class="form-control" value="{{ filters.fecha_desde|default:'' }}">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Fecha hasta</label>
-                    <input type="date" name="fecha_hasta" class="form-control" value="{{ filters.fecha_hasta|default:'' }}">
+                    <label class="form-label">Período</label>
+                    <select name="periodo" class="form-select">
+                        <option value="" {% if not filters.periodo %}selected{% endif %}>Todo</option>
+                        <option value="hoy" {% if filters.periodo == 'hoy' %}selected{% endif %}>Hoy</option>
+                        <option value="7" {% if filters.periodo == '7' %}selected{% endif %}>Últimos 7 días</option>
+                        <option value="30" {% if filters.periodo == '30' %}selected{% endif %}>Últimos 30 días</option>
+                        <option value="mes" {% if filters.periodo == 'mes' %}selected{% endif %}>Este mes</option>
+                    </select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Estado OT</label>
@@ -100,8 +102,8 @@
                 </div>
             </form>
             <p class="text-muted small mb-0 mt-3">
-                Tip: <strong>Estado</strong> y <strong>Tipo de trabajo</strong> filtran informes de OT.
-                Empresa/comuna también aplican a reportes de clientes operativos.
+                El período usa la <strong>fecha de creación</strong> de la OT (útil aunque aún no estén finalizadas).
+                Estado y tipo de trabajo son los filtros más operativos día a día.
                 {% if filtros_activos %}
                 <span class="badge bg-info text-dark ms-1">Filtros activos</span>
                 {% endif %}
@@ -136,7 +138,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if item.supports_date_range %}<span class="badge delco-badge-muted me-1">Fechas</span>{% endif %}
+                            {% if item.supports_date_range %}<span class="badge delco-badge-muted me-1">Período</span>{% endif %}
                             {% if item.supports_estado %}<span class="badge delco-badge-muted me-1">Estado</span>{% endif %}
                             {% if item.supports_tipo %}<span class="badge delco-badge-muted me-1">Tipo</span>{% endif %}
                             {% if item.supports_tecnico %}<span class="badge delco-badge-muted me-1">Técnico</span>{% endif %}

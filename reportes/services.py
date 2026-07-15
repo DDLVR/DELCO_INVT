@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from django.db.models import Count, Q
@@ -27,22 +27,46 @@ ESTADOS_PENDIENTES_OT = OrdenTrabajo.ESTADOS_ABIERTOS | {
 
 
 def parse_report_filters(params) -> Dict[str, Any]:
-    fecha_desde = (params.get('fecha_desde') or '').strip()
-    fecha_hasta = (params.get('fecha_hasta') or '').strip()
+    periodo = (params.get('periodo') or '').strip().lower()
     tecnico_id = (params.get('tecnico_id') or '').strip()
     empresa = (params.get('empresa') or '').strip()
     estado_ot = (params.get('estado_ot') or '').strip().upper()
     tipo_trabajo = (params.get('tipo_trabajo') or '').strip().upper()
     comuna = (params.get('comuna') or '').strip()
+
+    fecha_desde, fecha_hasta = _fechas_desde_periodo(periodo)
+    # Compatibilidad: si aún llegan fechas manuales, usarlas
+    if not periodo:
+        fecha_desde = _parse_date((params.get('fecha_desde') or '').strip()) or fecha_desde
+        fecha_hasta = _parse_date((params.get('fecha_hasta') or '').strip()) or fecha_hasta
+
     return {
-        'fecha_desde': _parse_date(fecha_desde),
-        'fecha_hasta': _parse_date(fecha_hasta),
+        'periodo': periodo or None,
+        'fecha_desde': fecha_desde,
+        'fecha_hasta': fecha_hasta,
         'tecnico_id': int(tecnico_id) if tecnico_id.isdigit() else None,
         'empresa': empresa,
         'estado_ot': estado_ot or None,
         'tipo_trabajo': tipo_trabajo or None,
         'comuna': comuna,
     }
+
+
+def _fechas_desde_periodo(periodo: str):
+    """Convierte presets operativos a rango de fechas (None = sin límite)."""
+    if not periodo or periodo in {'todo', 'all'}:
+        return None, None
+
+    hoy = timezone.localdate()
+    if periodo == 'hoy':
+        return hoy, hoy
+    if periodo in {'7', '7d', 'semana'}:
+        return hoy - timedelta(days=6), hoy
+    if periodo in {'30', '30d', 'mes_corrido'}:
+        return hoy - timedelta(days=29), hoy
+    if periodo in {'mes', 'este_mes'}:
+        return hoy.replace(day=1), hoy
+    return None, None
 
 
 def _parse_date(value: str) -> Optional[date]:
@@ -113,7 +137,7 @@ def report_clientes_completos(filters: Dict[str, Any]) -> ReportResult:
 
 def report_clientes_ejecutados(filters: Dict[str, Any]) -> ReportResult:
     ot_qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS, cliente_id__isnull=False)
-    ot_qs = _filter_ordenes(ot_qs, filters, fecha_field='fecha_fin_ejecucion')
+    ot_qs = _filter_ordenes(ot_qs, filters, fecha_field='fecha_creacion')
     cliente_ids = ot_qs.values_list('cliente_id', flat=True).distinct()
     qs = _filter_clientes(Cliente.objects.filter(pk__in=cliente_ids, activo=True), filters).order_by('numero_cliente')
     rows = [_cliente_row(c) for c in qs]
@@ -211,11 +235,10 @@ def report_trabajos_por_fecha(filters: Dict[str, Any]) -> ReportResult:
     ]
     if filters.get('estado_ot'):
         qs = OrdenTrabajo.objects.all()
-        fecha_field = 'fecha_creacion'
     else:
         qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS)
-        fecha_field = 'fecha_fin_ejecucion'
-    qs = _filter_ordenes(qs, filters, fecha_field=fecha_field)
+    # Período operativo siempre sobre fecha de creación (más útil con OT abiertas)
+    qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     rows = [
         [
             ot.id,
@@ -228,7 +251,7 @@ def report_trabajos_por_fecha(filters: Dict[str, Any]) -> ReportResult:
             ot.fecha_fin_ejecucion.strftime('%Y-%m-%d %H:%M') if ot.fecha_fin_ejecucion else '',
             ot.cliente.comuna if ot.cliente else '',
         ]
-        for ot in qs.select_related('cliente', 'tecnico_responsable').order_by(f'-{fecha_field}')
+        for ot in qs.select_related('cliente', 'tecnico_responsable').order_by('-fecha_creacion')
     ]
     return headers, rows
 
@@ -298,12 +321,12 @@ def report_trabajos_diarios(filters: Dict[str, Any]) -> ReportResult:
     qs = OrdenTrabajo.objects.filter(fecha_creacion__isnull=False)
     qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     creadas = qs.values('fecha_creacion__date').annotate(cantidad=Count('id')).order_by('fecha_creacion__date')
-    ejecutadas_qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS, fecha_fin_ejecucion__isnull=False)
-    ejecutadas_qs = _filter_ordenes(ejecutadas_qs, {**filters, 'estado_ot': None}, fecha_field='fecha_fin_ejecucion')
+    ejecutadas_qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS)
+    ejecutadas_qs = _filter_ordenes(ejecutadas_qs, {**filters, 'estado_ot': None}, fecha_field='fecha_creacion')
     ejecutadas = {
-        item['fecha_fin_ejecucion__date']: item['cantidad']
-        for item in ejecutadas_qs.values('fecha_fin_ejecucion__date').annotate(cantidad=Count('id'))
-        if item['fecha_fin_ejecucion__date'] is not None
+        item['fecha_creacion__date']: item['cantidad']
+        for item in ejecutadas_qs.values('fecha_creacion__date').annotate(cantidad=Count('id'))
+        if item['fecha_creacion__date'] is not None
     }
     rows = []
     for item in creadas:
@@ -317,18 +340,18 @@ def report_trabajos_diarios(filters: Dict[str, Any]) -> ReportResult:
 def report_resultado_diario_tecnico(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Fecha', 'Tecnico', 'Ejecutadas', 'Pendientes']
     qs = OrdenTrabajo.objects.filter(tecnico_responsable__isnull=False)
-    qs = _filter_ordenes(qs, filters, fecha_field='fecha_fin_ejecucion')
+    qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     aggregated = (
-        qs.values('fecha_fin_ejecucion__date', 'tecnico_responsable__nombre_interno')
+        qs.values('fecha_creacion__date', 'tecnico_responsable__nombre_interno')
         .annotate(
             ejecutadas=Count('id', filter=Q(estado__in=ESTADOS_EJECUTADOS)),
             pendientes=Count('id', filter=Q(estado__in=ESTADOS_PENDIENTES_OT)),
         )
-        .order_by('-fecha_fin_ejecucion__date')
+        .order_by('-fecha_creacion__date')
     )
     rows = [
         [
-            item['fecha_fin_ejecucion__date'].strftime('%Y-%m-%d') if item['fecha_fin_ejecucion__date'] else '',
+            item['fecha_creacion__date'].strftime('%Y-%m-%d') if item['fecha_creacion__date'] else '',
             item['tecnico_responsable__nombre_interno'],
             item['ejecutadas'],
             item['pendientes'],

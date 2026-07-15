@@ -84,8 +84,7 @@ def reportes_hub_view(request):
     errores_reportes = []
     query = urlencode({
         k: v for k, v in {
-            'fecha_desde': request.GET.get('fecha_desde', ''),
-            'fecha_hasta': request.GET.get('fecha_hasta', ''),
+            'periodo': request.GET.get('periodo', ''),
             'tecnico_id': request.GET.get('tecnico_id', ''),
             'empresa': request.GET.get('empresa', ''),
             'estado_ot': request.GET.get('estado_ot', ''),
@@ -149,8 +148,7 @@ def reportes_hub_view(request):
         'total_filas_reportes': total_filas,
         'mostrar_catalogo': tiene_actividad and (hay_datos_en_reportes or bool(errores_reportes)),
         'filtros_activos': any([
-            request.GET.get('fecha_desde'),
-            request.GET.get('fecha_hasta'),
+            request.GET.get('periodo'),
             request.GET.get('tecnico_id'),
             request.GET.get('empresa'),
             request.GET.get('estado_ot'),
