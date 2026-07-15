@@ -7,8 +7,8 @@
     <div class="mb-4">
         <h2 class="mb-1">Reportes operativos</h2>
         <p class="text-muted mb-0">
-            Descarga informes de trabajos en terreno y alertas en Excel o PDF.
-            Los registros aparecen cuando hay órdenes de trabajo o MoreApp procesado; las importaciones de fichas no se incluyen.
+            Informes de OT y alertas de terreno. Exporta en Excel o PDF.
+            Los filtros se aplican a trabajos y clientes con actividad operativa (no a importaciones de fichas).
         </p>
     </div>
 
@@ -42,6 +42,24 @@
                     <input type="date" name="fecha_hasta" class="form-control" value="{{ filters.fecha_hasta|default:'' }}">
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label">Estado OT</label>
+                    <select name="estado_ot" class="form-select">
+                        <option value="">Todos</option>
+                        {% for codigo, label in estados_ot %}
+                        <option value="{{ codigo }}" {% if filters.estado_ot == codigo %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Tipo de trabajo</label>
+                    <select name="tipo_trabajo" class="form-select">
+                        <option value="">Todos</option>
+                        {% for codigo, label in tipos_trabajo %}
+                        <option value="{{ codigo }}" {% if filters.tipo_trabajo == codigo %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">Técnico</label>
                     <select name="tecnico_id" class="form-select">
                         <option value="">Todos</option>
@@ -49,14 +67,45 @@
                         <option value="{{ tecnico.id }}" {% if filters.tecnico_id == tecnico.id|stringformat:"s" %}selected{% endif %}>
                             {{ tecnico.nombre_interno }}
                         </option>
+                        {% empty %}
+                        <option value="" disabled>Sin técnicos asignados aún</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Empresa</label>
-                    <input type="text" name="empresa" class="form-control" value="{{ filters.empresa|default:'' }}" placeholder="Filtrar por empresa">
+                    <select name="empresa" class="form-select">
+                        <option value="">Todas</option>
+                        {% for emp in empresas %}
+                        <option value="{{ emp }}" {% if filters.empresa == emp %}selected{% endif %}>{{ emp }}</option>
+                        {% empty %}
+                        <option value="" disabled>Sin empresa en clientes operativos</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Comuna</label>
+                    <select name="comuna" class="form-select">
+                        <option value="">Todas</option>
+                        {% for c in comunas %}
+                        <option value="{{ c }}" {% if filters.comuna == c %}selected{% endif %}>{{ c }}</option>
+                        {% empty %}
+                        <option value="" disabled>Sin comuna en clientes operativos</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-grow-1">Aplicar filtros</button>
+                    <a href="{% url 'reportes_hub' %}" class="btn btn-outline-secondary">Limpiar</a>
                 </div>
             </form>
+            <p class="text-muted small mb-0 mt-3">
+                Tip: <strong>Estado</strong> y <strong>Tipo de trabajo</strong> filtran informes de OT.
+                Empresa/comuna también aplican a reportes de clientes operativos.
+                {% if filtros_activos %}
+                <span class="badge bg-info text-dark ms-1">Filtros activos</span>
+                {% endif %}
+            </p>
         </div>
     </div>
 
@@ -68,7 +117,7 @@
                         <th>Reporte</th>
                         <th>Descripción</th>
                         <th>Registros</th>
-                        <th>Filtros</th>
+                        <th>Filtros que aplica</th>
                         <th class="text-end">Exportar</th>
                     </tr>
                 </thead>
@@ -88,16 +137,19 @@
                         </td>
                         <td>
                             {% if item.supports_date_range %}<span class="badge delco-badge-muted me-1">Fechas</span>{% endif %}
+                            {% if item.supports_estado %}<span class="badge delco-badge-muted me-1">Estado</span>{% endif %}
+                            {% if item.supports_tipo %}<span class="badge delco-badge-muted me-1">Tipo</span>{% endif %}
                             {% if item.supports_tecnico %}<span class="badge delco-badge-muted me-1">Técnico</span>{% endif %}
                             {% if item.supports_empresa %}<span class="badge delco-badge-muted me-1">Empresa</span>{% endif %}
+                            {% if item.supports_comuna %}<span class="badge delco-badge-muted me-1">Comuna</span>{% endif %}
                         </td>
                         <td class="text-end text-nowrap">
                             <a class="btn btn-sm btn-success"
-                               href="{% url 'reportes_export' item.slug %}?formato=excel&fecha_desde={{ filters.fecha_desde|default:'' }}&fecha_hasta={{ filters.fecha_hasta|default:'' }}&tecnico_id={{ filters.tecnico_id|default:'' }}&empresa={{ filters.empresa|default:'' }}">
+                               href="{% url 'reportes_export' item.slug %}?formato=excel{% if filter_query %}&{{ filter_query }}{% endif %}">
                                 Excel
                             </a>
                             <a class="btn btn-sm btn-outline-danger"
-                               href="{% url 'reportes_export' item.slug %}?formato=pdf&fecha_desde={{ filters.fecha_desde|default:'' }}&fecha_hasta={{ filters.fecha_hasta|default:'' }}&tecnico_id={{ filters.tecnico_id|default:'' }}&empresa={{ filters.empresa|default:'' }}">
+                               href="{% url 'reportes_export' item.slug %}?formato=pdf{% if filter_query %}&{{ filter_query }}{% endif %}">
                                 PDF
                             </a>
                         </td>
