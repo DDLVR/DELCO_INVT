@@ -17,7 +17,11 @@ ESTADOS_MOREAPP_PROCESADOS = frozenset({
 
 
 def hay_actividad_operativa() -> bool:
-    """True si existe al menos una OT o un registro MoreApp procesado."""
+    """True si existe al menos una OT o un registro MoreApp procesado.
+
+    No se cachea: ``exists()`` es barato y un False stale ocultaría el hub
+    justo después de crear la primera OT.
+    """
     if OrdenTrabajo.objects.exists():
         return True
     return IntegracionMoreApp.objects.filter(
@@ -26,45 +30,46 @@ def hay_actividad_operativa() -> bool:
 
 
 def _codigos_cliente_desde_moreapp() -> Set[str]:
-    codigos: Set[str] = set()
-    for registro in IntegracionMoreApp.objects.filter(
-        estado_sincronizacion__in=ESTADOS_MOREAPP_PROCESADOS,
-    ).only('datos_procesados', 'datos_recibidos'):
-        datos = registro.datos_procesados or {}
-        if not isinstance(datos, dict):
-            datos = {}
-        for clave in ('cliente_codigo', 'numero_cliente', 'cliente'):
-            valor = datos.get(clave)
-            if valor:
-                codigos.add(str(valor).strip())
-                break
-        else:
-            payload = registro.datos_recibidos or {}
-            if isinstance(payload, dict):
-                data = payload.get('data', {})
-                if isinstance(data, dict):
-                    for fuente in (data, data.get('buscarCliente', {}), data.get('clienteParaMantenimiento', {})):
-                        if not isinstance(fuente, dict):
-                            continue
-                        for clave in ('cliente', 'cliente1', 'CLIENTE', 'numeroCliente'):
-                            valor = fuente.get(clave)
-                            if valor:
-                                codigos.add(str(valor).strip())
-                                break
-    return {c for c in codigos if c}
+    from web.perf_cache import cache_get_or_set, TTL_MEDIO
+
+    def _calc():
+        codigos: Set[str] = set()
+        # Solo campos ya normalizados: evita recorrer datos_recibidos en cada request
+        for codigo in (
+            IntegracionMoreApp.objects.filter(
+                estado_sincronizacion__in=ESTADOS_MOREAPP_PROCESADOS,
+            )
+            .exclude(datos_procesados__cliente_codigo__isnull=True)
+            .values_list('datos_procesados__cliente_codigo', flat=True)
+            .iterator(chunk_size=2000)
+        ):
+            if codigo:
+                texto = str(codigo).strip()
+                if texto:
+                    codigos.add(texto)
+        return codigos
+
+    return set(cache_get_or_set('operacional:codigos_moreapp', _calc, TTL_MEDIO))
 
 
 def cliente_ids_operativos() -> Set[int]:
     """Clientes con OT o con registro MoreApp procesado vinculado."""
-    ids: Set[int] = set(
-        OrdenTrabajo.objects.exclude(cliente_id__isnull=True).values_list('cliente_id', flat=True)
-    )
-    codigos = _codigos_cliente_desde_moreapp()
-    if codigos:
-        ids.update(
-            Cliente.objects.filter(numero_cliente__in=codigos).values_list('pk', flat=True)
+    from web.perf_cache import cache_get_or_set, TTL_MEDIO
+
+    def _calc():
+        ids: Set[int] = set(
+            OrdenTrabajo.objects.exclude(cliente_id__isnull=True)
+            .values_list('cliente_id', flat=True)
+            .distinct()
         )
-    return ids
+        codigos = _codigos_cliente_desde_moreapp()
+        if codigos:
+            ids.update(
+                Cliente.objects.filter(numero_cliente__in=codigos).values_list('pk', flat=True)
+            )
+        return ids
+
+    return set(cache_get_or_set('operacional:cliente_ids', _calc, TTL_MEDIO))
 
 
 def clientes_operativos_qs() -> QuerySet:

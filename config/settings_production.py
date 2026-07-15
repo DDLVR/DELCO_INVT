@@ -130,4 +130,16 @@ MOREAPP_WEB_SKIP_DUPLICATE_REPROCESS = os.environ.get(
 ).strip().lower() == 'true'
 MOREAPP_FIRST_SCAN_TAIL = int(os.environ.get('MOREAPP_FIRST_SCAN_TAIL', '25'))
 MOREAPP_INCREMENTAL_LOOKBACK = int(os.environ.get('MOREAPP_INCREMENTAL_LOOKBACK', '1'))
+# No sincronizar MoreApp dentro de cada página: evita timeout con muchos registros.
+MOREAPP_AUTO_SYNC_ENABLED = os.environ.get('MOREAPP_AUTO_SYNC_ENABLED', 'false').strip().lower() == 'true'
+MOREAPP_AUTO_REFRESH_SECONDS = int(os.environ.get('MOREAPP_AUTO_REFRESH_SECONDS', '0') or 0)
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'delcoplata-prod-locmem',
+        'TIMEOUT': 120,
+        'OPTIONS': {'MAX_ENTRIES': 4000},
+    }
+}
 
