@@ -22,7 +22,7 @@ Estado:
 | 3 | Ficha unica por cliente | LISTO | Cerrar modelo de datos y defaults |
 | 4 | Validaciones obligatorias | LISTO | Implementar validaciones criticas |
 | 5 | Gestion de OT | LISTO | Definir backlog minimo y reglas base |
-| 6 | Aplicacion de terreno | PARCIAL | MVP terreno = MoreApp (sync/webhook). App movil Delco fuera de alcance. Falta checklist ops productivos. |
+| 6 | Aplicacion de terreno | LISTO | Terreno = MoreApp (sync/webhook + panel ops + cron `--limite-web`). App movil Delco fuera de alcance. |
 | 7 | Alarmas y alertas | LISTO | MVP: duplicados IP/medidor/OT, STB/SCi4, reincidencia, alertas criticas MoreApp en UI |
 | 8 | Integraciones | PARCIAL | MVP: Excel + MoreApp OK. API bidireccional y multimedia avanzada = Fase 2 |
 | 9 | Informes y reportes | LISTO | Hub 19 informes; Excel + PDF; filtros por periodo/estado/tipo/tecnico/empresa/comuna |
@@ -33,19 +33,18 @@ Estado:
 | 14 | Requerimientos tecnicos | LISTO | Checklist tecnico de cumplimiento |
 | 15 | Evitar errores operativos | LISTO | Alinear validaciones P3+P4 con este objetivo |
 
-**Conteo:** 13 LISTO · 2 PARCIAL (6, 8) · 0 FALTA. MVP operable; PARCIAL no bloquea salida controlada.
+**Conteo:** 14 LISTO · 1 PARCIAL (8) · 0 FALTA. MVP operable; P8 PARCIAL solo por API/multimedia Fase 2.
 
 ---
 
-## Siguiente bloque de producto (congelado 2026-07-15)
+## Siguiente bloque de producto (actualizado 2026-07-15)
 
-Prioridad acordada tras cierre MVP:
+1. **Verificacion host** del checklist `MOREAPP_OPS_CHECKLIST.md` (companero: pull + cron opcional).
+2. **Validacion negocio Punto 7** — solo si detectan alarma del PDF aun no cubierta.
+3. **Fase 2 diferida** — API MoreApp, multimedia/georref, reporteria programada, catalogo con reglas, pareja tecnicos UI, etc.
 
-1. **Ops MoreApp (Puntos 6 y 8)** — checklist de produccion en `MOREAPP_OPS_CHECKLIST.md` (sync manual/cron, carpetas, limites web, `MOREAPP_AUTO_SYNC_ENABLED=false` por defecto, pull+Restart). Sin API bidireccional nueva.
-2. **Validacion negocio Punto 7** — solo si detectan alarma del PDF aun no cubierta en dashboard/cola.
-3. **Fase 2 diferida** — API MoreApp, multimedia/georref, reporteria programada, catalogo con reglas, pareja tecnicos UI, reasignacion OT, denormalizacion MoreApp.
-
-Rendimiento/paginacion (commit `344a525`) es **soporte operativo**, no punto PDF nuevo.
+Ops MoreApp en codigo: cerrado (panel estado, ultima sync, comando `--limite-web`).
+Rendimiento/paginacion (`344a525`) sigue siendo soporte operativo, no punto PDF.
 
 ---
 ## Backlog ejecutable Semana 1 (Puntos 1 a 4)
@@ -183,6 +182,7 @@ Rendimiento/paginacion (commit `344a525`) es **soporte operativo**, no punto PDF
 | 2026-07-15 | Punto 9: export PDF (reportlab), filtros por periodo operativo, hub liviano sin ejecutar 19 reportes al cargar | 9 | Reporteria usable en produccion |
 | 2026-07-15 | Optimizacion escala: paginacion servidor clientes/OT/MoreApp, cache KPIs, autosync MoreApp off por defecto (`344a525`) | soporte ops | No es punto PDF; habilita volumen alto |
 | 2026-07-15 | Siguiente bloque congelado: checklist ops MoreApp (P6/P8); P7 residual solo si negocio; Fase 2 diferida | 6, 8 | Prioridad clara post-MVP |
+| 2026-07-15 | Cierre Punto 6 LISTO: panel ops MoreApp, registro ultima sync, cron `sincronizar_registros --limite-web` | 6 | Terreno MoreApp operable; app Delco fuera de alcance |
 
 ---
 

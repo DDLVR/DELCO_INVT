@@ -35,6 +35,49 @@
     </div>
   </div>
 
+  {% if moreapp_ops %}
+  <div class="alert alert-light border shadow-sm mb-3 py-2" role="status">
+    <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start">
+      <div class="small">
+        <strong class="me-1"><i class="bi bi-hdd-network"></i> Estado ops MoreApp</strong>
+        {% if moreapp_ops.dir_existe and moreapp_ops.dir_legible %}
+        <span class="badge bg-success">Carpeta OK</span>
+        {% elif moreapp_ops.dir_existe %}
+        <span class="badge bg-warning text-dark">Carpeta sin lectura</span>
+        {% else %}
+        <span class="badge bg-danger">Carpeta no encontrada</span>
+        {% endif %}
+        {% if moreapp_ops.auto_sync_enabled %}
+        <span class="badge bg-warning text-dark">Autosync GET ON</span>
+        {% else %}
+        <span class="badge bg-secondary">Autosync GET off</span>
+        {% endif %}
+        <span class="text-muted ms-1">Límite sync web: {{ moreapp_ops.max_archivos }} archivos / {{ moreapp_ops.max_segundos }}s</span>
+        <div class="text-muted mt-1 text-break">
+          Dir: <code>{{ moreapp_ops.base_dir|default:"(sin configurar)" }}</code>
+        </div>
+        {% if moreapp_ops.ultimo_sync.ts %}
+        <div class="mt-1">
+          Última sync ({{ moreapp_ops.ultimo_sync.origen }}):
+          <strong>{{ moreapp_ops.ultimo_sync.ts }}</strong>
+          · nuevos {{ moreapp_ops.ultimo_sync.nuevos }}
+          · errores {{ moreapp_ops.ultimo_sync.errores }}
+          {% if moreapp_ops.ultimo_sync.incompleto %}
+          <span class="badge bg-warning text-dark">parcial</span>
+          {% endif %}
+        </div>
+        {% else %}
+        <div class="mt-1 text-muted">Aún no hay sync registrada en este proceso (usa el botón o cron).</div>
+        {% endif %}
+      </div>
+      <div class="small text-muted" style="max-width: 28rem;">
+        Preferir <strong>Sincronizar ahora</strong> o cron:
+        <code class="d-block mt-1 user-select-all">{{ moreapp_ops.cron_ejemplo }}</code>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Gráficos (colapsable) -->
   {{ sinc_breakdown|json_script:"datos-sinc" }}
   {{ formula_breakdown|json_script:"datos-formula" }}

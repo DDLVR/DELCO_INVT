@@ -712,3 +712,33 @@ class MoreAppAvisoTests(TestCase):
 		self.assertEqual(aviso['nuevos'], 0)
 		self.assertTrue(aviso['activo'])
 		self.assertEqual(aviso['por_revisar'], 1)
+
+
+class MoreAppOpsStatusTests(TestCase):
+	"""Panel ops / registro de última sync (Punto 6)."""
+
+	def test_registrar_y_construir_ops_status(self):
+		from django.conf import settings
+		from web.moreapp_ops import construir_ops_status_moreapp, registrar_resultado_sync
+
+		registrar_resultado_sync(
+			{
+				'base_dir': getattr(settings, 'MOREAPP_REGISTROS_DIR', ''),
+				'nuevos': 2,
+				'duplicados': 1,
+				'alertas': 0,
+				'errores': 0,
+				'omitidos': 0,
+				'carpetas_revisadas': 3,
+				'incompleto': False,
+				'motivo_corte': '',
+				'modo': 'incremental',
+			},
+			origen='comando',
+		)
+		ops = construir_ops_status_moreapp()
+		self.assertIn('base_dir', ops)
+		self.assertIn('auto_sync_enabled', ops)
+		self.assertEqual(ops['ultimo_sync'].get('nuevos'), 2)
+		self.assertEqual(ops['ultimo_sync'].get('origen'), 'comando')
+		self.assertIn('sincronizar_registros', ops['cron_ejemplo'])

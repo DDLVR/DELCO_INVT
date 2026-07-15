@@ -99,7 +99,7 @@ Optimizacion de rendimiento para volumen alto (paginacion, cache, autosync off p
 
 ## Siguiente bloque (prioridad post-MVP — 2026-07-15)
 
-1. **Ops MoreApp (Puntos 6 y 8):** checklist `MOREAPP_OPS_CHECKLIST.md` (carpetas, sync manual o cron, variables `MOREAPP_*`, despliegue pull+Restart). Sin nuevas features de API.
+1. **Verificacion host** `MOREAPP_OPS_CHECKLIST.md` (companero). Codigo P6 cerrado.
 2. Validacion residual Punto 7 solo si negocio marca una alarma del PDF faltante.
 3. Cualquier item de Fase 2 requiere aprobacion explicita.
 
