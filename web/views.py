@@ -311,7 +311,13 @@ def dashboard_view(request):
                 'total_modems': Modem.objects.count(),
                 'modems_bodega': Modem.objects.filter(estado_inventario__nombre='En bodega').count(),
                 'modems_instalados': Modem.objects.filter(estado_inventario__nombre='Instalado').count(),
-                'total_clientes': Cliente.objects.count(),
+                'total_clientes': (
+                    Cliente.objects.filter(activo=True)
+                    .exclude(numero_cliente__in=['', '0'])
+                    .values('numero_cliente')
+                    .distinct()
+                    .count()
+                ),
                 'medidores_por_estado': list(
                     Medidor.objects.values('estado_inventario__nombre')
                     .annotate(cantidad=Count('id'))
@@ -2742,7 +2748,13 @@ def clientes_list_view(request):
             | Q(meter_manufacturer_id__icontains=q)
         )
 
-    total_clientes = clientes_qs.count()
+    total_fichas = clientes_qs.count()
+    total_clientes = (
+        clientes_qs.exclude(numero_cliente='')
+        .values('numero_cliente')
+        .distinct()
+        .count()
+    )
     page_obj = Paginator(clientes_qs, per_page).get_page(request.GET.get('page') or 1)
     ultima_importacion_clientes = ImportacionExcel.objects.filter(tipo='CLIENTES').order_by('-id').first()
 
@@ -2757,6 +2769,7 @@ def clientes_list_view(request):
         'solo_duplicados': solo_duplicados,
         'per_page': per_page,
         'total_clientes': total_clientes,
+        'total_fichas': total_fichas,
         'numeros_duplicados': numeros_duplicados,
         'numeros_duplicados_json': json.dumps(sorted(numeros_duplicados)),
         'total_numeros_duplicados': len(numeros_duplicados),
@@ -2799,17 +2812,29 @@ def clientes_importar_view(request):
         importacion = importar_clientes_excel(archivo, request.user, sincronizar_completo=sincronizar_completo)
         errores = list(importacion.errores.values_list('motivo', flat=True).distinct()[:30])
         advertencias = list(dict.fromkeys(getattr(importacion, 'warnings', [])))[:40]
-        warning_summary = getattr(importacion, 'warning_summary', {})
+        warning_summary = getattr(importacion, 'warning_summary', {}) or {}
+        clientes_unicos_archivo = int(warning_summary.get('clientes_unicos_detectados') or 0)
+        clientes_unicos_sistema = (
+            Cliente.objects.filter(activo=True)
+            .exclude(numero_cliente__in=['', '0'])
+            .values('numero_cliente')
+            .distinct()
+            .count()
+        )
 
         if importacion.estado == 'COMPLETADO':
             message = (
-                f'Importación completada: {importacion.exitosas} filas correctas '
-                f'y {importacion.fallidas} con error.'
+                f'Importación completada: {clientes_unicos_archivo} clientes en el archivo '
+                f'({importacion.exitosas} filas correctas'
+                f'{f", {importacion.fallidas} con error" if importacion.fallidas else ""}). '
+                f'En el sistema hay {clientes_unicos_sistema} clientes.'
             )
         else:
             message = (
                 f'Importación con problemas: {importacion.exitosas} filas correctas '
-                f'y {importacion.fallidas} con error.'
+                f'y {importacion.fallidas} con error. '
+                f'Clientes en archivo: {clientes_unicos_archivo}. '
+                f'En el sistema: {clientes_unicos_sistema}.'
             )
 
         return JsonResponse({
@@ -2823,6 +2848,8 @@ def clientes_importar_view(request):
             'exitosas': importacion.exitosas,
             'fallidas': importacion.fallidas,
             'total_filas': importacion.total_filas,
+            'clientes_unicos_archivo': clientes_unicos_archivo,
+            'clientes_unicos_sistema': clientes_unicos_sistema,
             'importacion_id': importacion.id,
         })
     except Exception as e:
