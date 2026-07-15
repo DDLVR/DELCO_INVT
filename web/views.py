@@ -2707,6 +2707,7 @@ def clientes_list_view(request):
     """Lista de clientes activos con paginación servidor (no carga todo el padrón en HTML)."""
     from django.core.paginator import Paginator
     from django.db.models import Count
+    from django.db.models.functions import Length
 
     q = (request.GET.get('q') or '').strip()
     solo_duplicados = (request.GET.get('solo_duplicados') or '') == '1'
@@ -2717,10 +2718,12 @@ def clientes_list_view(request):
     if per_page not in (25, 50, 100, 200):
         per_page = 50
 
+    # Orden natural de Nº cliente (1000 después de 200), no alfabético
     clientes_qs = (
         Cliente.objects.filter(activo=True)
-        .exclude(numero_cliente='0')
-        .order_by('numero_cliente', 'meter_serial_n_1', 'id')
+        .exclude(numero_cliente__in=['', '0'])
+        .annotate(_ord_len=Length('numero_cliente'))
+        .order_by('_ord_len', 'numero_cliente', 'meter_serial_n_1', 'id')
     )
 
     numeros_duplicados = set(
@@ -2750,12 +2753,7 @@ def clientes_list_view(request):
         )
 
     total_fichas = clientes_qs.count()
-    total_clientes = (
-        clientes_qs.exclude(numero_cliente='')
-        .values('numero_cliente')
-        .distinct()
-        .count()
-    )
+    total_clientes = clientes_qs.values('numero_cliente').distinct().count()
     page_obj = Paginator(clientes_qs, per_page).get_page(request.GET.get('page') or 1)
     ultima_importacion_clientes = ImportacionExcel.objects.filter(tipo='CLIENTES').order_by('-id').first()
 
