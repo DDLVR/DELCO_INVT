@@ -4437,6 +4437,11 @@ def reportes_moreapp_list(request):
     query_params = request.GET.copy()
     query_params.pop('page', None)
 
+    moreapp_ops = None
+    if request.user.rol in ROLES_REPORTES_GESTION:
+        from web.moreapp_ops import construir_ops_status_moreapp
+        moreapp_ops = construir_ops_status_moreapp()
+
     context = {
         'registros': registros,
         'page_obj': page_obj,
@@ -4463,6 +4468,7 @@ def reportes_moreapp_list(request):
         'sinc_breakdown': kpis['sinc_breakdown'],
         'formula_breakdown': kpis['formula_breakdown'],
         'adv_breakdown': adv_breakdown,
+        'moreapp_ops': moreapp_ops,
     }
     return render(request, 'reportes/integraciones_list.html', context)
 
@@ -4562,6 +4568,9 @@ def reportes_moreapp_sincronizar(request):
     if not isinstance(stats, dict):
         messages.warning(request, 'Sincronización finalizó sin estadísticas.')
         return redirect('reportes_moreapp_list')
+
+    from web.moreapp_ops import registrar_resultado_sync
+    registrar_resultado_sync(stats, origen='manual_web')
 
     detalle = stats.get('detalle', []) or []
     errores_detalle = [d for d in detalle if str(d.get('resultado', '')).lower() == 'error']

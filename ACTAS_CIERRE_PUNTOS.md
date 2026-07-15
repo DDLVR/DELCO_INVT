@@ -49,16 +49,20 @@ Suite: ordenes_trabajo.tests.OrdenesBasicasWorkflowTests.
 
 ## Punto 6 - Aplicacion de Terreno
 
-Fecha: 2026-07-15 | Estado: PARCIAL (MVP terreno aceptado via MoreApp)
+Fecha: 2026-07-15 | Estado: LISTO (MVP terreno via MoreApp)
 
-Decision: no se desarrolla app movil Delco. Terreno = MoreApp (carpetas JSON + webhook + sync web/manual).
+Decision: no se desarrolla app movil Delco. Terreno = MoreApp (carpetas JSON + webhook + sync web/cron).
 
-Cobertura MVP:
-- Lectura incremental de registros MoreApp (`integraciones/reader.py`).
-- Webhook y listados/detalle/cola operacional.
-- Limites anti-timeout web; autosync en request desactivado por defecto en produccion.
+Cobertura:
+- Lectura incremental (`integraciones/reader.py`).
+- Webhook, listados/detalle/cola operacional.
+- Limites anti-timeout; autosync en GET off por defecto en produccion.
+- Panel **Estado ops MoreApp** en `/reportes/moreapp/` (`web/moreapp_ops.py`).
+- Registro de ultima sync (manual o cron) e invalidacion de caches.
+- Comando: `python manage.py sincronizar_registros --limite-web`.
+- Checklist host: `MOREAPP_OPS_CHECKLIST.md` (verificacion en Hostingplus a cargo del companero).
 
-Pendiente (ops, no feature nueva): ejecutar checklist de despliegue en `MOREAPP_OPS_CHECKLIST.md` (carpetas, cron o boton sync, variables `MOREAPP_*`, pull + Restart).
+Archivos: `integraciones/reader.py`, `web/moreapp_ops.py`, `web/views.py`, `templates/reportes/integraciones_list.html`, `integraciones/management/commands/sincronizar_registros.py`.
 
 ---
 
