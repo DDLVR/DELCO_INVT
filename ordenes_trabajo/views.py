@@ -93,7 +93,7 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
         'creada_por',
     ).annotate(
         moreapp_count=Count('sincronizaciones_moreapp', distinct=True),
-    ).order_by('-fecha_creacion')
+    ).order_by('id')
 
 
 @login_required
@@ -122,6 +122,8 @@ def ordenes_list_view(request):
         per_page = 50
 
     total_alertas_duplicado = ordenes_qs.filter(alerta_duplicado=True).count()
+    # Forzar ID asc aquí: anotar/colas no deben perder el orden visible.
+    ordenes_qs = ordenes_qs.order_by('id')
     page_obj = Paginator(ordenes_qs, per_page).get_page(request.GET.get('page') or 1)
 
     tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
@@ -645,20 +647,20 @@ def ordenes_asignar_masivo_view(request):
     tecnico_id = request.POST.get('tecnico_responsable', '').strip()
 
     if not ids_raw or not tecnico_id:
-        return JsonResponse({'success': False, 'message': 'Selecciona órdenes y un técnico responsable'})
+        return JsonResponse({'success': False, 'message': 'Marca las órdenes y elige el técnico responsable.'})
 
     try:
         ids = [int(x) for x in ids_raw.split(',') if x.strip().isdigit()]
         resultado = asignar_ordenes_masivo(ids, int(tecnico_id), request.user)
-        msg = (
-            f'{resultado["actualizadas"]} órdenes asignadas a {resultado["tecnico"]}. '
-            f'Alertas duplicidad: {resultado["alertas_duplicado"]}.'
-        )
+        alertas = resultado["alertas_duplicado"]
+        msg = f'Se asignaron {resultado["actualizadas"]} orden(es) a {resultado["tecnico"]}.'
+        if alertas:
+            msg += f' {alertas} quedaron con alerta de posible trabajo duplicado; revísalas.'
         return JsonResponse({'success': True, 'message': msg, **resultado})
     except Usuario.DoesNotExist:
-        return JsonResponse({'success': False, 'message': 'Técnico no válido'})
+        return JsonResponse({'success': False, 'message': 'Ese técnico no está disponible. Elige otro de la lista.'})
     except Exception as exc:
-        return JsonResponse({'success': False, 'message': str(exc)})
+        return JsonResponse({'success': False, 'message': f'No se pudo asignar: {exc}'})
 
 
 @_requiere_admin_ordenes
@@ -667,16 +669,22 @@ def ordenes_modificar_masivo_view(request):
     """Edición masiva de estado y tipo de trabajo."""
     ids_raw = request.POST.get('ids', '').strip()
     if not ids_raw:
-        return JsonResponse({'success': False, 'message': 'Selecciona al menos una orden'})
+        return JsonResponse({'success': False, 'message': 'Marca al menos una orden en la lista antes de continuar.'})
 
     try:
         ids = [int(x) for x in ids_raw.split(',') if x.strip().isdigit()]
     except ValueError:
-        return JsonResponse({'success': False, 'message': 'IDs inválidos'})
+        return JsonResponse({'success': False, 'message': 'La selección de órdenes no es válida. Vuelve a marcarlas e intenta de nuevo.'})
 
     nuevo_estado = request.POST.get('estado', '').strip()
     nuevo_tipo = request.POST.get('tipo_trabajo', '').strip()
     tecnico_id = request.POST.get('tecnico_responsable', '').strip()
+
+    if not nuevo_estado and not nuevo_tipo and not tecnico_id:
+        return JsonResponse({
+            'success': False,
+            'message': 'No elegiste ningún cambio. Completa al menos un campo o cancela.',
+        })
 
     ordenes = OrdenTrabajo.objects.filter(pk__in=ids)
     actualizadas = 0
@@ -705,9 +713,13 @@ def ordenes_modificar_masivo_view(request):
             aplicar_alerta_duplicado(orden)
             actualizadas += 1
 
+    sin_cambios = len(ids) - actualizadas
+    msg = f'Se actualizaron {actualizadas} orden(es).'
+    if sin_cambios:
+        msg += f' {sin_cambios} ya tenían esos mismos datos.'
     return JsonResponse({
         'success': True,
-        'message': f'{actualizadas} órdenes actualizadas correctamente',
+        'message': msg,
         'actualizadas': actualizadas,
     })
 

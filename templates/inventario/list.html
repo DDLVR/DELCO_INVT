@@ -56,7 +56,7 @@
                     <i class="bi bi-plus-circle"></i> Agregar equipo
                 </button>
                 <button type="button" class="btn btn-outline-dark" id="btnAbrirMasivo">
-                    <i class="bi bi-check2-square"></i> Edición múltiple
+                    <i class="bi bi-check2-square"></i> Cambiar varios
                 </button>
                 {% endif %}
                 {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
@@ -84,21 +84,21 @@
             <ul class="nav nav-tabs" role="tablist">
                 <li class="nav-item">
                     <a class="nav-link {% if tipo == 'medidor' %}active{% endif %}" 
-                       href="{% url 'inventario_list' %}?tipo=medidor"
+                       href="{% url 'inventario_list' %}?tipo=medidor&per_page={{ per_page }}"
                        data-tipo="medidor">
                         Medidores
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if tipo == 'sim' %}active{% endif %}" 
-                       href="{% url 'inventario_list' %}?tipo=sim"
+                       href="{% url 'inventario_list' %}?tipo=sim&per_page={{ per_page }}"
                        data-tipo="sim">
                         SIM Cards
                     </a>
                 </li>
                 <li class="nav-item">
                     <a class="nav-link {% if tipo == 'modem' %}active{% endif %}" 
-                       href="{% url 'inventario_list' %}?tipo=modem"
+                       href="{% url 'inventario_list' %}?tipo=modem&per_page={{ per_page }}"
                        data-tipo="modem">
                         Módems
                     </a>
@@ -221,6 +221,30 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
+                <div class="card-header bg-body d-flex flex-wrap justify-content-between align-items-center gap-2 py-2">
+                    <span class="text-muted small mb-0">
+                        {% if total_filtrado %}
+                        Mostrando {{ page_obj.start_index }}–{{ page_obj.end_index }} de <strong>{{ total_filtrado }}</strong>
+                        {% else %}
+                        Sin resultados
+                        {% endif %}
+                    </span>
+                    <form method="get" class="d-flex align-items-center gap-2 mb-0">
+                        <input type="hidden" name="tipo" value="{{ tipo }}">
+                        {% if busqueda %}<input type="hidden" name="q" value="{{ busqueda }}">{% endif %}
+                        {% if campo_busqueda and campo_busqueda != 'all' %}<input type="hidden" name="campo" value="{{ campo_busqueda }}">{% endif %}
+                        {% if estado_seleccionado %}<input type="hidden" name="estado" value="{{ estado_seleccionado }}">{% endif %}
+                        {% if proyecto_seleccionado %}<input type="hidden" name="proyecto" value="{{ proyecto_seleccionado }}">{% endif %}
+                        {% if caja_seleccionada %}<input type="hidden" name="caja" value="{{ caja_seleccionada }}">{% endif %}
+                        {% if tipo_medidor_seleccionado %}<input type="hidden" name="tipo_medidor" value="{{ tipo_medidor_seleccionado }}">{% endif %}
+                        <label class="small text-muted mb-0" for="perPageInventario">Por página</label>
+                        <select id="perPageInventario" name="per_page" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+                            {% for opt in per_page_options %}
+                            <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
+                            {% endfor %}
+                        </select>
+                    </form>
+                </div>
                 <div class="table-responsive">
                     <table id="tablaInventario" class="table table-hover mb-0">
                         <thead class="table-delco">
@@ -707,7 +731,7 @@
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title"><i class="bi bi-check2-square"></i> Modificación masiva</h5>
+                <h5 class="modal-title"><i class="bi bi-check2-square"></i> Cambiar varios equipos</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form id="formEditarMasivo">
@@ -715,12 +739,16 @@
                 <div class="modal-body">
                     <input type="hidden" name="tipo" value="{{ tipo }}">
                     <input type="hidden" name="ids" id="bulkIds">
-                    <p class="small text-muted" id="bulkResumenSeleccion">0 equipos seleccionados</p>
+                    <p class="small mb-1" id="bulkResumenSeleccion">Ningún equipo seleccionado</p>
+                    <p class="small text-muted mb-3">
+                        Completa solo lo que quieras modificar. Si un campo queda en
+                        <strong>Sin cambio</strong>, ese dato se mantiene igual.
+                    </p>
 
                     <div class="mb-3">
-                        <label class="form-label">Estado</label>
+                        <label class="form-label">Estado del equipo</label>
                         <select class="form-select" name="estado_id">
-                            <option value="">-- No cambiar --</option>
+                            <option value="">Sin cambio</option>
                             {% for estado in estados_disponibles %}
                             <option value="{{ estado.id }}">{{ estado.nombre }}</option>
                             {% endfor %}
@@ -729,9 +757,9 @@
 
                     {% if tipo == 'medidor' %}
                     <div class="mb-3">
-                        <label class="form-label">Entregado a</label>
+                        <label class="form-label">Entregar a (técnico)</label>
                         <select class="form-select" name="entregado_a_id">
-                            <option value="">-- No cambiar --</option>
+                            <option value="">Sin cambio</option>
                             {% for usuario in usuarios %}
                             <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
                             {% endfor %}
@@ -739,16 +767,17 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Cliente (número)</label>
-                        <input type="text" class="form-control" name="cliente_texto" placeholder="-- No cambiar --">
+                        <input type="text" class="form-control" name="cliente_texto" placeholder="Dejar vacío = sin cambio">
+                        <small class="text-muted">Ejemplo: 1027336</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
-                        <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
+                        <input type="text" class="form-control" name="proyecto" placeholder="Dejar vacío = sin cambio">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Tipo de medidor</label>
                         <select class="form-select" name="tipo_medidor">
-                            <option value="">-- No cambiar --</option>
+                            <option value="">Sin cambio</option>
                             {% for codigo, nombre in tipo_medidor_choices %}
                             <option value="{{ codigo }}">{{ nombre }}</option>
                             {% endfor %}
@@ -756,9 +785,9 @@
                     </div>
                     {% elif tipo == 'sim' %}
                     <div class="mb-3">
-                        <label class="form-label">Entregado A / En Custodia De</label>
+                        <label class="form-label">Responsable / custodia</label>
                         <select class="form-select" name="entregado_a_id">
-                            <option value="">-- No cambiar --</option>
+                            <option value="">Sin cambio</option>
                             {% for usuario in usuarios %}
                             <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
                             {% endfor %}
@@ -766,26 +795,30 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Cliente (número)</label>
-                        <input type="text" class="form-control" name="cliente_texto" placeholder="-- No cambiar --">
+                        <input type="text" class="form-control" name="cliente_texto" placeholder="Dejar vacío = sin cambio">
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Medidor</label>
-                        <select class="form-select" name="medidor_id">
-                            <option value="">-- No cambiar --</option>
-                            {% for medidor in medidores %}
-                            <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
-                            {% endfor %}
+                        <label class="form-label">Medidor asociado</label>
+                        <div class="inventario-ac position-relative mb-1"
+                             data-ac-url="{% url 'api_buscar_medidores' %}"
+                             data-ac-select="masivoMedidorSim">
+                            <input type="search" class="form-control form-control-sm inventario-ac-input"
+                                   placeholder="Buscar por serie, caja o marca..." autocomplete="off">
+                            <div class="list-group inventario-ac-results shadow-sm" hidden></div>
+                        </div>
+                        <select class="form-select" name="medidor_id" id="masivoMedidorSim">
+                            <option value="">Sin cambio</option>
                         </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
-                        <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
+                        <input type="text" class="form-control" name="proyecto" placeholder="Dejar vacío = sin cambio">
                     </div>
                     {% else %}
                     <div class="mb-3">
-                        <label class="form-label">Entregado A</label>
+                        <label class="form-label">Entregar a (técnico)</label>
                         <select class="form-select" name="entregado_a_id">
-                            <option value="">-- No cambiar --</option>
+                            <option value="">Sin cambio</option>
                             {% for usuario in usuarios %}
                             <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
                             {% endfor %}
@@ -793,37 +826,45 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Cliente</label>
-                        <select class="form-select" name="cliente_id">
-                            <option value="">-- No cambiar --</option>
-                            {% for cliente in clientes %}
-                            <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
-                            {% endfor %}
+                        <div class="inventario-ac position-relative mb-1"
+                             data-ac-url="{% url 'api_buscar_clientes' %}"
+                             data-ac-select="masivoClienteId">
+                            <input type="search" class="form-control form-control-sm inventario-ac-input"
+                                   placeholder="Buscar por número o dirección..." autocomplete="off">
+                            <div class="list-group inventario-ac-results shadow-sm" hidden></div>
+                        </div>
+                        <select class="form-select" name="cliente_id" id="masivoClienteId">
+                            <option value="">Sin cambio</option>
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Medidor</label>
-                        <select class="form-select" name="medidor_id">
-                            <option value="">-- No cambiar --</option>
-                            {% for medidor in medidores %}
-                            <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
-                            {% endfor %}
+                        <label class="form-label">Medidor asociado</label>
+                        <div class="inventario-ac position-relative mb-1"
+                             data-ac-url="{% url 'api_buscar_medidores' %}"
+                             data-ac-select="masivoMedidorOtro">
+                            <input type="search" class="form-control form-control-sm inventario-ac-input"
+                                   placeholder="Buscar por serie, caja o marca..." autocomplete="off">
+                            <div class="list-group inventario-ac-results shadow-sm" hidden></div>
+                        </div>
+                        <select class="form-select" name="medidor_id" id="masivoMedidorOtro">
+                            <option value="">Sin cambio</option>
                         </select>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
-                        <input type="text" class="form-control" name="proyecto" placeholder="-- No cambiar --">
+                        <input type="text" class="form-control" name="proyecto" placeholder="Dejar vacío = sin cambio">
                     </div>
                     {% endif %}
 
                     <hr class="my-3">
                     <div class="mb-3">
-                        <label class="form-label">Observación</label>
-                        <textarea class="form-control" name="observacion" rows="2" placeholder="Detalle operativo del movimiento"></textarea>
+                        <label class="form-label">Nota para el historial (opcional)</label>
+                        <textarea class="form-control" name="observacion" rows="2" placeholder="Ej: entrega a terreno — cuadrilla norte"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-dark">Aplicar cambios</button>
+                    <button type="submit" class="btn btn-dark">Guardar cambios</button>
                 </div>
             </form>
         </div>
@@ -937,12 +978,16 @@
                                 </div>
                                 <div class="col-md-6 mb-3">
                                     <label for="clienteMedidor" class="form-label">Cliente</label>
+                                    <div class="inventario-ac position-relative mb-1"
+                                         data-ac-url="{% url 'api_buscar_clientes' %}"
+                                         data-ac-select="clienteMedidor">
+                                        <input type="search" class="form-control form-control-sm inventario-ac-input"
+                                               placeholder="Buscar número o dirección..." autocomplete="off">
+                                        <div class="list-group inventario-ac-results shadow-sm" hidden></div>
+                                    </div>
                                     <select class="form-select selector-con-otro" id="clienteMedidor" name="cliente" data-otro-target="clienteMedidorOtroWrapper">
                                         <option value="">-- Sin cliente --</option>
                                         <option value="OTRO">Otro</option>
-                                        {% for cliente in clientes %}
-                                        <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
-                                        {% endfor %}
                                     </select>
                                     <div class="mt-2 d-none" id="clienteMedidorOtroWrapper">
                                         <input type="text" class="form-control" id="clienteTexto" name="cliente_otro" placeholder="Ingrese cliente manual">
@@ -1055,12 +1100,16 @@
                                             <i class="bi bi-building"></i> 
                                             Cliente
                                         </label>
+                                        <div class="inventario-ac position-relative mb-1"
+                                             data-ac-url="{% url 'api_buscar_clientes' %}"
+                                             data-ac-select="simCliente">
+                                            <input type="search" class="form-control form-control-sm inventario-ac-input"
+                                                   placeholder="Buscar número o dirección..." autocomplete="off">
+                                            <div class="list-group inventario-ac-results shadow-sm" hidden></div>
+                                        </div>
                                         <select class="form-select selector-con-otro" id="simCliente" name="cliente" data-otro-target="simClienteOtroWrapper">
                                             <option value="">-- Sin cliente --</option>
                                             <option value="OTRO">Otro</option>
-                                            {% for cliente in clientes %}
-                                            <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
-                                            {% endfor %}
                                         </select>
                                         <small id="simClienteHint" class="text-muted d-none">Sin cliente asignado en el maestro</small>
                                         <div class="mt-2 d-none" id="simClienteOtroWrapper">
@@ -1073,12 +1122,16 @@
                                             <i class="bi bi-speedometer"></i> 
                                             Medidor
                                         </label>
+                                        <div class="inventario-ac position-relative mb-1"
+                                             data-ac-url="{% url 'api_buscar_medidores' %}"
+                                             data-ac-select="simMedidor">
+                                            <input type="search" class="form-control form-control-sm inventario-ac-input"
+                                                   placeholder="Buscar serie, caja o marca..." autocomplete="off">
+                                            <div class="list-group inventario-ac-results shadow-sm" hidden></div>
+                                        </div>
                                         <select class="form-select selector-con-otro" id="simMedidor" name="medidor" data-otro-target="simMedidorOtroWrapper">
                                             <option value="">-- Sin medidor --</option>
                                             <option value="OTRO">Otro</option>
-                                            {% for medidor in medidores %}
-                                            <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
-                                            {% endfor %}
                                         </select>
                                         <div class="mt-2 d-none" id="simMedidorOtroWrapper">
                                             <input type="text" class="form-control" id="simMedidorOtro" name="medidor_otro" placeholder="Ingrese número de medidor manual">
@@ -1194,12 +1247,16 @@
                                             <i class="bi bi-building"></i> 
                                             Cliente
                                         </label>
+                                        <div class="inventario-ac position-relative mb-1"
+                                             data-ac-url="{% url 'api_buscar_clientes' %}"
+                                             data-ac-select="modemCliente">
+                                            <input type="search" class="form-control form-control-sm inventario-ac-input"
+                                                   placeholder="Buscar número o dirección..." autocomplete="off">
+                                            <div class="list-group inventario-ac-results shadow-sm" hidden></div>
+                                        </div>
                                         <select class="form-select selector-con-otro" id="modemCliente" name="cliente" data-otro-target="modemClienteOtroWrapper">
                                             <option value="">-- Sin cliente --</option>
                                             <option value="OTRO">Otro</option>
-                                            {% for cliente in clientes %}
-                                            <option value="{{ cliente.id }}">{{ cliente.numero_cliente }} - {{ cliente.direccion }}</option>
-                                            {% endfor %}
                                         </select>
                                         <div class="mt-2 d-none" id="modemClienteOtroWrapper">
                                             <input type="text" class="form-control" id="modemClienteOtro" name="cliente_otro" placeholder="Ingrese cliente manual">
@@ -1222,12 +1279,16 @@
                                             <i class="bi bi-speedometer"></i> 
                                             Medidor
                                         </label>
+                                        <div class="inventario-ac position-relative mb-1"
+                                             data-ac-url="{% url 'api_buscar_medidores' %}"
+                                             data-ac-select="modemMedidor">
+                                            <input type="search" class="form-control form-control-sm inventario-ac-input"
+                                                   placeholder="Buscar serie, caja o marca..." autocomplete="off">
+                                            <div class="list-group inventario-ac-results shadow-sm" hidden></div>
+                                        </div>
                                         <select class="form-select selector-con-otro" id="modemMedidor" name="medidor" data-otro-target="modemMedidorOtroWrapper">
                                             <option value="">-- Sin medidor --</option>
                                             <option value="OTRO">Otro</option>
-                                            {% for medidor in medidores %}
-                                            <option value="{{ medidor.id }}">{{ medidor.serie }} - {{ medidor.marca }}</option>
-                                            {% endfor %}
                                         </select>
                                         <div class="mt-2 d-none" id="modemMedidorOtroWrapper">
                                             <input type="text" class="form-control" id="modemMedidorOtro" name="medidor_otro" placeholder="Ingrese número de medidor manual">
@@ -1304,6 +1365,20 @@
 </div>
 
 
+
+<style>
+.inventario-ac-results {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 1080;
+    max-height: 220px;
+    overflow: auto;
+}
+.inventario-ac-results[hidden] {
+    display: none !important;
+}
+</style>
 
 <script>
 // Eliminar registro con confirmación simple para evitar bloqueo de modales
@@ -1383,6 +1458,114 @@ function actualizarCampoOtro(selectElement) {
         }
     }
 }
+
+function ensureSelectOption(selectEl, value, label) {
+    if (!selectEl || value === undefined || value === null || value === '') {
+        return;
+    }
+    const strVal = String(value);
+    let opt = Array.from(selectEl.options).find(o => o.value === strVal);
+    if (!opt) {
+        opt = new Option(label || strVal, strVal);
+        const otroOpt = Array.from(selectEl.options).find(o => o.value === 'OTRO');
+        if (otroOpt) {
+            selectEl.insertBefore(opt, otroOpt);
+        } else {
+            selectEl.appendChild(opt);
+        }
+    } else if (label) {
+        opt.textContent = label;
+    }
+    selectEl.value = strVal;
+}
+
+function initInventarioAutocompletes() {
+    document.querySelectorAll('.inventario-ac').forEach(wrap => {
+        if (wrap.dataset.acReady === '1') return;
+        wrap.dataset.acReady = '1';
+        const input = wrap.querySelector('.inventario-ac-input');
+        const results = wrap.querySelector('.inventario-ac-results');
+        const select = document.getElementById(wrap.dataset.acSelect);
+        const url = wrap.dataset.acUrl;
+        if (!input || !results || !select || !url) return;
+
+        let timer = null;
+        let abortCtrl = null;
+
+        const hideResults = () => {
+            results.hidden = true;
+            results.innerHTML = '';
+        };
+
+        const pick = (id, label) => {
+            ensureSelectOption(select, id, label);
+            if (typeof actualizarCampoOtro === 'function') {
+                actualizarCampoOtro(select);
+            }
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            input.value = label || '';
+            hideResults();
+        };
+
+        input.addEventListener('input', () => {
+            const q = input.value.trim();
+            clearTimeout(timer);
+            if (q.length < 2) {
+                hideResults();
+                return;
+            }
+            timer = setTimeout(async () => {
+                try {
+                    if (abortCtrl) abortCtrl.abort();
+                    abortCtrl = new AbortController();
+                    const resp = await fetch(`${url}?q=${encodeURIComponent(q)}`, {
+                        signal: abortCtrl.signal,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    });
+                    const data = await resp.json();
+                    const items = data.results || [];
+                    results.innerHTML = '';
+                    if (!items.length) {
+                        results.innerHTML = '<div class="list-group-item list-group-item-light text-muted small">Sin coincidencias</div>';
+                        results.hidden = false;
+                        return;
+                    }
+                    items.forEach(item => {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'list-group-item list-group-item-action py-2';
+                        btn.textContent = item.label || String(item.id);
+                        btn.addEventListener('click', () => pick(item.id, item.label));
+                        results.appendChild(btn);
+                    });
+                    results.hidden = false;
+                } catch (err) {
+                    if (err.name !== 'AbortError') {
+                        console.warn('Autocomplete inventario:', err);
+                    }
+                }
+            }, 250);
+        });
+
+        input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Escape') hideResults();
+        });
+
+        document.addEventListener('click', (ev) => {
+            if (!wrap.contains(ev.target)) hideResults();
+        });
+
+        select.addEventListener('change', () => {
+            if (select.value === '' || select.value === 'OTRO') {
+                if (document.activeElement !== input) {
+                    input.value = '';
+                }
+            }
+        });
+    });
+}
+
+initInventarioAutocompletes();
 
 document.querySelectorAll('.selector-con-otro').forEach(selectElement => {
     selectElement.addEventListener('change', function() {
@@ -1471,8 +1654,22 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                     estadoSIM.value = equipoData.estado_id;
                 }
                 if (clienteSIM) {
-                    clienteSIM.value = equipoData.cliente_id || (equipoData.cliente_otro ? 'OTRO' : '');
+                    if (equipoData.cliente_id) {
+                        ensureSelectOption(
+                            clienteSIM,
+                            equipoData.cliente_id,
+                            equipoData.cliente_label || equipoData.cliente_numero || String(equipoData.cliente_id)
+                        );
+                    } else {
+                        clienteSIM.value = equipoData.cliente_otro ? 'OTRO' : '';
+                    }
                     actualizarCampoOtro(clienteSIM);
+                    const acInput = document.querySelector('.inventario-ac[data-ac-select="simCliente"] .inventario-ac-input');
+                    if (acInput) {
+                        acInput.value = equipoData.cliente_id
+                            ? (equipoData.cliente_label || equipoData.cliente_numero || '')
+                            : '';
+                    }
                 }
                 if (clienteSIMOtro) {
                     clienteSIMOtro.value = equipoData.cliente_otro || '';
@@ -1484,13 +1681,21 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                     simClienteHint.textContent = tieneCliente ? '' : 'Sin cliente asignado en el maestro';
                     simClienteHint.classList.toggle('d-none', tieneCliente);
                 }
-                if (medidorSIM && equipoData.medidor_id) {
-                    medidorSIM.value = equipoData.medidor_id;
-                } else if (medidorSIM) {
-                    medidorSIM.value = equipoData.medidor_otro ? 'OTRO' : '';
-                }
                 if (medidorSIM) {
+                    if (equipoData.medidor_id) {
+                        ensureSelectOption(
+                            medidorSIM,
+                            equipoData.medidor_id,
+                            equipoData.medidor_label || String(equipoData.medidor_id)
+                        );
+                    } else {
+                        medidorSIM.value = equipoData.medidor_otro ? 'OTRO' : '';
+                    }
                     actualizarCampoOtro(medidorSIM);
+                    const acMed = document.querySelector('.inventario-ac[data-ac-select="simMedidor"] .inventario-ac-input');
+                    if (acMed) {
+                        acMed.value = equipoData.medidor_id ? (equipoData.medidor_label || '') : '';
+                    }
                 }
                 if (medidorSIMOtro) {
                     medidorSIMOtro.value = equipoData.medidor_otro || '';
@@ -1529,8 +1734,20 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 const modemProyecto = document.getElementById('modemProyecto');
                 
                 if (clienteModem) {
-                    clienteModem.value = equipoData.cliente_id || (equipoData.cliente_otro ? 'OTRO' : '');
+                    if (equipoData.cliente_id) {
+                        ensureSelectOption(
+                            clienteModem,
+                            equipoData.cliente_id,
+                            equipoData.cliente_label || String(equipoData.cliente_id)
+                        );
+                    } else {
+                        clienteModem.value = equipoData.cliente_otro ? 'OTRO' : '';
+                    }
                     actualizarCampoOtro(clienteModem);
+                    const acInput = document.querySelector('.inventario-ac[data-ac-select="modemCliente"] .inventario-ac-input');
+                    if (acInput) {
+                        acInput.value = equipoData.cliente_id ? (equipoData.cliente_label || '') : '';
+                    }
                 }
                 if (clienteModemOtro) {
                     clienteModemOtro.value = equipoData.cliente_otro || '';
@@ -1540,8 +1757,20 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                     modemEntregadoA.value = equipoData.entregado_a_valor || equipoData.entregado_a_id || '';
                 }
                 if (medidorModem) {
-                    medidorModem.value = equipoData.medidor_id || (equipoData.medidor_otro ? 'OTRO' : '');
+                    if (equipoData.medidor_id) {
+                        ensureSelectOption(
+                            medidorModem,
+                            equipoData.medidor_id,
+                            equipoData.medidor_label || String(equipoData.medidor_id)
+                        );
+                    } else {
+                        medidorModem.value = equipoData.medidor_otro ? 'OTRO' : '';
+                    }
                     actualizarCampoOtro(medidorModem);
+                    const acMed = document.querySelector('.inventario-ac[data-ac-select="modemMedidor"] .inventario-ac-input');
+                    if (acMed) {
+                        acMed.value = equipoData.medidor_id ? (equipoData.medidor_label || '') : '';
+                    }
                 }
                 if (medidorModemOtro) {
                     medidorModemOtro.value = equipoData.medidor_otro || '';
@@ -1595,8 +1824,22 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                     entregadoSelect.value = equipoData.entregado_a_valor || equipoData.entregado_a_id || '';
                 }
                 if (clienteSelect) {
-                    clienteSelect.value = equipoData.cliente_id || (equipoData.cliente_otro ? 'OTRO' : '');
+                    if (equipoData.cliente_id) {
+                        ensureSelectOption(
+                            clienteSelect,
+                            equipoData.cliente_id,
+                            equipoData.cliente_label || equipoData.cliente_numero || String(equipoData.cliente_id)
+                        );
+                    } else {
+                        clienteSelect.value = equipoData.cliente_otro ? 'OTRO' : '';
+                    }
                     actualizarCampoOtro(clienteSelect);
+                    const acInput = document.querySelector('.inventario-ac[data-ac-select="clienteMedidor"] .inventario-ac-input');
+                    if (acInput) {
+                        acInput.value = equipoData.cliente_id
+                            ? (equipoData.cliente_label || equipoData.cliente_numero || '')
+                            : '';
+                    }
                 }
                 if (clienteTexto) {
                     clienteTexto.value = equipoData.cliente_otro || equipoData.cliente_numero || '';
@@ -1763,13 +2006,16 @@ if (btnAbrirMasivo) {
     btnAbrirMasivo.addEventListener('click', function() {
         const seleccionados = Array.from(document.querySelectorAll('.equipo-checkbox:checked'));
         if (!seleccionados.length) {
-            showToast('Selecciona al menos un equipo para la modificación masiva.', 'warning');
+            showToast('Marca al menos un equipo en la lista para cambiar varios a la vez.', 'warning');
             return;
         }
 
         const ids = seleccionados.map(cb => cb.value).join(',');
         document.getElementById('bulkIds').value = ids;
-        document.getElementById('bulkResumenSeleccion').textContent = `${seleccionados.length} equipos seleccionados`;
+        document.getElementById('bulkResumenSeleccion').textContent =
+            seleccionados.length === 1
+                ? 'Vas a modificar 1 equipo.'
+                : `Vas a modificar ${seleccionados.length} equipos.`;
 
         const modalEl = document.getElementById('modalEditarMasivo');
         const modal = new bootstrap.Modal(modalEl);
@@ -1790,13 +2036,13 @@ if (formEditarMasivo) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showToast(data.message || 'Actualización masiva aplicada.', 'success');
-                setTimeout(() => location.reload(), 1500);
+                showToast(data.message || 'Cambios guardados correctamente.', 'success');
+                setTimeout(() => location.reload(), 1000);
             } else {
-                showToast('Error: ' + (data.message || 'No se pudo aplicar la actualización masiva'), 'danger');
+                showToast(data.message || 'No se pudieron guardar los cambios. Revisa los datos e intenta de nuevo.', 'danger');
             }
         })
-        .catch(() => showToast('Error de conexión al aplicar cambios masivos.', 'danger'));
+        .catch(() => showToast('No hay conexión con el servidor. Intenta de nuevo.', 'danger'));
     });
 }
 

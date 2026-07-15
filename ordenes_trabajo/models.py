@@ -412,7 +412,7 @@ class OrdenTrabajo(models.Model):
     class Meta:
         verbose_name = 'Orden de Trabajo'
         verbose_name_plural = 'Órdenes de Trabajo'
-        ordering = ['-fecha_creacion']
+        ordering = ['id']
         indexes = [
             models.Index(fields=['estado']),
             models.Index(fields=['tecnico_responsable']),
