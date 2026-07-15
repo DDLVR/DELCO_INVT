@@ -13,16 +13,10 @@
             Administra la ficha de cada cliente: datos de instalación, medidor, conexión y estado operativo.
             <span class="mx-2">|</span>
             Clientes: <strong id="totalClientesVisibles">{{ total_clientes }}</strong>
-            {% if total_fichas and total_fichas != total_clientes %}
-              <span class="mx-2">|</span>
-              <span class="text-muted" title="Filas en tabla (un cliente puede tener más de una ficha/medidor)">
-                Fichas: {{ total_fichas }}
-              </span>
-            {% endif %}
             {% if total_numeros_duplicados %}
               <span class="mx-2">|</span>
               <span class="text-danger fw-semibold">
-                Números de cliente con varias fichas: {{ total_numeros_duplicados }}
+                Clientes duplicados: {{ total_numeros_duplicados }}
               </span>
             {% endif %}
           </p>
@@ -79,10 +73,7 @@
               {% if page_obj %}
               <p class="text-muted small mb-0 mt-2">
                 Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
-                · {{ total_clientes }} cliente{{ total_clientes|pluralize }}
-                {% if total_fichas and total_fichas != total_clientes %}
-                ({{ total_fichas }} ficha{{ total_fichas|pluralize }})
-                {% endif %}.
+                · {{ total_clientes }} cliente{{ total_clientes|pluralize }}.
                 Exportar descarga el padrón completo.
               </p>
               {% endif %}
