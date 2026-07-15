@@ -21,10 +21,21 @@
       <span class="text-muted small">ID: {{ registro.moreapp_submission_id }}</span>
     </div>
     <div class="col-auto d-flex gap-2 align-items-start">
-      {% if registro.alerta_doble_trabajo %}
+      {% if es_alerta_critica %}
+      <span class="badge bg-danger fs-6 align-self-center">
+        <i class="bi bi-exclamation-octagon-fill"></i> Alerta crítica
+      </span>
+      {% elif registro.alerta_doble_trabajo %}
       <span class="badge bg-warning text-dark fs-6 align-self-center">
         <i class="bi bi-exclamation-triangle-fill"></i> Alerta doble trabajo
       </span>
+      {% endif %}
+      {% if registro.estado_revision == 'CON_ADVERTENCIA' %}
+      <span class="badge bg-warning text-dark fs-6 align-self-center">Con advertencia</span>
+      {% elif registro.estado_revision == 'PENDIENTE' %}
+      <span class="badge bg-primary fs-6 align-self-center">Revisión pendiente</span>
+      {% elif registro.estado_revision == 'REVISADO' %}
+      <span class="badge bg-success fs-6 align-self-center">Revisado</span>
       {% endif %}
       {% if registro.estado_sincronizacion|moreapp_sync_ok %}
         <span class="badge bg-success fs-6 align-self-center">Procesado</span>
@@ -75,7 +86,16 @@
   </div>
 
   <!-- Alerta si aplica -->
-  {% if registro.alerta_doble_trabajo and registro.descripcion_alerta %}
+  {% if es_alerta_critica and registro.descripcion_alerta %}
+  <div class="alert alert-danger d-flex align-items-start gap-2 mb-4">
+    <i class="bi bi-exclamation-octagon-fill fs-5 flex-shrink-0 mt-1"></i>
+    <div>
+      <strong>Alerta crítica — equipo en otro cliente (sin reasignación automática):</strong>
+      <div class="mt-1">{{ registro.descripcion_alerta }}</div>
+      <div class="small mt-2">Revisa inventario/cliente, corrige la asignación manualmente y luego marca como revisado.</div>
+    </div>
+  </div>
+  {% elif registro.alerta_doble_trabajo and registro.descripcion_alerta %}
   <div class="alert alert-warning d-flex align-items-start gap-2 mb-4">
     <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0 mt-1"></i>
     <div>

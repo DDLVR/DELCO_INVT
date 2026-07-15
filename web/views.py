@@ -469,11 +469,13 @@ def pendientes_operativos_view(request):
     marcar_aviso_moreapp_visto(request)
 
     estado = request.GET.get('estado', 'PENDIENTE')
-    if estado not in ('PENDIENTE', 'CON_ADVERTENCIA', 'REVISADO', 'DESCARTADO', 'TODOS'):
+    if estado not in ('PENDIENTE', 'CON_ADVERTENCIA', 'REVISADO', 'DESCARTADO', 'CRITICA', 'TODOS'):
         estado = 'PENDIENTE'
 
     qs = IntegracionMoreApp.objects.select_related('procesado_por').order_by('-fecha_recepcion')
-    if estado != 'TODOS':
+    if estado == 'CRITICA':
+        qs = qs.filter(descripcion_alerta__icontains='ALERTA_CRITICA')
+    elif estado != 'TODOS':
         qs = qs.filter(estado_revision=estado)
 
     ahora = timezone.now()
@@ -485,6 +487,7 @@ def pendientes_operativos_view(request):
         'CON_ADVERTENCIA': IntegracionMoreApp.objects.filter(estado_revision='CON_ADVERTENCIA').count(),
         'REVISADO': IntegracionMoreApp.objects.filter(estado_revision='REVISADO').count(),
         'DESCARTADO': IntegracionMoreApp.objects.filter(estado_revision='DESCARTADO').count(),
+        'CRITICA': IntegracionMoreApp.objects.filter(descripcion_alerta__icontains='ALERTA_CRITICA').count(),
         'envejecidos': IntegracionMoreApp.objects.filter(
             estado_revision='PENDIENTE', fecha_recepcion__lt=umbral_7d
         ).count(),
@@ -495,6 +498,11 @@ def pendientes_operativos_view(request):
         bloqueos = _extraer_bloqueos_operativos_registro(reg)
         reg.bloqueos_operativos = bloqueos
         reg.bloqueo_operativo_preview = bloqueos[0]['motivo'] if bloqueos else ''
+        reg.es_alerta_critica = (
+            'ALERTA_CRITICA' in str(reg.descripcion_alerta or '').upper()
+            or any(b.get('es_critica') for b in bloqueos)
+        )
+        reg.alerta_preview = (reg.descripcion_alerta or '')[:160]
 
     context = {
         'registros': registros,
@@ -3866,14 +3874,21 @@ def _categorias_advertencia_registro(registro):
     categorias = set()
     for bloqueo in _extraer_bloqueos_operativos_registro(registro):
         motivo = bloqueo.get('motivo', '').lower()
-        if 'no encontrada' in motivo or 'no encontrado' in motivo:
+        origen = bloqueo.get('origen', '')
+        if origen == 'alerta_critica' or 'alerta_critica' in motivo:
+            categorias.add('critica')
+        elif 'no encontrada' in motivo or 'no encontrado' in motivo:
             categorias.add('equipo')
         elif 'no se puede instalar' in motivo:
             categorias.add('regla')
         elif 'doble trabajo' in motivo or 'ya instalado' in motivo:
             categorias.add('doble')
 
-    if registro.alerta_doble_trabajo:
+    desc = str(getattr(registro, 'descripcion_alerta', '') or '')
+    if 'ALERTA_CRITICA' in desc.upper():
+        categorias.add('critica')
+
+    if registro.alerta_doble_trabajo and 'critica' not in categorias:
         categorias.add('doble')
 
     return categorias
@@ -3951,11 +3966,12 @@ def _tecnico_visible_moreapp(registro):
 
 
 def _calcular_adv_breakdown(model_class):
-    """Cuenta registros con advertencia agrupados en 3 categorías operativas."""
+    """Cuenta registros con advertencia agrupados en categorías operativas."""
     from django.db.models import Q as _Q
     adv_equipo = 0
     adv_regla = 0
     adv_doble = 0
+    adv_critica = 0
     qs = model_class.objects.filter(
         _Q(estado_revision='CON_ADVERTENCIA') | _Q(alerta_doble_trabajo=True)
     ).only('datos_procesados', 'descripcion_alerta', 'alerta_doble_trabajo')
@@ -3964,10 +3980,12 @@ def _calcular_adv_breakdown(model_class):
         adv_equipo += int('equipo' in cats)
         adv_regla += int('regla' in cats)
         adv_doble += int('doble' in cats)
+        adv_critica += int('critica' in cats)
     return [
         {'categoria': 'Sin equipo en inventario', 'count': adv_equipo},
         {'categoria': 'Bloqueo de regla operativa', 'count': adv_regla},
         {'categoria': 'Doble trabajo / conflicto', 'count': adv_doble},
+        {'categoria': 'Alerta crítica (otro cliente)', 'count': adv_critica},
     ]
 
 
@@ -4052,6 +4070,12 @@ _ORIGEN_BLOQUEO_META = {
         'badge': 'bg-warning text-dark',
         'icon': 'bi-people',
     },
+    'alerta_critica': {
+        'label': 'Alerta crítica',
+        'detalle': 'Equipo ya asignado a otro cliente. No se reasignó automáticamente: corregir manualmente.',
+        'badge': 'bg-danger',
+        'icon': 'bi-exclamation-octagon-fill',
+    },
     'alerta_operativa': {
         'label': 'Alerta operativa',
         'detalle': 'Inconsistencia detectada al cruzar datos del terreno con el sistema.',
@@ -4077,6 +4101,15 @@ def _url_inventario_bloqueo(tipo_equipo: str, identificador: str) -> str:
 
 def _clasificar_origen_alerta(motivo: str) -> str:
     texto = str(motivo or '').lower()
+    if (
+        'alerta_critica' in texto
+        or 'ya asignado' in texto
+        or 'no se reasign' in texto
+        or 'corregir manualmente' in texto
+        or 'sin cambios automáticos' in texto
+        or 'sin reasignación automática' in texto
+    ):
+        return 'alerta_critica'
     if 'doble trabajo' in texto or 'ya instalado' in texto or 'otro cliente' in texto:
         return 'doble_trabajo'
     if 'no se puede instalar' in texto or 'bloqueo_operativo' in texto:
@@ -4103,8 +4136,39 @@ def _enriquecer_bloqueo_operativo(item: dict) -> dict:
         'identificador': identificador,
         'motivo': motivo,
         'inventario_url': _url_inventario_bloqueo(tipo_equipo, identificador),
+        'es_critica': origen == 'alerta_critica',
     }
     return enriquecido
+
+
+def _parsear_marcador_alerta(prefijo: str, cuerpo: str, origen: str) -> dict:
+    contexto = ''
+    texto = str(cuerpo or '').strip()
+    if ' | CONTEXTO:' in texto:
+        texto, contexto = texto.split(' | CONTEXTO:', 1)
+        contexto = contexto.strip()
+
+    motivo = texto
+    tipo_equipo = ''
+    identificador = ''
+    if ':' in texto:
+        cabecera, motivo = texto.split(':', 1)
+        motivo = motivo.strip()
+        partes = cabecera.strip().split(None, 1)
+        if partes:
+            tipo_equipo = partes[0].upper()
+        if len(partes) > 1:
+            identificador = partes[1].strip()
+
+    if contexto:
+        motivo = f'{motivo} (contexto: {contexto})'
+
+    return {
+        'origen': origen,
+        'tipo_equipo': tipo_equipo,
+        'identificador': identificador,
+        'motivo': motivo or prefijo,
+    }
 
 
 def _parsear_parte_descripcion_alerta(parte: str) -> dict:
@@ -4112,34 +4176,18 @@ def _parsear_parte_descripcion_alerta(parte: str) -> dict:
     if not texto:
         return {}
 
-    if texto.upper().startswith('BLOQUEO_OPERATIVO |'):
+    upper = texto.upper()
+    if upper.startswith('ALERTA_CRITICA'):
         cuerpo = texto.split('|', 1)[1].strip() if '|' in texto else texto
-        contexto = ''
-        if ' | CONTEXTO:' in cuerpo:
-            cuerpo, contexto = cuerpo.split(' | CONTEXTO:', 1)
-            contexto = contexto.strip()
+        return _parsear_marcador_alerta('ALERTA_CRITICA', cuerpo, 'alerta_critica')
 
-        motivo = cuerpo.strip()
-        tipo_equipo = ''
-        identificador = ''
-        if ':' in cuerpo:
-            cabecera, motivo = cuerpo.split(':', 1)
-            motivo = motivo.strip()
-            partes = cabecera.strip().split(None, 1)
-            if partes:
-                tipo_equipo = partes[0].upper()
-            if len(partes) > 1:
-                identificador = partes[1].strip()
+    if upper.startswith('BLOQUEO_OPERATIVO'):
+        cuerpo = texto.split('|', 1)[1].strip() if '|' in texto else texto
+        return _parsear_marcador_alerta('BLOQUEO_OPERATIVO', cuerpo, 'regla_operativa')
 
-        item = {
-            'origen': 'regla_operativa',
-            'tipo_equipo': tipo_equipo,
-            'identificador': identificador,
-            'motivo': motivo,
-        }
-        if contexto:
-            item['motivo'] = f'{motivo} (contexto: {contexto})'
-        return item
+    if upper.startswith('ALERTA_ASIGNACION'):
+        cuerpo = texto.split('|', 1)[1].strip() if '|' in texto else texto
+        return _parsear_marcador_alerta('ALERTA_ASIGNACION', cuerpo, 'doble_trabajo')
 
     origen = _clasificar_origen_alerta(texto)
     return {
@@ -4148,6 +4196,22 @@ def _parsear_parte_descripcion_alerta(parte: str) -> dict:
         'identificador': '',
         'motivo': texto,
     }
+
+
+def _segmentar_descripcion_alerta(descripcion: str):
+    """Parte descripcion_alerta por marcadores (no por cada '|')."""
+    texto = str(descripcion or '').strip()
+    if not texto:
+        return []
+
+    patron = re.compile(
+        r'(?=(?:ALERTA_CRITICA|BLOQUEO_OPERATIVO|ALERTA_ASIGNACION|ERROR_SYNC)\s*\|)',
+        re.IGNORECASE,
+    )
+    partes = [p.strip() for p in patron.split(texto) if p and p.strip()]
+    if not partes:
+        return [texto]
+    return partes
 
 
 def _extraer_bloqueos_operativos_registro(registro):
@@ -4164,8 +4228,12 @@ def _extraer_bloqueos_operativos_registro(registro):
         motivo = str(p.get('motivo', '')).strip()
         if not motivo:
             continue
+        origen = 'pendiente_revision'
+        if str(motivo).upper().startswith('CRITICO:') or 'alerta_critica' in motivo.lower():
+            origen = 'alerta_critica'
+            motivo = motivo.split(':', 1)[-1].strip() if ':' in motivo else motivo
         bloqueos.append({
-            'origen': 'pendiente_revision',
+            'origen': origen,
             'tipo_equipo': str(p.get('tipo_equipo', '')).upper().strip(),
             'identificador': str(p.get('identificador', '')).strip(),
             'motivo': motivo,
@@ -4173,7 +4241,7 @@ def _extraer_bloqueos_operativos_registro(registro):
 
     descripcion = str(registro.descripcion_alerta or '').strip()
     if descripcion:
-        for parte in [x.strip() for x in descripcion.split('|') if x.strip()]:
+        for parte in _segmentar_descripcion_alerta(descripcion):
             parsed = _parsear_parte_descripcion_alerta(parte)
             if parsed:
                 bloqueos.append(parsed)
@@ -4221,10 +4289,14 @@ def reportes_moreapp_list(request):
         qs = qs.filter(estado_sincronizacion=estado)
     if alerta == '1':
         qs = qs.filter(alerta_doble_trabajo=True)
+    if alerta == 'critica':
+        qs = qs.filter(descripcion_alerta__icontains='ALERTA_CRITICA')
     if revision:
         qs = qs.filter(estado_revision=revision)
     if kpi == 'advertencia':
         qs = qs.filter(estado_revision='CON_ADVERTENCIA')
+    if kpi == 'adv_critica':
+        qs = qs.filter(descripcion_alerta__icontains='ALERTA_CRITICA')
     if q:
         qs = qs.filter(
             Q(nombre_formulario__icontains=q) |
@@ -4253,6 +4325,11 @@ def reportes_moreapp_list(request):
         reg.tecnico_visible = _tecnico_visible_moreapp(reg)
         reg.tiene_bloqueo_operativo = len(bloqueos) > 0
         reg.bloqueo_operativo_preview = bloqueos[0]['motivo'] if bloqueos else ''
+        reg.es_alerta_critica = (
+            'critica' in categorias_advertencia
+            or 'ALERTA_CRITICA' in str(reg.descripcion_alerta or '').upper()
+        )
+        reg.alerta_preview = (reg.descripcion_alerta or '')[:180]
         if bloqueo == '1' and not reg.tiene_bloqueo_operativo:
             continue
         if kpi == 'adv_equipo' and 'equipo' not in categorias_advertencia:
@@ -4260,6 +4337,8 @@ def reportes_moreapp_list(request):
         if kpi == 'adv_regla' and 'regla' not in categorias_advertencia:
             continue
         if kpi == 'adv_doble' and 'doble' not in categorias_advertencia:
+            continue
+        if kpi == 'adv_critica' and 'critica' not in categorias_advertencia:
             continue
         registros_filtrados.append(reg)
     registros = registros_filtrados
@@ -4269,6 +4348,7 @@ def reportes_moreapp_list(request):
         'equipo': next((x['count'] for x in adv_breakdown if x['categoria'] == 'Sin equipo en inventario'), 0),
         'regla': next((x['count'] for x in adv_breakdown if x['categoria'] == 'Bloqueo de regla operativa'), 0),
         'doble': next((x['count'] for x in adv_breakdown if x['categoria'] == 'Doble trabajo / conflicto'), 0),
+        'critica': next((x['count'] for x in adv_breakdown if x['categoria'] == 'Alerta crítica (otro cliente)'), 0),
     }
 
     if request.user.rol == 'ADMIN':
@@ -4373,6 +4453,10 @@ def reportes_moreapp_detalle(request, pk):
         'bloqueos_operativos': bloqueos_operativos,
         'movimientos_operativos': movimientos_operativos,
         'mostrar_panel_operativo': request.user.rol in ('ADMIN', 'ADMINISTRATIVO'),
+        'es_alerta_critica': (
+            'ALERTA_CRITICA' in str(registro.descripcion_alerta or '').upper()
+            or any(b.get('es_critica') for b in bloqueos_operativos)
+        ),
     })
 
 

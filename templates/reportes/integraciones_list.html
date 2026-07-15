@@ -76,7 +76,7 @@
 
   <!-- KPIs -->
   <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-2">
       <a href="{% url 'reportes_moreapp_list' %}" class="text-decoration-none text-reset d-block h-100">
       <div class="card card-kpi-reporte border-0 shadow-sm h-100 delco-panel-card {% if not kpi_actual %}ring-active{% endif %}">
         <div class="card-body text-center">
@@ -86,12 +86,22 @@
       </div>
       </a>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-2">
+      <a href="{% url 'reportes_moreapp_list' %}?kpi=adv_critica" class="text-decoration-none text-reset d-block h-100">
+      <div class="card card-kpi-reporte border-0 shadow-sm h-100 delco-panel-card {% if kpi_actual == 'adv_critica' %}ring-active{% endif %}">
+        <div class="card-body text-center">
+          <div class="fs-2 fw-bold text-danger">{{ adv_counts.critica|default:0 }}</div>
+          <div class="text-muted small">Alerta crítica</div>
+        </div>
+      </div>
+      </a>
+    </div>
+    <div class="col-6 col-md-2">
       <a href="{% url 'reportes_moreapp_list' %}?kpi=adv_equipo" class="text-decoration-none text-reset d-block h-100">
       <div class="card card-kpi-reporte border-0 shadow-sm h-100 delco-panel-card {% if kpi_actual == 'adv_equipo' %}ring-active{% endif %}">
         <div class="card-body text-center">
           <div class="fs-2 fw-bold text-warning">{{ adv_counts.equipo }}</div>
-          <div class="text-muted small">Sin equipo en inventario</div>
+          <div class="text-muted small">Sin equipo</div>
         </div>
       </div>
       </a>
@@ -101,7 +111,7 @@
       <div class="card card-kpi-reporte border-0 shadow-sm h-100 delco-panel-card {% if kpi_actual == 'adv_regla' %}ring-active{% endif %}">
         <div class="card-body text-center">
           <div class="fs-2 fw-bold text-danger">{{ adv_counts.regla }}</div>
-          <div class="text-muted small">Bloqueo de regla operativa</div>
+          <div class="text-muted small">Bloqueo de regla</div>
         </div>
       </div>
       </a>
@@ -111,7 +121,7 @@
       <div class="card card-kpi-reporte border-0 shadow-sm h-100 delco-panel-card {% if kpi_actual == 'adv_doble' %}ring-active{% endif %}">
         <div class="card-body text-center">
           <div class="fs-2 fw-bold text-body">{{ adv_counts.doble }}</div>
-          <div class="text-muted small">Doble trabajo / conflicto</div>
+          <div class="text-muted small">Doble trabajo</div>
         </div>
       </div>
       </a>
@@ -167,6 +177,7 @@
           <select name="alerta" class="form-select form-select-sm">
             <option value="">Todas</option>
             <option value="1" {% if alerta_actual == '1' %}selected{% endif %}>Solo con alerta</option>
+            <option value="critica" {% if alerta_actual == 'critica' %}selected{% endif %}>Solo críticas</option>
           </select>
         </div>
         <div class="col-md-2">
@@ -257,7 +268,7 @@
           <tbody>
             {% for reg in registros %}
             {% with d=reg.datos_procesados %}
-            <tr class="{% if reg.alerta_doble_trabajo %}table-warning{% elif reg.estado_sincronizacion == 'ERROR_JSON' or reg.estado_sincronizacion == 'ERROR_LECTURA' %}table-danger{% endif %} delco-row-detalle" data-href="{% url 'reportes_moreapp_detalle' reg.pk %}">
+            <tr class="{% if reg.es_alerta_critica %}table-danger{% elif reg.alerta_doble_trabajo %}table-warning{% elif reg.estado_sincronizacion == 'ERROR_JSON' or reg.estado_sincronizacion == 'ERROR_LECTURA' %}table-danger{% endif %} delco-row-detalle" data-href="{% url 'reportes_moreapp_detalle' reg.pk %}">
               {% if puede_eliminar_reportes %}
               <td class="text-center" onclick="event.stopPropagation();">
                 <input type="checkbox"
@@ -320,11 +331,15 @@
                 <span class="text-muted" title="Sin OT vinculada">—</span>
                 {% endif %}
               </td>
-              <td class="text-center">
-                {% if reg.alerta_doble_trabajo %}
+              <td class="small">
+                {% if reg.es_alerta_critica %}
+                  <span class="badge bg-danger">Crítica</span>
+                  <div class="small text-danger mt-1" title="{{ reg.descripcion_alerta }}">{{ reg.alerta_preview|truncatechars:80 }}</div>
+                {% elif reg.alerta_doble_trabajo %}
                   <i class="bi bi-exclamation-triangle-fill text-warning" title="{{ reg.descripcion_alerta }}"></i>
+                  <div class="small text-muted mt-1" title="{{ reg.descripcion_alerta }}">{{ reg.alerta_preview|default:reg.descripcion_alerta|truncatechars:60 }}</div>
                 {% endif %}
-                {% if reg.tiene_bloqueo_operativo %}
+                {% if reg.tiene_bloqueo_operativo and not reg.es_alerta_critica %}
                   <i class="bi bi-shield-exclamation text-danger ms-1" title="{{ reg.bloqueo_operativo_preview|truncatechars:120 }}"></i>
                 {% endif %}
               </td>
