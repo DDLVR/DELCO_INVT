@@ -36,43 +36,57 @@
   </div>
 
   {% if moreapp_ops %}
-  <div class="alert alert-light border shadow-sm mb-3 py-2" role="status">
-    <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start">
-      <div class="small">
-        <strong class="me-1"><i class="bi bi-hdd-network"></i> Estado ops MoreApp</strong>
-        {% if moreapp_ops.dir_existe and moreapp_ops.dir_legible %}
-        <span class="badge bg-success">Carpeta OK</span>
-        {% elif moreapp_ops.dir_existe %}
-        <span class="badge bg-warning text-dark">Carpeta sin lectura</span>
-        {% else %}
-        <span class="badge bg-danger">Carpeta no encontrada</span>
-        {% endif %}
-        {% if moreapp_ops.auto_sync_enabled %}
-        <span class="badge bg-warning text-dark">Autosync GET ON</span>
-        {% else %}
-        <span class="badge bg-secondary">Autosync GET off</span>
-        {% endif %}
-        <span class="text-muted ms-1">Límite sync web: {{ moreapp_ops.max_archivos }} archivos / {{ moreapp_ops.max_segundos }}s</span>
-        <div class="text-muted mt-1 text-break">
-          Dir: <code>{{ moreapp_ops.base_dir|default:"(sin configurar)" }}</code>
-        </div>
-        {% if moreapp_ops.ultimo_sync.ts %}
-        <div class="mt-1">
-          Última sync ({{ moreapp_ops.ultimo_sync.origen }}):
-          <strong>{{ moreapp_ops.ultimo_sync.ts }}</strong>
-          · nuevos {{ moreapp_ops.ultimo_sync.nuevos }}
-          · errores {{ moreapp_ops.ultimo_sync.errores }}
-          {% if moreapp_ops.ultimo_sync.incompleto %}
-          <span class="badge bg-warning text-dark">parcial</span>
+  <div class="card border-0 shadow-sm mb-3 delco-panel-card" role="status">
+    <div class="card-body py-3">
+      <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+        <div>
+          <div class="fw-semibold mb-1">
+            <i class="bi bi-phone me-1 text-primary"></i> Informes de terreno (MoreApp)
+          </div>
+          <p class="text-muted small mb-2 mb-md-1">
+            Para traer trabajos nuevos hechos en terreno, usa el botón
+            <strong>Sincronizar ahora</strong>.
+          </p>
+          <div class="d-flex flex-wrap gap-2 align-items-center">
+            {% if moreapp_ops.estado_carpeta == 'ok' %}
+            <span class="badge bg-success">{{ moreapp_ops.estado_carpeta_texto }}</span>
+            {% elif moreapp_ops.estado_carpeta == 'sin_lectura' %}
+            <span class="badge bg-warning text-dark">{{ moreapp_ops.estado_carpeta_texto }}</span>
+            {% else %}
+            <span class="badge bg-danger">{{ moreapp_ops.estado_carpeta_texto }}</span>
+            {% endif %}
+          </div>
+          {% if moreapp_ops.ultimo_sync.ts %}
+          <div class="small mt-2">
+            Última actualización {{ moreapp_ops.ultimo_sync_origen_texto }}:
+            <strong>{{ moreapp_ops.ultimo_sync_fecha_texto }}</strong>
+            {% if moreapp_ops.ultimo_sync.nuevos %}
+            · {{ moreapp_ops.ultimo_sync.nuevos }} informe{{ moreapp_ops.ultimo_sync.nuevos|pluralize }} nuevo{{ moreapp_ops.ultimo_sync.nuevos|pluralize }}
+            {% else %}
+            · sin informes nuevos
+            {% endif %}
+            {% if moreapp_ops.ultimo_sync.errores %}
+            · <span class="text-danger">{{ moreapp_ops.ultimo_sync.errores }} con problema</span>
+            {% endif %}
+            {% if moreapp_ops.ultimo_sync.incompleto %}
+            · <span class="text-warning">quedaron pendientes: vuelve a sincronizar</span>
+            {% endif %}
+          </div>
+          {% else %}
+          <div class="small text-muted mt-2">
+            Todavía no se ha sincronizado. Pulsa <strong>Sincronizar ahora</strong> cuando necesites traer trabajos.
+          </div>
+          {% endif %}
+          {% if moreapp_ops.ultimo_registro %}
+          <div class="small text-muted mt-1">
+            Informe más reciente en el sistema:
+            {{ moreapp_ops.ultimo_registro.fecha_texto }}
+            {% if moreapp_ops.ultimo_registro.formulario %}
+            ({{ moreapp_ops.ultimo_registro.formulario }})
+            {% endif %}
+          </div>
           {% endif %}
         </div>
-        {% else %}
-        <div class="mt-1 text-muted">Aún no hay sync registrada en este proceso (usa el botón o cron).</div>
-        {% endif %}
-      </div>
-      <div class="small text-muted" style="max-width: 28rem;">
-        Preferir <strong>Sincronizar ahora</strong> o cron:
-        <code class="d-block mt-1 user-select-all">{{ moreapp_ops.cron_ejemplo }}</code>
       </div>
     </div>
   </div>
