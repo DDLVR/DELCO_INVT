@@ -14,6 +14,7 @@ from clientes.models import Cliente
 from usuarios.models import Usuario
 from web.services.validators import (
     merge_issues,
+    normalize_ip_value,
     validate_ip_format,
     validate_ip_port_coherence,
     validate_meter_uniqueness,
@@ -1024,7 +1025,13 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                 ultimo_registro_facturacion = clean_text(get_val('ultimo_registro_facturacion', 'ultimo registro facturacion'))
                 note = clean_text(get_val('note', 'nota', 'notas'))
                 trabajo = clean_text(get_val('trabajo', 'work'))
-                ip = clean_text(get_val('ip', 'direccion ip', 'ip address', 'ipv4'))
+                client_type = clean_text(get_val('client_type', 'client type', 'tipo cliente', 'tipo de cliente'))
+                ip_raw = get_val('ip', 'direccion ip', 'ip address', 'ipv4')
+                ip = normalize_ip_value(ip_raw)
+                if ip_raw is not None and str(ip_raw).strip() != '' and ip and str(ip_raw).strip() != str(ip):
+                    advertencias.append(
+                        f'Fila {idx}: [IP] se normalizó de "{ip_raw}" a "{ip}" (formato Excel sin puntos).'
+                    )
                 puerto = clean_text(get_val('puerto', 'port'))
                 modem = clean_text(get_val('modem'))
                 fecha_registro_raw = clean_text(get_val('fecha_registro', 'fecha de registro', 'registro fecha'))
@@ -1034,9 +1041,16 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                     validate_ip_port_coherence(ip, puerto),
                 )
                 for issue in validation_issues:
-                    if issue.severity == 'error':
+                    if issue.severity == 'error' and issue.code == 'IP_INVALID_FORMAT':
+                        # No tumbar la fila: el cliente importa; IP queda vacía con aviso
+                        advertencias.append(
+                            f'Fila {idx}: [VALIDACION] {issue.message}. Se importó sin IP.'
+                        )
+                        ip = None
+                    elif issue.severity == 'error':
                         raise ValueError(error_columna('IP', issue.message, ip))
-                    advertencias.append(f'Fila {idx}: [VALIDACION] {issue.message}')
+                    else:
+                        advertencias.append(f'Fila {idx}: [VALIDACION] {issue.message}')
 
                 if not numero:
                     raise ValueError('Falta campo obligatorio: Numero Cliente')
@@ -1165,7 +1179,8 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                     cliente_existente.pod = None
                     if city:
                         cliente_existente.city = city
-                    cliente_existente.client_type = None
+                    if client_type:
+                        cliente_existente.client_type = client_type
                     if ultimo_acceso:
                         cliente_existente.ultimo_acceso = ultimo_acceso
                     if ultimo_perfil_carga:
@@ -1207,7 +1222,7 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                         proyecto=proyecto_final,
                         meter_manufacturer_id=meter_manufacturer_id,
                         meter_serial_n_1=meter_serial_n_1,
-                        client_type=None,
+                        client_type=client_type,
                         ultimo_acceso=ultimo_acceso,
                         ultimo_perfil_carga=ultimo_perfil_carga,
                         ultimo_perfil_instrumentacion=ultimo_perfil_instrumentacion,
@@ -1223,7 +1238,6 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                         activo=True,
                     )
                     creadas += 1
-
                 if ip_key:
                     ips_importadas[ip_key] = (idx, numero_text)
                 if serie_key:
