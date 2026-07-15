@@ -93,6 +93,7 @@ from importaciones.utils import (
 from importaciones.models import ImportacionExcel, ImportacionExcelError
 from web.services.validators import (
     merge_issues,
+    normalize_ip_value,
     validate_ip_duplicate_on_active_clients,
     validate_ip_format,
     validate_ip_port_coherence,
@@ -2877,7 +2878,7 @@ def cliente_crear_view(request):
         ultimo_reset = request.POST.get('ultimo_reset', '').strip()
         ultimo_registro_facturacion = request.POST.get('ultimo_registro_facturacion', '').strip()
         note = request.POST.get('note', '').strip()
-        ip = request.POST.get('ip', '').strip()
+        ip = normalize_ip_value(request.POST.get('ip', '').strip()) or ''
         puerto = request.POST.get('puerto', '').strip()
         modem = request.POST.get('modem', '').strip()
         fecha_registro = request.POST.get('fecha_registro', '').strip()

@@ -104,3 +104,19 @@ class ImportacionClientesModoTests(TestCase):
 		self.assertEqual(importacion.estado, 'COMPLETADO')
 		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-KEEP-1', activo=True).exists())
 		self.assertFalse(Cliente.objects.filter(numero_cliente='CLI-DROP-1', activo=True).exists())
+
+	def test_importacion_normaliza_ip_excel_sin_puntos(self):
+		from web.services.validators import normalize_ip_value
+
+		self.assertEqual(normalize_ip_value(10117122165), '10.117.122.165')
+		self.assertEqual(normalize_ip_value('10.117.22.31'), '10.117.22.31')
+
+		archivo = self._build_excel([
+			['CENTRO', 'ELECTRICO', 'CLI-IP-1', 'Santiago', 'Cliente IP', 'Inst IP', 'SCHNEIDER', 'PROY A', 'SER-IP-1', 10117122165],
+		])
+		importacion = importar_clientes_excel(archivo, self.usuario, sincronizar_completo=False)
+		self.assertEqual(importacion.estado, 'COMPLETADO')
+		self.assertEqual(importacion.exitosas, 1)
+		self.assertEqual(importacion.fallidas, 0)
+		cliente = Cliente.objects.get(numero_cliente='CLI-IP-1', activo=True)
+		self.assertEqual(cliente.ip, '10.117.122.165')

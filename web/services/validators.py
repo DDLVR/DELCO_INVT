@@ -19,6 +19,54 @@ class ValidationIssue:
     severity: str  # "error" or "warning"
 
 
+def normalize_ip_value(ip_value) -> str | None:
+    """Normaliza IP desde Excel (a veces llega como entero sin puntos: 10117122165 -> 10.117.122.165)."""
+    if ip_value is None:
+        return None
+
+    if isinstance(ip_value, bool):
+        return None
+
+    if isinstance(ip_value, float):
+        if ip_value.is_integer():
+            ip_value = int(ip_value)
+        else:
+            ip_value = str(ip_value).strip()
+
+    if isinstance(ip_value, int):
+        texto = str(ip_value)
+    else:
+        texto = str(ip_value).strip()
+        if texto.endswith('.0') and texto[:-2].isdigit():
+            texto = texto[:-2]
+
+    if not texto:
+        return None
+
+    try:
+        return str(ipaddress.ip_address(texto))
+    except ValueError:
+        pass
+
+    digitos = ''.join(ch for ch in texto if ch.isdigit())
+    candidatos = []
+    # Patrón frecuente en bases Delco: 10.xxx.xxx.xxx comprimido a 11 dígitos
+    if len(digitos) == 11 and digitos.startswith('10'):
+        candidatos.append(f'{digitos[0:2]}.{digitos[2:5]}.{digitos[5:8]}.{digitos[8:11]}')
+    if len(digitos) == 12:
+        candidatos.append(f'{digitos[0:3]}.{digitos[3:6]}.{digitos[6:9]}.{digitos[9:12]}')
+    if len(digitos) == 10 and digitos.startswith('10'):
+        candidatos.append(f'{digitos[0:2]}.{digitos[2:4]}.{digitos[4:7]}.{digitos[7:10]}')
+
+    for candidato in candidatos:
+        try:
+            return str(ipaddress.ip_address(candidato))
+        except ValueError:
+            continue
+
+    return texto
+
+
 def validate_ip_format(ip_value: str | None) -> List[ValidationIssue]:
     """Validate IPv4/IPv6 format when an IP is provided."""
     issues: List[ValidationIssue] = []
