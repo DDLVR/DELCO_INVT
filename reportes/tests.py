@@ -129,6 +129,27 @@ class ReportesSoloActividadOperativaTests(TestCase):
         response = reportes_hub_view(request)
         self.assertIn('Base completa de clientes', response.content.decode())
 
+    def test_filtro_tipo_trabajo_pendientes(self):
+        OrdenTrabajo.objects.create(
+            titulo='OT inst',
+            tipo_trabajo='INSTALACION',
+            cliente=self.cliente,
+            creada_por=self.admin,
+            estado='ASIGNADA',
+        )
+        OrdenTrabajo.objects.create(
+            titulo='OT insp',
+            tipo_trabajo='INSPECCION',
+            cliente=self.cliente,
+            creada_por=self.admin,
+            estado='ASIGNADA',
+        )
+        _, all_rows = run_report('trabajos_pendientes_causa', {})
+        _, filt_rows = run_report('trabajos_pendientes_causa', {'tipo_trabajo': 'INSTALACION'})
+        self.assertTrue(len(all_rows) >= 1)
+        self.assertTrue(any('Instalación' in str(r[0]) for r in filt_rows))
+        self.assertFalse(any('Inspección' in str(r[0]) for r in filt_rows))
+
     def test_hub_vacio_con_moreapp_sin_cliente(self):
         from django.test import RequestFactory
         from ordenes_trabajo.models import IntegracionMoreApp
@@ -146,3 +167,23 @@ class ReportesSoloActividadOperativaTests(TestCase):
         content = response.content.decode()
         self.assertIn('Sin reportes operativos por ahora', content)
         self.assertNotIn('Base completa de clientes', content)
+
+    def test_hub_muestra_filtros_operativos(self):
+        from django.test import RequestFactory
+        from reportes.views import reportes_hub_view
+
+        OrdenTrabajo.objects.create(
+            titulo='OT hub filtros',
+            tipo_trabajo='INSTALACION',
+            cliente=self.cliente,
+            creada_por=self.admin,
+            estado='ASIGNADA',
+        )
+        request = RequestFactory().get('/reportes/', {'tipo_trabajo': 'INSTALACION', 'estado_ot': 'ASIGNADA'})
+        request.user = self.admin
+        response = reportes_hub_view(request)
+        content = response.content.decode()
+        self.assertIn('Aplicar filtros', content)
+        self.assertIn('Estado OT', content)
+        self.assertIn('Tipo de trabajo', content)
+        self.assertIn('Filtros activos', content)

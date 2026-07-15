@@ -31,11 +31,17 @@ def parse_report_filters(params) -> Dict[str, Any]:
     fecha_hasta = (params.get('fecha_hasta') or '').strip()
     tecnico_id = (params.get('tecnico_id') or '').strip()
     empresa = (params.get('empresa') or '').strip()
+    estado_ot = (params.get('estado_ot') or '').strip().upper()
+    tipo_trabajo = (params.get('tipo_trabajo') or '').strip().upper()
+    comuna = (params.get('comuna') or '').strip()
     return {
         'fecha_desde': _parse_date(fecha_desde),
         'fecha_hasta': _parse_date(fecha_hasta),
         'tecnico_id': int(tecnico_id) if tecnico_id.isdigit() else None,
         'empresa': empresa,
+        'estado_ot': estado_ot or None,
+        'tipo_trabajo': tipo_trabajo or None,
+        'comuna': comuna,
     }
 
 
@@ -99,22 +105,22 @@ CLIENTE_HEADERS = [
 ]
 
 
-def report_clientes_completos(_filters: Dict[str, Any]) -> ReportResult:
-    rows = [_cliente_row(c) for c in clientes_operativos_qs().order_by('numero_cliente')]
+def report_clientes_completos(filters: Dict[str, Any]) -> ReportResult:
+    qs = _filter_clientes(clientes_operativos_qs(), filters).order_by('numero_cliente')
+    rows = [_cliente_row(c) for c in qs]
     return CLIENTE_HEADERS, rows
 
 
-def report_clientes_ejecutados(_filters: Dict[str, Any]) -> ReportResult:
-    cliente_ids = (
-        OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS, cliente_id__isnull=False)
-        .values_list('cliente_id', flat=True)
-        .distinct()
-    )
-    rows = [_cliente_row(c) for c in Cliente.objects.filter(pk__in=cliente_ids, activo=True).order_by('numero_cliente')]
+def report_clientes_ejecutados(filters: Dict[str, Any]) -> ReportResult:
+    ot_qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS, cliente_id__isnull=False)
+    ot_qs = _filter_ordenes(ot_qs, filters, fecha_field='fecha_fin_ejecucion')
+    cliente_ids = ot_qs.values_list('cliente_id', flat=True).distinct()
+    qs = _filter_clientes(Cliente.objects.filter(pk__in=cliente_ids, activo=True), filters).order_by('numero_cliente')
+    rows = [_cliente_row(c) for c in qs]
     return CLIENTE_HEADERS, rows
 
 
-def report_clientes_pendientes(_filters: Dict[str, Any]) -> ReportResult:
+def report_clientes_pendientes(filters: Dict[str, Any]) -> ReportResult:
     if not hay_actividad_operativa():
         return CLIENTE_HEADERS + ['Motivo Pendiente'], []
 
@@ -128,7 +134,7 @@ def report_clientes_pendientes(_filters: Dict[str, Any]) -> ReportResult:
         ).values_list('datos_procesados__cliente_codigo', flat=True)
         if codigo
     }
-    clientes = clientes_operativos_qs().order_by('numero_cliente')
+    clientes = _filter_clientes(clientes_operativos_qs(), filters).order_by('numero_cliente')
     rows = []
     for cliente in clientes:
         motivos = []
@@ -165,16 +171,37 @@ def report_ot_cerradas_sin_ejecutar(_filters: Dict[str, Any]) -> ReportResult:
     return headers, rows
 
 
-def _filter_ordenes_fecha(qs, filters: Dict[str, Any]):
+def _filter_ordenes(qs, filters: Dict[str, Any], fecha_field: str = 'fecha_creacion'):
+    """Aplica filtros operativos de OT (fechas, técnico, empresa, estado, tipo, comuna)."""
     if filters.get('fecha_desde'):
-        qs = qs.filter(fecha_creacion__gte=_aware_start(filters['fecha_desde']))
+        qs = qs.filter(**{f'{fecha_field}__gte': _aware_start(filters['fecha_desde'])})
     if filters.get('fecha_hasta'):
-        qs = qs.filter(fecha_creacion__lte=_aware_end(filters['fecha_hasta']))
+        qs = qs.filter(**{f'{fecha_field}__lte': _aware_end(filters['fecha_hasta'])})
     if filters.get('tecnico_id'):
         qs = qs.filter(tecnico_responsable_id=filters['tecnico_id'])
     if filters.get('empresa'):
-        qs = qs.filter(cliente__empresa__icontains=filters['empresa'])
+        qs = qs.filter(cliente__empresa__iexact=filters['empresa'])
+    if filters.get('estado_ot'):
+        qs = qs.filter(estado=filters['estado_ot'])
+    if filters.get('tipo_trabajo'):
+        qs = qs.filter(tipo_trabajo=filters['tipo_trabajo'])
+    if filters.get('comuna'):
+        qs = qs.filter(cliente__comuna__iexact=filters['comuna'])
     return qs
+
+
+def _filter_clientes(qs, filters: Dict[str, Any]):
+    """Filtros de ficha para reportes de clientes operativos."""
+    if filters.get('empresa'):
+        qs = qs.filter(empresa__iexact=filters['empresa'])
+    if filters.get('comuna'):
+        qs = qs.filter(comuna__iexact=filters['comuna'])
+    return qs
+
+
+def _filter_ordenes_fecha(qs, filters: Dict[str, Any]):
+    """Compatibilidad: mismo comportamiento de filtros OT sobre fecha_creacion."""
+    return _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
 
 
 def report_trabajos_por_fecha(filters: Dict[str, Any]) -> ReportResult:
@@ -182,12 +209,13 @@ def report_trabajos_por_fecha(filters: Dict[str, Any]) -> ReportResult:
         'ID OT', 'Cliente', 'Empresa', 'Tecnico', 'Estado', 'Tipo Trabajo',
         'Fecha Inicio', 'Fecha Fin', 'Comuna',
     ]
-    qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS)
-    if filters.get('fecha_desde'):
-        qs = qs.filter(fecha_fin_ejecucion__gte=_aware_start(filters['fecha_desde']))
-    if filters.get('fecha_hasta'):
-        qs = qs.filter(fecha_fin_ejecucion__lte=_aware_end(filters['fecha_hasta']))
-    qs = _filter_ordenes_fecha(qs, filters)
+    if filters.get('estado_ot'):
+        qs = OrdenTrabajo.objects.all()
+        fecha_field = 'fecha_creacion'
+    else:
+        qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS)
+        fecha_field = 'fecha_fin_ejecucion'
+    qs = _filter_ordenes(qs, filters, fecha_field=fecha_field)
     rows = [
         [
             ot.id,
@@ -200,7 +228,7 @@ def report_trabajos_por_fecha(filters: Dict[str, Any]) -> ReportResult:
             ot.fecha_fin_ejecucion.strftime('%Y-%m-%d %H:%M') if ot.fecha_fin_ejecucion else '',
             ot.cliente.comuna if ot.cliente else '',
         ]
-        for ot in qs.select_related('cliente', 'tecnico_responsable').order_by('-fecha_fin_ejecucion')
+        for ot in qs.select_related('cliente', 'tecnico_responsable').order_by(f'-{fecha_field}')
     ]
     return headers, rows
 
@@ -208,10 +236,7 @@ def report_trabajos_por_fecha(filters: Dict[str, Any]) -> ReportResult:
 def report_trabajos_por_tecnico(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Tecnico', 'Total Ejecutados', 'Pendientes', 'En Ejecucion']
     qs = OrdenTrabajo.objects.filter(tecnico_responsable__isnull=False)
-    if filters.get('fecha_desde'):
-        qs = qs.filter(fecha_creacion__gte=_aware_start(filters['fecha_desde']))
-    if filters.get('fecha_hasta'):
-        qs = qs.filter(fecha_creacion__lte=_aware_end(filters['fecha_hasta']))
+    qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     aggregated = (
         qs.values('tecnico_responsable__nombre_interno')
         .annotate(
@@ -231,9 +256,7 @@ def report_trabajos_por_tecnico(filters: Dict[str, Any]) -> ReportResult:
 def report_trabajos_por_empresa(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Empresa', 'Total OT', 'Ejecutadas', 'Pendientes']
     qs = OrdenTrabajo.objects.filter(cliente__isnull=False)
-    qs = _filter_ordenes_fecha(qs, filters)
-    if filters.get('empresa'):
-        qs = qs.filter(cliente__empresa__icontains=filters['empresa'])
+    qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     aggregated = (
         qs.values('cliente__empresa')
         .annotate(
@@ -253,7 +276,9 @@ def report_trabajos_por_empresa(filters: Dict[str, Any]) -> ReportResult:
 def report_trabajos_pendientes_por_causa(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Tipo Trabajo', 'Estado OT', 'Cantidad']
     qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_PENDIENTES_OT)
-    qs = _filter_ordenes_fecha(qs, filters)
+    if filters.get('estado_ot'):
+        qs = OrdenTrabajo.objects.all()
+    qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     aggregated = (
         qs.values('tipo_trabajo', 'estado')
         .annotate(cantidad=Count('id'))
@@ -271,16 +296,10 @@ def report_trabajos_pendientes_por_causa(filters: Dict[str, Any]) -> ReportResul
 def report_trabajos_diarios(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Fecha', 'OT Creadas', 'OT Ejecutadas']
     qs = OrdenTrabajo.objects.filter(fecha_creacion__isnull=False)
-    if filters.get('fecha_desde'):
-        qs = qs.filter(fecha_creacion__gte=_aware_start(filters['fecha_desde']))
-    if filters.get('fecha_hasta'):
-        qs = qs.filter(fecha_creacion__lte=_aware_end(filters['fecha_hasta']))
+    qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     creadas = qs.values('fecha_creacion__date').annotate(cantidad=Count('id')).order_by('fecha_creacion__date')
     ejecutadas_qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS, fecha_fin_ejecucion__isnull=False)
-    if filters.get('fecha_desde'):
-        ejecutadas_qs = ejecutadas_qs.filter(fecha_fin_ejecucion__gte=_aware_start(filters['fecha_desde']))
-    if filters.get('fecha_hasta'):
-        ejecutadas_qs = ejecutadas_qs.filter(fecha_fin_ejecucion__lte=_aware_end(filters['fecha_hasta']))
+    ejecutadas_qs = _filter_ordenes(ejecutadas_qs, {**filters, 'estado_ot': None}, fecha_field='fecha_fin_ejecucion')
     ejecutadas = {
         item['fecha_fin_ejecucion__date']: item['cantidad']
         for item in ejecutadas_qs.values('fecha_fin_ejecucion__date').annotate(cantidad=Count('id'))
@@ -298,12 +317,7 @@ def report_trabajos_diarios(filters: Dict[str, Any]) -> ReportResult:
 def report_resultado_diario_tecnico(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Fecha', 'Tecnico', 'Ejecutadas', 'Pendientes']
     qs = OrdenTrabajo.objects.filter(tecnico_responsable__isnull=False)
-    if filters.get('fecha_desde'):
-        qs = qs.filter(fecha_fin_ejecucion__gte=_aware_start(filters['fecha_desde']))
-    if filters.get('fecha_hasta'):
-        qs = qs.filter(fecha_fin_ejecucion__lte=_aware_end(filters['fecha_hasta']))
-    if filters.get('tecnico_id'):
-        qs = qs.filter(tecnico_responsable_id=filters['tecnico_id'])
+    qs = _filter_ordenes(qs, filters, fecha_field='fecha_fin_ejecucion')
     aggregated = (
         qs.values('fecha_fin_ejecucion__date', 'tecnico_responsable__nombre_interno')
         .annotate(
@@ -324,13 +338,13 @@ def report_resultado_diario_tecnico(filters: Dict[str, Any]) -> ReportResult:
     return headers, rows
 
 
-def report_clientes_reincidentes(_filters: Dict[str, Any]) -> ReportResult:
+def report_clientes_reincidentes(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Numero Cliente', 'Nombre', 'Comuna', 'Visitas 6 Meses']
     desde = six_month_window_start()
+    qs = OrdenTrabajo.objects.filter(fecha_creacion__date__gte=desde).exclude(estado='CANCELADA')
+    qs = _filter_ordenes(qs, {**filters, 'fecha_desde': None, 'fecha_hasta': None}, fecha_field='fecha_creacion')
     aggregated = (
-        OrdenTrabajo.objects.filter(fecha_creacion__date__gte=desde)
-        .exclude(estado='CANCELADA')
-        .values('cliente_id', 'cliente__numero_cliente', 'cliente__customer_name', 'cliente__comuna')
+        qs.values('cliente_id', 'cliente__numero_cliente', 'cliente__customer_name', 'cliente__comuna')
         .annotate(visitas=Count('id'))
         .filter(visitas__gt=2)
         .order_by('-visitas')
@@ -342,9 +356,27 @@ def report_clientes_reincidentes(_filters: Dict[str, Any]) -> ReportResult:
     return headers, rows
 
 
-def _clientes_por_valor_duplicado(campo: str) -> ReportResult:
+def report_clientes_estado_visita(filters: Dict[str, Any]) -> ReportResult:
+    keywords = ['cerrado', 'deshabitado', 'no permite', 'no permite acceso']
+    q = Q()
+    for kw in keywords:
+        q |= Q(trabajo__icontains=kw) | Q(note__icontains=kw)
+    qs = _filter_clientes(
+        filtrar_clientes_operativos(Cliente.objects.filter(activo=True).filter(q)),
+        filters,
+    ).order_by('numero_cliente')
+    headers = CLIENTE_HEADERS + ['Trabajo/Nota']
+    rows = []
+    for cliente in qs:
+        row = _cliente_row(cliente)
+        row.append((cliente.trabajo or '') + ' | ' + (cliente.note or ''))
+        rows.append(row)
+    return headers, rows
+
+
+def _clientes_por_valor_duplicado(campo: str, filters: Optional[Dict[str, Any]] = None) -> ReportResult:
     headers = ['Valor Duplicado', 'Numero Cliente', 'Nombre', 'Comuna']
-    base = clientes_operativos_qs()
+    base = _filter_clientes(clientes_operativos_qs(), filters or {})
     if not base.exists():
         return headers, []
 
@@ -364,76 +396,70 @@ def _clientes_por_valor_duplicado(campo: str) -> ReportResult:
     return headers, rows
 
 
-def report_clientes_ip_duplicada(_filters: Dict[str, Any]) -> ReportResult:
-    return _clientes_por_valor_duplicado('ip')
+def report_clientes_ip_duplicada(filters: Dict[str, Any]) -> ReportResult:
+    return _clientes_por_valor_duplicado('ip', filters)
 
 
-def report_clientes_medidor_duplicado(_filters: Dict[str, Any]) -> ReportResult:
-    return _clientes_por_valor_duplicado('meter_serial_n_1')
+def report_clientes_medidor_duplicado(filters: Dict[str, Any]) -> ReportResult:
+    return _clientes_por_valor_duplicado('meter_serial_n_1', filters)
 
 
-def report_clientes_pendientes_stb(_filters: Dict[str, Any]) -> ReportResult:
-    qs = filtrar_clientes_operativos(
-        Cliente.objects.filter(activo=True, estado_stb='PENDIENTE')
+def report_clientes_pendientes_stb(filters: Dict[str, Any]) -> ReportResult:
+    qs = _filter_clientes(
+        filtrar_clientes_operativos(Cliente.objects.filter(activo=True, estado_stb='PENDIENTE')),
+        filters,
     ).order_by('numero_cliente')
     rows = [_cliente_row(c) for c in qs]
     return CLIENTE_HEADERS, rows
 
 
-def report_clientes_pendientes_sci4(_filters: Dict[str, Any]) -> ReportResult:
-    qs = filtrar_clientes_operativos(
-        Cliente.objects.filter(activo=True, estado_sci4='PENDIENTE')
+def report_clientes_pendientes_sci4(filters: Dict[str, Any]) -> ReportResult:
+    qs = _filter_clientes(
+        filtrar_clientes_operativos(Cliente.objects.filter(activo=True, estado_sci4='PENDIENTE')),
+        filters,
     ).order_by('numero_cliente')
     rows = [_cliente_row(c) for c in qs]
     return CLIENTE_HEADERS, rows
 
 
-def report_clientes_disciplina_mercado(_filters: Dict[str, Any]) -> ReportResult:
-    qs = filtrar_clientes_operativos(
-        Cliente.objects.filter(activo=True).filter(
-            Q(note__icontains='disciplina') | Q(trabajo__icontains='disciplina') | Q(note__icontains='mercado')
-        )
+def report_clientes_disciplina_mercado(filters: Dict[str, Any]) -> ReportResult:
+    qs = _filter_clientes(
+        filtrar_clientes_operativos(
+            Cliente.objects.filter(activo=True).filter(
+                Q(note__icontains='disciplina') | Q(trabajo__icontains='disciplina') | Q(note__icontains='mercado')
+            )
+        ),
+        filters,
     ).order_by('numero_cliente')
     rows = [_cliente_row(c) for c in qs]
     return CLIENTE_HEADERS, rows
 
 
-def report_clientes_sin_comunicacion(_filters: Dict[str, Any]) -> ReportResult:
-    qs = filtrar_clientes_operativos(
-        Cliente.objects.filter(
-            activo=True,
-            estado_telemetria__in={'SIN_COMUNICACION', 'NO_COMUNICA'},
-        )
+def report_clientes_sin_comunicacion(filters: Dict[str, Any]) -> ReportResult:
+    qs = _filter_clientes(
+        filtrar_clientes_operativos(
+            Cliente.objects.filter(
+                activo=True,
+                estado_telemetria__in={'SIN_COMUNICACION', 'NO_COMUNICA'},
+            )
+        ),
+        filters,
     ).order_by('numero_cliente')
     rows = [_cliente_row(c) for c in qs]
     return CLIENTE_HEADERS, rows
 
 
-def report_clientes_sin_suministro(_filters: Dict[str, Any]) -> ReportResult:
-    qs = filtrar_clientes_operativos(
-        Cliente.objects.filter(activo=True).filter(
-            Q(tipo_suministro__isnull=True) | Q(tipo_suministro='') | Q(note__icontains='sin suministro')
-        )
+def report_clientes_sin_suministro(filters: Dict[str, Any]) -> ReportResult:
+    qs = _filter_clientes(
+        filtrar_clientes_operativos(
+            Cliente.objects.filter(activo=True).filter(
+                Q(tipo_suministro__isnull=True) | Q(tipo_suministro='') | Q(note__icontains='sin suministro')
+            )
+        ),
+        filters,
     ).order_by('numero_cliente')
     rows = [_cliente_row(c) for c in qs]
     return CLIENTE_HEADERS, rows
-
-
-def report_clientes_estado_visita(_filters: Dict[str, Any]) -> ReportResult:
-    keywords = ['cerrado', 'deshabitado', 'no permite', 'no permite acceso']
-    q = Q()
-    for kw in keywords:
-        q |= Q(trabajo__icontains=kw) | Q(note__icontains=kw)
-    qs = filtrar_clientes_operativos(
-        Cliente.objects.filter(activo=True).filter(q)
-    ).order_by('numero_cliente')
-    headers = CLIENTE_HEADERS + ['Trabajo/Nota']
-    rows = []
-    for cliente in qs:
-        row = _cliente_row(cliente)
-        row.append((cliente.trabajo or '') + ' | ' + (cliente.note or ''))
-        rows.append(row)
-    return headers, rows
 
 
 REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
@@ -442,15 +468,21 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Clientes con trabajo registrado (OT o MoreApp procesado).',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_completos,
     },
     'clientes_ejecutados': {
         'title': 'Clientes ejecutados',
         'description': 'Clientes con al menos una OT ejecutada/validada.',
-        'supports_date_range': False,
-        'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_date_range': True,
+        'supports_tecnico': True,
+        'supports_empresa': True,
+        'supports_estado': True,
+        'supports_tipo': True,
+        'supports_comuna': True,
         'runner': report_clientes_ejecutados,
     },
     'clientes_pendientes': {
@@ -458,7 +490,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Clientes con OT o revisión MoreApp pendiente.',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_pendientes,
     },
     'ot_cerradas_sin_ejecutar': {
@@ -466,47 +501,65 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'OT anuladas sin fecha de inicio de ejecución.',
         'supports_date_range': True,
         'supports_tecnico': True,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': True,
+        'supports_tipo': True,
+        'supports_comuna': True,
         'runner': report_ot_cerradas_sin_ejecutar,
     },
     'trabajos_por_fecha': {
-        'title': 'Trabajos ejecutados por rango de fechas',
-        'description': 'Detalle de OT ejecutadas en el período.',
+        'title': 'Trabajos por rango de fechas',
+        'description': 'Detalle de OT en el período (por defecto solo ejecutadas).',
         'supports_date_range': True,
         'supports_tecnico': True,
         'supports_empresa': True,
+        'supports_estado': True,
+        'supports_tipo': True,
+        'supports_comuna': True,
         'runner': report_trabajos_por_fecha,
     },
     'trabajos_por_tecnico': {
-        'title': 'Trabajos ejecutados por técnico',
+        'title': 'Trabajos por técnico',
         'description': 'Resumen de productividad por técnico.',
         'supports_date_range': True,
-        'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_tecnico': True,
+        'supports_empresa': True,
+        'supports_estado': True,
+        'supports_tipo': True,
+        'supports_comuna': True,
         'runner': report_trabajos_por_tecnico,
     },
     'trabajos_por_empresa': {
-        'title': 'Trabajos ejecutados por empresa',
+        'title': 'Trabajos por empresa',
         'description': 'Resumen de OT agrupadas por empresa del cliente.',
         'supports_date_range': True,
-        'supports_tecnico': False,
+        'supports_tecnico': True,
         'supports_empresa': True,
+        'supports_estado': True,
+        'supports_tipo': True,
+        'supports_comuna': True,
         'runner': report_trabajos_por_empresa,
     },
     'trabajos_pendientes_causa': {
         'title': 'Trabajos pendientes por causa',
         'description': 'Agrupación por tipo de trabajo y estado OT.',
         'supports_date_range': True,
-        'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_tecnico': True,
+        'supports_empresa': True,
+        'supports_estado': True,
+        'supports_tipo': True,
+        'supports_comuna': True,
         'runner': report_trabajos_pendientes_por_causa,
     },
     'trabajos_diarios': {
         'title': 'Cantidad de trabajos diarios',
         'description': 'OT creadas y ejecutadas por día.',
         'supports_date_range': True,
-        'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_tecnico': True,
+        'supports_empresa': True,
+        'supports_estado': True,
+        'supports_tipo': True,
+        'supports_comuna': True,
         'runner': report_trabajos_diarios,
     },
     'resultado_diario_tecnico': {
@@ -514,7 +567,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Ejecutadas y pendientes por técnico y fecha.',
         'supports_date_range': True,
         'supports_tecnico': True,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': True,
+        'supports_tipo': True,
+        'supports_comuna': True,
         'runner': report_resultado_diario_tecnico,
     },
     'clientes_reincidentes': {
@@ -522,7 +578,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Reincidencia operativa por cliente.',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_reincidentes,
     },
     'clientes_ip_duplicada': {
@@ -530,7 +589,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Clientes que comparten la misma dirección IP.',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_ip_duplicada,
     },
     'clientes_medidor_duplicado': {
@@ -538,7 +600,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Clientes que comparten el mismo número de serie de medidor.',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_medidor_duplicado,
     },
     'clientes_pendientes_stb': {
@@ -546,7 +611,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Clientes que aún no están actualizados en StarBeat.',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_pendientes_stb,
     },
     'clientes_pendientes_sci4': {
@@ -554,7 +622,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Clientes que aún no están actualizados en SCi4.',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_pendientes_sci4,
     },
     'clientes_disciplina_mercado': {
@@ -562,7 +633,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Casos marcados para seguimiento con Disciplina de Mercado.',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_disciplina_mercado,
     },
     'clientes_sin_comunicacion': {
@@ -570,7 +644,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Clientes cuya telemetría no reporta comunicación activa.',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_sin_comunicacion,
     },
     'clientes_sin_suministro': {
@@ -578,7 +655,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Clientes sin tipo de suministro registrado o con indicio en notas operativas.',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_sin_suministro,
     },
     'clientes_estado_visita': {
@@ -586,7 +666,10 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'description': 'Clientes con visitas no concretadas por acceso o estado del domicilio.',
         'supports_date_range': False,
         'supports_tecnico': False,
-        'supports_empresa': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
         'runner': report_clientes_estado_visita,
     },
 }

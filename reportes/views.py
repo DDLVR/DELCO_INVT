@@ -1,9 +1,12 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.db.models import Q
 from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect, render
+from urllib.parse import urlencode
 import logging
 
+from ordenes_trabajo.models import OrdenTrabajo
 from usuarios.models import Usuario
 from web.decorators import role_required
 
@@ -13,6 +16,65 @@ from .services import REPORT_CATALOG, parse_report_filters, run_report
 logger = logging.getLogger(__name__)
 
 
+def _opciones_filtro_reportes():
+    """Opciones reales para el hub (solo valores con sentido operativo)."""
+    from reportes.operational_scope import clientes_operativos_qs
+
+    tecnico_ids = set(
+        OrdenTrabajo.objects.exclude(tecnico_responsable_id=None)
+        .values_list('tecnico_responsable_id', flat=True)
+        .distinct()
+    )
+    tecnicos = Usuario.objects.filter(
+        Q(rol='TECNICO', is_active=True) | Q(pk__in=tecnico_ids)
+    ).order_by('nombre_interno')
+
+    empresas = list(
+        clientes_operativos_qs()
+        .exclude(empresa__isnull=True)
+        .exclude(empresa='')
+        .order_by('empresa')
+        .values_list('empresa', flat=True)
+        .distinct()
+    )
+    if not empresas:
+        empresas = list(
+            OrdenTrabajo.objects.exclude(cliente__empresa__isnull=True)
+            .exclude(cliente__empresa='')
+            .order_by('cliente__empresa')
+            .values_list('cliente__empresa', flat=True)
+            .distinct()
+        )
+
+    comunas = list(
+        clientes_operativos_qs()
+        .exclude(comuna__isnull=True)
+        .exclude(comuna='')
+        .order_by('comuna')
+        .values_list('comuna', flat=True)
+        .distinct()
+    )
+    if not comunas:
+        comunas = list(
+            OrdenTrabajo.objects.exclude(cliente__comuna__isnull=True)
+            .exclude(cliente__comuna='')
+            .order_by('cliente__comuna')
+            .values_list('cliente__comuna', flat=True)
+            .distinct()
+        )
+
+    estados = list(OrdenTrabajo.ESTADO_CHOICES)
+    tipos = list(OrdenTrabajo.TIPO_TRABAJO_CHOICES)
+
+    return {
+        'tecnicos': tecnicos,
+        'empresas': empresas,
+        'comunas': comunas,
+        'estados_ot': estados,
+        'tipos_trabajo': tipos,
+    }
+
+
 @login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR'])
 def reportes_hub_view(request):
@@ -20,6 +82,17 @@ def reportes_hub_view(request):
     catalog = []
     total_filas = 0
     errores_reportes = []
+    query = urlencode({
+        k: v for k, v in {
+            'fecha_desde': request.GET.get('fecha_desde', ''),
+            'fecha_hasta': request.GET.get('fecha_hasta', ''),
+            'tecnico_id': request.GET.get('tecnico_id', ''),
+            'empresa': request.GET.get('empresa', ''),
+            'estado_ot': request.GET.get('estado_ot', ''),
+            'tipo_trabajo': request.GET.get('tipo_trabajo', ''),
+            'comuna': request.GET.get('comuna', ''),
+        }.items() if v
+    })
 
     for slug, meta in REPORT_CATALOG.items():
         title = meta.get('title') or slug
@@ -38,9 +111,12 @@ def reportes_hub_view(request):
             'slug': slug,
             'title': title,
             'description': meta['description'],
-            'supports_date_range': meta['supports_date_range'],
-            'supports_tecnico': meta['supports_tecnico'],
-            'supports_empresa': meta['supports_empresa'],
+            'supports_date_range': meta.get('supports_date_range', False),
+            'supports_tecnico': meta.get('supports_tecnico', False),
+            'supports_empresa': meta.get('supports_empresa', False),
+            'supports_estado': meta.get('supports_estado', False),
+            'supports_tipo': meta.get('supports_tipo', False),
+            'supports_comuna': meta.get('supports_comuna', False),
             'row_count': row_count,
             'error': had_error,
         })
@@ -57,15 +133,30 @@ def reportes_hub_view(request):
 
     tiene_actividad = hay_actividad_operativa()
     hay_datos_en_reportes = total_filas > 0
+    opciones = _opciones_filtro_reportes()
 
     return render(request, 'reportes/hub.html', {
         'catalog': catalog,
         'filters': request.GET,
-        'tecnicos': Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno'),
+        'filter_query': query,
+        'tecnicos': opciones['tecnicos'],
+        'empresas': opciones['empresas'],
+        'comunas': opciones['comunas'],
+        'estados_ot': opciones['estados_ot'],
+        'tipos_trabajo': opciones['tipos_trabajo'],
         'hay_actividad_operativa': tiene_actividad,
         'hay_datos_en_reportes': hay_datos_en_reportes,
         'total_filas_reportes': total_filas,
-        'mostrar_catalogo': tiene_actividad and (hay_datos_en_reportes or bool(errores_reportes) or bool(catalog)),
+        'mostrar_catalogo': tiene_actividad and (hay_datos_en_reportes or bool(errores_reportes)),
+        'filtros_activos': any([
+            request.GET.get('fecha_desde'),
+            request.GET.get('fecha_hasta'),
+            request.GET.get('tecnico_id'),
+            request.GET.get('empresa'),
+            request.GET.get('estado_ot'),
+            request.GET.get('tipo_trabajo'),
+            request.GET.get('comuna'),
+        ]),
     })
 
 
