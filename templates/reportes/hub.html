@@ -7,7 +7,7 @@
     <div class="mb-4">
         <h2 class="mb-1">Reportes operativos</h2>
         <p class="text-muted mb-0">
-            Descarga informes de trabajos en terreno y alertas en Excel.
+            Descarga informes de trabajos en terreno y alertas en Excel o PDF.
             Los registros aparecen cuando hay órdenes de trabajo o MoreApp procesado; las importaciones de fichas no se incluyen.
         </p>
     </div>
@@ -91,10 +91,14 @@
                             {% if item.supports_tecnico %}<span class="badge delco-badge-muted me-1">Técnico</span>{% endif %}
                             {% if item.supports_empresa %}<span class="badge delco-badge-muted me-1">Empresa</span>{% endif %}
                         </td>
-                        <td class="text-end">
+                        <td class="text-end text-nowrap">
                             <a class="btn btn-sm btn-success"
-                               href="{% url 'reportes_export' item.slug %}?fecha_desde={{ filters.fecha_desde|default:'' }}&fecha_hasta={{ filters.fecha_hasta|default:'' }}&tecnico_id={{ filters.tecnico_id|default:'' }}&empresa={{ filters.empresa|default:'' }}">
+                               href="{% url 'reportes_export' item.slug %}?formato=excel&fecha_desde={{ filters.fecha_desde|default:'' }}&fecha_hasta={{ filters.fecha_hasta|default:'' }}&tecnico_id={{ filters.tecnico_id|default:'' }}&empresa={{ filters.empresa|default:'' }}">
                                 Excel
+                            </a>
+                            <a class="btn btn-sm btn-outline-danger"
+                               href="{% url 'reportes_export' item.slug %}?formato=pdf&fecha_desde={{ filters.fecha_desde|default:'' }}&fecha_hasta={{ filters.fecha_hasta|default:'' }}&tecnico_id={{ filters.tecnico_id|default:'' }}&empresa={{ filters.empresa|default:'' }}">
+                                PDF
                             </a>
                         </td>
                     </tr>
