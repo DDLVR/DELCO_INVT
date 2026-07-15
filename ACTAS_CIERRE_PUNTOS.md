@@ -1,10 +1,11 @@
 # Actas de Cierre - Puntos PDF
 
-Fecha de consolidacion: 2026-07-09
+Fecha de consolidacion: 2026-07-09  
+Actualizacion documental: 2026-07-15
 
 Comando de verificacion general (todos los tests):
 
-python manage.py test web.tests clientes.tests importaciones.tests ordenes_trabajo.tests -v 1
+python manage.py test web.tests clientes.tests importaciones.tests ordenes_trabajo.tests reportes.tests -v 1
 
 ---
 
@@ -46,39 +47,65 @@ Suite: ordenes_trabajo.tests.OrdenesBasicasWorkflowTests.
 
 ---
 
+## Punto 6 - Aplicacion de Terreno
+
+Fecha: 2026-07-15 | Estado: PARCIAL (MVP terreno aceptado via MoreApp)
+
+Decision: no se desarrolla app movil Delco. Terreno = MoreApp (carpetas JSON + webhook + sync web/manual).
+
+Cobertura MVP:
+- Lectura incremental de registros MoreApp (`integraciones/reader.py`).
+- Webhook y listados/detalle/cola operacional.
+- Limites anti-timeout web; autosync en request desactivado por defecto en produccion.
+
+Pendiente (ops, no feature nueva): ejecutar checklist de despliegue en `MOREAPP_OPS_CHECKLIST.md` (carpetas, cron o boton sync, variables `MOREAPP_*`, pull + Restart).
+
+---
+
 ## Punto 7 - Alarmas y Alertas
 
-Fecha: 2026-07-09 | Estado: LISTO
+Fecha: 2026-07-09 | Actualizado: 2026-07-15 | Estado: LISTO (MVP)
 
-Cobertura: alerta de duplicidad de OT por cliente en ventana de 14 dias.
+Cobertura:
+- Alerta duplicidad de OT por cliente (ventana 14 dias).
+- Panel/KPIs: IP/medidor duplicados, pendientes STB/SCi4, clientes reincidentes.
+- MoreApp: pendientes, advertencias, envejecimiento, **alertas criticas** (KPI, filtro, detalle, cola).
 
-Archivos: ordenes_trabajo/utils.py (aplicar_alerta_duplicado, detectar_duplicado_orden), ordenes_trabajo/models.py (campo alerta_duplicado).
+Archivos: ordenes_trabajo/utils.py, web/views.py (dashboard, MoreApp list/detalle), templates MoreApp/operacional.
 
-Suite: web.tests.AlarmasIntegracionPunto7y8Tests.
+Suites: web.tests.AlarmasIntegracionPunto7y8Tests (base); validacion visual/operativa de criticas en listados MoreApp.
+
+Residual: solo si negocio identifica alarma del PDF aun no cubierta.
 
 ---
 
 ## Punto 8 - Integraciones
 
-Fecha: 2026-07-09 | Estado: LISTO
+Fecha: 2026-07-09 | Actualizado: 2026-07-15 | Estado: PARCIAL
 
-Cobertura: importacion/exportacion Excel para clientes, inventario y OT. Webhook MoreApp disponible. Endpoint de reportes MoreApp accesible.
+**MVP LISTO:** import/export Excel (clientes, inventario, OT); webhook MoreApp; reportes MoreApp; sync por carpetas.
 
-Archivos: importaciones/utils.py, ordenes_trabajo/utils.py, web/views.py (clientes_importar_view, inventario_importar_view, movimientos_importar_moreapp_webhook).
+**Fase 2 (diferido):** API bidireccional robusta; adjuntos multimedia y georreferencia avanzada.
 
-Suite: web.tests.AlarmasIntegracionPunto7y8Tests.
+Archivos: importaciones/utils.py, ordenes_trabajo/utils.py, integraciones/reader.py, web/views.py (webhook, MoreApp).
+
+Suite: web.tests.AlarmasIntegracionPunto7y8Tests; smoke MoreApp reader.
 
 ---
 
 ## Punto 9 - Informes y Reportes
 
-Fecha: 2026-07-09 | Estado: LISTO
+Fecha: 2026-07-09 | Actualizado: 2026-07-15 | Estado: LISTO
 
-Hub `/reportes/` con 19 informes Excel del PDF y filtros por fecha/técnico/empresa.
-Exports legacy siguen activos: clientes, inventario, órdenes, movimientos, MoreApp.
+Hub `/reportes/` con 19 informes del PDF.
+- Export **Excel** y **PDF** (`reportlab`, pin compatible Py3.8).
+- Filtros operativos: periodo (Todo/Hoy/7/30/mes), estado OT, tipo trabajo, tecnico, empresa, comuna.
+- Hub liviano: no ejecuta los 19 reportes en cada carga (conteos al exportar).
+- Exports legacy activos: clientes, inventario, ordenes, movimientos, MoreApp.
 
-Archivos: `reportes/services.py`, `reportes/views.py`, `templates/reportes/hub.html`
-Suites: `reportes.tests.ReportesPunto9Tests`, `web.tests.ReportesSetMinimoPunto9Tests`
+Archivos: `reportes/services.py`, `reportes/views.py`, `reportes/exports.py`, `templates/reportes/hub.html`, `requirements.txt`
+
+Suites: `reportes.tests.ReportesPunto9Tests`, `reportes.tests.ReportesSoloActividadOperativaTests`, `web.tests.ReportesSetMinimoPunto9Tests`
 
 ---
 
@@ -137,3 +164,11 @@ Cobertura: IP invalida bloquea creacion de cliente, importacion sin archivo devu
 Archivos: web/views.py, web/services/validators.py, importaciones/utils.py.
 
 Suite: web.tests.ErroresOperativosPunto15Tests.
+
+---
+
+## Soporte operativo (no punto PDF) - Rendimiento 2026-07-15
+
+Paginacion servidor (clientes, OT, MoreApp), cache corta de KPIs/avisos, dropdowns inventarios topados, autosync MoreApp off por defecto.
+
+Commit: `344a525`. Despliegue: `git pull` + Restart (sin dep nueva frente a reportlab previo).
