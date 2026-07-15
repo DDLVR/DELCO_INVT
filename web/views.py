@@ -295,40 +295,53 @@ def dashboard_view(request):
         context['clientes_pendientes_sci4'] = count_clientes_sin_actualizacion_sci4()
         
         # Usuarios
-        context['usuarios_activos'] = request.user.__class__.objects.filter(is_active=True).count()
-        context['total_tecnicos'] = request.user.__class__.objects.filter(rol='TECNICO', is_active=True).count()
-        context['total_administrativos'] = request.user.__class__.objects.filter(rol='ADMINISTRATIVO', is_active=True).count()
-        
-        # Inventario - Medidores
-        context['total_medidores'] = Medidor.objects.count()
-        context['medidores_bodega'] = Medidor.objects.filter(
-            estado_inventario__nombre='En bodega'
-        ).count()
-        context['medidores_instalados'] = Medidor.objects.filter(
-            estado_inventario__nombre='Instalado'
-        ).count()
-        
-        # Inventario - SIM Cards
-        context['total_sims'] = SimCard.objects.count()
-        context['sims_bodega'] = SimCard.objects.filter(
-            estado_inventario__nombre='En bodega'
-        ).count()
-        context['sims_instaladas'] = SimCard.objects.filter(
-            estado_inventario__nombre='Instalado'
-        ).count()
-        
-        # Inventario - Modems
-        context['total_modems'] = Modem.objects.count()
-        context['modems_bodega'] = Modem.objects.filter(
-            estado_inventario__nombre='En bodega'
-        ).count()
-        context['modems_instalados'] = Modem.objects.filter(
-            estado_inventario__nombre='Instalado'
-        ).count()
-        
-        # Clientes
-        context['total_clientes'] = Cliente.objects.count()
-        
+        from web.perf_cache import cache_get_or_set, TTL_CORTO
+
+        def _kpis_inventario_dashboard():
+            return {
+                'usuarios_activos': request.user.__class__.objects.filter(is_active=True).count(),
+                'total_tecnicos': request.user.__class__.objects.filter(rol='TECNICO', is_active=True).count(),
+                'total_administrativos': request.user.__class__.objects.filter(rol='ADMINISTRATIVO', is_active=True).count(),
+                'total_medidores': Medidor.objects.count(),
+                'medidores_bodega': Medidor.objects.filter(estado_inventario__nombre='En bodega').count(),
+                'medidores_instalados': Medidor.objects.filter(estado_inventario__nombre='Instalado').count(),
+                'total_sims': SimCard.objects.count(),
+                'sims_bodega': SimCard.objects.filter(estado_inventario__nombre='En bodega').count(),
+                'sims_instaladas': SimCard.objects.filter(estado_inventario__nombre='Instalado').count(),
+                'total_modems': Modem.objects.count(),
+                'modems_bodega': Modem.objects.filter(estado_inventario__nombre='En bodega').count(),
+                'modems_instalados': Modem.objects.filter(estado_inventario__nombre='Instalado').count(),
+                'total_clientes': Cliente.objects.count(),
+                'medidores_por_estado': list(
+                    Medidor.objects.values('estado_inventario__nombre')
+                    .annotate(cantidad=Count('id'))
+                    .order_by('-cantidad')[:5]
+                ),
+                'sims_por_estado': list(
+                    SimCard.objects.values('estado_inventario__nombre')
+                    .annotate(cantidad=Count('id'))
+                    .order_by('-cantidad')[:5]
+                ),
+                'modems_por_estado': list(
+                    Modem.objects.values('estado_inventario__nombre')
+                    .annotate(cantidad=Count('id'))
+                    .order_by('-cantidad')[:5]
+                ),
+                'movimientos_tipo_breakdown': list(
+                    MovimientoInventario.objects.values('tipo')
+                    .annotate(c=Count('id'))
+                    .order_by('-c')
+                ),
+                'movimientos_origen_breakdown': list(
+                    MovimientoInventario.objects.values('origen_sistema')
+                    .annotate(c=Count('id'))
+                    .order_by('-c')
+                ),
+            }
+
+        inv = cache_get_or_set('dashboard:admin_inv_kpis', _kpis_inventario_dashboard, TTL_CORTO)
+        context.update(inv)
+
         # Calcular porcentajes para barras de progreso (evitar división por cero)
         context['medidores_instalados_pct'] = round((context['medidores_instalados'] / context['total_medidores'] * 100) if context['total_medidores'] > 0 else 0)
         context['medidores_bodega_pct'] = round((context['medidores_bodega'] / context['total_medidores'] * 100) if context['total_medidores'] > 0 else 0)
@@ -338,35 +351,6 @@ def dashboard_view(request):
         
         context['modems_instalados_pct'] = round((context['modems_instalados'] / context['total_modems'] * 100) if context['total_modems'] > 0 else 0)
         context['modems_bodega_pct'] = round((context['modems_bodega'] / context['total_modems'] * 100) if context['total_modems'] > 0 else 0)
-        
-        # Estados disponibles para gráficos
-        context['medidores_por_estado'] = list(
-            Medidor.objects.values('estado_inventario__nombre')
-            .annotate(cantidad=Count('id'))
-            .order_by('-cantidad')[:5]
-        )
-        context['sims_por_estado'] = list(
-            SimCard.objects.values('estado_inventario__nombre')
-            .annotate(cantidad=Count('id'))
-            .order_by('-cantidad')[:5]
-        )
-        context['modems_por_estado'] = list(
-            Modem.objects.values('estado_inventario__nombre')
-            .annotate(cantidad=Count('id'))
-            .order_by('-cantidad')[:5]
-        )
-
-        # Desglose global de movimientos para panel consolidado de gráficos
-        context['movimientos_tipo_breakdown'] = list(
-            MovimientoInventario.objects.values('tipo')
-            .annotate(c=Count('id'))
-            .order_by('-c')
-        )
-        context['movimientos_origen_breakdown'] = list(
-            MovimientoInventario.objects.values('origen_sistema')
-            .annotate(c=Count('id'))
-            .order_by('-c')
-        )
         
         # Movimientos de inventario (últimos 7 días)
         from datetime import timedelta
@@ -928,7 +912,11 @@ def inventario_list_view(request):
                         query |= Q(modulo=False)
                 equipos = equipos.filter(query)
 
-    total_filtrado = len(equipos)
+    # count() en QuerySet evita materializar todo el inventario en memoria
+    if hasattr(equipos, 'count') and not isinstance(equipos, list):
+        total_filtrado = equipos.count()
+    else:
+        total_filtrado = len(equipos)
     paginador = Paginator(equipos, per_page)
     page_obj = paginador.get_page(page_num)
     equipos = page_obj.object_list
@@ -1004,15 +992,25 @@ def inventario_list_view(request):
         estados_permitidos = ['En bodega', 'En Trayecto', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja']
         estados_disponibles = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
         estados_disponibles.sort(key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99)
+    from web.perf_cache import cache_get_or_set, TTL_MEDIO
+
     ubicaciones_disponibles = Ubicacion.objects.all()
-    usuarios = Usuario.objects.filter(rol='TECNICO')  # Solo técnicos
-    clientes = Cliente.objects.all()
-    medidores = Medidor.objects.all().order_by('serie')  # Todos los medidores
-    proyectos_disponibles = sorted(set(
-        list(Medidor.objects.exclude(proyecto='').values_list('proyecto', flat=True))
-        + list(SimCard.objects.exclude(proyecto='').values_list('proyecto', flat=True))
-        + list(Modem.objects.exclude(proyecto='').values_list('proyecto', flat=True))
-    ))
+    usuarios = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
+    # Cap en dropdowns: listados completos rompen la página con miles de clientes/medidores
+    clientes = Cliente.objects.filter(activo=True).exclude(numero_cliente='0').order_by('numero_cliente')[:300]
+    medidores = Medidor.objects.order_by('serie')[:300]
+
+    def _proyectos_lista():
+        return sorted(set(
+            list(Medidor.objects.exclude(proyecto='').exclude(proyecto__isnull=True)
+                 .values_list('proyecto', flat=True).distinct()[:200])
+            + list(SimCard.objects.exclude(proyecto='').exclude(proyecto__isnull=True)
+                   .values_list('proyecto', flat=True).distinct()[:200])
+            + list(Modem.objects.exclude(proyecto='').exclude(proyecto__isnull=True)
+                   .values_list('proyecto', flat=True).distinct()[:200])
+        ))
+
+    proyectos_disponibles = cache_get_or_set('inventario:proyectos', _proyectos_lista, TTL_MEDIO)
 
     sim_resumen = None
     if tipo == 'sim':
@@ -2699,15 +2697,24 @@ def usuario_reset_password_view(request, pk):
 
 @login_required
 def clientes_list_view(request):
-    """Lista de clientes activos para todos los roles autenticados."""
+    """Lista de clientes activos con paginación servidor (no carga todo el padrón en HTML)."""
+    from django.core.paginator import Paginator
     from django.db.models import Count
 
-    clientes = (
+    q = (request.GET.get('q') or '').strip()
+    solo_duplicados = (request.GET.get('solo_duplicados') or '') == '1'
+    try:
+        per_page = int(request.GET.get('per_page') or 50)
+    except (TypeError, ValueError):
+        per_page = 50
+    if per_page not in (25, 50, 100, 200):
+        per_page = 50
+
+    clientes_qs = (
         Cliente.objects.filter(activo=True)
         .exclude(numero_cliente='0')
         .order_by('numero_cliente', 'meter_serial_n_1', 'id')
     )
-    ultima_importacion_clientes = ImportacionExcel.objects.filter(tipo='CLIENTES').order_by('-id').first()
 
     numeros_duplicados = set(
         Cliente.objects.filter(activo=True)
@@ -2718,14 +2725,44 @@ def clientes_list_view(request):
         .values_list('numero_cliente', flat=True)
     )
 
+    if solo_duplicados and numeros_duplicados:
+        clientes_qs = clientes_qs.filter(numero_cliente__in=numeros_duplicados)
+
+    if q:
+        clientes_qs = clientes_qs.filter(
+            Q(numero_cliente__icontains=q)
+            | Q(customer_name__icontains=q)
+            | Q(comuna__icontains=q)
+            | Q(direccion__icontains=q)
+            | Q(installation_address__icontains=q)
+            | Q(meter_serial_n_1__icontains=q)
+            | Q(proyecto__icontains=q)
+            | Q(sector__icontains=q)
+            | Q(tipo_suministro__icontains=q)
+            | Q(meter_manufacturer_id__icontains=q)
+        )
+
+    total_clientes = clientes_qs.count()
+    page_obj = Paginator(clientes_qs, per_page).get_page(request.GET.get('page') or 1)
+    ultima_importacion_clientes = ImportacionExcel.objects.filter(tipo='CLIENTES').order_by('-id').first()
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+
     context = {
-        'clientes': clientes,
-        'total_clientes': clientes.count(),
+        'clientes': page_obj.object_list,
+        'page_obj': page_obj,
+        'query_string': query_params.urlencode(),
+        'q': q,
+        'solo_duplicados': solo_duplicados,
+        'per_page': per_page,
+        'total_clientes': total_clientes,
         'numeros_duplicados': numeros_duplicados,
         'numeros_duplicados_json': json.dumps(sorted(numeros_duplicados)),
         'total_numeros_duplicados': len(numeros_duplicados),
         'ultima_importacion_total_filas': ultima_importacion_clientes.total_filas if ultima_importacion_clientes else None,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
+        'paginacion_servidor': True,
     }
     return render(request, 'clientes/list.html', context)
 
@@ -3966,27 +4003,32 @@ def _tecnico_visible_moreapp(registro):
 
 
 def _calcular_adv_breakdown(model_class):
-    """Cuenta registros con advertencia agrupados en categorías operativas."""
+    """Cuenta registros con advertencia agrupados en categorías (cache 60s)."""
     from django.db.models import Q as _Q
-    adv_equipo = 0
-    adv_regla = 0
-    adv_doble = 0
-    adv_critica = 0
-    qs = model_class.objects.filter(
-        _Q(estado_revision='CON_ADVERTENCIA') | _Q(alerta_doble_trabajo=True)
-    ).only('datos_procesados', 'descripcion_alerta', 'alerta_doble_trabajo')
-    for reg in qs:
-        cats = _categorias_advertencia_registro(reg)
-        adv_equipo += int('equipo' in cats)
-        adv_regla += int('regla' in cats)
-        adv_doble += int('doble' in cats)
-        adv_critica += int('critica' in cats)
-    return [
-        {'categoria': 'Sin equipo en inventario', 'count': adv_equipo},
-        {'categoria': 'Bloqueo de regla operativa', 'count': adv_regla},
-        {'categoria': 'Doble trabajo / conflicto', 'count': adv_doble},
-        {'categoria': 'Alerta crítica (otro cliente)', 'count': adv_critica},
-    ]
+    from web.perf_cache import cache_get_or_set, TTL_CORTO
+
+    def _calc():
+        adv_equipo = 0
+        adv_regla = 0
+        adv_doble = 0
+        adv_critica = 0
+        qs = model_class.objects.filter(
+            _Q(estado_revision='CON_ADVERTENCIA') | _Q(alerta_doble_trabajo=True)
+        ).only('datos_procesados', 'descripcion_alerta', 'alerta_doble_trabajo')
+        for reg in qs.iterator(chunk_size=500):
+            cats = _categorias_advertencia_registro(reg)
+            adv_equipo += int('equipo' in cats)
+            adv_regla += int('regla' in cats)
+            adv_doble += int('doble' in cats)
+            adv_critica += int('critica' in cats)
+        return [
+            {'categoria': 'Sin equipo en inventario', 'count': adv_equipo},
+            {'categoria': 'Bloqueo de regla operativa', 'count': adv_regla},
+            {'categoria': 'Doble trabajo / conflicto', 'count': adv_doble},
+            {'categoria': 'Alerta crítica (otro cliente)', 'count': adv_critica},
+        ]
+
+    return cache_get_or_set('moreapp:adv_breakdown', _calc, TTL_CORTO)
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -4264,18 +4306,19 @@ def _extraer_bloqueos_operativos_registro(registro):
 
 @login_required
 def reportes_moreapp_list(request):
-    """Lista de registros sincronizados desde carpetas de MoreApp."""
+    """Lista de registros MoreApp con paginación servidor (no materializa todo el JSON)."""
+    from django.core.paginator import Paginator
     from ordenes_trabajo.models import IntegracionMoreApp
 
     if request.user.rol not in ROLES_REPORTES_LECTURA:
         messages.error(request, 'No tienes permiso para acceder a Reportes.')
         return redirect('dashboard')
 
+    # Autosync solo si MOREAPP_AUTO_SYNC_ENABLED=true (off por defecto en producción)
     _ejecutar_autosync_moreapp_si_corresponde()
 
     qs_base = IntegracionMoreApp.objects.all().order_by('-fecha_recepcion')
 
-    # Filtros
     estado = request.GET.get('estado', '')
     alerta = request.GET.get('alerta', '')
     bloqueo = request.GET.get('bloqueo', '')
@@ -4283,6 +4326,12 @@ def reportes_moreapp_list(request):
     q = request.GET.get('q', '')
     formulario = request.GET.get('formulario', '')
     kpi = request.GET.get('kpi', '')
+    try:
+        per_page = int(request.GET.get('per_page') or 50)
+    except (TypeError, ValueError):
+        per_page = 50
+    if per_page not in (25, 50, 100):
+        per_page = 50
 
     qs = qs_base
     if estado:
@@ -4314,8 +4363,29 @@ def reportes_moreapp_list(request):
     if formulario:
         qs = qs.filter(nombre_formulario=formulario)
 
-    registros = list(qs)
-    registros_filtrados = []
+    # Filtros que requieren parseo Python: reducen a IDs sin enriquecer todas las filas en HTML
+    needs_python_filter = bloqueo == '1' or kpi in ('adv_equipo', 'adv_regla', 'adv_doble')
+    if needs_python_filter:
+        matched_ids = []
+        for reg in qs.only(
+            'id', 'datos_procesados', 'descripcion_alerta', 'alerta_doble_trabajo',
+        ).iterator(chunk_size=500):
+            cats = _categorias_advertencia_registro(reg)
+            if bloqueo == '1' and not _extraer_bloqueos_operativos_registro(reg):
+                continue
+            if kpi == 'adv_equipo' and 'equipo' not in cats:
+                continue
+            if kpi == 'adv_regla' and 'regla' not in cats:
+                continue
+            if kpi == 'adv_doble' and 'doble' not in cats:
+                continue
+            matched_ids.append(reg.pk)
+        qs = IntegracionMoreApp.objects.filter(pk__in=matched_ids).order_by('-fecha_recepcion')
+
+    total = qs.count()
+    page_obj = Paginator(qs, per_page).get_page(request.GET.get('page') or 1)
+    registros = list(page_obj.object_list)
+
     for reg in registros:
         bloqueos = _extraer_bloqueos_operativos_registro(reg)
         categorias_advertencia = _categorias_advertencia_registro(reg)
@@ -4330,18 +4400,7 @@ def reportes_moreapp_list(request):
             or 'ALERTA_CRITICA' in str(reg.descripcion_alerta or '').upper()
         )
         reg.alerta_preview = (reg.descripcion_alerta or '')[:180]
-        if bloqueo == '1' and not reg.tiene_bloqueo_operativo:
-            continue
-        if kpi == 'adv_equipo' and 'equipo' not in categorias_advertencia:
-            continue
-        if kpi == 'adv_regla' and 'regla' not in categorias_advertencia:
-            continue
-        if kpi == 'adv_doble' and 'doble' not in categorias_advertencia:
-            continue
-        if kpi == 'adv_critica' and 'critica' not in categorias_advertencia:
-            continue
-        registros_filtrados.append(reg)
-    registros = registros_filtrados
+        reg.delete_url = f'/reportes/moreapp/{reg.pk}/eliminar/' if request.user.rol == 'ADMIN' else ''
 
     adv_breakdown = _calcular_adv_breakdown(IntegracionMoreApp)
     adv_counts = {
@@ -4351,15 +4410,38 @@ def reportes_moreapp_list(request):
         'critica': next((x['count'] for x in adv_breakdown if x['categoria'] == 'Alerta crítica (otro cliente)'), 0),
     }
 
-    if request.user.rol == 'ADMIN':
-        for reg in registros:
-            reg.delete_url = f'/reportes/moreapp/{reg.pk}/eliminar/'
-    else:
-        for reg in registros:
-            reg.delete_url = ''
+    from web.perf_cache import cache_get_or_set, TTL_CORTO
+
+    def _kpis_moreapp():
+        return {
+            'pendientes': IntegracionMoreApp.objects.filter(estado_revision='PENDIENTE').count(),
+            'con_advertencia': IntegracionMoreApp.objects.filter(estado_revision='CON_ADVERTENCIA').count(),
+            'alertas': IntegracionMoreApp.objects.filter(alerta_doble_trabajo=True).count(),
+            'errores': IntegracionMoreApp.objects.filter(
+                estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR')
+            ).count(),
+            'sinc_breakdown': list(
+                IntegracionMoreApp.objects.values('estado_sincronizacion')
+                .annotate(c=Count('id'))
+                .order_by('-c')
+            ),
+            'formula_breakdown': list(
+                IntegracionMoreApp.objects.values('nombre_formulario')
+                .annotate(c=Count('id'))
+                .order_by('-c')
+            ),
+        }
+
+    kpis = cache_get_or_set('moreapp:list_kpis', _kpis_moreapp, TTL_CORTO)
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
 
     context = {
         'registros': registros,
+        'page_obj': page_obj,
+        'query_string': query_params.urlencode(),
+        'per_page': per_page,
         'estado_actual': estado,
         'alerta_actual': alerta,
         'bloqueo_actual': bloqueo,
@@ -4368,30 +4450,18 @@ def reportes_moreapp_list(request):
         'formulario_actual': formulario,
         'kpi_actual': kpi,
         'formularios': formularios,
-        'total': len(registros),
+        'total': total,
         'puede_eliminar_reportes': request.user.rol == 'ADMIN',
         'adv_counts': adv_counts,
-        'pendientes': IntegracionMoreApp.objects.filter(estado_revision='PENDIENTE').count(),
-        'con_advertencia': IntegracionMoreApp.objects.filter(estado_revision='CON_ADVERTENCIA').count(),
-        'alertas': IntegracionMoreApp.objects.filter(alerta_doble_trabajo=True).count(),
-        'errores': IntegracionMoreApp.objects.filter(
-            estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR')
-        ).count(),
+        'pendientes': kpis['pendientes'],
+        'con_advertencia': kpis['con_advertencia'],
+        'alertas': kpis['alertas'],
+        'errores': kpis['errores'],
         'estados_choices': IntegracionMoreApp.ESTADO_CHOICES,
         'revision_choices': IntegracionMoreApp.ESTADO_REVISION_CHOICES,
         'moreapp_auto_refresh_seconds': int(getattr(settings, 'MOREAPP_AUTO_REFRESH_SECONDS', 300) or 300),
-        # Datos para gráficos
-        'sinc_breakdown': list(
-            IntegracionMoreApp.objects.values('estado_sincronizacion')
-            .annotate(c=Count('id'))
-            .order_by('-c')
-        ),
-        'formula_breakdown': list(
-            IntegracionMoreApp.objects.values('nombre_formulario')
-            .annotate(c=Count('id'))
-            .order_by('-c')
-        ),
-        # Desglose de advertencias por categoría (iterar en Python sobre los afectados)
+        'sinc_breakdown': kpis['sinc_breakdown'],
+        'formula_breakdown': kpis['formula_breakdown'],
         'adv_breakdown': adv_breakdown,
     }
     return render(request, 'reportes/integraciones_list.html', context)

@@ -71,7 +71,10 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
         if tecnico_filtro:
             ordenes = ordenes.filter(tecnico_responsable_id=tecnico_filtro)
         if cliente_filtro:
-            ordenes = ordenes.filter(cliente_id=cliente_filtro)
+            if str(cliente_filtro).isdigit():
+                ordenes = ordenes.filter(cliente_id=int(cliente_filtro))
+            else:
+                ordenes = ordenes.filter(cliente__numero_cliente__icontains=cliente_filtro)
         if buscar:
             ordenes = ordenes.filter(
                 Q(titulo__icontains=buscar)
@@ -96,25 +99,45 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
 @login_required
 def ordenes_list_view(request):
     """
-    Lista de órdenes de trabajo con filtros
+    Lista de órdenes de trabajo con filtros y paginación servidor.
     """
+    from django.core.paginator import Paginator
+
     usuario = request.user
     base_ordenes = _queryset_ordenes_filtrado(request, aplicar_filtros=False)
-    ordenes = _queryset_ordenes_filtrado(request)
-    
+    ordenes_qs = _queryset_ordenes_filtrado(request)
+
     estado_filtro = request.GET.get('estado', '')
     tipo_filtro = request.GET.get('tipo_trabajo', '')
     tecnico_filtro = request.GET.get('tecnico', '')
     cliente_filtro = request.GET.get('cliente', '')
     buscar = request.GET.get('buscar', '')
     cola_filtro = request.GET.get('cola', '')
-    
-    # Obtener opciones para filtros
-    tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True)
-    clientes = Cliente.objects.all()
-    
+
+    try:
+        per_page = int(request.GET.get('per_page') or 50)
+    except (TypeError, ValueError):
+        per_page = 50
+    if per_page not in (25, 50, 100):
+        per_page = 50
+
+    total_alertas_duplicado = ordenes_qs.filter(alerta_duplicado=True).count()
+    page_obj = Paginator(ordenes_qs, per_page).get_page(request.GET.get('page') or 1)
+
+    tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
+    # Solo clientes con OT (cap) — no cargar todo el padrón en el filtro
+    clientes = Cliente.objects.filter(
+        pk__in=OrdenTrabajo.objects.exclude(cliente_id=None).values('cliente_id')
+    ).order_by('numero_cliente')[:500]
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+
     context = {
-        'ordenes': ordenes,
+        'ordenes': page_obj.object_list,
+        'page_obj': page_obj,
+        'query_string': query_params.urlencode(),
+        'per_page': per_page,
         'tecnicos': tecnicos,
         'clientes': clientes,
         'estados': OrdenTrabajo.ESTADO_CHOICES,
@@ -127,10 +150,11 @@ def ordenes_list_view(request):
         'cola_filtro': cola_filtro,
         'colas_orden': COLAS_ORDEN,
         'colas_conteo': contadores_colas_ordenes(base_ordenes),
-        'total_alertas_duplicado': ordenes.filter(alerta_duplicado=True).count(),
+        'total_alertas_duplicado': total_alertas_duplicado,
         'puede_eliminar': usuario.rol == 'ADMIN',
+        'paginacion_servidor': True,
     }
-    
+
     return render(request, 'ordenes/list.html', context)
 
 
@@ -209,9 +233,9 @@ def orden_crear_view(request):
         except Exception as e:
             messages.error(request, f'Error al crear orden: {str(e)}')
     
-    # GET - Mostrar formulario
-    tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True)
-    clientes = Cliente.objects.all()
+    # GET - Mostrar formulario (tope: evita renderizar miles de clientes en el select)
+    tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
+    clientes = Cliente.objects.filter(activo=True).exclude(numero_cliente='0').order_by('numero_cliente')[:500]
     
     context = {
         'tecnicos': tecnicos,

@@ -131,6 +131,8 @@
                         <td>
                             {% if item.error %}
                             <span class="badge bg-danger">Error</span>
+                            {% elif conteos_diferidos and item.row_count is None %}
+                            <span class="badge bg-light text-muted border" title="El conteo se calcula al exportar (páginas más rápidas)">Al exportar</span>
                             {% elif item.row_count == 0 %}
                             <span class="badge bg-secondary">0</span>
                             {% else %}

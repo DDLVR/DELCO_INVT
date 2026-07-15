@@ -200,9 +200,22 @@ SESSION_SAVE_EVERY_REQUEST = False
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_COOKIE_HTTPONLY = True
 
+# Cache local (LocMem): KPIs, avisos MoreApp y alcances operativos.
+# En hosting compartido no hay Redis; esto reduce COUNTs repetidos por request.
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'delcoplata-locmem',
+        'TIMEOUT': 120,
+        'OPTIONS': {'MAX_ENTRIES': 2000},
+    }
+}
+
 # Modo de integracion MoreApp
 MOREAPP_WEBHOOK_REALTIME_ENABLED = os.getenv('MOREAPP_WEBHOOK_REALTIME_ENABLED', 'true').strip().lower() == 'true'
-MOREAPP_AUTO_SYNC_ENABLED = os.getenv('MOREAPP_AUTO_SYNC_ENABLED', 'true').strip().lower() == 'true'
+# Autosync en GET de dashboard/listados: OFF por defecto (bloquea el request con muchos JSON).
+# Activar solo si hace falta: MOREAPP_AUTO_SYNC_ENABLED=true. Preferir botón manual / cron.
+MOREAPP_AUTO_SYNC_ENABLED = os.getenv('MOREAPP_AUTO_SYNC_ENABLED', 'false').strip().lower() == 'true'
 MOREAPP_AUTO_SYNC_INTERVAL_SECONDS = int(os.getenv('MOREAPP_AUTO_SYNC_INTERVAL_SECONDS', '300'))
 MOREAPP_AUTO_REFRESH_SECONDS = int(os.getenv('MOREAPP_AUTO_REFRESH_SECONDS', '300'))
 ORDENES_TRABAJO_HABILITADAS = os.getenv('ORDENES_TRABAJO_HABILITADAS', 'true').strip().lower() == 'true'
