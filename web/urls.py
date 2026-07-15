@@ -11,7 +11,7 @@ from .views import (
     reportes_moreapp_eliminar_masivo,
     pendientes_operativos_view, moreapp_marcar_revision_view, moreapp_reprocesar_view,
     auditoria_list_view,
-    api_buscar_medidores, api_obtener_medidor,
+    api_buscar_medidores, api_buscar_clientes, api_obtener_medidor,
 )
 from reportes.views import reportes_hub_view, reportes_export_view
 from catalogos.views import catalogo_diagnostico_list_view
@@ -118,7 +118,8 @@ urlpatterns = [
     # API Webhook MoreApp (tiempo real - sin autenticación Django)
     path('api/moreapp-webhook/', movimientos_importar_moreapp_webhook, name='movimientos_webhook_moreapp'),
     
-    # API - Búsqueda de Medidores (Autocomplete)
+    # API - Búsqueda autocomplete inventario
     path('api/buscar-medidores/', api_buscar_medidores, name='api_buscar_medidores'),
+    path('api/buscar-clientes/', api_buscar_clientes, name='api_buscar_clientes'),
     path('api/medidores/<int:medidor_id>/', api_obtener_medidor, name='api_obtener_medidor'),
 ]

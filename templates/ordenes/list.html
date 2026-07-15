@@ -23,6 +23,9 @@
                 <button type="button" class="btn btn-outline-primary" id="btnAsignarMasivo">
                     <i class="bi bi-person-check"></i> Asignar responsable
                 </button>
+                <button type="button" class="btn btn-outline-dark" id="btnEditarMasivo">
+                    <i class="bi bi-check2-square"></i> Cambiar varios
+                </button>
                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarOrdenes">
                     <i class="bi bi-upload"></i> Importar Excel
                 </button>
@@ -156,11 +159,11 @@
                         </thead>
                         <tbody>
                             {% for orden in ordenes %}
-                            <tr class="{% if orden.alerta_duplicado %}table-warning{% endif %}">
+                            <tr class="{% if orden.alerta_duplicado %}table-warning{% endif %}" data-orden-id="{{ orden.id }}">
                                 {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
                                 <td><input type="checkbox" class="check-orden" value="{{ orden.id }}"></td>
                                 {% endif %}
-                                <td>
+                                <td data-order="{{ orden.id }}">
                                     <a href="{% url 'orden_detalle' orden.id %}" class="text-decoration-none fw-bold">#{{ orden.id }}</a>
                                 </td>
                                 <td>{{ orden.titulo }}</td>
@@ -311,41 +314,45 @@
     </div>
 </div>
 
-<!-- Modal Edición múltiple (oculto temporalmente) -->
-<div class="modal fade d-none" id="modalEditarMasivoOrdenes" tabindex="-1" aria-hidden="true">
+<!-- Modal Cambiar varios (estado / tipo / técnico) -->
+<div class="modal fade" id="modalEditarMasivoOrdenes" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header bg-dark text-white">
-                <h5 class="modal-title"><i class="bi bi-check2-square"></i> Edición múltiple</h5>
+                <h5 class="modal-title"><i class="bi bi-check2-square"></i> Cambiar varias órdenes</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form id="formEditarMasivoOrdenes">
                 {% csrf_token %}
                 <input type="hidden" name="ids" id="bulkOrdenIds">
                 <div class="modal-body">
-                    <p id="bulkOrdenResumen" class="text-muted small"></p>
+                    <p id="bulkOrdenResumen" class="mb-1"></p>
+                    <p class="small text-muted mb-3">
+                        Completa solo lo que quieras modificar. Si un campo queda en
+                        <strong>Sin cambio</strong>, ese dato se mantiene igual.
+                    </p>
                     <div class="mb-3">
-                        <label class="form-label">Cambiar estado</label>
+                        <label class="form-label">Estado</label>
                         <select name="estado" class="form-select">
-                            <option value="">— Sin cambio —</option>
+                            <option value="">Sin cambio</option>
                             {% for estado_code, estado_nombre in estados %}
                             <option value="{{ estado_code }}">{{ estado_nombre }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Cambiar tipo de trabajo</label>
+                        <label class="form-label">Tipo de trabajo</label>
                         <select name="tipo_trabajo" class="form-select">
-                            <option value="">— Sin cambio —</option>
+                            <option value="">Sin cambio</option>
                             {% for tipo_code, tipo_nombre in tipos_trabajo %}
                             <option value="{{ tipo_code }}">{{ tipo_nombre }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Asignar técnico responsable</label>
+                        <label class="form-label">Técnico responsable</label>
                         <select name="tecnico_responsable" class="form-select">
-                            <option value="">— Sin cambio —</option>
+                            <option value="">Sin cambio</option>
                             {% for tecnico in tecnicos %}
                             <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}</option>
                             {% endfor %}
@@ -354,7 +361,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Aplicar cambios</button>
+                    <button type="submit" class="btn btn-primary">Guardar cambios</button>
                 </div>
             </form>
         </div>
@@ -373,23 +380,23 @@
                 {% csrf_token %}
                 <input type="hidden" name="ids" id="bulkAsignarIds">
                 <div class="modal-body">
-                    <p id="bulkAsignarResumen" class="text-muted small"></p>
+                    <p id="bulkAsignarResumen" class="mb-1"></p>
                     <div class="mb-3">
-                        <label class="form-label">Técnico responsable *</label>
+                        <label class="form-label">Técnico que hará el trabajo *</label>
                         <select name="tecnico_responsable" class="form-select" required>
-                            <option value="">— Seleccionar —</option>
+                            <option value="">Elige un técnico</option>
                             {% for tecnico in tecnicos %}
                             <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="alert alert-info small mb-0">
-                        Las órdenes seleccionadas pasarán a estado <strong>Asignada</strong> con fecha de asignación actual.
+                        Las órdenes pasarán a estado <strong>Asignada</strong> y quedarán listas para el técnico.
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-primary">Asignar</button>
+                    <button type="submit" class="btn btn-primary">Asignar ahora</button>
                 </div>
             </form>
         </div>
@@ -417,11 +424,20 @@ $(document).ready(function() {
     function abrirModalSeleccion(modalId, idsFieldId, resumenId) {
         const seleccionados = obtenerSeleccionadas();
         if (!seleccionados.length) {
-            alert('Selecciona al menos una orden.');
+            if (window.showToast) {
+                showToast('Marca al menos una orden en la lista para continuar.', 'warning');
+            } else {
+                alert('Marca al menos una orden en la lista para continuar.');
+            }
             return false;
         }
         document.getElementById(idsFieldId).value = seleccionados.map(cb => cb.value).join(',');
-        document.getElementById(resumenId).textContent = `${seleccionados.length} orden(es) seleccionada(s)`;
+        const resumen = document.getElementById(resumenId);
+        if (resumen) {
+            resumen.textContent = seleccionados.length === 1
+                ? 'Vas a trabajar con 1 orden.'
+                : `Vas a trabajar con ${seleccionados.length} órdenes.`;
+        }
         new bootstrap.Modal(document.getElementById(modalId)).show();
         return true;
     }
@@ -429,6 +445,12 @@ $(document).ready(function() {
     const btnAsignar = document.getElementById('btnAsignarMasivo');
     if (btnAsignar) btnAsignar.addEventListener('click', () => abrirModalSeleccion('modalAsignarMasivoOrdenes', 'bulkAsignarIds', 'bulkAsignarResumen'));
 
+    const btnEditarMasivo = document.getElementById('btnEditarMasivo');
+    if (btnEditarMasivo) {
+        btnEditarMasivo.addEventListener('click', () =>
+            abrirModalSeleccion('modalEditarMasivoOrdenes', 'bulkOrdenIds', 'bulkOrdenResumen')
+        );
+    }
     const modalImportarOrdenes = document.getElementById('modalImportarOrdenes');
     if (modalImportarOrdenes) {
         modalImportarOrdenes.addEventListener('hide.bs.modal', function(e) {
@@ -510,7 +532,39 @@ $(document).ready(function() {
             e.preventDefault();
             fetch("{% url 'ordenes_asignar_masivo' %}", { method: 'POST', body: new FormData(formAsignar) })
                 .then(r => r.json())
-                .then(data => { alert(data.message); if (data.success) location.reload(); });
+                .then(data => {
+                    if (window.showToast) {
+                        showToast(data.message || (data.success ? 'Órdenes asignadas.' : 'No se pudo asignar.'), data.success ? 'success' : 'danger');
+                    } else {
+                        alert(data.message);
+                    }
+                    if (data.success) setTimeout(() => location.reload(), 900);
+                })
+                .catch(() => {
+                    if (window.showToast) showToast('No hay conexión con el servidor. Intenta de nuevo.', 'danger');
+                    else alert('Error de conexión');
+                });
+        });
+    }
+
+    const formEditarMasivoOrdenes = document.getElementById('formEditarMasivoOrdenes');
+    if (formEditarMasivoOrdenes) {
+        formEditarMasivoOrdenes.addEventListener('submit', function(e) {
+            e.preventDefault();
+            fetch("{% url 'ordenes_modificar_masivo' %}", { method: 'POST', body: new FormData(formEditarMasivoOrdenes) })
+                .then(r => r.json())
+                .then(data => {
+                    if (window.showToast) {
+                        showToast(data.message || (data.success ? 'Cambios guardados.' : 'No se pudo guardar.'), data.success ? 'success' : 'danger');
+                    } else {
+                        alert(data.message);
+                    }
+                    if (data.success) setTimeout(() => location.reload(), 900);
+                })
+                .catch(() => {
+                    if (window.showToast) showToast('No hay conexión con el servidor. Intenta de nuevo.', 'danger');
+                    else alert('Error de conexión');
+                });
         });
     }
 
@@ -527,21 +581,25 @@ $(document).ready(function() {
         });
     });
 
-    // --- DataTables al final: si falla, no bloquea importación ni otros handlers ---
+    // Con paginación servidor: no usar DataTables (reordena filas y desarma # / ID).
+    {% if not paginacion_servidor %}
     $.fn.dataTable.ext.errMode = 'none';
     const dtOptions = {
         language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json' },
-        paging: {% if paginacion_servidor %}false{% else %}true{% endif %},
-        searching: {% if paginacion_servidor %}false{% else %}true{% endif %},
-        info: {% if paginacion_servidor %}false{% else %}true{% endif %},
+        paging: true,
+        searching: true,
+        info: true,
+        ordering: true,
+        order: [],
         pageLength: 25,
         autoWidth: false,
-        order: [[{% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}8{% else %}7{% endif %}, 'desc']],
-        columnDefs: [{ targets: -1, orderable: false, searchable: false }]
+        columnDefs: [
+            { targets: -1, orderable: false, searchable: false }
+            {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
+            , { targets: 0, orderable: false, searchable: false }
+            {% endif %}
+        ]
     };
-    {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
-    dtOptions.columnDefs.push({ targets: 0, orderable: false, searchable: false });
-    {% endif %}
 
     const tablaOrdenes = document.getElementById('tablaOrdenes');
     const filasDatos = tablaOrdenes ? tablaOrdenes.querySelectorAll('tbody tr:not(.delco-fila-vacia)') : [];
@@ -552,6 +610,7 @@ $(document).ready(function() {
             console.warn('DataTables no inicializado en órdenes:', err);
         }
     }
+    {% endif %}
 });
 </script>
 {% endblock %}

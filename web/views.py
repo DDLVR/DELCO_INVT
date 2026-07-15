@@ -615,13 +615,12 @@ def inventario_list_view(request):
     from types import SimpleNamespace
     
     from usuarios.models import Usuario
-    from clientes.models import Cliente
     
     tipo = request.GET.get('tipo', 'medidor')
     if tipo == 'todos':
         tipo = 'medidor'
     page_num = request.GET.get('page', '1')
-    per_page_raw = request.GET.get('per_page', '100')
+    per_page_raw = request.GET.get('per_page', '50')
     busqueda = request.GET.get('q', '').strip()
     campo_busqueda = request.GET.get('campo', 'all').strip()
     estado_filtro = request.GET.get('estado', '').strip()
@@ -642,9 +641,9 @@ def inventario_list_view(request):
     try:
         per_page = int(per_page_raw)
     except (TypeError, ValueError):
-        per_page = 100
+        per_page = 50
     if per_page not in per_page_options:
-        per_page = 100
+        per_page = 50
     
     def _equipo_contiene_valor(equipo_row, valor: str) -> bool:
         return valor in ' '.join([
@@ -1003,9 +1002,7 @@ def inventario_list_view(request):
 
     ubicaciones_disponibles = Ubicacion.objects.all()
     usuarios = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
-    # Cap en dropdowns: listados completos rompen la página con miles de clientes/medidores
-    clientes = Cliente.objects.filter(activo=True).exclude(numero_cliente='0').order_by('numero_cliente')[:300]
-    medidores = Medidor.objects.order_by('serie')[:300]
+    # Cliente/medidor se eligen por autocomplete (APIs); no cargar miles de opciones al HTML.
 
     def _proyectos_lista():
         return sorted(set(
@@ -1044,8 +1041,6 @@ def inventario_list_view(request):
         'estados_disponibles': estados_disponibles,
         'ubicaciones_disponibles': ubicaciones_disponibles,
         'usuarios': usuarios,
-        'clientes': clientes,
-        'medidores': medidores,
         'estado_seleccionado': str(estado_filtro).strip() if estado_filtro else '',
         'ubicacion_seleccionada': ubicacion_filtro,
         'proyecto_seleccionado': proyecto_filtro,
@@ -1125,8 +1120,16 @@ def inventario_obtener_datos_view(request, pk):
                 'estado_id': getattr(equipo, 'estado_inventario_id', '') or '',
                 'cliente_id': getattr(equipo, 'cliente_id', '') or '',
                 'cliente_numero': equipo.cliente.numero_cliente if getattr(equipo, 'cliente', None) else '',
+                'cliente_label': (
+                    f"{equipo.cliente.numero_cliente} - {equipo.cliente.direccion}"
+                    if getattr(equipo, 'cliente', None) else ''
+                ),
                 'cliente_otro': getattr(equipo, 'cliente_otro', '') or '',
                 'medidor_id': getattr(equipo, 'medidor_id', '') or '',
+                'medidor_label': (
+                    f"{equipo.medidor.serie} - {equipo.medidor.marca or 'S/M'}"
+                    if getattr(equipo, 'medidor', None) else ''
+                ),
                 'medidor_otro': getattr(equipo, 'medidor_otro', '') or '',
                 'proyecto': getattr(equipo, 'proyecto', '') or '',
             }
@@ -1149,8 +1152,16 @@ def inventario_obtener_datos_view(request, pk):
                 # AMARILLO (editables)
                 'estado_id': getattr(equipo, 'estado_inventario_id', '') or '',
                 'cliente_id': getattr(equipo, 'cliente_id', '') or '',
+                'cliente_label': (
+                    f"{equipo.cliente.numero_cliente} - {equipo.cliente.direccion}"
+                    if getattr(equipo, 'cliente', None) else ''
+                ),
                 'cliente_otro': getattr(equipo, 'cliente_otro', '') or '',
                 'medidor_id': getattr(equipo, 'medidor_id', '') or '',
+                'medidor_label': (
+                    f"{equipo.medidor.serie} - {equipo.medidor.marca or 'S/M'}"
+                    if getattr(equipo, 'medidor', None) else ''
+                ),
                 'medidor_otro': getattr(equipo, 'medidor_otro', '') or '',
                 'observaciones': getattr(equipo, 'observaciones', '') or '',
                 'marca_secundaria': getattr(equipo, 'marca_secundaria', '') or '',
@@ -1175,6 +1186,10 @@ def inventario_obtener_datos_view(request, pk):
                 'entregado_a_info': getattr(equipo, 'entregado_a_info', '') or '',
                 'observaciones': getattr(equipo, 'observaciones', '') or '',
                 'cliente_numero': equipo.cliente.numero_cliente if getattr(equipo, 'cliente', None) else '',
+                'cliente_label': (
+                    f"{equipo.cliente.numero_cliente} - {equipo.cliente.direccion}"
+                    if getattr(equipo, 'cliente', None) else ''
+                ),
                 'cliente_otro': getattr(equipo, 'cliente_otro', '') or '',
                 'fecha_entrega': equipo.fecha_entrega.strftime('%Y-%m-%d') if equipo.fecha_entrega else '',
                 'estado_id': getattr(equipo, 'estado_inventario_id', '') or '',
@@ -1704,7 +1719,7 @@ def inventario_modificar_masivo_view(request):
     tipo = request.POST.get('tipo', 'medidor').strip().lower()
     ids_raw = request.POST.get('ids', '').strip()
     if not ids_raw:
-        return JsonResponse({'success': False, 'message': 'Selecciona al menos un equipo'})
+        return JsonResponse({'success': False, 'message': 'Marca al menos un equipo en la lista antes de continuar.'})
 
     try:
         ids = [int(x) for x in ids_raw.split(',') if x.strip().isdigit()]
@@ -1712,7 +1727,7 @@ def inventario_modificar_masivo_view(request):
         ids = []
 
     if not ids:
-        return JsonResponse({'success': False, 'message': 'IDs inválidos para edición múltiple'})
+        return JsonResponse({'success': False, 'message': 'La selección de equipos no es válida. Vuelve a marcarlos e intenta de nuevo.'})
 
     if tipo == 'medidor':
         queryset = Medidor.objects.filter(pk__in=ids)
@@ -1724,7 +1739,7 @@ def inventario_modificar_masivo_view(request):
         queryset = Modem.objects.filter(pk__in=ids)
         tipo_item = 'MODEM'
     else:
-        return JsonResponse({'success': False, 'message': 'Tipo de equipo no válido'})
+        return JsonResponse({'success': False, 'message': 'Tipo de equipo no reconocido.'})
 
     # --- Campos de edición ---
     estado_id = request.POST.get('estado_id', '').strip()
@@ -1849,7 +1864,10 @@ def inventario_modificar_masivo_view(request):
 
     return JsonResponse({
         'success': True,
-        'message': f'Actualizados: {actualizados} | Sin cambios: {sin_cambios}',
+        'message': (
+            f'Se actualizaron {actualizados} equipo(s).'
+            + (f' {sin_cambios} ya tenían esos mismos datos.' if sin_cambios else '')
+        ).strip(),
         'actualizados': actualizados,
         'sin_cambios': sin_cambios,
     })
@@ -4062,36 +4080,72 @@ def _calcular_adv_breakdown(model_class):
 # ═══════════════════════════════════════════════════════════════════════════
 
 @login_required
-def api_buscar_medidores(request):
-    """API para buscar medidores por serie, caja o marca (autocomplete)"""
-    from inventario.models import Medidor
-    
+def api_buscar_clientes(request):
+    """API para buscar clientes por número, dirección o comuna (autocomplete)."""
     query = request.GET.get('q', '').strip()
-    
     if not query or len(query) < 2:
         return JsonResponse({'results': []})
-    
+
     try:
-        # Buscar medidores que coincidan con serie, caja o marca
+        qs = (
+            Cliente.objects.filter(activo=True)
+            .exclude(numero_cliente='0')
+            .filter(
+                Q(numero_cliente__icontains=query)
+                | Q(direccion__icontains=query)
+                | Q(comuna__icontains=query)
+            )
+            .order_by('numero_cliente')
+            .values('id', 'numero_cliente', 'direccion', 'comuna')[:20]
+        )
+        results = []
+        for row in qs:
+            label = f"{row['numero_cliente']} - {row['direccion']}"
+            if row.get('comuna'):
+                label = f"{label} ({row['comuna']})"
+            results.append({
+                'id': row['id'],
+                'numero_cliente': row['numero_cliente'],
+                'direccion': row['direccion'],
+                'comuna': row.get('comuna') or '',
+                'label': label,
+            })
+        return JsonResponse({'results': results})
+    except Exception as e:
+        return JsonResponse({'results': [], 'error': str(e)}, status=400)
+
+
+@login_required
+def api_buscar_medidores(request):
+    """API para buscar medidores por serie, caja o marca (autocomplete)"""
+    query = request.GET.get('q', '').strip()
+
+    if not query or len(query) < 2:
+        return JsonResponse({'results': []})
+
+    try:
         medidores = Medidor.objects.filter(
-            activo=True
-        ).filter(
-            models.Q(serie__icontains=query) |
-            models.Q(caja__icontains=query) |
-            models.Q(marca__icontains=query)
-        ).values('id', 'serie', 'caja', 'marca', 'en_custodia_de__nombre_interno')[:20]
-        
+            Q(serie__icontains=query)
+            | Q(caja__icontains=query)
+            | Q(marca__icontains=query)
+        ).select_related('entregado_a', 'en_custodia_de').order_by('serie')[:20]
+
         results = []
         for med in medidores:
+            custodia = (
+                getattr(getattr(med, 'en_custodia_de', None), 'nombre_interno', None)
+                or getattr(getattr(med, 'entregado_a', None), 'nombre_interno', None)
+                or 'Bodega'
+            )
             results.append({
-                'id': med['id'],
-                'serie': med['serie'],
-                'caja': med['caja'],
-                'marca': med['marca'] or 'No especificada',
-                'custodia': med['en_custodia_de__nombre_interno'] or 'Bodega',
-                'label': f"{med['serie']} - Caja: {med['caja']} ({med['marca'] or 'S/M'})",
+                'id': med.id,
+                'serie': med.serie,
+                'caja': med.caja or '',
+                'marca': med.marca or 'No especificada',
+                'custodia': custodia,
+                'label': f"{med.serie} - Caja: {med.caja or '-'} ({med.marca or 'S/M'})",
             })
-        
+
         return JsonResponse({'results': results})
     except Exception as e:
         return JsonResponse({'results': [], 'error': str(e)}, status=400)
@@ -4100,18 +4154,21 @@ def api_buscar_medidores(request):
 @login_required
 def api_obtener_medidor(request, medidor_id):
     """API para obtener detalles completos de un medidor"""
-    from inventario.models import Medidor
-    
     try:
-        medidor = Medidor.objects.get(id=medidor_id, activo=True)
+        medidor = Medidor.objects.select_related('en_custodia_de', 'entregado_a').get(id=medidor_id)
+        custodia = (
+            getattr(getattr(medidor, 'en_custodia_de', None), 'nombre_interno', None)
+            or getattr(getattr(medidor, 'entregado_a', None), 'nombre_interno', None)
+            or 'Bodega'
+        )
         return JsonResponse({
             'id': medidor.id,
             'serie': medidor.serie,
             'caja': medidor.caja,
             'marca': medidor.marca or 'No especificada',
-            'modelo': medidor.modelo or 'No especificado',
+            'modelo': getattr(medidor, 'modelo', '') or 'No especificado',
             'tipo': medidor.get_tipo_medidor_display() if hasattr(medidor, 'get_tipo_medidor_display') else 'Estándar',
-            'en_custodia': medidor.en_custodia_de.nombre_interno if medidor.en_custodia_de else 'Bodega',
+            'en_custodia': custodia,
         })
     except Medidor.DoesNotExist:
         return JsonResponse({'error': 'Medidor no encontrado'}, status=404)
