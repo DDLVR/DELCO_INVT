@@ -213,6 +213,50 @@
     </div>
   </div>
 
+  {% if user.is_authenticated %}
+  <!-- Popup ticket rápido (todos los roles) -->
+  <div class="modal fade" id="modalTicketRapido" tabindex="-1" aria-labelledby="modalTicketRapidoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header text-white" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);">
+          <h5 class="modal-title" id="modalTicketRapidoLabel">
+            <i class="bi bi-life-preserver me-1"></i> Reportar ticket
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <form id="formTicketRapido">
+          {% csrf_token %}
+          <div class="modal-body">
+            <p class="small text-muted">Describe el bug o problema. El ticket quedará registrado con tu cuenta ({{ user.nombre_interno }}).</p>
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="ticketRapidoCategoria">Tipo de reporte <span class="text-danger">*</span></label>
+              <select class="form-select" name="categoria" id="ticketRapidoCategoria" required>
+                <option value="BUG">Bug / Error</option>
+                <option value="PROBLEMA">Problema operativo</option>
+                <option value="MEJORA">Mejora / Idea</option>
+                <option value="ACCESO">Acceso / Permisos</option>
+                <option value="OTRO">Otro</option>
+              </select>
+            </div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold" for="ticketRapidoDescripcion">Descripción <span class="text-danger">*</span></label>
+              <textarea class="form-control" name="descripcion" id="ticketRapidoDescripcion" rows="5" required placeholder="Qué ocurrió, en qué pantalla y qué esperabas ver..."></textarea>
+            </div>
+            <input type="hidden" name="pagina_url" id="ticketRapidoUrl" value="">
+            <div id="ticketRapidoFeedback" class="alert d-none mb-0" role="status"></div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary" id="ticketRapidoSubmit">
+              <i class="bi bi-send"></i> Enviar ticket
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <script>
   window.showToast = function (message, type, duration) {
     if (!type) type = 'success';
@@ -521,6 +565,58 @@
         openProfileModalSafe();
       });
     });
+
+    var formTicketRapido = document.getElementById('formTicketRapido');
+    if (formTicketRapido) {
+      var ticketUrlField = document.getElementById('ticketRapidoUrl');
+      var ticketFeedback = document.getElementById('ticketRapidoFeedback');
+      var ticketModalEl = document.getElementById('modalTicketRapido');
+      if (ticketModalEl) {
+        ticketModalEl.addEventListener('show.bs.modal', function () {
+          if (ticketUrlField) ticketUrlField.value = window.location.pathname + window.location.search;
+          if (ticketFeedback) {
+            ticketFeedback.className = 'alert d-none mb-0';
+            ticketFeedback.textContent = '';
+          }
+        });
+      }
+      formTicketRapido.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var submitBtn = document.getElementById('ticketRapidoSubmit');
+        if (submitBtn) submitBtn.disabled = true;
+        fetch("{% url 'soporte_ticket_rapido' %}", {
+          method: 'POST',
+          body: new FormData(formTicketRapido),
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (ticketFeedback) {
+              ticketFeedback.className = 'alert mb-0 ' + (data.success ? 'alert-success' : 'alert-danger');
+              ticketFeedback.textContent = data.message || (data.success ? 'Ticket enviado.' : 'No se pudo enviar.');
+              ticketFeedback.classList.remove('d-none');
+            }
+            if (data.success) {
+              formTicketRapido.reset();
+              if (typeof showToast === 'function') showToast(data.message || 'Ticket enviado.', 'success');
+              setTimeout(function () {
+                var modal = bootstrap.Modal.getInstance(ticketModalEl);
+                if (modal) modal.hide();
+              }, 900);
+            }
+          })
+          .catch(function () {
+            if (ticketFeedback) {
+              ticketFeedback.className = 'alert alert-danger mb-0';
+              ticketFeedback.textContent = 'Error de conexión al enviar el ticket.';
+              ticketFeedback.classList.remove('d-none');
+            }
+          })
+          .finally(function () {
+            if (submitBtn) submitBtn.disabled = false;
+          });
+      });
+    }
 
     {% for message in messages %}
     showToast(

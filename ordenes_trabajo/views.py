@@ -296,6 +296,7 @@ def orden_detalle_view(request, pk):
 
         tecnico_anterior = orden.tecnico_responsable
         tecnico_anterior_id = getattr(tecnico_anterior, 'id', None)
+        estado_anterior_ot = orden.estado
         if tecnico_anterior_id is not None:
             if tecnico_anterior_id == nuevo_tecnico.id and orden.estado == 'REASIGNADA':
                 messages.info(request, 'El técnico ya está asignado a esta orden')
@@ -317,6 +318,16 @@ def orden_detalle_view(request, pk):
 
         anterior_txt = (
             tecnico_anterior.nombre_interno if tecnico_anterior else 'sin asignar'
+        )
+        from ordenes_trabajo.models import RegistroValidacionOT
+        RegistroValidacionOT.objects.create(
+            orden=orden,
+            accion='REASIGNADA',
+            realizado_por=usuario,
+            comentario=motivo_reasignacion,
+            estado_anterior=estado_anterior_ot,
+            estado_nuevo='REASIGNADA',
+            detalle_extra=f'{anterior_txt} → {nuevo_tecnico.nombre_interno}',
         )
         register_audit_event(
             AuditEvent(
@@ -368,6 +379,9 @@ def orden_detalle_view(request, pk):
         )
 
     tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
+    registros_validacion = (
+        orden.registros_validacion.select_related('realizado_por').order_by('-fecha')[:50]
+    )
 
     context = {
         'orden': orden,
@@ -376,6 +390,7 @@ def orden_detalle_view(request, pk):
         'sincronizaciones': sincronizaciones,
         'paso_operativo': paso_operativo,
         'historial_ordenes_cliente': historial_ordenes_cliente,
+        'registros_validacion': registros_validacion,
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'puede_reasignar': puede_reasignar,
         'tecnicos': tecnicos,

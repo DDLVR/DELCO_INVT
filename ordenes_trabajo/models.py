@@ -378,6 +378,17 @@ class OrdenTrabajo(models.Model):
 
         self.save()
 
+        if nuevo_estado in {'VALIDADA', 'OBSERVADA'}:
+            from ordenes_trabajo.models import RegistroValidacionOT
+            RegistroValidacionOT.objects.create(
+                orden=self,
+                accion=nuevo_estado,
+                realizado_por=usuario,
+                comentario=razon or '',
+                estado_anterior=estado_anterior,
+                estado_nuevo=nuevo_estado,
+            )
+
         from ordenes_trabajo.sync import sincronizar_orden_completa
         sync_result = sincronizar_orden_completa(self, usuario, nuevo_estado)
 
@@ -440,6 +451,49 @@ class OrdenTrabajo(models.Model):
             models.Index(fields=['-fecha_creacion']),
             models.Index(fields=['eliminado']),
         ]
+
+
+class RegistroValidacionOT(models.Model):
+    """Historial persistente de validaciones / rechazos / reasignaciones administrativas."""
+
+    ACCION_CHOICES = [
+        ('VALIDADA', 'Validada (aprobada)'),
+        ('OBSERVADA', 'Observada (rechazada)'),
+        ('REASIGNADA', 'Reasignación de técnico'),
+    ]
+
+    orden = models.ForeignKey(
+        OrdenTrabajo,
+        on_delete=models.CASCADE,
+        related_name='registros_validacion',
+    )
+    accion = models.CharField(max_length=20, choices=ACCION_CHOICES)
+    realizado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.PROTECT,
+        related_name='registros_validacion_ot',
+    )
+    comentario = models.TextField(blank=True)
+    estado_anterior = models.CharField(max_length=40, blank=True)
+    estado_nuevo = models.CharField(max_length=40, blank=True)
+    detalle_extra = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text='Ej. técnico anterior → nuevo técnico',
+    )
+    fecha = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-fecha']
+        verbose_name = 'Registro de validación OT'
+        verbose_name_plural = 'Registros de validación OT'
+        indexes = [
+            models.Index(fields=['orden', '-fecha']),
+            models.Index(fields=['accion', '-fecha']),
+        ]
+
+    def __str__(self):
+        return f'OT #{self.orden_id} · {self.accion} · {self.fecha:%Y-%m-%d %H:%M}'
 
 
 class AdjuntoOrden(models.Model):

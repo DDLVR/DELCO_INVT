@@ -20,6 +20,7 @@ from soporte.views import (
     soporte_list_view,
     soporte_crear_view,
     soporte_detalle_view,
+    soporte_ticket_rapido_view,
 )
 from ordenes_trabajo.views import (
     ordenes_list_view as ordenes_trabajo_list, 
@@ -122,6 +123,7 @@ urlpatterns = [
     path('soporte/', soporte_hub_view, name='soporte_hub'),
     path('soporte/tickets/', soporte_list_view, name='soporte_list'),
     path('soporte/tickets/crear/', soporte_crear_view, name='soporte_crear'),
+    path('soporte/tickets/rapido/', soporte_ticket_rapido_view, name='soporte_ticket_rapido'),
     path('soporte/tickets/<int:pk>/', soporte_detalle_view, name='soporte_detalle'),
     path('operacional/moreapp/<int:pk>/marcar-revision/', moreapp_marcar_revision_view, name='moreapp_marcar_revision'),
     path('reportes/moreapp/<int:pk>/reprocesar/', moreapp_reprocesar_view, name='moreapp_reprocesar'),

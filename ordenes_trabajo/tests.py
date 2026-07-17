@@ -408,6 +408,9 @@ class OrdenesValidacionAdministrativoTests(TestCase):
 		self.orden.refresh_from_db()
 		self.assertEqual(self.orden.estado, 'VALIDADA')
 		self.assertEqual(self.orden.validada_por, self.administrativo)
+		from ordenes_trabajo.models import RegistroValidacionOT
+		reg = RegistroValidacionOT.objects.get(orden=self.orden, accion='VALIDADA')
+		self.assertEqual(reg.realizado_por_id, self.administrativo.id)
 
 	def test_observada_crea_orden_derivada(self):
 		self.assertTrue(self.client.login(rut=self.administrativo.rut, password=self.password))
@@ -429,6 +432,21 @@ class OrdenesValidacionAdministrativoTests(TestCase):
 		self.assertEqual(derivada.tecnico_responsable_id, self.tecnico.pk)
 		self.assertEqual(derivada.estado, 'ASIGNADA')
 		self.assertEqual(response.url, reverse('orden_detalle', args=[derivada.pk]))
+		from ordenes_trabajo.models import RegistroValidacionOT
+		reg = RegistroValidacionOT.objects.get(orden=self.orden, accion='OBSERVADA')
+		self.assertIn('Falta foto', reg.comentario)
+
+	def test_detalle_muestra_registro_validacion(self):
+		self.assertTrue(self.client.login(rut=self.administrativo.rut, password=self.password))
+		self.client.post(
+			reverse('cambiar_estado_orden', args=[self.orden.pk]),
+			{'nuevo_estado': 'VALIDADA'},
+		)
+		response = self.client.get(reverse('orden_detalle', args=[self.orden.pk]))
+		self.assertEqual(response.status_code, 200)
+		html = response.content.decode()
+		self.assertIn('Registro de validación', html)
+		self.assertIn(self.administrativo.nombre_interno, html)
 
 	def test_observada_sin_comentario_bloquea(self):
 		self.assertTrue(self.client.login(rut=self.administrativo.rut, password=self.password))
