@@ -2725,9 +2725,13 @@ def clientes_list_view(request):
     """Lista de clientes activos con paginación servidor (no carga todo el padrón en HTML)."""
     from django.core.paginator import Paginator
     from django.db.models import Count
-    from django.db.models.functions import Length
+    from django.db.models.functions import Length, Trim
 
     q = (request.GET.get('q') or '').strip()
+    numero_cliente_filtro = (request.GET.get('numero_cliente') or '').strip()
+    comuna_filtro = (request.GET.get('comuna') or '').strip()
+    sector_filtro = (request.GET.get('sector') or '').strip()
+    tipo_suministro_filtro = (request.GET.get('tipo_suministro') or '').strip()
     solo_duplicados = (request.GET.get('solo_duplicados') or '') == '1'
     try:
         per_page = int(request.GET.get('per_page') or 50)
@@ -2736,17 +2740,17 @@ def clientes_list_view(request):
     if per_page not in (25, 50, 100, 200):
         per_page = 50
 
+    base_activos = Cliente.objects.filter(activo=True).exclude(numero_cliente__in=['', '0'])
+
     # Orden natural de Nº cliente (1000 después de 200), no alfabético
     clientes_qs = (
-        Cliente.objects.filter(activo=True)
-        .exclude(numero_cliente__in=['', '0'])
+        base_activos
         .annotate(_ord_len=Length('numero_cliente'))
         .order_by('_ord_len', 'numero_cliente', 'meter_serial_n_1', 'id')
     )
 
     numeros_duplicados = set(
-        Cliente.objects.filter(activo=True)
-        .exclude(numero_cliente__in=['', '0'])
+        base_activos
         .values('numero_cliente')
         .annotate(c=Count('id'))
         .filter(c__gt=1)
@@ -2756,6 +2760,21 @@ def clientes_list_view(request):
     if solo_duplicados and numeros_duplicados:
         clientes_qs = clientes_qs.filter(numero_cliente__in=numeros_duplicados)
 
+    if numero_cliente_filtro:
+        clientes_qs = clientes_qs.filter(numero_cliente__icontains=numero_cliente_filtro)
+    if comuna_filtro:
+        clientes_qs = clientes_qs.annotate(_comuna_norm=Trim('comuna')).filter(
+            _comuna_norm__iexact=comuna_filtro
+        )
+    if sector_filtro:
+        clientes_qs = clientes_qs.annotate(_sector_norm=Trim('sector')).filter(
+            _sector_norm__iexact=sector_filtro
+        )
+    if tipo_suministro_filtro:
+        clientes_qs = clientes_qs.annotate(_tipo_sum_norm=Trim('tipo_suministro')).filter(
+            _tipo_sum_norm__iexact=tipo_suministro_filtro
+        )
+
     if q:
         clientes_qs = clientes_qs.filter(
             Q(numero_cliente__icontains=q)
@@ -2764,11 +2783,33 @@ def clientes_list_view(request):
             | Q(direccion__icontains=q)
             | Q(installation_address__icontains=q)
             | Q(meter_serial_n_1__icontains=q)
-            | Q(proyecto__icontains=q)
             | Q(sector__icontains=q)
             | Q(tipo_suministro__icontains=q)
-            | Q(meter_manufacturer_id__icontains=q)
         )
+
+    def _valores_filtro(campo):
+        """Valores únicos para combos (sin repetir por espacios/mayúsculas)."""
+        unicos = {}
+        for valor in (
+            base_activos.exclude(**{f'{campo}__isnull': True})
+            .exclude(**{campo: ''})
+            .values_list(campo, flat=True)
+            .iterator()
+        ):
+            if valor is None:
+                continue
+            texto = str(valor).strip()
+            if not texto:
+                continue
+            clave = texto.casefold()
+            # Conserva la primera forma vista; evita opciones duplicadas en el select.
+            if clave not in unicos:
+                unicos[clave] = texto
+        return sorted(unicos.values(), key=lambda item: item.casefold())
+
+    comunas_disponibles = _valores_filtro('comuna')
+    sectores_disponibles = _valores_filtro('sector')
+    tipos_suministro_disponibles = _valores_filtro('tipo_suministro')
 
     total_fichas = clientes_qs.count()
     total_clientes = clientes_qs.values('numero_cliente').distinct().count()
@@ -2783,6 +2824,13 @@ def clientes_list_view(request):
         'page_obj': page_obj,
         'query_string': query_params.urlencode(),
         'q': q,
+        'numero_cliente_seleccionado': numero_cliente_filtro,
+        'comuna_seleccionada': comuna_filtro,
+        'sector_seleccionado': sector_filtro,
+        'tipo_suministro_seleccionado': tipo_suministro_filtro,
+        'comunas_disponibles': comunas_disponibles,
+        'sectores_disponibles': sectores_disponibles,
+        'tipos_suministro_disponibles': tipos_suministro_disponibles,
         'solo_duplicados': solo_duplicados,
         'per_page': per_page,
         'total_clientes': total_clientes,
@@ -3071,8 +3119,33 @@ def cliente_crear_view(request):
 @login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
 def cliente_editar_view(request, pk):
-    """Editar cliente (roles ADMIN y ADMINISTRATIVO)."""
+    """Editar cliente (roles ADMIN y ADMINISTRATIVO). Soporta modal AJAX sin salir del listado."""
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
+
+    def _quiere_json():
+        if request.GET.get('format') == 'json' or request.POST.get('ajax') == '1':
+            return True
+        accept = (request.headers.get('Accept') or '').lower()
+        if 'application/json' in accept:
+            return True
+        return (request.headers.get('X-Requested-With') or '') == 'XMLHttpRequest'
+
+    if request.method == 'GET' and _quiere_json():
+        return JsonResponse({
+            'success': True,
+            'cliente': {
+                'id': cliente.id,
+                'numero_cliente': cliente.numero_cliente or '',
+                'sector': cliente.sector or '',
+                'tipo_suministro': cliente.tipo_suministro or '',
+                'comuna': cliente.comuna or '',
+                'customer_name': cliente.customer_name or '',
+                'installation_address': cliente.installation_address or '',
+                'proyecto': cliente.proyecto or '',
+                'meter_manufacturer_id': cliente.meter_manufacturer_id or '',
+                'meter_serial_n_1': cliente.meter_serial_n_1 or '',
+            },
+        })
 
     if request.method == 'POST':
         numero_cliente = request.POST.get('numero_cliente', '').strip()
@@ -3084,6 +3157,7 @@ def cliente_editar_view(request, pk):
         proyecto = request.POST.get('proyecto', '').strip()
         meter_manufacturer_id = request.POST.get('meter_manufacturer_id', '').strip()
         meter_serial_n_1 = request.POST.get('meter_serial_n_1', '').strip()
+        next_url = (request.POST.get('next') or '').strip()
 
         before_values = {
             'numero_cliente': cliente.numero_cliente,
@@ -3100,20 +3174,30 @@ def cliente_editar_view(request, pk):
         # Si no envían número de cliente en edición, se conserva el actual.
         numero_cliente_final = numero_cliente or cliente.numero_cliente
 
+        def _responder_error(mensaje):
+            if _quiere_json():
+                return JsonResponse({'success': False, 'message': mensaje}, status=400)
+            messages.error(request, mensaje)
+            if next_url and next_url.startswith('/'):
+                return redirect(next_url)
+            return redirect('clientes_list')
+
         if Cliente.objects.filter(
             numero_cliente=numero_cliente_final,
             meter_serial_n_1__iexact=meter_serial_n_1,
             activo=True,
         ).exclude(pk=pk).exists():
-            messages.error(request, f'Ya existe un cliente activo con numero {numero_cliente_final} y la misma serie {meter_serial_n_1}.')
-            return redirect('cliente_editar', pk=pk)
+            return _responder_error(
+                f'Ya existe un cliente activo con numero {numero_cliente_final} y la misma serie {meter_serial_n_1}.'
+            )
 
         if meter_serial_n_1 and Cliente.objects.filter(
             meter_serial_n_1__iexact=meter_serial_n_1,
             activo=True,
         ).exclude(pk=pk).exists():
-            messages.error(request, f'El número de serie {meter_serial_n_1} ya está asignado a otro cliente activo.')
-            return redirect('cliente_editar', pk=pk)
+            return _responder_error(
+                f'El número de serie {meter_serial_n_1} ya está asignado a otro cliente activo.'
+            )
 
         cliente.numero_cliente = numero_cliente_final
         cliente.sector = sector or None
@@ -3153,11 +3237,203 @@ def cliente_editar_view(request, pk):
                     )
                 )
 
-        messages.success(request, f'Cliente {numero_cliente_final} actualizado correctamente.')
+        mensaje_ok = f'Cliente {numero_cliente_final} actualizado correctamente.'
+        if _quiere_json():
+            return JsonResponse({
+                'success': True,
+                'message': mensaje_ok,
+                'cliente': after_values,
+                'cliente_id': cliente.id,
+            })
+
+        messages.success(request, mensaje_ok)
+        if next_url and next_url.startswith('/'):
+            return redirect(next_url)
         return redirect('clientes_list')
 
-    context = {'cliente': cliente}
-    return render(request, 'clientes/editar.html', context)
+    # GET HTML clásico: redirige al listado (edición es modal)
+    return redirect('clientes_list')
+
+
+@login_required
+def cliente_historial_view(request, pk):
+    """Ficha completa del cliente: datos ocultos del listado, OT y alertas operativas."""
+    from ordenes_trabajo.models import OrdenTrabajo, IntegracionMoreApp
+    from ordenes_trabajo.services import (
+        count_visits_last_6_months,
+        has_open_ot_for_cliente,
+        should_flag_reincidence,
+    )
+    from web.models import AuditLog
+
+    cliente = get_object_or_404(Cliente, pk=pk, activo=True)
+    numero = (cliente.numero_cliente or '').strip()
+
+    ordenes = (
+        OrdenTrabajo.objects.filter(cliente=cliente)
+        .select_related('tecnico_responsable')
+        .order_by('-fecha_creacion')[:50]
+    )
+    ordenes_abiertas = OrdenTrabajo.objects.filter(
+        cliente=cliente,
+        estado__in=OrdenTrabajo.ESTADOS_ABIERTOS,
+    ).count()
+    ordenes_con_alerta = OrdenTrabajo.objects.filter(
+        cliente=cliente,
+        alerta_duplicado=True,
+    ).count()
+    visitas_6m = count_visits_last_6_months(cliente.pk)
+
+    fichas_mismo_numero = list(
+        Cliente.objects.filter(activo=True, numero_cliente=numero)
+        .exclude(pk=cliente.pk)
+        .order_by('meter_serial_n_1', 'id')[:20]
+    )
+
+    alertas = []
+    if fichas_mismo_numero:
+        alertas.append({
+            'nivel': 'danger',
+            'titulo': 'Número de cliente duplicado',
+            'detalle': (
+                f'Hay {len(fichas_mismo_numero)} ficha(s) activa(s) más con el mismo '
+                f'Nº {numero}.'
+            ),
+        })
+
+    if cliente.ip:
+        otros_ip = Cliente.objects.filter(
+            activo=True,
+            ip__iexact=str(cliente.ip).strip(),
+        ).exclude(pk=cliente.pk).exclude(ip__isnull=True).exclude(ip='')
+        if otros_ip.exists():
+            alertas.append({
+                'nivel': 'danger',
+                'titulo': 'IP duplicada',
+                'detalle': (
+                    f'La IP {cliente.ip} también está en: '
+                    + ', '.join(otros_ip.values_list('numero_cliente', flat=True)[:5])
+                ),
+            })
+        if not (cliente.puerto or '').strip():
+            alertas.append({
+                'nivel': 'warning',
+                'titulo': 'IP sin puerto',
+                'detalle': 'Hay IP registrada pero no hay puerto asociado.',
+            })
+
+    if cliente.meter_serial_n_1:
+        otros_medidor = Cliente.objects.filter(
+            activo=True,
+            meter_serial_n_1__iexact=str(cliente.meter_serial_n_1).strip(),
+        ).exclude(pk=cliente.pk)
+        if otros_medidor.exists():
+            alertas.append({
+                'nivel': 'danger',
+                'titulo': 'Serie de medidor duplicada',
+                'detalle': (
+                    f'La serie {cliente.meter_serial_n_1} también está en: '
+                    + ', '.join(otros_medidor.values_list('numero_cliente', flat=True)[:5])
+                ),
+            })
+
+    if has_open_ot_for_cliente(cliente.pk):
+        alertas.append({
+            'nivel': 'warning',
+            'titulo': 'OT abierta',
+            'detalle': f'El cliente tiene {ordenes_abiertas} orden(es) de trabajo abierta(s).',
+        })
+
+    if ordenes_con_alerta:
+        alertas.append({
+            'nivel': 'warning',
+            'titulo': 'OT con alerta de duplicado',
+            'detalle': f'{ordenes_con_alerta} OT marcada(s) como posible trabajo duplicado.',
+        })
+
+    if should_flag_reincidence(visitas_6m):
+        alertas.append({
+            'nivel': 'warning',
+            'titulo': 'Reincidencia de visitas',
+            'detalle': (
+                f'Más de 2 visitas en los últimos 6 meses ({visitas_6m} registros OT).'
+            ),
+        })
+
+    if cliente.estado_stb == 'PENDIENTE':
+        alertas.append({
+            'nivel': 'warning',
+            'titulo': 'Pendiente STB',
+            'detalle': 'Cliente pendiente de actualización en StarBeat (STB).',
+        })
+    if cliente.estado_sci4 == 'PENDIENTE':
+        alertas.append({
+            'nivel': 'warning',
+            'titulo': 'Pendiente SCi4',
+            'detalle': 'Cliente pendiente de actualización en SCi4.',
+        })
+    if cliente.estado_telemetria in ('SIN_COMUNICACION', 'NO_COMUNICA', 'SIN_MEDIDOR'):
+        alertas.append({
+            'nivel': 'warning',
+            'titulo': 'Estado de telemetría',
+            'detalle': f'Telemetría: {cliente.get_estado_telemetria_display()}.',
+        })
+    if cliente.sim_estado in ('SIN_DATOS', 'DANADA', 'SIN_COBERTURA', 'SIN_IP'):
+        alertas.append({
+            'nivel': 'warning',
+            'titulo': 'Estado de SIM',
+            'detalle': f'SIM: {cliente.get_sim_estado_display()}.',
+        })
+
+    if not alertas:
+        alertas.append({
+            'nivel': 'success',
+            'titulo': 'Sin alertas detectadas',
+            'detalle': 'No se encontraron inconsistencias operativas automáticas en esta ficha.',
+        })
+
+    moreapp_regs = []
+    if numero:
+        moreapp_qs = IntegracionMoreApp.objects.order_by('-fecha_recepcion')[:300]
+        for reg in moreapp_qs:
+            data = reg.datos_procesados or {}
+            raw = (reg.datos_recibidos or {}).get('data') or {}
+            candidatos = [
+                data.get('cliente'),
+                data.get('numero_cliente'),
+                data.get('codigo_cliente'),
+                raw.get('cliente'),
+            ]
+            buscar = raw.get('buscarCliente') or {}
+            if isinstance(buscar, dict):
+                candidatos.append(buscar.get('CLIENTE1'))
+            mant = raw.get('clienteParaMantenimiento') or {}
+            if isinstance(mant, dict):
+                candidatos.append(mant.get('NROCLIENTE'))
+            if any(str(c).strip() == numero for c in candidatos if c is not None):
+                moreapp_regs.append(reg)
+            if len(moreapp_regs) >= 20:
+                break
+
+    auditoria = AuditLog.objects.filter(
+        entity='Cliente',
+        entity_id=str(cliente.pk),
+    ).order_by('-created_at')[:40]
+
+    context = {
+        'cliente': cliente,
+        'ordenes': ordenes,
+        'ordenes_abiertas': ordenes_abiertas,
+        'ordenes_con_alerta': ordenes_con_alerta,
+        'visitas_6m': visitas_6m,
+        'alertas': alertas,
+        'tiene_alertas_criticas': any(a['nivel'] == 'danger' for a in alertas),
+        'fichas_mismo_numero': fichas_mismo_numero,
+        'moreapp_regs': moreapp_regs,
+        'auditoria': auditoria,
+        'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
+    }
+    return render(request, 'clientes/historial.html', context)
 
 
 @login_required

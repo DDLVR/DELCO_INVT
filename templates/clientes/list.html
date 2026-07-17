@@ -48,15 +48,42 @@
                 <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
               </select>
             </div>
-            <div class="col-md-7">
-              <label for="tablaBuscar" class="form-label mb-1">Buscar (servidor)</label>
-              <input type="text" name="q" id="tablaBuscar" class="form-control form-control-sm" placeholder="Nº cliente, nombre, comuna, serie, proyecto..." value="{{ q|default:'' }}">
+            <div class="col-md-2">
+              <label for="filtroNumeroCliente" class="form-label mb-1">Nº Cliente</label>
+              <input type="text" id="filtroNumeroCliente" name="numero_cliente" class="form-control form-control-sm" placeholder="Ej: 2930789" value="{{ numero_cliente_seleccionado|default:'' }}">
             </div>
-            <div class="col-md-3 d-flex gap-2">
+            <div class="col-md-2">
+              <label for="filtroComuna" class="form-label mb-1">Comuna</label>
+              <select id="filtroComuna" name="comuna" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todas</option>
+                {% for comuna in comunas_disponibles %}
+                <option value="{{ comuna }}" {% if comuna == comuna_seleccionada %}selected{% endif %}>{{ comuna }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label for="filtroSector" class="form-label mb-1">Sector</label>
+              <select id="filtroSector" name="sector" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                {% for sector in sectores_disponibles %}
+                <option value="{{ sector }}" {% if sector == sector_seleccionado %}selected{% endif %}>{{ sector }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label for="filtroTipoSuministro" class="form-label mb-1">Tipo suministro</label>
+              <select id="filtroTipoSuministro" name="tipo_suministro" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                {% for tipo in tipos_suministro_disponibles %}
+                <option value="{{ tipo }}" {% if tipo == tipo_suministro_seleccionado %}selected{% endif %}>{{ tipo }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2 d-flex gap-2">
               <button type="submit" class="btn btn-primary btn-sm flex-grow-1" id="btnAplicarFiltroTabla">
                 <i class="bi bi-funnel"></i> Filtrar
               </button>
-              <a href="{% url 'clientes_list' %}" class="btn btn-secondary btn-sm" id="btnLimpiarFiltroTabla">
+              <a href="{% url 'clientes_list' %}" class="btn btn-secondary btn-sm" id="btnLimpiarFiltroTabla" title="Limpiar filtros">
                 <i class="bi bi-arrow-clockwise"></i>
               </a>
             </div>
@@ -70,7 +97,8 @@
               {% if page_obj %}
               <p class="text-muted small mb-0 mt-2">
                 Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
-                · {{ total_clientes }} cliente{{ total_clientes|pluralize }}.
+                · {{ total_clientes }} cliente{{ total_clientes|pluralize }}
+                {% if total_fichas != total_clientes %} ({{ total_fichas }} fichas){% endif %}.
                 Exportar descarga el padrón completo.
               </p>
               {% endif %}
@@ -90,16 +118,15 @@
               <input type="checkbox" id="seleccionarTodosClientes" title="Seleccionar todos los clientes visibles">
             {% endif %}
           </th>
-          <th>#</th>
+          <th>Número Cliente</th>
+          <th>Nombre Cliente</th>
+          <th>Comuna</th>
           <th>Sector</th>
           <th>Tipo Suministro</th>
-          <th>Numero Cliente</th>
-          <th>Comuna</th>
-          <th>Nombre Cliente</th>
-          <th>Dirección Instalación</th>
+          <th>Dirección</th>
           <th>Marca Medidor</th>
-          <th>Proyecto</th>
           <th>Serie Medidor</th>
+          <th>Proyecto</th>
           <th>Acciones</th>
         </tr>
       </thead>
@@ -111,41 +138,60 @@
                 <input type="checkbox" class="cliente-selector" value="{{ cliente.id }}" aria-label="Seleccionar cliente {{ cliente.numero_cliente }}">
               {% endif %}
             </td>
-            <td>{% if page_obj %}{{ page_obj.start_index|add:forloop.counter0 }}{% else %}{{ forloop.counter }}{% endif %}</td>
-            <td>{{ cliente.sector|default_if_none:'' }}</td>
-            <td>{{ cliente.tipo_suministro|default_if_none:'' }}</td>
             <td class="{% if cliente.numero_cliente in numeros_duplicados %}cliente-numero-duplicado{% endif %}">
               <strong {% if cliente.numero_cliente in numeros_duplicados %}class="cliente-numero-duplicado" title="Numero Cliente duplicado"{% endif %}>{{ cliente.numero_cliente }}</strong>
             </td>
-            <td>{{ cliente.comuna|default_if_none:'' }}</td>
             <td>{{ cliente.customer_name|default_if_none:'' }}</td>
-            <td>{{ cliente.installation_address|default_if_none:'' }}</td>
+            <td>{{ cliente.comuna|default_if_none:'' }}</td>
+            <td>{{ cliente.sector|default_if_none:'' }}</td>
+            <td>{{ cliente.tipo_suministro|default_if_none:'' }}</td>
+            <td>{% firstof cliente.installation_address cliente.direccion '' %}</td>
             <td>
               {% if cliente.meter_manufacturer_id and cliente.meter_manufacturer_id|lower != 'null' and cliente.meter_manufacturer_id|lower != 'nulo' %}
                 {{ cliente.meter_manufacturer_id }}
               {% endif %}
             </td>
-            <td>{{ cliente.proyecto|default_if_none:'' }}</td>
             <td>
               {% if cliente.meter_serial_n_1 and cliente.meter_serial_n_1|lower != 'null' and cliente.meter_serial_n_1|lower != 'nulo' %}
                 {{ cliente.meter_serial_n_1 }}
               {% endif %}
             </td>
+            <td>{{ cliente.proyecto|default_if_none:'' }}</td>
             <td>
-              {% if puede_editar %}
-                <a href="{% url 'cliente_editar' cliente.id %}" class="btn btn-sm btn-info">✏️ Editar</a>
+              <div class="d-flex flex-wrap gap-1">
+                <a href="{% url 'cliente_historial' cliente.id %}" class="btn btn-sm btn-success" title="Ver historial y alertas">
+                  Historial
+                </a>
+                {% if puede_editar %}
+                <button type="button"
+                        class="btn btn-sm btn-info btn-editar-cliente"
+                        data-bs-toggle="modal"
+                        data-bs-target="#modalEditarCliente"
+                        data-cliente-id="{{ cliente.id }}"
+                        data-numero-cliente="{{ cliente.numero_cliente|default:'' }}"
+                        data-sector="{{ cliente.sector|default:'' }}"
+                        data-tipo-suministro="{{ cliente.tipo_suministro|default:'' }}"
+                        data-comuna="{{ cliente.comuna|default:'' }}"
+                        data-customer-name="{{ cliente.customer_name|default:'' }}"
+                        data-installation-address="{{ cliente.installation_address|default:'' }}"
+                        data-proyecto="{{ cliente.proyecto|default:'' }}"
+                        data-meter-manufacturer-id="{{ cliente.meter_manufacturer_id|default:'' }}"
+                        data-meter-serial="{{ cliente.meter_serial_n_1|default:'' }}">
+                  ✏️ Editar
+                </button>
                 <form action="{% url 'cliente_eliminar' cliente.id %}" method="post" style="display:inline;" class="form-eliminar-cliente" data-cliente-numero="{{ cliente.numero_cliente }}">
                   {% csrf_token %}
                   <button type="submit" class="btn btn-sm btn-danger">🗑️ Eliminar</button>
                 </form>
-              {% else %}
-                <span class="text-muted">Solo lectura</span>
-              {% endif %}
+                {% else %}
+                <span class="text-muted align-self-center small">Solo lectura</span>
+                {% endif %}
+              </div>
             </td>
           </tr>
         {% empty %}
           <tr>
-            <td colspan="12" class="text-center text-muted py-4">No hay clientes registrados.</td>
+            <td colspan="11" class="text-center text-muted py-4">No hay clientes registrados.</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -229,6 +275,71 @@
     </div>
   </div>
 </div>
+
+{% if puede_editar %}
+<div class="modal fade" id="modalEditarCliente" tabindex="-1" aria-labelledby="modalEditarClienteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalEditarClienteLabel">✏️ Editar cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form id="formEditarCliente">
+        {% csrf_token %}
+        <input type="hidden" name="ajax" value="1">
+        <input type="hidden" name="next" id="editarClienteNext" value="">
+        <input type="hidden" id="editarClienteId" value="">
+        <div class="modal-body">
+          <div id="editarClienteAlerta" class="alert alert-danger d-none" role="alert"></div>
+          <p class="text-muted small mb-3">Modifica los datos y guarda. Permanecerás en este listado.</p>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarNumeroCliente">Número de Cliente</label>
+              <input type="text" class="form-control" id="editarNumeroCliente" name="numero_cliente">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarSector">Sector</label>
+              <input type="text" class="form-control" id="editarSector" name="sector">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarTipoSuministro">Tipo de Suministro</label>
+              <input type="text" class="form-control" id="editarTipoSuministro" name="tipo_suministro">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarComuna">Comuna</label>
+              <input type="text" class="form-control" id="editarComuna" name="comuna">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarCustomerName">Nombre Cliente</label>
+              <input type="text" class="form-control" id="editarCustomerName" name="customer_name">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarInstallationAddress">Dirección Instalación</label>
+              <input type="text" class="form-control" id="editarInstallationAddress" name="installation_address">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarMeterManufacturer">Marca Medidor</label>
+              <input type="text" class="form-control" id="editarMeterManufacturer" name="meter_manufacturer_id">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarProyecto">Proyecto</label>
+              <input type="text" class="form-control" id="editarProyecto" name="proyecto">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarMeterSerial">Serie Medidor</label>
+              <input type="text" class="form-control" id="editarMeterSerial" name="meter_serial_n_1">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btnGuardarEditarCliente">✓ Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
 {% endblock %}
 
         {% block extra_js %}
@@ -313,11 +424,6 @@
                   searchable: false
                 },
                 {
-                  targets: 1,
-                  orderable: false,
-                  searchable: false
-                },
-                {
                   targets: -1,
                   orderable: false,
                   searchable: false
@@ -341,7 +447,7 @@
               var frecuenciasNumero = {};
               dataTableClientes.rows().every(function() {
                 var data = this.data();
-                var numero = extraerTextoDeCelda(data[4]);
+                var numero = extraerTextoDeCelda(data[1]);
                 if (numero) {
                   frecuenciasNumero[numero] = (frecuenciasNumero[numero] || 0) + 1;
                 }
@@ -360,7 +466,7 @@
                 if (!settings || settings.nTable.id !== 'tablaClientes') return true;
                 var check = document.getElementById('tablaSoloDuplicados');
                 if (!check || !check.checked) return true;
-                var numero = extraerTextoDeCelda(data[4]);
+                var numero = extraerTextoDeCelda(data[1]);
                 return duplicadosNumeroSet.has(numero) || duplicadosImportacionSet.has(numero);
               });
               filtroDuplicadosRegistrado = true;
@@ -371,11 +477,11 @@
               if (!dataTableClientes) return;
               dataTableClientes.rows({ page: 'current' }).every(function() {
                 var data = this.data();
-                var numero = extraerTextoDeCelda(data[4]);
+                var numero = extraerTextoDeCelda(data[1]);
                 var esDuplicado = duplicadosNumeroSet.has(numero) || duplicadosImportacionSet.has(numero);
                 var nodo = this.node();
                 if (!nodo) return;
-                var celdaNumero = nodo.querySelector('td:nth-child(5)');
+                var celdaNumero = nodo.querySelector('td:nth-child(2)');
                 if (!celdaNumero) return;
                 celdaNumero.classList.toggle('cliente-numero-duplicado', esDuplicado);
                 celdaNumero.title = esDuplicado ? 'Numero Cliente duplicado' : '';
@@ -687,6 +793,131 @@
                 }
               });
             });
+
+            var modalEditarEl = document.getElementById('modalEditarCliente');
+            var formEditarCliente = document.getElementById('formEditarCliente');
+            if (modalEditarEl && formEditarCliente) {
+              var editarAlerta = document.getElementById('editarClienteAlerta');
+              var btnGuardarEditar = document.getElementById('btnGuardarEditarCliente');
+              var editarClienteNext = document.getElementById('editarClienteNext');
+              if (editarClienteNext) {
+                editarClienteNext.value = window.location.pathname + window.location.search;
+              }
+
+              modalEditarEl.addEventListener('show.bs.modal', function(event) {
+                var button = event.relatedTarget;
+                if (!button) return;
+                if (editarAlerta) {
+                  editarAlerta.classList.add('d-none');
+                  editarAlerta.textContent = '';
+                }
+                document.getElementById('editarClienteId').value = button.getAttribute('data-cliente-id') || '';
+                document.getElementById('editarNumeroCliente').value = button.getAttribute('data-numero-cliente') || '';
+                document.getElementById('editarSector').value = button.getAttribute('data-sector') || '';
+                document.getElementById('editarTipoSuministro').value = button.getAttribute('data-tipo-suministro') || '';
+                document.getElementById('editarComuna').value = button.getAttribute('data-comuna') || '';
+                document.getElementById('editarCustomerName').value = button.getAttribute('data-customer-name') || '';
+                document.getElementById('editarInstallationAddress').value = button.getAttribute('data-installation-address') || '';
+                document.getElementById('editarProyecto').value = button.getAttribute('data-proyecto') || '';
+                document.getElementById('editarMeterManufacturer').value = button.getAttribute('data-meter-manufacturer-id') || '';
+                document.getElementById('editarMeterSerial').value = button.getAttribute('data-meter-serial') || '';
+                var titulo = document.getElementById('modalEditarClienteLabel');
+                if (titulo) {
+                  var num = button.getAttribute('data-numero-cliente') || '';
+                  titulo.textContent = num ? ('✏️ Editar cliente ' + num) : '✏️ Editar cliente';
+                }
+              });
+
+              formEditarCliente.addEventListener('submit', function(event) {
+                event.preventDefault();
+                var clienteId = document.getElementById('editarClienteId').value;
+                if (!clienteId) return;
+
+                var formData = new FormData(formEditarCliente);
+                if (btnGuardarEditar) {
+                  btnGuardarEditar.disabled = true;
+                  btnGuardarEditar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
+                }
+                if (editarAlerta) {
+                  editarAlerta.classList.add('d-none');
+                }
+
+                fetch('/clientes/' + clienteId + '/editar/', {
+                  method: 'POST',
+                  body: formData,
+                  headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                  }
+                })
+                .then(function(response) {
+                  return response.json().then(function(data) {
+                    return { ok: response.ok, data: data };
+                  });
+                })
+                .then(function(result) {
+                  if (result.data && result.data.success) {
+                    if (window.showToast) showToast(result.data.message || 'Cliente actualizado.', 'success');
+                    var modalInstance = bootstrap.Modal.getInstance(modalEditarEl);
+                    if (modalInstance) modalInstance.hide();
+                    setTimeout(function() {
+                      window.location.reload();
+                    }, 400);
+                  } else {
+                    var msg = (result.data && result.data.message) || 'No se pudo guardar el cliente.';
+                    if (editarAlerta) {
+                      editarAlerta.textContent = msg;
+                      editarAlerta.classList.remove('d-none');
+                    }
+                    if (window.showToast) showToast(msg, 'danger');
+                    if (btnGuardarEditar) {
+                      btnGuardarEditar.disabled = false;
+                      btnGuardarEditar.innerHTML = '✓ Guardar cambios';
+                    }
+                  }
+                })
+                .catch(function() {
+                  var msg = 'Error de red al guardar el cliente.';
+                  if (editarAlerta) {
+                    editarAlerta.textContent = msg;
+                    editarAlerta.classList.remove('d-none');
+                  }
+                  if (window.showToast) showToast(msg, 'danger');
+                  if (btnGuardarEditar) {
+                    btnGuardarEditar.disabled = false;
+                    btnGuardarEditar.innerHTML = '✓ Guardar cambios';
+                  }
+                });
+              });
+
+              // Abrir modal si viene ?editar=<id> (p.ej. desde historial)
+              var paramsEditar = new URLSearchParams(window.location.search);
+              var editarId = paramsEditar.get('editar');
+              if (editarId) {
+                var btnTarget = document.querySelector('.btn-editar-cliente[data-cliente-id="' + editarId + '"]');
+                if (btnTarget) {
+                  document.getElementById('editarClienteId').value = btnTarget.getAttribute('data-cliente-id') || '';
+                  document.getElementById('editarNumeroCliente').value = btnTarget.getAttribute('data-numero-cliente') || '';
+                  document.getElementById('editarSector').value = btnTarget.getAttribute('data-sector') || '';
+                  document.getElementById('editarTipoSuministro').value = btnTarget.getAttribute('data-tipo-suministro') || '';
+                  document.getElementById('editarComuna').value = btnTarget.getAttribute('data-comuna') || '';
+                  document.getElementById('editarCustomerName').value = btnTarget.getAttribute('data-customer-name') || '';
+                  document.getElementById('editarInstallationAddress').value = btnTarget.getAttribute('data-installation-address') || '';
+                  document.getElementById('editarProyecto').value = btnTarget.getAttribute('data-proyecto') || '';
+                  document.getElementById('editarMeterManufacturer').value = btnTarget.getAttribute('data-meter-manufacturer-id') || '';
+                  document.getElementById('editarMeterSerial').value = btnTarget.getAttribute('data-meter-serial') || '';
+                  var tituloAuto = document.getElementById('modalEditarClienteLabel');
+                  if (tituloAuto) {
+                    var numAuto = btnTarget.getAttribute('data-numero-cliente') || '';
+                    tituloAuto.textContent = numAuto ? ('✏️ Editar cliente ' + numAuto) : '✏️ Editar cliente';
+                  }
+                  paramsEditar.delete('editar');
+                  var nuevaQs = paramsEditar.toString();
+                  window.history.replaceState({}, '', window.location.pathname + (nuevaQs ? ('?' + nuevaQs) : ''));
+                  bootstrap.Modal.getOrCreateInstance(modalEditarEl).show();
+                }
+              }
+            }
           } catch (e) {
             console.error('Info: DataTables no pudo inicializarse en clientes', e);
             if (window.showToast) showToast('Error al inicializar la tabla de clientes. Revisa la consola del navegador.', 'danger', 0);

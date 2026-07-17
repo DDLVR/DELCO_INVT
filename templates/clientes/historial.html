@@ -1,0 +1,428 @@
+{% extends 'base.html' %}
+
+{% block title %}Historial Cliente {{ cliente.numero_cliente }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-4">
+    <div>
+      <h1 class="mb-1">
+        <i class="bi bi-clock-history text-success"></i>
+        Historial — {{ cliente.numero_cliente }}
+      </h1>
+      <p class="text-muted mb-0">
+        {{ cliente.customer_name|default:"Sin nombre" }}
+        {% if cliente.comuna %} · {{ cliente.comuna }}{% endif %}
+      </p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      {% if puede_editar %}
+      <button type="button"
+              class="btn btn-info btn-sm"
+              data-bs-toggle="modal"
+              data-bs-target="#modalEditarClienteHistorial">
+        ✏️ Editar
+      </button>
+      {% endif %}
+      <a href="{% url 'clientes_list' %}" class="btn btn-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Volver al listado
+      </a>
+    </div>
+  </div>
+
+  {# ── Alertas ── #}
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-body d-flex justify-content-between align-items-center">
+          <strong><i class="bi bi-shield-exclamation me-1"></i> Alertas operativas</strong>
+          {% if tiene_alertas_criticas %}
+          <span class="badge bg-danger">Requiere atención</span>
+          {% else %}
+          <span class="badge bg-success">Revisión OK / sin críticas</span>
+          {% endif %}
+        </div>
+        <div class="card-body py-3">
+          <div class="row g-2">
+            {% for alerta in alertas %}
+            <div class="col-md-6">
+              <div class="alert alert-{{ alerta.nivel }} mb-0 py-2">
+                <strong>{{ alerta.titulo }}</strong>
+                <div class="small">{{ alerta.detalle }}</div>
+              </div>
+            </div>
+            {% endfor %}
+          </div>
+          <div class="d-flex flex-wrap gap-3 mt-3 small text-muted">
+            <span>OT abiertas: <strong>{{ ordenes_abiertas }}</strong></span>
+            <span>OT con alerta duplicado: <strong>{{ ordenes_con_alerta }}</strong></span>
+            <span>Visitas (6 meses): <strong>{{ visitas_6m }}</strong></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    {# ── Datos visibles / principales ── #}
+    <div class="col-lg-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-body"><strong>Datos principales</strong></div>
+        <div class="card-body">
+          <dl class="row mb-0 small">
+            <dt class="col-sm-4">Nº Cliente</dt><dd class="col-sm-8">{{ cliente.numero_cliente }}</dd>
+            <dt class="col-sm-4">Nombre</dt><dd class="col-sm-8">{{ cliente.customer_name|default:"—" }}</dd>
+            <dt class="col-sm-4">Comuna</dt><dd class="col-sm-8">{{ cliente.comuna|default:"—" }}</dd>
+            <dt class="col-sm-4">Sector</dt><dd class="col-sm-8">{{ cliente.sector|default:"—" }}</dd>
+            <dt class="col-sm-4">Tipo suministro</dt><dd class="col-sm-8">{{ cliente.tipo_suministro|default:"—" }}</dd>
+            <dt class="col-sm-4">Dirección instalación</dt><dd class="col-sm-8">{% firstof cliente.installation_address "—" %}</dd>
+            <dt class="col-sm-4">Dirección base</dt><dd class="col-sm-8">{{ cliente.direccion|default:"—" }}</dd>
+            <dt class="col-sm-4">Ciudad</dt><dd class="col-sm-8">{{ cliente.city|default:"—" }}</dd>
+            <dt class="col-sm-4">Proyecto</dt><dd class="col-sm-8">{{ cliente.proyecto|default:"—" }}</dd>
+            <dt class="col-sm-4">Marca medidor</dt><dd class="col-sm-8">{{ cliente.meter_manufacturer_id|default:"—" }}</dd>
+            <dt class="col-sm-4">Serie medidor</dt><dd class="col-sm-8">{{ cliente.meter_serial_n_1|default:"—" }}</dd>
+            <dt class="col-sm-4">Empresa</dt><dd class="col-sm-8">{{ cliente.empresa|default:"—" }}</dd>
+            <dt class="col-sm-4">Referencia</dt><dd class="col-sm-8">{{ cliente.referencia|default:"—" }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    {# ── Datos operativos no visibles en listado ── #}
+    <div class="col-lg-6">
+      <div class="card border-0 shadow-sm h-100">
+        <div class="card-header bg-body"><strong>Datos operativos / conexión</strong></div>
+        <div class="card-body">
+          <dl class="row mb-0 small">
+            <dt class="col-sm-4">IP</dt><dd class="col-sm-8">{{ cliente.ip|default:"—" }}</dd>
+            <dt class="col-sm-4">Puerto</dt><dd class="col-sm-8">{{ cliente.puerto|default:"—" }}</dd>
+            <dt class="col-sm-4">Módem</dt><dd class="col-sm-8">{{ cliente.modem|default:"—" }}</dd>
+            <dt class="col-sm-4">Telemetría</dt><dd class="col-sm-8">{{ cliente.get_estado_telemetria_display }}</dd>
+            <dt class="col-sm-4">STB</dt><dd class="col-sm-8">{{ cliente.get_estado_stb_display }}</dd>
+            <dt class="col-sm-4">SCi4</dt><dd class="col-sm-8">{{ cliente.get_estado_sci4_display }}</dd>
+            <dt class="col-sm-4">SIM operador</dt><dd class="col-sm-8">{{ cliente.sim_operador|default:"—" }}</dd>
+            <dt class="col-sm-4">SIM ICCID</dt><dd class="col-sm-8">{{ cliente.sim_iccid|default:"—" }}</dd>
+            <dt class="col-sm-4">SIM abonado</dt><dd class="col-sm-8">{{ cliente.sim_abonado|default:"—" }}</dd>
+            <dt class="col-sm-4">Estado SIM</dt><dd class="col-sm-8">{% if cliente.sim_estado %}{{ cliente.get_sim_estado_display }}{% else %}—{% endif %}</dd>
+            <dt class="col-sm-4">Último acceso</dt><dd class="col-sm-8">{{ cliente.ultimo_acceso|default:"—" }}</dd>
+            <dt class="col-sm-4">Último perfil carga</dt><dd class="col-sm-8">{{ cliente.ultimo_perfil_carga|default:"—" }}</dd>
+            <dt class="col-sm-4">Último perfil instr.</dt><dd class="col-sm-8">{{ cliente.ultimo_perfil_instrumentacion|default:"—" }}</dd>
+            <dt class="col-sm-4">Último reset</dt><dd class="col-sm-8">{{ cliente.ultimo_reset|default:"—" }}</dd>
+            <dt class="col-sm-4">Último reg. facturación</dt><dd class="col-sm-8">{{ cliente.ultimo_registro_facturacion|default:"—" }}</dd>
+            <dt class="col-sm-4">Fecha registro</dt><dd class="col-sm-8">{{ cliente.fecha_registro|default:"—" }}</dd>
+            <dt class="col-sm-4">Trabajo</dt><dd class="col-sm-8">{{ cliente.trabajo|default:"—" }}</dd>
+            <dt class="col-sm-4">Nota</dt><dd class="col-sm-8">{{ cliente.note|default:"—" }}</dd>
+            <dt class="col-sm-4">Creado / actualizado</dt>
+            <dd class="col-sm-8">{{ cliente.fecha_creacion|date:"d/m/Y H:i" }} · {{ cliente.fecha_actualizacion|date:"d/m/Y H:i" }}</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if fichas_mismo_numero %}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-body text-danger"><strong>Otras fichas con el mismo Nº cliente</strong></div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Serie medidor</th>
+              <th>Comuna</th>
+              <th>Nombre</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for otra in fichas_mismo_numero %}
+            <tr>
+              <td>{{ otra.id }}</td>
+              <td>{{ otra.meter_serial_n_1|default:"—" }}</td>
+              <td>{{ otra.comuna|default:"—" }}</td>
+              <td>{{ otra.customer_name|default:"—" }}</td>
+              <td><a class="btn btn-sm btn-outline-success" href="{% url 'cliente_historial' otra.id %}">Ver</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {# ── Órdenes de trabajo ── #}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-body d-flex justify-content-between align-items-center">
+      <strong><i class="bi bi-clipboard-check me-1"></i> Órdenes de trabajo</strong>
+      <a href="{% url 'ordenes_list' %}?cliente={{ cliente.numero_cliente }}" class="btn btn-sm btn-outline-primary">Ver en listado OT</a>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle">
+          <thead class="table-delco">
+            <tr>
+              <th>OT</th>
+              <th>Estado</th>
+              <th>Tipo</th>
+              <th>Técnico</th>
+              <th>Creada</th>
+              <th>Alerta</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for orden in ordenes %}
+            <tr>
+              <td><strong>#{{ orden.id }}</strong></td>
+              <td>
+                <span class="badge bg-{% if orden.estado == 'FINALIZADA' or orden.estado == 'VALIDADA' or orden.estado == 'REALIZADA' %}success{% elif orden.estado == 'CANCELADA' %}danger{% elif orden.estado == 'EN_EJECUCION' or orden.estado == 'ASIGNADA' %}primary{% else %}secondary{% endif %}">
+                  {{ orden.get_estado_display }}
+                </span>
+              </td>
+              <td>{{ orden.get_tipo_trabajo_display }}</td>
+              <td>{{ orden.tecnico_responsable.nombre_interno|default:"Sin asignar" }}</td>
+              <td>{{ orden.fecha_creacion|date:"d/m/Y H:i" }}</td>
+              <td>
+                {% if orden.alerta_duplicado %}
+                <span class="badge bg-warning text-dark" title="{{ orden.descripcion_alerta_duplicado }}">Duplicado</span>
+                {% else %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              </td>
+              <td><a href="{% url 'orden_detalle' orden.id %}" class="btn btn-sm btn-outline-secondary">Abrir</a></td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-4">Este cliente no tiene órdenes de trabajo registradas.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── MoreApp ── #}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-body"><strong><i class="bi bi-phone me-1"></i> Registros MoreApp vinculados</strong></div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0 align-middle">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Formulario</th>
+              <th>Correlativo</th>
+              <th>Revisión</th>
+              <th>Sync</th>
+              <th>Fecha</th>
+              <th>Alerta</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for reg in moreapp_regs %}
+            <tr>
+              <td>{{ reg.id }}</td>
+              <td>{{ reg.nombre_formulario|default:"—" }}</td>
+              <td>{{ reg.numero_correlativo|default:"—" }}</td>
+              <td>{{ reg.get_estado_revision_display }}</td>
+              <td>{{ reg.get_estado_sincronizacion_display }}</td>
+              <td>{{ reg.fecha_recepcion|date:"d/m/Y H:i" }}</td>
+              <td>
+                {% if reg.alerta_doble_trabajo %}
+                <span class="badge bg-warning text-dark">Doble trabajo</span>
+                {% elif reg.descripcion_alerta %}
+                <span class="badge bg-secondary">Sí</span>
+                {% else %}—{% endif %}
+              </td>
+              <td><a href="{% url 'reportes_moreapp_detalle' reg.id %}" class="btn btn-sm btn-outline-secondary">Ver</a></td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="8" class="text-center text-muted py-3">Sin registros MoreApp asociados a este Nº cliente.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── Auditoría ── #}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-body"><strong><i class="bi bi-journal-text me-1"></i> Auditoría de cambios</strong></div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Acción</th>
+              <th>Campo</th>
+              <th>Anterior</th>
+              <th>Nuevo</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for log in auditoria %}
+            <tr>
+              <td>{{ log.created_at|date:"d/m/Y H:i" }}</td>
+              <td>{{ log.action }}</td>
+              <td>{{ log.field_name|default:"—" }}</td>
+              <td class="small">{{ log.old_value|default:"—" }}</td>
+              <td class="small">{{ log.new_value|default:"—" }}</td>
+              <td class="small">{{ log.reason|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="6" class="text-center text-muted py-3">Sin eventos de auditoría para esta ficha.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if puede_editar %}
+<div class="modal fade" id="modalEditarClienteHistorial" tabindex="-1" aria-labelledby="modalEditarClienteHistorialLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalEditarClienteHistorialLabel">✏️ Editar cliente {{ cliente.numero_cliente }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form id="formEditarClienteHistorial">
+        {% csrf_token %}
+        <input type="hidden" name="ajax" value="1">
+        <input type="hidden" name="next" value="{% url 'cliente_historial' cliente.id %}">
+        <div class="modal-body">
+          <div id="editarClienteHistorialAlerta" class="alert alert-danger d-none" role="alert"></div>
+          <p class="text-muted small mb-3">Al cancelar o guardar permanecerás en el historial de este cliente.</p>
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="histEditarNumeroCliente">Número de Cliente</label>
+              <input type="text" class="form-control" id="histEditarNumeroCliente" name="numero_cliente" value="{{ cliente.numero_cliente|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="histEditarSector">Sector</label>
+              <input type="text" class="form-control" id="histEditarSector" name="sector" value="{{ cliente.sector|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="histEditarTipoSuministro">Tipo de Suministro</label>
+              <input type="text" class="form-control" id="histEditarTipoSuministro" name="tipo_suministro" value="{{ cliente.tipo_suministro|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="histEditarComuna">Comuna</label>
+              <input type="text" class="form-control" id="histEditarComuna" name="comuna" value="{{ cliente.comuna|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="histEditarCustomerName">Nombre Cliente</label>
+              <input type="text" class="form-control" id="histEditarCustomerName" name="customer_name" value="{{ cliente.customer_name|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="histEditarInstallationAddress">Dirección Instalación</label>
+              <input type="text" class="form-control" id="histEditarInstallationAddress" name="installation_address" value="{{ cliente.installation_address|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="histEditarMeterManufacturer">Marca Medidor</label>
+              <input type="text" class="form-control" id="histEditarMeterManufacturer" name="meter_manufacturer_id" value="{{ cliente.meter_manufacturer_id|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="histEditarProyecto">Proyecto</label>
+              <input type="text" class="form-control" id="histEditarProyecto" name="proyecto" value="{{ cliente.proyecto|default:'' }}">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="histEditarMeterSerial">Serie Medidor</label>
+              <input type="text" class="form-control" id="histEditarMeterSerial" name="meter_serial_n_1" value="{{ cliente.meter_serial_n_1|default:'' }}">
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btnGuardarEditarClienteHistorial">✓ Guardar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if puede_editar %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var form = document.getElementById('formEditarClienteHistorial');
+  var modalEl = document.getElementById('modalEditarClienteHistorial');
+  if (!form || !modalEl) return;
+
+  var alerta = document.getElementById('editarClienteHistorialAlerta');
+  var btnGuardar = document.getElementById('btnGuardarEditarClienteHistorial');
+  var clienteId = {{ cliente.id }};
+
+  form.addEventListener('submit', function(event) {
+    event.preventDefault();
+    var formData = new FormData(form);
+    if (btnGuardar) {
+      btnGuardar.disabled = true;
+      btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
+    }
+    if (alerta) alerta.classList.add('d-none');
+
+    fetch('/clientes/' + clienteId + '/editar/', {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
+      }
+    })
+    .then(function(response) {
+      return response.json().then(function(data) {
+        return { ok: response.ok, data: data };
+      });
+    })
+    .then(function(result) {
+      if (result.data && result.data.success) {
+        if (window.showToast) showToast(result.data.message || 'Cliente actualizado.', 'success');
+        var modalInstance = bootstrap.Modal.getInstance(modalEl);
+        if (modalInstance) modalInstance.hide();
+        setTimeout(function() {
+          window.location.reload();
+        }, 400);
+      } else {
+        var msg = (result.data && result.data.message) || 'No se pudo guardar el cliente.';
+        if (alerta) {
+          alerta.textContent = msg;
+          alerta.classList.remove('d-none');
+        }
+        if (window.showToast) showToast(msg, 'danger');
+        if (btnGuardar) {
+          btnGuardar.disabled = false;
+          btnGuardar.innerHTML = '✓ Guardar cambios';
+        }
+      }
+    })
+    .catch(function() {
+      var msg = 'Error de red al guardar el cliente.';
+      if (alerta) {
+        alerta.textContent = msg;
+        alerta.classList.remove('d-none');
+      }
+      if (window.showToast) showToast(msg, 'danger');
+      if (btnGuardar) {
+        btnGuardar.disabled = false;
+        btnGuardar.innerHTML = '✓ Guardar cambios';
+      }
+    });
+  });
+});
+</script>
+{% endif %}
+{% endblock %}
