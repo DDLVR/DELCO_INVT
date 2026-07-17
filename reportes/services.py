@@ -19,10 +19,16 @@ from reportes.operational_scope import (
 
 ReportResult = Tuple[List[str], List[List[Any]]]
 
-ESTADOS_EJECUTADOS = {'REALIZADA', 'VALIDADA', 'FINALIZADA'}
+ESTADOS_EJECUTADOS = {
+    'REALIZADA',
+    'REALIZADA_PENDIENTE_COMPROBACION',
+    'VALIDADA',
+    'FINALIZADA',
+}
+# Pendientes de gestión/campo (no incluyen ya ejecutadas en terreno)
 ESTADOS_PENDIENTES_OT = OrdenTrabajo.ESTADOS_ABIERTOS | {
     'PENDIENTE_VALIDACION',
-    'REALIZADA_PENDIENTE_COMPROBACION',
+    'OBSERVADA',
 }
 
 

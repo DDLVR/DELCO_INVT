@@ -30,37 +30,35 @@
                 <a href="?estado=PENDIENTE"
                    class="btn btn-sm {% if estado_filtro == 'PENDIENTE' %}btn-primary{% else %}btn-outline-primary{% endif %}">
                     <i class="bi bi-clock"></i> Pendientes
-                    <span class="badge delco-badge-muted ms-1">{{ contadores.PENDIENTE }}</span>
+                    <span class="badge delco-badge-muted ms-1" id="contador-PENDIENTE">{{ contadores.PENDIENTE }}</span>
                 </a>
                 <a href="?estado=CRITICA"
                    class="btn btn-sm {% if estado_filtro == 'CRITICA' %}btn-danger{% else %}btn-outline-danger{% endif %}">
                     <i class="bi bi-exclamation-octagon"></i> Críticas
-                    <span class="badge delco-badge-muted ms-1">{{ contadores.CRITICA }}</span>
+                    <span class="badge delco-badge-muted ms-1" id="contador-CRITICA">{{ contadores.CRITICA }}</span>
                 </a>
                 <a href="?estado=CON_ADVERTENCIA"
                    class="btn btn-sm {% if estado_filtro == 'CON_ADVERTENCIA' %}btn-warning{% else %}btn-outline-warning{% endif %}">
                     <i class="bi bi-exclamation-triangle"></i> Con advertencia
-                    <span class="badge delco-badge-muted ms-1">{{ contadores.CON_ADVERTENCIA }}</span>
+                    <span class="badge delco-badge-muted ms-1" id="contador-CON_ADVERTENCIA">{{ contadores.CON_ADVERTENCIA }}</span>
                 </a>
                 <a href="?estado=REVISADO"
                    class="btn btn-sm {% if estado_filtro == 'REVISADO' %}btn-success{% else %}btn-outline-success{% endif %}">
                     <i class="bi bi-check-circle"></i> Revisados
-                    <span class="badge delco-badge-muted ms-1">{{ contadores.REVISADO }}</span>
+                    <span class="badge delco-badge-muted ms-1" id="contador-REVISADO">{{ contadores.REVISADO }}</span>
                 </a>
                 <a href="?estado=DESCARTADO"
                    class="btn btn-sm {% if estado_filtro == 'DESCARTADO' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
                     <i class="bi bi-x-circle"></i> Descartados
-                    <span class="badge delco-badge-muted ms-1">{{ contadores.DESCARTADO }}</span>
+                    <span class="badge delco-badge-muted ms-1" id="contador-DESCARTADO">{{ contadores.DESCARTADO }}</span>
                 </a>
                 <a href="?estado=TODOS"
                    class="btn btn-sm {% if estado_filtro == 'TODOS' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
                     <i class="bi bi-grid"></i> Todos
                 </a>
-                {% if contadores.envejecidos %}
-                <span class="badge bg-danger ms-md-2">
-                    <i class="bi bi-hourglass-split"></i> {{ contadores.envejecidos }} sin revisar &gt;7 días
+                <span class="badge bg-danger ms-md-2 {% if not contadores.envejecidos %}d-none{% endif %}" id="badge-envejecidos">
+                    <i class="bi bi-hourglass-split"></i> <span id="contador-envejecidos">{{ contadores.envejecidos }}</span> sin revisar &gt;7 días
                 </span>
-                {% endif %}
             </div>
         </div>
     </div>
@@ -69,7 +67,7 @@
     <div class="card shadow-sm delco-panel-card">
         <div class="card-header delco-card-header-muted py-2 d-flex justify-content-between align-items-center">
             <span><i class="bi bi-table me-1"></i> Registros en cola</span>
-            <span class="small text-muted">{{ registros|length }} en esta vista</span>
+            <span class="small text-muted"><span id="contador-vista">{{ registros|length }}</span> en esta vista</span>
         </div>
         <div class="card-body p-0">
             <div class="table-responsive delco-table-wrap">
@@ -208,6 +206,7 @@
 {% block extra_js %}
 <script>
 const CSRFTOKEN = '{{ csrf_token }}';
+const ESTADO_FILTRO = '{{ estado_filtro }}';
 
 const BADGE_REVISION_CLASS = {
     'REVISADO': 'badge bg-success',
@@ -216,10 +215,53 @@ const BADGE_REVISION_CLASS = {
     'PENDIENTE': 'badge bg-primary',
 };
 
+function actualizarContadores(contadores) {
+    if (!contadores) return;
+    ['PENDIENTE', 'CON_ADVERTENCIA', 'REVISADO', 'DESCARTADO', 'CRITICA'].forEach(function(key) {
+        const el = document.getElementById('contador-' + key);
+        if (el && contadores[key] !== undefined) {
+            el.textContent = contadores[key];
+        }
+    });
+    const env = document.getElementById('contador-envejecidos');
+    const badgeEnv = document.getElementById('badge-envejecidos');
+    if (env && contadores.envejecidos !== undefined) {
+        env.textContent = contadores.envejecidos;
+        if (badgeEnv) {
+            badgeEnv.classList.toggle('d-none', !contadores.envejecidos);
+        }
+    }
+}
+
+function actualizarContadorVista() {
+    const tbody = document.querySelector('table.delco-table-compact tbody');
+    const contadorVista = document.getElementById('contador-vista');
+    if (!tbody || !contadorVista) return;
+    const filas = tbody.querySelectorAll('tr[id^="fila-"]');
+    contadorVista.textContent = filas.length;
+    if (filas.length === 0 && !tbody.querySelector('.fila-vacia')) {
+        const tr = document.createElement('tr');
+        tr.className = 'fila-vacia';
+        tr.innerHTML = '<td colspan="10" class="text-center text-muted py-5">' +
+            '<i class="bi bi-check2-all fs-3 d-block mb-2"></i>' +
+            'Sin registros con este filtro.</td>';
+        tbody.appendChild(tr);
+    }
+}
+
+function debeQuitarDeVista(nuevoEstado) {
+    if (ESTADO_FILTRO === 'TODOS') return false;
+    if (ESTADO_FILTRO === 'CRITICA') {
+        return nuevoEstado === 'REVISADO' || nuevoEstado === 'DESCARTADO';
+    }
+    return nuevoEstado !== ESTADO_FILTRO;
+}
+
 document.querySelectorAll('.btn-marcar').forEach(function(btn) {
     btn.addEventListener('click', function() {
         const pk = this.dataset.pk;
         const nuevoEstado = this.dataset.nuevoEstado;
+        const boton = this;
 
         fetch('{% url "moreapp_marcar_revision" 0 %}'.replace('/0/', `/${pk}/`), {
             method: 'POST',
@@ -235,16 +277,25 @@ document.querySelectorAll('.btn-marcar').forEach(function(btn) {
             return r.json();
         })
         .then(data => {
-            if (data.success) {
-                const badge = document.getElementById(`badge-revision-${pk}`);
-                if (badge) {
-                    badge.textContent = data.estado_revision_display;
-                    badge.className = BADGE_REVISION_CLASS[data.estado_revision] || 'badge delco-badge-muted';
-                }
-                this.disabled = true;
-            } else {
+            if (!data.success) {
                 alert('Error al actualizar: ' + (data.error || 'desconocido'));
+                return;
             }
+            actualizarContadores(data.contadores);
+
+            if (debeQuitarDeVista(data.estado_revision)) {
+                const fila = document.getElementById('fila-' + pk);
+                if (fila) fila.remove();
+                actualizarContadorVista();
+                return;
+            }
+
+            const badge = document.getElementById('badge-revision-' + pk);
+            if (badge) {
+                badge.textContent = data.estado_revision_display;
+                badge.className = BADGE_REVISION_CLASS[data.estado_revision] || 'badge delco-badge-muted';
+            }
+            boton.disabled = true;
         })
         .catch(() => alert('Error de red al actualizar el estado.'));
     });
