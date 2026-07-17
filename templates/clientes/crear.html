@@ -13,8 +13,9 @@
 
   <div class="card shadow-sm delco-panel-card">
     <div class="card-body p-4">
-      <form method="post">
+      <form method="post" id="formCrearCliente">
         {% csrf_token %}
+        <input type="hidden" name="medidor_opcion" id="medidorOpcion" value="crear_medidor">
 
         <!-- ═════════════════════════════════════════════════════ -->
         <!-- DATOS PRINCIPALES (VERDES) -->
@@ -59,28 +60,42 @@
                 <label class="form-label fw-semibold">Proyecto</label>
                 <input type="text" name="proyecto" class="form-control" placeholder="si queda vacio SIN PROYECTO">
               </div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label fw-semibold">Fabricante/ID Medidor <span class="text-danger">*</span></label>
-                <input type="text" name="meter_manufacturer_id" class="form-control" required placeholder="Ej: SCHNEIDER">
-              </div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label fw-semibold">Serie Medidor <span class="text-danger">*</span></label>
-                <input type="text" name="meter_serial_n_1" class="form-control" required placeholder="Ej: 987654321">
-              </div>
             </div>
 
-            <div class="row">
-              <div class="col-md-4 mb-3">
-                <label class="form-label fw-semibold">Dirección Base <span class="text-danger">*</span></label>
-                <input type="text" name="direccion" class="form-control" required placeholder="Ej: GENOVA 7260">
-              </div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label fw-semibold">Ciudad <span class="text-danger">*</span></label>
-                <input type="text" name="city" class="form-control" required placeholder="Ej: SANTIAGO">
-              </div>
+            <hr>
+            <h6 class="fw-semibold mb-3">Medidor <span class="text-danger">*</span></h6>
+            <p class="text-muted small mb-3">El número de medidor es obligatorio, salvo que indiques “Sin medidor”.</p>
+
+            <div class="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Opción de medidor">
+              <input type="radio" class="btn-check" name="medidor_opcion_ui" id="opcionCrearMedidor" value="crear_medidor" checked autocomplete="off">
+              <label class="btn btn-outline-primary" for="opcionCrearMedidor">Crear medidor</label>
+
+              <input type="radio" class="btn-check" name="medidor_opcion_ui" id="opcionSinMedidor" value="sin_medidor" autocomplete="off">
+              <label class="btn btn-outline-secondary" for="opcionSinMedidor">Sin medidor</label>
             </div>
 
-            <small class="text-muted d-block mb-3">La serie de medidor debe existir en inventario y no puede estar duplicada en otro cliente.</small>
+            <div id="bloqueCrearMedidor">
+              <div class="row align-items-end">
+                <div class="col-md-4 mb-3">
+                  <label class="form-label fw-semibold">Serie Medidor <span class="text-danger">*</span></label>
+                  <input type="text" name="meter_serial_n_1" id="meterSerial" class="form-control" required placeholder="Se completa al crear el medidor" readonly>
+                </div>
+                <div class="col-md-4 mb-3">
+                  <label class="form-label fw-semibold">Fabricante/ID Medidor</label>
+                  <input type="text" name="meter_manufacturer_id" id="meterManufacturer" class="form-control" placeholder="Marca del medidor" readonly>
+                </div>
+                <div class="col-md-4 mb-3">
+                  <button type="button" class="btn btn-success w-100" data-bs-toggle="modal" data-bs-target="#modalCrearMedidor">
+                    ＋ Abrir crear medidor
+                  </button>
+                </div>
+              </div>
+              <small class="text-muted d-block mb-3">Usa el popup para crear el medidor en inventario; la serie quedará asociada a este cliente.</small>
+            </div>
+
+            <div id="bloqueSinMedidor" class="alert alert-secondary d-none mb-3" role="status">
+              Este cliente se creará <strong>sin medidor</strong>. El estado de telemetría quedará como “Sin medidor”.
+            </div>
 
             <hr>
             <h6 class="fw-semibold mb-3">Datos Operativos</h6>
@@ -143,4 +158,139 @@
     </div>
   </div>
 </div>
+
+<!-- Modal crear medidor (mismo flujo que inventario) -->
+<div class="modal fade" id="modalCrearMedidor" tabindex="-1" aria-labelledby="modalCrearMedidorLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="modalCrearMedidorLabel"><i class="bi bi-plus-circle"></i> Crear medidor</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form id="formCrearMedidorPopup">
+        {% csrf_token %}
+        <div class="modal-body">
+          <input type="hidden" name="tipo" value="medidor">
+          <div class="mb-3">
+            <label class="form-label">Serie <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="serie" id="popupMedidorSerie" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Marca</label>
+            <input type="text" class="form-control" name="marca" id="popupMedidorMarca">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Caja</label>
+            <input type="text" class="form-control" name="caja">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Tipo de medidor <span class="text-danger">*</span></label>
+            <select class="form-select" name="tipo_medidor" required>
+              <option value="">-- Seleccionar --</option>
+              {% for codigo, nombre in tipo_medidor_choices %}
+              <option value="{{ codigo }}">{{ nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Proyecto</label>
+            <input type="text" class="form-control" name="proyecto" placeholder="Proyecto asociado">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Fecha recepción</label>
+            <input type="date" class="form-control" name="fecha_recepcion">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Estado inicial</label>
+            <select class="form-select" name="estado_id">
+              <option value="">-- Sin estado --</option>
+              {% for estado in estados_disponibles %}
+              <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar medidor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const medidorOpcionHidden = document.getElementById('medidorOpcion');
+  const bloqueCrear = document.getElementById('bloqueCrearMedidor');
+  const bloqueSin = document.getElementById('bloqueSinMedidor');
+  const meterSerial = document.getElementById('meterSerial');
+  const meterManufacturer = document.getElementById('meterManufacturer');
+  const radios = document.querySelectorAll('input[name="medidor_opcion_ui"]');
+
+  function aplicarOpcionMedidor(valor) {
+    medidorOpcionHidden.value = valor;
+    const esSin = valor === 'sin_medidor';
+    bloqueCrear.classList.toggle('d-none', esSin);
+    bloqueSin.classList.toggle('d-none', !esSin);
+    meterSerial.required = !esSin;
+    if (esSin) {
+      meterSerial.value = '';
+      meterManufacturer.value = '';
+    }
+  }
+
+  radios.forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      if (radio.checked) aplicarOpcionMedidor(radio.value);
+    });
+  });
+
+  document.getElementById('formCrearCliente').addEventListener('submit', function (e) {
+    const opcion = medidorOpcionHidden.value;
+    if (opcion === 'crear_medidor' && !meterSerial.value.trim()) {
+      e.preventDefault();
+      alert('Debes crear un medidor con el popup o elegir “Sin medidor”.');
+      return;
+    }
+  });
+
+  const formPopup = document.getElementById('formCrearMedidorPopup');
+  formPopup.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const formData = new FormData(formPopup);
+    const serie = (formData.get('serie') || '').toString().trim();
+    const marca = (formData.get('marca') || '').toString().trim();
+
+    fetch("{% url 'inventario_crear' %}", {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.success) {
+          alert(data.message || 'No se pudo crear el medidor');
+          return;
+        }
+        meterSerial.value = data.serie || serie;
+        meterManufacturer.value = data.marca || marca;
+        document.getElementById('opcionCrearMedidor').checked = true;
+        aplicarOpcionMedidor('crear_medidor');
+        const modalEl = document.getElementById('modalCrearMedidor');
+        const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
+        modal.hide();
+        formPopup.reset();
+        if (typeof showToast === 'function') {
+          showToast(data.message || 'Medidor creado correctamente.', 'success');
+        }
+      })
+      .catch(function () {
+        alert('Error de conexión al crear el medidor.');
+      });
+  });
+})();
+</script>
 {% endblock %}
