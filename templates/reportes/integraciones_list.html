@@ -367,7 +367,7 @@
                 {% elif reg.estado_sincronizacion == 'PENDIENTE' %}
                   <span class="badge bg-info text-dark">Pendiente</span>
                 {% else %}
-                  <span class="badge delco-badge-muted">{{ reg.estado_sincronizacion }}</span>
+                  <span class="badge delco-badge-muted">{{ reg.get_estado_sincronizacion_display|default:reg.estado_sincronizacion }}</span>
                 {% endif %}
               </td>
               <td>

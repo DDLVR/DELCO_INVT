@@ -112,15 +112,21 @@ def construir_aviso_moreapp(request) -> Dict[str, Any]:
     # Solo traer recientes si hay cola (evita query extra en sesión limpia)
     recientes = []
     if por_revisar > 0:
+        from ordenes_trabajo.models import IntegracionMoreApp
+        from web.services.audit_labels import label_valor
+
+        revision_labels = dict(IntegracionMoreApp.ESTADO_REVISION_CHOICES)
         for item in qs.only(
             'id', 'numero_correlativo', 'nombre_formulario', 'estado_revision',
             'fecha_recepcion', 'orden_id',
         ).order_by('-fecha_recepcion')[:5]:
+            codigo_rev = item.estado_revision or ''
             recientes.append({
                 'id': item.id,
                 'numero_correlativo': item.numero_correlativo,
                 'nombre_formulario': item.nombre_formulario or '',
-                'estado_revision': item.estado_revision,
+                'estado_revision': codigo_rev,
+                'estado_revision_label': revision_labels.get(codigo_rev) or label_valor(codigo_rev),
                 'fecha_recepcion': item.fecha_recepcion.isoformat() if item.fecha_recepcion else '',
                 'orden_id': item.orden_id,
             })
