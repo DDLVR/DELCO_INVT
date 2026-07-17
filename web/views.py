@@ -441,6 +441,31 @@ def dashboard_view(request):
 
 # ========== VISTAS OPERATIVAS (Puntos 2, 8, 9, 11) ==========
 
+def _contadores_pendientes_moreapp():
+    """Contadores de la cola operativa MoreApp (excluye soft-deleted)."""
+    from ordenes_trabajo.models import IntegracionMoreApp
+    from django.utils import timezone
+    from datetime import timedelta
+
+    qs_activos = IntegracionMoreApp.objects.filter(eliminado=False)
+    umbral_7d = timezone.now() - timedelta(days=7)
+    # Críticas solo cuentan si aún requieren revisión operativa
+    critica_qs = qs_activos.filter(
+        descripcion_alerta__icontains='ALERTA_CRITICA',
+        estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
+    )
+    return {
+        'PENDIENTE': qs_activos.filter(estado_revision='PENDIENTE').count(),
+        'CON_ADVERTENCIA': qs_activos.filter(estado_revision='CON_ADVERTENCIA').count(),
+        'REVISADO': qs_activos.filter(estado_revision='REVISADO').count(),
+        'DESCARTADO': qs_activos.filter(estado_revision='DESCARTADO').count(),
+        'CRITICA': critica_qs.count(),
+        'envejecidos': qs_activos.filter(
+            estado_revision='PENDIENTE', fecha_recepcion__lt=umbral_7d
+        ).count(),
+    }
+
+
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
 def pendientes_operativos_view(request):
     """
@@ -464,25 +489,16 @@ def pendientes_operativos_view(request):
         .order_by('-fecha_recepcion')
     )
     if estado == 'CRITICA':
-        qs = qs.filter(descripcion_alerta__icontains='ALERTA_CRITICA')
+        qs = qs.filter(
+            descripcion_alerta__icontains='ALERTA_CRITICA',
+            estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
+        )
     elif estado != 'TODOS':
         qs = qs.filter(estado_revision=estado)
 
     ahora = timezone.now()
     umbral_7d = ahora - timedelta(days=7)
-
-    # Contadores para filtros rápidos (Punto 6) — excluyen soft-deleted
-    qs_activos = IntegracionMoreApp.objects.filter(eliminado=False)
-    contadores = {
-        'PENDIENTE': qs_activos.filter(estado_revision='PENDIENTE').count(),
-        'CON_ADVERTENCIA': qs_activos.filter(estado_revision='CON_ADVERTENCIA').count(),
-        'REVISADO': qs_activos.filter(estado_revision='REVISADO').count(),
-        'DESCARTADO': qs_activos.filter(estado_revision='DESCARTADO').count(),
-        'CRITICA': qs_activos.filter(descripcion_alerta__icontains='ALERTA_CRITICA').count(),
-        'envejecidos': qs_activos.filter(
-            estado_revision='PENDIENTE', fecha_recepcion__lt=umbral_7d
-        ).count(),
-    }
+    contadores = _contadores_pendientes_moreapp()
 
     registros = list(qs[:200])
     for reg in registros:
@@ -514,6 +530,7 @@ def moreapp_marcar_revision_view(request, pk):
     Acepta: REVISADO, DESCARTADO, CON_ADVERTENCIA.
     """
     from ordenes_trabajo.models import IntegracionMoreApp
+    from web.perf_cache import cache_invalidate
 
     ESTADOS_VALIDOS = {'REVISADO', 'DESCARTADO', 'CON_ADVERTENCIA', 'PENDIENTE'}
     nuevo_estado = request.POST.get('estado_revision', '').strip().upper()
@@ -524,10 +541,11 @@ def moreapp_marcar_revision_view(request, pk):
         messages.error(request, 'Estado de revisión no válido')
         return redirect('reportes_moreapp_detalle', pk=pk)
 
-    registro = get_object_or_404(IntegracionMoreApp, pk=pk)
+    registro = get_object_or_404(IntegracionMoreApp, pk=pk, eliminado=False)
     estado_anterior = registro.estado_revision
     registro.estado_revision = nuevo_estado
     registro.save(update_fields=['estado_revision'])
+    cache_invalidate('moreapp:aviso_conteos')
     register_audit_event(
         AuditEvent(
             actor_id=getattr(request.user, 'id', None),
@@ -548,7 +566,9 @@ def moreapp_marcar_revision_view(request, pk):
     return JsonResponse({
         'success': True,
         'estado_revision': nuevo_estado,
+        'estado_anterior': estado_anterior,
         'estado_revision_display': dict(IntegracionMoreApp.ESTADO_REVISION_CHOICES).get(nuevo_estado, nuevo_estado),
+        'contadores': _contadores_pendientes_moreapp(),
     })
 
 
