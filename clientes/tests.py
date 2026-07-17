@@ -43,14 +43,13 @@ class ClienteFlujoViewTests(TestCase):
 	def _payload_base(self):
 		return {
 			'numero_cliente': 'CLI-TEST-9001',
-			'direccion': 'Dir Base 123',
 			'comuna': 'Santiago',
 			'tipo_suministro': 'ELECTRICO',
 			'sector': 'NORTE',
-			'city': 'Santiago',
 			'customer_name': 'Cliente Prueba',
 			'installation_address': 'Inst 123',
 			'proyecto': '',
+			'medidor_opcion': 'asignar_lista',
 			'meter_manufacturer_id': 'SCHNEIDER',
 			'meter_serial_n_1': self.medidor.serie,
 			'ultimo_acceso': '2026-07-08',
@@ -141,6 +140,62 @@ class ClienteFlujoViewTests(TestCase):
 			Cliente.objects.filter(numero_cliente='CLI-TEST-9001', activo=True).count(),
 			2,
 		)
+
+	def test_creacion_sin_medidor_permite_alta(self):
+		payload = self._payload_base()
+		payload['numero_cliente'] = 'CLI-TEST-SIN-MED'
+		payload['medidor_opcion'] = 'sin_medidor'
+		payload['meter_serial_n_1'] = ''
+		payload['meter_manufacturer_id'] = ''
+		payload['ip'] = '10.10.10.9'
+
+		response = self.client.post(reverse('cliente_crear'), payload)
+		self.assertEqual(response.status_code, 302)
+
+		cliente = Cliente.objects.get(numero_cliente='CLI-TEST-SIN-MED', activo=True)
+		self.assertFalse(cliente.meter_serial_n_1)
+		self.assertIsNone(cliente.medidor_actual)
+		self.assertEqual(cliente.estado_telemetria, 'SIN_MEDIDOR')
+		self.assertEqual(cliente.direccion, 'Inst 123')
+
+	def test_creacion_crear_medidor_sin_serie_bloquea(self):
+		payload = self._payload_base()
+		payload['numero_cliente'] = 'CLI-TEST-SIN-SERIE'
+		payload['medidor_opcion'] = 'asignar_lista'
+		payload['meter_serial_n_1'] = ''
+
+		response = self.client.post(reverse('cliente_crear'), payload)
+		self.assertEqual(response.status_code, 302)
+		self.assertFalse(
+			Cliente.objects.filter(numero_cliente='CLI-TEST-SIN-SERIE', activo=True).exists()
+		)
+
+	def test_formulario_crear_no_pide_direccion_base_ni_ciudad(self):
+		response = self.client.get(reverse('cliente_crear'))
+		self.assertEqual(response.status_code, 200)
+		html = response.content.decode()
+		self.assertNotIn('Dirección Base', html)
+		self.assertNotIn('name="city"', html)
+		self.assertIn('Sin medidor', html)
+		self.assertIn('Crear medidor', html)
+		self.assertIn('medidorSelect', html)
+		self.assertIn('modalCrearMedidor', html)
+		self.assertContains(response, self.medidor.serie)
+
+	def test_formulario_excluye_medidor_ya_asignado(self):
+		Cliente.objects.create(
+			numero_cliente='CLI-ASIG-1',
+			direccion='Dir',
+			comuna='Santiago',
+			meter_serial_n_1=self.medidor.serie,
+			medidor_actual=self.medidor,
+			activo=True,
+		)
+		response = self.client.get(reverse('cliente_crear'))
+		self.assertEqual(response.status_code, 200)
+		html = response.content.decode()
+		self.assertNotIn(f'data-serie="{self.medidor.serie}"', html)
+		self.assertIn(f'data-serie="{self.medidor_alt.serie}"', html)
 
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
