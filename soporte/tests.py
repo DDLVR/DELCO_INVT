@@ -58,3 +58,21 @@ class SoporteTicketsAdminOnlyTests(TestCase):
 		self.assertTrue(self.client.login(rut=self.administrativo.rut, password=self.password))
 		response = self.client.get(reverse('soporte_hub'))
 		self.assertEqual(response.status_code, 403)
+
+	def test_cualquier_usuario_levanta_ticket_rapido(self):
+		self.assertTrue(self.client.login(rut=self.administrativo.rut, password=self.password))
+		response = self.client.post(
+			reverse('soporte_ticket_rapido'),
+			{
+				'categoria': 'PROBLEMA',
+				'descripcion': 'No puedo ver el inventario en móvil.',
+				'pagina_url': '/inventario/',
+			},
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertTrue(data['success'])
+		ticket = TicketSoporte.objects.get(pk=data['ticket_id'])
+		self.assertEqual(ticket.creado_por_id, self.administrativo.id)
+		self.assertEqual(ticket.categoria, 'PROBLEMA')
+		self.assertIn('inventario', ticket.descripcion.lower())

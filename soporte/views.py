@@ -1,13 +1,79 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_http_methods
+from django.views.decorators.http import require_http_methods, require_POST
 
 from web.decorators import admin_only
 from web.services.audit import AuditEvent, register_audit_event
 
 from .models import TicketSoporte
+
+
+def _crear_ticket(usuario, *, titulo, descripcion, categoria, prioridad='MEDIA', pagina_url=''):
+    categorias = {c[0] for c in TicketSoporte.CATEGORIA_CHOICES}
+    prioridades = {p[0] for p in TicketSoporte.PRIORIDAD_CHOICES}
+    if categoria not in categorias:
+        categoria = 'BUG'
+    if prioridad not in prioridades:
+        prioridad = 'MEDIA'
+
+    ticket = TicketSoporte.objects.create(
+        titulo=titulo,
+        descripcion=descripcion,
+        categoria=categoria,
+        prioridad=prioridad,
+        pagina_url=pagina_url,
+        creado_por=usuario,
+        actualizado_por=usuario,
+    )
+    register_audit_event(
+        AuditEvent(
+            actor_id=usuario.id,
+            action='SUPPORT_TICKET_CREATE',
+            entity='TicketSoporte',
+            entity_id=str(ticket.pk),
+            field_name='titulo',
+            old_value=None,
+            new_value=titulo,
+            reason=f'Ticket {categoria}/{prioridad}',
+        )
+    )
+    return ticket
+
+
+@login_required
+@require_POST
+def soporte_ticket_rapido_view(request):
+    """Crea un ticket desde el popup del sidebar (cualquier usuario autenticado)."""
+    categoria = request.POST.get('categoria', 'BUG').strip()
+    descripcion = request.POST.get('descripcion', '').strip()
+    pagina_url = request.POST.get('pagina_url', '').strip() or request.META.get('HTTP_REFERER', '')
+
+    if not descripcion:
+        return JsonResponse({'success': False, 'message': 'La descripción es obligatoria.'}, status=400)
+
+    categorias_map = dict(TicketSoporte.CATEGORIA_CHOICES)
+    tipo_label = categorias_map.get(categoria, 'Reporte')
+    resumen = descripcion[:80].replace('\n', ' ').strip()
+    titulo = f'{tipo_label}: {resumen}'
+    if len(descripcion) > 80:
+        titulo += '…'
+
+    ticket = _crear_ticket(
+        request.user,
+        titulo=titulo[:200],
+        descripcion=descripcion,
+        categoria=categoria,
+        prioridad='MEDIA',
+        pagina_url=pagina_url[:500],
+    )
+    return JsonResponse({
+        'success': True,
+        'message': f'Ticket #{ticket.pk} enviado. Gracias por el reporte.',
+        'ticket_id': ticket.pk,
+    })
 
 
 @login_required
@@ -65,37 +131,17 @@ def soporte_crear_view(request):
         prioridad = request.POST.get('prioridad', 'MEDIA').strip()
         pagina_url = request.POST.get('pagina_url', '').strip()
 
-        categorias = {c[0] for c in TicketSoporte.CATEGORIA_CHOICES}
-        prioridades = {p[0] for p in TicketSoporte.PRIORIDAD_CHOICES}
-        if categoria not in categorias:
-            categoria = 'BUG'
-        if prioridad not in prioridades:
-            prioridad = 'MEDIA'
-
         if not titulo or not descripcion:
             messages.error(request, 'Título y descripción son obligatorios.')
             return redirect('soporte_crear')
 
-        ticket = TicketSoporte.objects.create(
+        ticket = _crear_ticket(
+            request.user,
             titulo=titulo,
             descripcion=descripcion,
             categoria=categoria,
             prioridad=prioridad,
             pagina_url=pagina_url,
-            creado_por=request.user,
-            actualizado_por=request.user,
-        )
-        register_audit_event(
-            AuditEvent(
-                actor_id=request.user.id,
-                action='SUPPORT_TICKET_CREATE',
-                entity='TicketSoporte',
-                entity_id=str(ticket.pk),
-                field_name='titulo',
-                old_value=None,
-                new_value=titulo,
-                reason=f'Ticket {categoria}/{prioridad}',
-            )
         )
         messages.success(request, f'Ticket #{ticket.pk} creado correctamente.')
         return redirect('soporte_detalle', pk=ticket.pk)
