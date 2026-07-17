@@ -78,7 +78,7 @@
                         <tr>
                             <th>ID</th>
                             <th>Formulario</th>
-                            <th>Submission</th>
+                            <th>Nº Cliente</th>
                             <th>Recibido</th>
                             <th>Antigüedad</th>
                             <th>Estado sincr.</th>
@@ -100,7 +100,13 @@
                                 <a href="{% url 'reportes_moreapp_detalle' reg.pk %}" class="text-decoration-none">#{{ reg.pk }}</a>
                             </td>
                             <td class="small">{{ reg.nombre_formulario|truncatechars:35 }}</td>
-                            <td><code class="small delco-code-inline">{{ reg.moreapp_submission_id|truncatechars:20 }}</code></td>
+                            <td>
+                                {% if reg.numero_cliente_display %}
+                                <strong>{{ reg.numero_cliente_display }}</strong>
+                                {% else %}
+                                <span class="text-muted small">—</span>
+                                {% endif %}
+                            </td>
                             <td class="small text-nowrap">{{ reg.fecha_recepcion|date:"d/m/Y H:i" }}</td>
                             <td>
                                 {% if reg.fecha_recepcion < umbral_7d and reg.estado_revision == 'PENDIENTE' %}

@@ -494,6 +494,7 @@ def pendientes_operativos_view(request):
             or any(b.get('es_critica') for b in bloqueos)
         )
         reg.alerta_preview = (reg.descripcion_alerta or '')[:160]
+        reg.numero_cliente_display = _numero_cliente_desde_moreapp(reg)
 
     context = {
         'registros': registros,
@@ -4646,6 +4647,31 @@ def _segmentar_descripcion_alerta(descripcion: str):
     if not partes:
         return [texto]
     return partes
+
+
+def _numero_cliente_desde_moreapp(registro) -> str:
+    """Extrae Nº cliente legible desde datos procesados o payload MoreApp."""
+    datos = registro.datos_procesados if isinstance(getattr(registro, 'datos_procesados', None), dict) else {}
+    for clave in ('cliente_codigo', 'nro_cliente', 'numero_cliente', 'codigo_cliente'):
+        valor = str(datos.get(clave) or '').strip()
+        if valor:
+            return valor
+
+    raw = registro.datos_recibidos if isinstance(getattr(registro, 'datos_recibidos', None), dict) else {}
+    data = raw.get('data') if isinstance(raw.get('data'), dict) else {}
+    candidatos = [
+        data.get('cliente'),
+        data.get('numero_cliente'),
+    ]
+    buscar = data.get('buscarCliente') if isinstance(data.get('buscarCliente'), dict) else {}
+    candidatos.append(buscar.get('CLIENTE1'))
+    mant = data.get('clienteParaMantenimiento') if isinstance(data.get('clienteParaMantenimiento'), dict) else {}
+    candidatos.append(mant.get('NROCLIENTE'))
+    for c in candidatos:
+        valor = str(c or '').strip()
+        if valor:
+            return valor
+    return ''
 
 
 def _extraer_bloqueos_operativos_registro(registro):
