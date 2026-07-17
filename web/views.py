@@ -1317,6 +1317,7 @@ def inventario_modificar_view(request, pk):
             }
         else:
             before = {
+                'fecha_entrega': equipo.fecha_entrega,
                 'estado_id': equipo.estado_inventario_id,
                 'entregado_a_id': equipo.entregado_a_id,
                 'entregado_a_otro': equipo.entregado_a_otro,
@@ -1404,6 +1405,12 @@ def inventario_modificar_view(request, pk):
             cliente_obj, cliente_manual = _resolver_cliente(cliente_id, cliente_otro)
             medidor_obj, medidor_manual = _resolver_medidor(medidor_id, medidor_otro)
             entregado_a_obj_modem, entregado_a_manual_modem = _resolver_responsable(entregado_a_id_modem)
+
+            fecha_entrega = request.POST.get('fecha_entrega', '').strip()
+            if fecha_entrega:
+                equipo.fecha_entrega = fecha_entrega
+            else:
+                equipo.fecha_entrega = None
             
             if cliente_obj or cliente_manual or cliente_id == 'OTRO':
                 equipo.cliente = cliente_obj
@@ -1550,6 +1557,7 @@ def inventario_modificar_view(request, pk):
             identificador = equipo.imei or equipo.abonado or str(equipo.pk)
         else:
             after = {
+                'fecha_entrega': equipo.fecha_entrega,
                 'estado_id': equipo.estado_inventario_id,
                 'entregado_a_id': equipo.entregado_a_id,
                 'entregado_a_otro': equipo.entregado_a_otro,
@@ -1567,6 +1575,7 @@ def inventario_modificar_view(request, pk):
                 'proyecto': equipo.proyecto,
             }
             etiquetas = {
+                'fecha_entrega': 'Fecha Entrega',
                 'estado_id': 'Estado',
                 'entregado_a_id': 'Entregado A',
                 'entregado_a_otro': 'Entregado A',

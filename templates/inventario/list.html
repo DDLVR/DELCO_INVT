@@ -1178,44 +1178,34 @@
                                 <strong>📦 Datos desde Planilla (Solo Lectura)</strong>
                             </div>
                             <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-6 mb-2">
-                                        <label class="form-label"><strong>MARCA:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="modemMarca" readonly>
+                                <div class="row g-2">
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-0"><strong>Marca</strong></label>
+                                        <input type="text" class="form-control-plaintext py-1" id="modemMarca" readonly>
                                     </div>
-                                    <div class="col-md-6 mb-2">
-                                        <label class="form-label"><strong>MODELO:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="modemModelo" readonly>
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-0"><strong>Modelo</strong></label>
+                                        <input type="text" class="form-control-plaintext py-1" id="modemModelo" readonly>
                                     </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-6 mb-2">
-                                        <label class="form-label"><strong>IMEI:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="modemImei" readonly>
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-0"><strong>IMEI</strong></label>
+                                        <input type="text" class="form-control-plaintext py-1" id="modemImei" readonly>
                                     </div>
-                                    <div class="col-md-6 mb-2">
-                                        <label class="form-label"><strong>SERIE:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="modemSerie" readonly>
+                                    <div class="col-md-3">
+                                        <label class="form-label mb-0"><strong>Serie</strong></label>
+                                        <input type="text" class="form-control-plaintext py-1" id="modemSerie" readonly>
                                     </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-4 mb-2">
-                                        <label class="form-label"><strong>FECHA RECEPCIÓN:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="modemFechaRecepcion" readonly>
+                                    <div class="col-md-4">
+                                        <label class="form-label mb-0"><strong>Fecha recepción</strong></label>
+                                        <input type="text" class="form-control-plaintext py-1" id="modemFechaRecepcion" readonly>
                                     </div>
-                                    <div class="col-md-4 mb-2">
-                                        <label class="form-label"><strong>FECHA ENTREGA:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="modemFechaEntrega" readonly>
+                                    <div class="col-md-4">
+                                        <label class="form-label mb-0"><strong>Caja</strong></label>
+                                        <input type="text" class="form-control-plaintext py-1" id="modemCaja" readonly>
                                     </div>
-                                    <div class="col-md-4 mb-2">
-                                        <label class="form-label"><strong>CAJA:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="modemCaja" readonly>
-                                    </div>
-                                </div>
-                                <div class="row">
-                                    <div class="col-md-12 mb-2">
-                                        <label class="form-label"><strong>TÉCNICO RESPONSABLE:</strong></label>
-                                        <input type="text" class="form-control-plaintext" id="modemTecnico" readonly>
+                                    <div class="col-md-4">
+                                        <label class="form-label mb-0"><strong>Técnico responsable</strong></label>
+                                        <input type="text" class="form-control-plaintext py-1" id="modemTecnico" readonly>
                                     </div>
                                 </div>
                             </div>
@@ -1227,11 +1217,17 @@
                                 <strong>✏️ Datos a Completar por Administrativo</strong>
                             </div>
                             <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
+                                <h6 class="text-muted text-uppercase small fw-semibold mb-3">Entrega y estado</h6>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-3">
+                                        <label for="modemFechaEntrega" class="form-label">
+                                            <i class="bi bi-calendar-event"></i> Fecha de entrega
+                                        </label>
+                                        <input type="date" class="form-control" id="modemFechaEntrega" name="fecha_entrega">
+                                    </div>
+                                    <div class="col-md-3">
                                         <label for="modemEntregadoA" class="form-label">
-                                            <i class="bi bi-person-badge"></i>
-                                            Entregado A
+                                            <i class="bi bi-person-badge"></i> Entregado a
                                         </label>
                                         <select class="form-select" id="modemEntregadoA" name="entregado_a_id">
                                             <option value="">-- Sin asignar --</option>
@@ -1240,12 +1236,32 @@
                                             <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
                                             {% endfor %}
                                         </select>
-                                        <small class="text-muted">Técnico o responsable del módem</small>
                                     </div>
-                                    <div class="col-md-6 mb-3">
+                                    <div class="col-md-3">
+                                        <label for="modemEstado" class="form-label">
+                                            <i class="bi bi-tag"></i> Estado
+                                        </label>
+                                        <select class="form-select" id="modemEstado" name="estado_modem">
+                                            <option value="">-- Seleccionar estado --</option>
+                                            {% for estado in estados_disponibles %}
+                                            <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="modemProyecto" class="form-label">
+                                            <i class="bi bi-folder"></i> Proyecto
+                                        </label>
+                                        <input type="text" class="form-control" id="modemProyecto" name="proyecto" placeholder="Nombre del proyecto">
+                                    </div>
+                                </div>
+
+                                <hr class="my-3">
+                                <h6 class="text-muted text-uppercase small fw-semibold mb-3">Asignación</h6>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
                                         <label for="modemCliente" class="form-label">
-                                            <i class="bi bi-building"></i> 
-                                            Cliente
+                                            <i class="bi bi-building"></i> Cliente
                                         </label>
                                         <div class="inventario-ac position-relative mb-1"
                                              data-ac-url="{% url 'api_buscar_clientes' %}"
@@ -1262,22 +1278,9 @@
                                             <input type="text" class="form-control" id="modemClienteOtro" name="cliente_otro" placeholder="Ingrese cliente manual">
                                         </div>
                                     </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="modemEstado" class="form-label">
-                                            <i class="bi bi-tag"></i> 
-                                            Estado
-                                        </label>
-                                        <select class="form-select" id="modemEstado" name="estado_modem">
-                                            <option value="">-- Seleccionar estado --</option>
-                                            {% for estado in estados_disponibles %}
-                                            <option value="{{ estado.id }}">{{ estado.nombre }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
+                                    <div class="col-md-6">
                                         <label for="modemMedidor" class="form-label">
-                                            <i class="bi bi-speedometer"></i> 
-                                            Medidor
+                                            <i class="bi bi-speedometer"></i> Medidor
                                         </label>
                                         <div class="inventario-ac position-relative mb-1"
                                              data-ac-url="{% url 'api_buscar_medidores' %}"
@@ -1293,47 +1296,48 @@
                                         <div class="mt-2 d-none" id="modemMedidorOtroWrapper">
                                             <input type="text" class="form-control" id="modemMedidorOtro" name="medidor_otro" placeholder="Ingrese número de medidor manual">
                                         </div>
-                                        <small class="text-muted">Medidor asociado a este módem (opcional)</small>
                                     </div>
                                 </div>
 
-                                <div class="row">
-                                    <div class="col-md-4 mb-3">
+                                <hr class="my-3">
+                                <h6 class="text-muted text-uppercase small fw-semibold mb-3">Conectividad</h6>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-6">
                                         <label for="modemIp" class="form-label">IP</label>
                                         <input type="text" class="form-control" id="modemIp" name="ip" placeholder="Ej: 192.168.1.10">
                                     </div>
-                                    <div class="col-md-4 mb-3">
+                                    <div class="col-md-6">
                                         <label for="modemPuerto" class="form-label">Puerto</label>
                                         <input type="text" class="form-control" id="modemPuerto" name="puerto" placeholder="Ej: 8080">
                                     </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label for="modemMarcaSecundaria" class="form-label">Marca</label>
-                                        <input type="text" class="form-control" id="modemMarcaSecundaria" name="marca_secundaria" placeholder="Ej: EMH">
-                                    </div>
                                 </div>
 
-                                <div class="row">
-                                    <div class="col-md-4 mb-3">
-                                        <label for="modemRetirado" class="form-label">Retirado</label>
-                                        <input type="text" class="form-control" id="modemRetirado" name="retirado" placeholder="Sí/No o detalle">
+                                <hr class="my-3">
+                                <h6 class="text-muted text-uppercase small fw-semibold mb-3">Datos adicionales</h6>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-4">
+                                        <label for="modemMarcaSecundaria" class="form-label">Marca (adicional)</label>
+                                        <input type="text" class="form-control" id="modemMarcaSecundaria" name="marca_secundaria" placeholder="Ej: EMH">
                                     </div>
-                                    <div class="col-md-4 mb-3">
+                                    <div class="col-md-4">
                                         <label for="modemSerieSecundaria" class="form-label">Serie (secundaria)</label>
                                         <input type="text" class="form-control" id="modemSerieSecundaria" name="serie_secundaria" placeholder="Serie secundaria">
                                     </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label for="modemProyecto" class="form-label">Proyecto</label>
-                                        <input type="text" class="form-control" id="modemProyecto" name="proyecto" placeholder="Nombre del proyecto">
+                                    <div class="col-md-4">
+                                        <label for="modemRetirado" class="form-label">Retirado</label>
+                                        <input type="text" class="form-control" id="modemRetirado" name="retirado" placeholder="Sí/No o detalle">
                                     </div>
                                 </div>
 
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
+                                <hr class="my-3">
+                                <h6 class="text-muted text-uppercase small fw-semibold mb-3">Notas</h6>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
                                         <label for="modemIrregularidad" class="form-label">Irregularidad</label>
                                         <textarea class="form-control" id="modemIrregularidad" name="irregularidad" rows="2" placeholder="Detalle de irregularidad"></textarea>
                                     </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="modemObservaciones" class="form-label">Obs</label>
+                                    <div class="col-md-6">
+                                        <label for="modemObservaciones" class="form-label">Observaciones</label>
                                         <textarea class="form-control" id="modemObservaciones" name="observaciones" rows="2" placeholder="Observaciones administrativas"></textarea>
                                     </div>
                                 </div>
@@ -1715,7 +1719,10 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 document.getElementById('modemImei').value = equipoData.imei || 'No hay';
                 document.getElementById('modemSerie').value = equipoData.serie || 'No hay';
                 document.getElementById('modemFechaRecepcion').value = equipoData.fecha_recepcion || 'No hay';
-                document.getElementById('modemFechaEntrega').value = equipoData.fecha_entrega || 'No hay';
+                const modemFechaEntrega = document.getElementById('modemFechaEntrega');
+                if (modemFechaEntrega) {
+                    modemFechaEntrega.value = equipoData.fecha_entrega || '';
+                }
                 document.getElementById('modemCaja').value = equipoData.caja || 'No hay';
                 document.getElementById('modemTecnico').value = equipoData.tecnico_responsable || 'No hay';
                 
@@ -1935,12 +1942,14 @@ if (btnGuardar) {
             const proyecto = document.getElementById('modemProyecto').value;
             
             const estadoModem = document.getElementById('modemEstado').value;
+            const fechaEntregaModem = document.getElementById('modemFechaEntrega')?.value || '';
             formData.append('cliente', cliente);
             formData.append('cliente_otro', clienteOtro);
             formData.append('medidor', medidor);
             formData.append('medidor_otro', medidorOtro);
             formData.append('entregado_a_id', modemEntregadoA);
             formData.append('estado_modem', estadoModem);
+            formData.append('fecha_entrega', fechaEntregaModem);
             formData.append('ip', ip);
             formData.append('puerto', puerto);
             formData.append('marca_secundaria', marcaSecundaria);
