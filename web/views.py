@@ -1708,7 +1708,16 @@ def inventario_crear_view(request):
             tipo_movimiento='RECEPCION',
         )
 
-        return JsonResponse({'success': True, 'message': f'{tipo.capitalize()} creado correctamente'})
+        payload = {
+            'success': True,
+            'message': f'{tipo.capitalize()} creado correctamente',
+            'tipo': tipo,
+            'identificador': identificador,
+        }
+        if tipo == 'medidor':
+            payload['serie'] = equipo.serie
+            payload['marca'] = equipo.marca or ''
+        return JsonResponse(payload)
 
     except IntegrityError as exc:
         return JsonResponse({'success': False, 'message': f'Dato duplicado: {exc}'})
@@ -2937,16 +2946,20 @@ def cliente_crear_view(request):
     """Crear cliente (roles ADMIN y ADMINISTRATIVO)."""
     if request.method == 'POST':
         numero_cliente = request.POST.get('numero_cliente', '').strip()
-        direccion = request.POST.get('direccion', '').strip()
         comuna = request.POST.get('comuna', '').strip()
         tipo_suministro = request.POST.get('tipo_suministro', '').strip()
         sector = request.POST.get('sector', '').strip()
-        city = request.POST.get('city', '').strip()
         customer_name = request.POST.get('customer_name', '').strip()
         installation_address = request.POST.get('installation_address', '').strip()
+        # Dirección base se deriva de la instalación (ya no se pide por separado).
+        direccion = installation_address
         proyecto = request.POST.get('proyecto', '').strip()
+        medidor_opcion = request.POST.get('medidor_opcion', 'crear_medidor').strip().lower()
+        if medidor_opcion not in {'crear_medidor', 'sin_medidor'}:
+            medidor_opcion = 'crear_medidor'
+        sin_medidor = medidor_opcion == 'sin_medidor'
         meter_manufacturer_id = request.POST.get('meter_manufacturer_id', '').strip()
-        meter_serial_n_1 = request.POST.get('meter_serial_n_1', '').strip()
+        meter_serial_n_1 = '' if sin_medidor else request.POST.get('meter_serial_n_1', '').strip()
         ultimo_acceso = request.POST.get('ultimo_acceso', '').strip()
         ultimo_perfil_carga = request.POST.get('ultimo_perfil_carga', '').strip()
         ultimo_reset = request.POST.get('ultimo_reset', '').strip()
@@ -2997,22 +3010,41 @@ def cliente_crear_view(request):
             if issue.severity == 'warning':
                 messages.warning(request, issue.message)
 
-        if not all([
+        campos_obligatorios = [
             numero_cliente,
-            direccion,
             comuna,
             tipo_suministro,
             sector,
-            city,
             customer_name,
             installation_address,
-            meter_manufacturer_id,
-            meter_serial_n_1,
-        ]):
-            messages.error(request, 'Faltan campos obligatorios: asegúrate de completar todos los datos requeridos.')
+        ]
+        if not sin_medidor:
+            campos_obligatorios.append(meter_serial_n_1)
+
+        if not all(campos_obligatorios):
+            if not sin_medidor and not meter_serial_n_1:
+                messages.error(
+                    request,
+                    'El número de medidor es obligatorio. Crea un medidor con el popup o elige “Sin medidor”.',
+                )
+            else:
+                messages.error(request, 'Faltan campos obligatorios: asegúrate de completar todos los datos requeridos.')
             return redirect('cliente_crear')
 
-        if Cliente.objects.filter(
+        if sin_medidor:
+            duplicado_sin_medidor = Cliente.objects.filter(
+                numero_cliente=numero_cliente,
+                activo=True,
+            ).filter(
+                models.Q(meter_serial_n_1__isnull=True) | models.Q(meter_serial_n_1=''),
+            ).exists()
+            if duplicado_sin_medidor:
+                messages.error(
+                    request,
+                    f'Ya existe un cliente activo con número {numero_cliente} sin medidor.',
+                )
+                return redirect('cliente_crear')
+        elif Cliente.objects.filter(
             numero_cliente=numero_cliente,
             meter_serial_n_1__iexact=meter_serial_n_1,
             activo=True,
@@ -3020,16 +3052,23 @@ def cliente_crear_view(request):
             messages.error(request, f'Ya existe un cliente activo con numero {numero_cliente} y la misma serie {meter_serial_n_1}.')
             return redirect('cliente_crear')
 
-        cliente_duplicado_serie_distinta = Cliente.objects.filter(
-            numero_cliente=numero_cliente,
-            activo=True,
-        ).exclude(
-            meter_serial_n_1__iexact=meter_serial_n_1,
-        ).exists()
+        cliente_duplicado_serie_distinta = False
+        if meter_serial_n_1:
+            cliente_duplicado_serie_distinta = Cliente.objects.filter(
+                numero_cliente=numero_cliente,
+                activo=True,
+            ).exclude(
+                meter_serial_n_1__iexact=meter_serial_n_1,
+            ).exists()
+        elif not sin_medidor:
+            cliente_duplicado_serie_distinta = Cliente.objects.filter(
+                numero_cliente=numero_cliente,
+                activo=True,
+            ).exists()
 
         ip_duplicada_serie_distinta = False
         if ip:
-            if Cliente.objects.filter(
+            if meter_serial_n_1 and Cliente.objects.filter(
                 ip__iexact=ip,
                 meter_serial_n_1__iexact=meter_serial_n_1,
                 activo=True,
@@ -3037,22 +3076,30 @@ def cliente_crear_view(request):
                 messages.error(request, f'La IP {ip} ya está asignada a un cliente activo con la misma serie {meter_serial_n_1}.')
                 return redirect('cliente_crear')
 
-            ip_duplicada_serie_distinta = Cliente.objects.filter(
-                ip__iexact=ip,
-                activo=True,
-            ).exclude(
-                meter_serial_n_1__iexact=meter_serial_n_1,
-            ).exists()
+            if meter_serial_n_1:
+                ip_duplicada_serie_distinta = Cliente.objects.filter(
+                    ip__iexact=ip,
+                    activo=True,
+                ).exclude(
+                    meter_serial_n_1__iexact=meter_serial_n_1,
+                ).exists()
+            else:
+                ip_duplicada_serie_distinta = Cliente.objects.filter(
+                    ip__iexact=ip,
+                    activo=True,
+                ).exists()
 
         medidor_obj = None
         if meter_serial_n_1:
             medidor_obj = Medidor.objects.filter(serie=meter_serial_n_1).first()
             if not medidor_obj:
-                messages.error(request, f'No existe un medidor con serie {meter_serial_n_1}.')
+                messages.error(request, f'No existe un medidor con serie {meter_serial_n_1}. Créalo con el popup de medidor.')
                 return redirect('cliente_crear')
             if Cliente.objects.filter(medidor_actual=medidor_obj, activo=True).exists():
                 messages.error(request, f'El medidor {meter_serial_n_1} ya está asignado a otro cliente o está duplicado.')
                 return redirect('cliente_crear')
+            if not meter_manufacturer_id and medidor_obj.marca:
+                meter_manufacturer_id = medidor_obj.marca
 
         nuevo_cliente = Cliente.objects.create(
             numero_cliente=numero_cliente,
@@ -3061,12 +3108,12 @@ def cliente_crear_view(request):
             tipo_suministro=tipo_suministro,
             pod=None,
             sector=sector,
-            city=city,
+            city=None,
             customer_name=customer_name,
             installation_address=installation_address,
             proyecto=proyecto_final,
-            meter_manufacturer_id=meter_manufacturer_id,
-            meter_serial_n_1=meter_serial_n_1,
+            meter_manufacturer_id=meter_manufacturer_id or None,
+            meter_serial_n_1=meter_serial_n_1 or None,
             client_type=None,
             ultimo_acceso=ultimo_acceso,
             ultimo_perfil_carga=ultimo_perfil_carga_final,
@@ -3080,6 +3127,7 @@ def cliente_crear_view(request):
             modem=modem or None,
             fecha_registro=fecha_registro or None,
             medidor_actual=medidor_obj,
+            estado_telemetria='SIN_MEDIDOR' if sin_medidor else 'OPERATIVO',
             activo=True,
         )
         register_audit_event(
@@ -3109,21 +3157,31 @@ def cliente_crear_view(request):
             reason='Equipos y conectividad en alta de cliente',
         )
         if cliente_duplicado_serie_distinta:
+            serie_msg = meter_serial_n_1 or 'sin medidor'
             messages.warning(
                 request,
                 f'Cliente duplicado detectado: el numero {numero_cliente} ya existía con otra serie. '
-                f'Se creó el cliente con serie distinta ({meter_serial_n_1}).'
+                f'Se creó el cliente con serie distinta ({serie_msg}).'
             )
         if ip_duplicada_serie_distinta:
+            serie_msg = meter_serial_n_1 or 'sin medidor'
             messages.warning(
                 request,
                 f'IP duplicada detectada: la IP {ip} ya existía con otra serie de medidor. '
-                f'Se creó el cliente con serie distinta ({meter_serial_n_1}).'
+                f'Se creó el cliente con serie distinta ({serie_msg}).'
             )
         messages.success(request, f'Cliente {numero_cliente} creado correctamente.')
         return redirect('clientes_list')
 
-    return render(request, 'clientes/crear.html')
+    estados_permitidos = ['En bodega', 'En Trayecto', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja', 'En peaje']
+    estados_disponibles = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
+    estados_disponibles.sort(
+        key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99
+    )
+    return render(request, 'clientes/crear.html', {
+        'tipo_medidor_choices': Medidor.TIPO_MEDIDOR_CHOICES,
+        'estados_disponibles': estados_disponibles,
+    })
 
 
 @login_required

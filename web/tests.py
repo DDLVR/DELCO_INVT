@@ -200,14 +200,13 @@ class AuditPersistencePunto12Tests(TestCase):
 
 		payload = {
 			'numero_cliente': 'CLI-AUD-001',
-			'direccion': 'Dir Audit 1',
 			'comuna': 'Santiago',
 			'tipo_suministro': 'ELECTRICO',
 			'sector': 'CENTRO',
-			'city': 'Santiago',
 			'customer_name': 'Cliente Audit',
 			'installation_address': 'Inst Audit 1',
 			'proyecto': '',
+			'medidor_opcion': 'crear_medidor',
 			'meter_manufacturer_id': 'TEST',
 			'meter_serial_n_1': medidor.serie,
 			'ultimo_acceso': '2026-07-09',
@@ -410,13 +409,12 @@ class ErroresOperativosPunto15Tests(TestCase):
 		from clientes.models import Cliente
 		resp = self.client.post(r('cliente_crear'), {
 			'numero_cliente': 'CLI-P15-001',
-			'direccion': 'Dir P15',
 			'comuna': 'Santiago',
 			'tipo_suministro': 'ELECTRICO',
 			'sector': 'NORTE',
-			'city': 'Santiago',
 			'customer_name': 'P15 Test',
 			'installation_address': 'Inst P15',
+			'medidor_opcion': 'crear_medidor',
 			'meter_manufacturer_id': 'TEST',
 			'meter_serial_n_1': self.medidor.serie,
 			'ip': '999.999.0.1',
