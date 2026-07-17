@@ -13,8 +13,11 @@
 
   <div class="card shadow-sm delco-panel-card">
     <div class="card-body p-4">
-      <form method="post">
+      <form method="post" id="formCrearCliente">
         {% csrf_token %}
+        <input type="hidden" name="medidor_opcion" id="medidorOpcion" value="">
+        <input type="hidden" name="meter_serial_n_1" id="meterSerial" value="">
+        <input type="hidden" name="meter_manufacturer_id" id="meterManufacturer" value="">
 
         <!-- ═════════════════════════════════════════════════════ -->
         <!-- DATOS PRINCIPALES (VERDES) -->
@@ -59,28 +62,41 @@
                 <label class="form-label fw-semibold">Proyecto</label>
                 <input type="text" name="proyecto" class="form-control" placeholder="si queda vacio SIN PROYECTO">
               </div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label fw-semibold">Fabricante/ID Medidor <span class="text-danger">*</span></label>
-                <input type="text" name="meter_manufacturer_id" class="form-control" required placeholder="Ej: SCHNEIDER">
-              </div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label fw-semibold">Serie Medidor <span class="text-danger">*</span></label>
-                <input type="text" name="meter_serial_n_1" class="form-control" required placeholder="Ej: 987654321">
+              <div class="col-md-8 mb-3">
+                <label class="form-label fw-semibold" for="medidorSelect">Medidor <span class="text-danger">*</span></label>
+                <select class="form-select" id="medidorSelect" required>
+                  <option value="">-- Seleccionar medidor --</option>
+                  <option value="__sin_medidor__">Sin medidor</option>
+                  <option value="__crear_medidor__">Crear medidor…</option>
+                  {% if medidores_libres %}
+                  <optgroup label="Medidores disponibles (sin cliente)" id="optgroupMedidoresLibres">
+                    {% for m in medidores_libres %}
+                    <option
+                      value="serie:{{ m.serie }}"
+                      data-serie="{{ m.serie }}"
+                      data-marca="{{ m.marca|default:'' }}"
+                    >{{ m.serie }}{% if m.marca %} — {{ m.marca }}{% endif %}{% if m.tipo_medidor %} ({{ m.get_tipo_medidor_display }}){% endif %}</option>
+                    {% endfor %}
+                  </optgroup>
+                  {% else %}
+                  <optgroup label="Medidores disponibles (sin cliente)" id="optgroupMedidoresLibres">
+                    <option value="" disabled>No hay medidores libres</option>
+                  </optgroup>
+                  {% endif %}
+                </select>
+                <small class="text-muted d-block mt-1">
+                  Elige un medidor libre, crea uno nuevo (popup) o deja el cliente sin medidor.
+                </small>
               </div>
             </div>
 
-            <div class="row">
-              <div class="col-md-4 mb-3">
-                <label class="form-label fw-semibold">Dirección Base <span class="text-danger">*</span></label>
-                <input type="text" name="direccion" class="form-control" required placeholder="Ej: GENOVA 7260">
-              </div>
-              <div class="col-md-4 mb-3">
-                <label class="form-label fw-semibold">Ciudad <span class="text-danger">*</span></label>
-                <input type="text" name="city" class="form-control" required placeholder="Ej: SANTIAGO">
-              </div>
+            <div id="bloqueSinMedidor" class="alert alert-secondary d-none mb-3" role="status">
+              Este cliente se creará <strong>sin medidor</strong>. El estado de telemetría quedará como “Sin medidor”.
             </div>
 
-            <small class="text-muted d-block mb-3">La serie de medidor debe existir en inventario y no puede estar duplicada en otro cliente.</small>
+            <div id="bloqueMedidorElegido" class="alert alert-light border d-none mb-3" role="status">
+              Medidor seleccionado: <strong id="medidorElegidoLabel">—</strong>
+            </div>
 
             <hr>
             <h6 class="fw-semibold mb-3">Datos Operativos</h6>
@@ -143,4 +159,231 @@
     </div>
   </div>
 </div>
+
+<!-- Modal crear medidor (mismo flujo que inventario) -->
+<div class="modal fade" id="modalCrearMedidor" tabindex="-1" aria-labelledby="modalCrearMedidorLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="modalCrearMedidorLabel"><i class="bi bi-plus-circle"></i> Crear medidor</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form id="formCrearMedidorPopup">
+        {% csrf_token %}
+        <div class="modal-body">
+          <input type="hidden" name="tipo" value="medidor">
+          <div class="mb-3">
+            <label class="form-label">Serie <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" name="serie" id="popupMedidorSerie" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Marca</label>
+            <input type="text" class="form-control" name="marca" id="popupMedidorMarca">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Caja</label>
+            <input type="text" class="form-control" name="caja">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Tipo de medidor <span class="text-danger">*</span></label>
+            <select class="form-select" name="tipo_medidor" required>
+              <option value="">-- Seleccionar --</option>
+              {% for codigo, nombre in tipo_medidor_choices %}
+              <option value="{{ codigo }}">{{ nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Proyecto</label>
+            <input type="text" class="form-control" name="proyecto" placeholder="Proyecto asociado">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Fecha recepción</label>
+            <input type="date" class="form-control" name="fecha_recepcion">
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Estado inicial</label>
+            <select class="form-select" name="estado_id">
+              <option value="">-- Sin estado --</option>
+              {% for estado in estados_disponibles %}
+              <option value="{{ estado.id }}">{{ estado.nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar medidor</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const select = document.getElementById('medidorSelect');
+  const medidorOpcion = document.getElementById('medidorOpcion');
+  const meterSerial = document.getElementById('meterSerial');
+  const meterManufacturer = document.getElementById('meterManufacturer');
+  const bloqueSin = document.getElementById('bloqueSinMedidor');
+  const bloqueElegido = document.getElementById('bloqueMedidorElegido');
+  const elegidoLabel = document.getElementById('medidorElegidoLabel');
+  const optgroup = document.getElementById('optgroupMedidoresLibres');
+  let lastNonCrearValue = '';
+
+  function limpiarMedidor() {
+    medidorOpcion.value = '';
+    meterSerial.value = '';
+    meterManufacturer.value = '';
+    bloqueSin.classList.add('d-none');
+    bloqueElegido.classList.add('d-none');
+    elegidoLabel.textContent = '—';
+  }
+
+  function aplicarSeleccion(valor) {
+    if (!valor) {
+      limpiarMedidor();
+      return;
+    }
+    if (valor === '__sin_medidor__') {
+      medidorOpcion.value = 'sin_medidor';
+      meterSerial.value = '';
+      meterManufacturer.value = '';
+      bloqueSin.classList.remove('d-none');
+      bloqueElegido.classList.add('d-none');
+      return;
+    }
+    if (valor === '__crear_medidor__') {
+      return;
+    }
+    if (valor.indexOf('serie:') === 0) {
+      const option = select.options[select.selectedIndex];
+      const serie = option.getAttribute('data-serie') || valor.slice(6);
+      const marca = option.getAttribute('data-marca') || '';
+      medidorOpcion.value = 'asignar_lista';
+      meterSerial.value = serie;
+      meterManufacturer.value = marca;
+      bloqueSin.classList.add('d-none');
+      bloqueElegido.classList.remove('d-none');
+      elegidoLabel.textContent = option.textContent.trim();
+    }
+  }
+
+  function abrirPopupCrear() {
+    const modalEl = document.getElementById('modalCrearMedidor');
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+    modal.show();
+  }
+
+  select.addEventListener('change', function () {
+    const valor = select.value;
+    if (valor === '__crear_medidor__') {
+      select.value = lastNonCrearValue || '';
+      aplicarSeleccion(select.value);
+      abrirPopupCrear();
+      return;
+    }
+    lastNonCrearValue = valor;
+    aplicarSeleccion(valor);
+  });
+
+  document.getElementById('formCrearCliente').addEventListener('submit', function (e) {
+    const valor = select.value;
+    if (!valor) {
+      e.preventDefault();
+      alert('Debes seleccionar un medidor, crear uno o elegir “Sin medidor”.');
+      return;
+    }
+    if (valor === '__sin_medidor__') {
+      medidorOpcion.value = 'sin_medidor';
+      meterSerial.value = '';
+      return;
+    }
+    if (!meterSerial.value.trim()) {
+      e.preventDefault();
+      alert('Debes seleccionar un medidor de la lista o crear uno nuevo.');
+    }
+  });
+
+  function asegurarOptgroup() {
+    if (optgroup) return optgroup;
+    const group = document.createElement('optgroup');
+    group.label = 'Medidores disponibles (sin cliente)';
+    group.id = 'optgroupMedidoresLibres';
+    select.appendChild(group);
+    return group;
+  }
+
+  function seleccionarSerieCreada(serie, marca) {
+    const group = asegurarOptgroup();
+    // Quitar placeholder "No hay medidores libres"
+    Array.from(group.querySelectorAll('option[disabled]')).forEach(function (el) { el.remove(); });
+
+    let option = Array.from(group.querySelectorAll('option')).find(function (opt) {
+      return (opt.getAttribute('data-serie') || '').toLowerCase() === serie.toLowerCase();
+    });
+    if (!option) {
+      option = document.createElement('option');
+      option.value = 'serie:' + serie;
+      option.setAttribute('data-serie', serie);
+      option.setAttribute('data-marca', marca || '');
+      option.textContent = marca ? (serie + ' — ' + marca) : serie;
+      group.insertBefore(option, group.firstChild);
+    }
+    select.value = option.value;
+    lastNonCrearValue = option.value;
+    medidorOpcion.value = 'crear_medidor';
+    meterSerial.value = serie;
+    meterManufacturer.value = marca || '';
+    bloqueSin.classList.add('d-none');
+    bloqueElegido.classList.remove('d-none');
+    elegidoLabel.textContent = option.textContent.trim();
+  }
+
+  const formPopup = document.getElementById('formCrearMedidorPopup');
+  formPopup.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const formData = new FormData(formPopup);
+    const serie = (formData.get('serie') || '').toString().trim();
+    const marca = (formData.get('marca') || '').toString().trim();
+
+    fetch("{% url 'inventario_crear' %}", {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (!data.success) {
+          alert(data.message || 'No se pudo crear el medidor');
+          return;
+        }
+        const serieFinal = data.serie || serie;
+        const marcaFinal = data.marca || marca;
+        seleccionarSerieCreada(serieFinal, marcaFinal);
+        const modalEl = document.getElementById('modalCrearMedidor');
+        const modal = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
+        modal.hide();
+        formPopup.reset();
+        if (typeof showToast === 'function') {
+          showToast(data.message || 'Medidor creado correctamente.', 'success');
+        }
+      })
+      .catch(function () {
+        alert('Error de conexión al crear el medidor.');
+      });
+  });
+
+  // Si cierran el modal sin crear, dejar el select coherente
+  document.getElementById('modalCrearMedidor').addEventListener('hidden.bs.modal', function () {
+    if (select.value === '__crear_medidor__') {
+      select.value = lastNonCrearValue || '';
+      aplicarSeleccion(select.value);
+    }
+  });
+})();
+</script>
 {% endblock %}
