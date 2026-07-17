@@ -49,7 +49,7 @@ class ClienteFlujoViewTests(TestCase):
 			'customer_name': 'Cliente Prueba',
 			'installation_address': 'Inst 123',
 			'proyecto': '',
-			'medidor_opcion': 'crear_medidor',
+			'medidor_opcion': 'asignar_lista',
 			'meter_manufacturer_id': 'SCHNEIDER',
 			'meter_serial_n_1': self.medidor.serie,
 			'ultimo_acceso': '2026-07-08',
@@ -161,7 +161,7 @@ class ClienteFlujoViewTests(TestCase):
 	def test_creacion_crear_medidor_sin_serie_bloquea(self):
 		payload = self._payload_base()
 		payload['numero_cliente'] = 'CLI-TEST-SIN-SERIE'
-		payload['medidor_opcion'] = 'crear_medidor'
+		payload['medidor_opcion'] = 'asignar_lista'
 		payload['meter_serial_n_1'] = ''
 
 		response = self.client.post(reverse('cliente_crear'), payload)
@@ -178,7 +178,24 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertNotIn('name="city"', html)
 		self.assertIn('Sin medidor', html)
 		self.assertIn('Crear medidor', html)
+		self.assertIn('medidorSelect', html)
 		self.assertIn('modalCrearMedidor', html)
+		self.assertContains(response, self.medidor.serie)
+
+	def test_formulario_excluye_medidor_ya_asignado(self):
+		Cliente.objects.create(
+			numero_cliente='CLI-ASIG-1',
+			direccion='Dir',
+			comuna='Santiago',
+			meter_serial_n_1=self.medidor.serie,
+			medidor_actual=self.medidor,
+			activo=True,
+		)
+		response = self.client.get(reverse('cliente_crear'))
+		self.assertEqual(response.status_code, 200)
+		html = response.content.decode()
+		self.assertNotIn(f'data-serie="{self.medidor.serie}"', html)
+		self.assertIn(f'data-serie="{self.medidor_alt.serie}"', html)
 
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
