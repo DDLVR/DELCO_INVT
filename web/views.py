@@ -5124,28 +5124,134 @@ def reportes_moreapp_eliminar_masivo(request):
     return redirect('reportes_moreapp_list')
 
 
+def _entity_ids_por_referencia_auditoria(referencia: str):
+    """Resuelve correlativo MoreApp, Nº cliente o ID interno a entity_id de auditoría."""
+    valor = (referencia or '').strip()
+    if not valor:
+        return []
+
+    ids = {valor}
+
+    try:
+        from ordenes_trabajo.models import IntegracionMoreApp
+        if valor.isdigit():
+            for pk in IntegracionMoreApp.objects.filter(
+                numero_correlativo=int(valor)
+            ).values_list('pk', flat=True)[:50]:
+                ids.add(str(pk))
+    except Exception:
+        pass
+
+    try:
+        from clientes.models import Cliente
+        for pk in Cliente.objects.filter(numero_cliente=valor).values_list('pk', flat=True)[:50]:
+            ids.add(str(pk))
+    except Exception:
+        pass
+
+    return list(ids)
+
+
+def _enriquecer_referencia_auditoria(registros):
+    """Agrega referencia_label legible (corr. MoreApp, Nº cliente, etc.)."""
+    from ordenes_trabajo.models import IntegracionMoreApp
+    from clientes.models import Cliente
+
+    more_ids = [
+        int(r.entity_id)
+        for r in registros
+        if r.entity == 'IntegracionMoreApp' and str(r.entity_id).isdigit()
+    ]
+    cliente_ids = [
+        int(r.entity_id)
+        for r in registros
+        if r.entity == 'Cliente' and str(r.entity_id).isdigit()
+    ]
+
+    more_map = {}
+    if more_ids:
+        more_map = {
+            str(pk): corr
+            for pk, corr in IntegracionMoreApp.objects.filter(pk__in=more_ids).values_list(
+                'pk', 'numero_correlativo'
+            )
+        }
+    cliente_map = {}
+    if cliente_ids:
+        cliente_map = {
+            str(pk): num
+            for pk, num in Cliente.objects.filter(pk__in=cliente_ids).values_list(
+                'pk', 'numero_cliente'
+            )
+        }
+
+    for reg in registros:
+        eid = str(reg.entity_id or '')
+        if reg.entity == 'IntegracionMoreApp' and more_map.get(eid) is not None:
+            reg.referencia_label = f'Corr. {more_map[eid]}'
+        elif reg.entity == 'Cliente' and cliente_map.get(eid):
+            reg.referencia_label = f'Nº {cliente_map[eid]}'
+        elif reg.entity == 'OrdenTrabajo':
+            reg.referencia_label = f'OT #{eid}'
+        else:
+            reg.referencia_label = f'#{eid}' if eid else '—'
+    return registros
+
+
 @login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'AUDITOR', 'GERENCIA'])
 def auditoria_list_view(request):
     """Historial de auditoría persistente (PDF punto 12)."""
     from web.models import AuditLog
+    from web.services.audit_labels import ACCION_LABELS, ENTIDAD_LABELS, label_accion, label_entidad
 
     entity = request.GET.get('entity', '').strip()
     action = request.GET.get('action', '').strip()
-    entity_id = request.GET.get('entity_id', '').strip()
+    referencia = (
+        request.GET.get('referencia', '').strip()
+        or request.GET.get('entity_id', '').strip()
+    )
 
     qs = AuditLog.objects.select_related('actor').order_by('-created_at')
     if entity:
-        qs = qs.filter(entity__icontains=entity)
+        qs = qs.filter(entity__iexact=entity) if entity in ENTIDAD_LABELS else qs.filter(entity__icontains=entity)
     if action:
-        qs = qs.filter(action__icontains=action)
-    if entity_id:
-        qs = qs.filter(entity_id=entity_id)
+        qs = qs.filter(action=action)
+    if referencia:
+        qs = qs.filter(entity_id__in=_entity_ids_por_referencia_auditoria(referencia))
+
+    acciones_db = list(
+        AuditLog.objects.order_by('action').values_list('action', flat=True).distinct()[:80]
+    )
+    acciones_opciones = []
+    vistas = set()
+    for codigo in list(ACCION_LABELS.keys()) + acciones_db:
+        if not codigo or codigo in vistas:
+            continue
+        vistas.add(codigo)
+        acciones_opciones.append({'codigo': codigo, 'label': label_accion(codigo)})
+    acciones_opciones.sort(key=lambda item: item['label'].casefold())
+
+    entidades_db = list(
+        AuditLog.objects.order_by('entity').values_list('entity', flat=True).distinct()[:80]
+    )
+    entidades_opciones = []
+    vistas_ent = set()
+    for codigo in list(ENTIDAD_LABELS.keys()) + entidades_db:
+        if not codigo or codigo in vistas_ent:
+            continue
+        vistas_ent.add(codigo)
+        entidades_opciones.append({'codigo': codigo, 'label': label_entidad(codigo)})
+    entidades_opciones.sort(key=lambda item: item['label'].casefold())
+
+    registros = _enriquecer_referencia_auditoria(list(qs[:500]))
 
     return render(request, 'auditoria/list.html', {
-        'registros': qs[:500],
+        'registros': registros,
         'entity': entity,
         'action': action,
-        'entity_id': entity_id,
+        'referencia': referencia,
         'total': qs.count(),
+        'acciones_opciones': acciones_opciones,
+        'entidades_opciones': entidades_opciones,
     })
