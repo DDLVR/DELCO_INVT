@@ -57,9 +57,12 @@
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'usuarios_list' %}active bg-primary text-white{% endif %}" href="{% url 'usuarios_list' %}">
         <i class="bi bi-people me-2"></i> Usuarios
       </a>
-      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'soporte_hub' or request.resolver_match.url_name == 'soporte_list' or request.resolver_match.url_name == 'soporte_crear' or request.resolver_match.url_name == 'soporte_detalle' %}active bg-primary text-white{% endif %}" href="{% url 'soporte_hub' %}">
+      {% url 'soporte_hub' as soporte_hub_url %}
+      {% if soporte_hub_url %}
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'soporte_hub' or request.resolver_match.url_name == 'soporte_list' or request.resolver_match.url_name == 'soporte_crear' or request.resolver_match.url_name == 'soporte_detalle' %}active bg-primary text-white{% endif %}" href="{{ soporte_hub_url }}">
         <i class="bi bi-life-preserver me-2"></i> Soporte / Tickets
       </a>
+      {% endif %}
     {% endif %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'registro_errores' or request.resolver_match.url_name == 'importacion_errores' %}active bg-primary text-white{% endif %}" href="{% url 'registro_errores' %}">
         <i class="bi bi-exclamation-octagon me-2"></i> Registro de errores
@@ -69,10 +72,13 @@
 
   {% if user.is_authenticated %}
   <div class="sidebar-footer border-top bg-body p-2 flex-shrink-0">
+    {% url 'soporte_ticket_rapido' as soporte_ticket_rapido_url %}
+    {% if soporte_ticket_rapido_url %}
     <button type="button" class="btn btn-warning w-100 mb-2 d-flex align-items-center justify-content-center gap-2 text-dark fw-semibold" data-bs-toggle="modal" data-bs-target="#modalTicketRapido" title="Reportar bug o problema">
       <i class="bi bi-life-preserver"></i>
       <span class="delco-sidebar-label">Reportar ticket</span>
     </button>
+    {% endif %}
     <button type="button" class="btn btn-outline-primary w-100 mb-2 d-flex align-items-center justify-content-center gap-2 js-open-profile" title="Ver perfil">
       <i class="bi bi-person-circle"></i>
       <span class="delco-sidebar-label">Perfil</span>
