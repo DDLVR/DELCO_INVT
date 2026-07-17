@@ -41,6 +41,7 @@
               {% elif movimiento.tipo == 'RETIRO' %}<span class="badge bg-warning text-dark fs-6">{{ movimiento.get_tipo_display }}</span>
               {% elif movimiento.tipo == 'DEVOLUCION' %}<span class="badge bg-danger fs-6">{{ movimiento.get_tipo_display }}</span>
               {% elif movimiento.tipo == 'IMPORTACION' %}<span class="badge badge-delco-import fs-6">{{ movimiento.get_tipo_display }}</span>
+              {% elif movimiento.tipo == 'ELIMINACION' %}<span class="badge bg-dark fs-6">{{ movimiento.get_tipo_display }}</span>
               {% else %}<span class="badge bg-secondary fs-6">{{ movimiento.get_tipo_display }}</span>{% endif %}
             </div>
             <div class="col-sm-4">
@@ -51,6 +52,16 @@
               <div class="text-muted small mb-1">Responsable</div>
               <div><i class="bi bi-person me-1"></i>{{ movimiento.responsable.nombre_interno }}</div>
             </div>
+            {% if es_eliminacion %}
+            <div class="col-sm-4">
+              <div class="text-muted small mb-1">Entidad eliminada</div>
+              <div>{{ movimiento.get_entidad_eliminada_display|default:movimiento.entidad_eliminada|default:"—" }}</div>
+            </div>
+            <div class="col-sm-4">
+              <div class="text-muted small mb-1">Identificador</div>
+              <div class="font-monospace small">{{ movimiento.identificador_entidad|default:"—" }}</div>
+            </div>
+            {% endif %}
             <div class="col-sm-4">
               <div class="text-muted small mb-1">Origen</div>
               <div><i class="bi bi-box-arrow-right me-1 text-muted"></i>{{ movimiento.origen.nombre|default:"—" }}
@@ -113,7 +124,7 @@
   </div>
 
   <!-- Equipos involucrados -->
-  <div class="card shadow-sm delco-panel-card">
+  <div class="card shadow-sm delco-panel-card {% if es_eliminacion %}mb-4{% endif %}">
     <div class="card-header card-header-delco small fw-semibold">
       <i class="bi bi-diagram-3 me-1"></i> Equipos involucrados en el movimiento
     </div>
@@ -159,6 +170,38 @@
       {% endif %}
     </div>
   </div>
+
+  {% if es_eliminacion %}
+  <div class="card shadow-sm delco-panel-card">
+    <div class="card-header card-header-delco small fw-semibold">
+      <i class="bi bi-camera me-1"></i> Snapshot de eliminación (solo lectura)
+    </div>
+    <div class="card-body p-0">
+      {% if snapshot_items %}
+      <div class="table-responsive delco-table-wrap">
+        <table class="table table-sm delco-table-compact mb-0">
+          <thead class="table-delco">
+            <tr>
+              <th style="width:28%;">Campo</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in snapshot_items %}
+            <tr>
+              <td class="small fw-semibold font-monospace">{{ item.campo }}</td>
+              <td class="small"><pre class="mb-0 small text-wrap" style="white-space:pre-wrap; word-break:break-word;">{{ item.valor }}</pre></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted text-center py-4 mb-0">Sin datos de snapshot</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 
 </div>
 {% endblock %}

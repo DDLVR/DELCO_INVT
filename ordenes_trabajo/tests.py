@@ -568,3 +568,62 @@ class OrdenesSyncInventarioTests(TestCase):
 		orden_abierta.refresh_from_db()
 		self.assertEqual(orden_abierta.medidor_id, self.medidor.id)
 		self.assertEqual(orden_abierta.estado, 'REALIZADA_PENDIENTE_COMPROBACION')
+
+
+class OrdenesReasignacionTecnicoTests(TestCase):
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='11112222-3',
+			email='admin_reasig@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Reasig',
+			nombre_interno='admin_reasig',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.tecnico_1 = Usuario.objects.create_user(
+			rut='33334444-5',
+			email='tec1_reasig@delco.cl',
+			password=self.password,
+			nombre='Tec1',
+			apellido='Reasig',
+			nombre_interno='tec1_reasig',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.tecnico_2 = Usuario.objects.create_user(
+			rut='55556666-7',
+			email='tec2_reasig@delco.cl',
+			password=self.password,
+			nombre='Tec2',
+			apellido='Reasig',
+			nombre_interno='tec2_reasig',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.orden = OrdenTrabajo.objects.create(
+			titulo='OT reasignacion',
+			tipo_trabajo='INSTALACION',
+			creada_por=self.admin,
+			tecnico_responsable=self.tecnico_1,
+			estado='ASIGNADA',
+		)
+		self.client = Client()
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+
+	def test_admin_reasigna_tecnico_y_estado_reasignada(self):
+		response = self.client.post(
+			reverse('orden_detalle', kwargs={'pk': self.orden.pk}),
+			{
+				'accion': 'reasignar_tecnico',
+				'tecnico_responsable': str(self.tecnico_2.pk),
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.orden.refresh_from_db()
+		self.assertEqual(self.orden.tecnico_responsable_id, self.tecnico_2.id)
+		self.assertEqual(self.orden.estado, 'REASIGNADA')
+		self.assertFalse(self.orden.tecnico_solicito_reasignacion)

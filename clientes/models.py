@@ -274,6 +274,19 @@ class Cliente(models.Model):
     fecha_actualizacion = models.DateTimeField(auto_now=True)
     
     activo = models.BooleanField(default=True)
+
+    fecha_eliminacion = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Fecha de soft-delete (activo=False)',
+    )
+    eliminado_por = models.ForeignKey(
+        'usuarios.Usuario',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='clientes_eliminados',
+    )
     
     def __str__(self):
         return f'{self.numero_cliente} - {self.direccion}'

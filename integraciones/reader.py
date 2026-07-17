@@ -1788,14 +1788,14 @@ def leer_carpetas(
                     stats['nuevos'] += 1
                     if resultado.get('alerta'):
                         stats['alertas'] += 1
-                elif resultado['resultado'] == 'duplicado':
+                elif resultado['resultado'] in ('duplicado', 'eliminado'):
                     stats['duplicados'] += 1
                     if resultado.get('alerta'):
                         stats['alertas'] += 1
                 elif resultado['resultado'] == 'error':
                     stats['errores'] += 1
 
-                if correlativo.isdigit() and resultado['resultado'] in ('nuevo', 'duplicado'):
+                if correlativo.isdigit() and resultado['resultado'] in ('nuevo', 'duplicado', 'eliminado'):
                     c_num = int(correlativo)
                     max_exitoso_form = c_num if max_exitoso_form is None else max(max_exitoso_form, c_num)
 
@@ -1891,6 +1891,14 @@ def _procesar_json(
     # --- Deduplicación por id ---
     existente = IntegracionMoreApp.objects.filter(moreapp_submission_id=submission_id).first()
     if existente:
+        # Soft-deleted: no reprocessar ni recrear
+        if getattr(existente, 'eliminado', False):
+            resultado['resultado'] = 'eliminado'
+            resultado['alerta'] = False
+            resultado['mensaje'] = (
+                f'Registro soft-deleted id={submission_id}; se omite sin recrear'
+            )
+            return resultado
         # Ruta rápida: evita timeout en sync HTTP al no reaplicar inventario en cada pasada
         if not reprocesar_duplicados:
             resultado['resultado'] = 'duplicado'
@@ -2068,6 +2076,14 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
 
     existente = IntegracionMoreApp.objects.filter(moreapp_submission_id=submission_id).first()
     if existente:
+        # Soft-deleted: no reprocessar ni recrear vía webhook
+        if getattr(existente, 'eliminado', False):
+            resultado['resultado'] = 'eliminado'
+            resultado['alerta'] = False
+            resultado['mensaje'] = (
+                f'Registro soft-deleted id={submission_id}; se omite sin recrear'
+            )
+            return resultado
         try:
             datos_norm = _extraer_datos_normalizados(data)
             resumen_operativo = _aplicar_actualizaciones_operativas(

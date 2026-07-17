@@ -129,14 +129,36 @@
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="text-muted small">Técnico Responsable</label>
+                            {% if puede_reasignar %}
+                            <form method="post" class="mt-1">
+                                {% csrf_token %}
+                                <input type="hidden" name="accion" value="reasignar_tecnico">
+                                <div class="input-group input-group-sm">
+                                    <select name="tecnico_responsable" class="form-select" required>
+                                        <option value="">— Seleccionar técnico —</option>
+                                        {% for tec in tecnicos %}
+                                        <option value="{{ tec.id }}"
+                                            {% if orden.tecnico_responsable_id == tec.id %}selected{% endif %}>
+                                            {{ tec.nombre_interno }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-outline-primary">
+                                        <i class="bi bi-arrow-repeat"></i> Reasignar
+                                    </button>
+                                </div>
+                                <small class="text-muted">Al reasignar, la orden pasa a estado <strong>Reasignada</strong>.</small>
+                            </form>
+                            {% else %}
                             <p class="mb-0">
                                 {% if orden.tecnico_responsable %}
                                 <strong>{{ orden.tecnico_responsable.nombre_interno }}</strong><br>
                                 <small class="text-muted">{{ orden.tecnico_responsable.email }}</small>
                                 {% else %}
-                                <em class="text-muted">Sin asignar — usa edición múltiple o asignación masiva</em>
+                                <em class="text-muted">Sin asignar</em>
                                 {% endif %}
                             </p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

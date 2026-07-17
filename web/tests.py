@@ -604,6 +604,7 @@ class MoreAppEliminarMasivoTests(TestCase):
 		)
 
 	def test_admin_puede_eliminar_varios_registros(self):
+		from inventario.models import MovimientoInventario
 		from ordenes_trabajo.models import IntegracionMoreApp
 
 		reg1 = self._crear_registro('bulk-test-1')
@@ -614,9 +615,24 @@ class MoreAppEliminarMasivoTests(TestCase):
 			'ids': [str(reg1.pk), str(reg2.pk)],
 		})
 		self.assertEqual(response.status_code, 302)
-		self.assertFalse(IntegracionMoreApp.objects.filter(pk=reg1.pk).exists())
-		self.assertFalse(IntegracionMoreApp.objects.filter(pk=reg2.pk).exists())
+
+		reg1.refresh_from_db()
+		reg2.refresh_from_db()
+		reg3.refresh_from_db()
+		self.assertTrue(reg1.eliminado)
+		self.assertTrue(reg2.eliminado)
+		self.assertFalse(reg3.eliminado)
+		self.assertTrue(IntegracionMoreApp.objects.filter(pk=reg1.pk).exists())
+		self.assertTrue(IntegracionMoreApp.objects.filter(pk=reg2.pk).exists())
 		self.assertTrue(IntegracionMoreApp.objects.filter(pk=reg3.pk).exists())
+
+		eliminaciones = MovimientoInventario.objects.filter(
+			tipo='ELIMINACION',
+			entidad_eliminada='MOREAPP',
+		)
+		self.assertEqual(eliminaciones.count(), 2)
+		self.assertTrue(eliminaciones.filter(entidad_id=str(reg1.pk)).exists())
+		self.assertTrue(eliminaciones.filter(entidad_id=str(reg2.pk)).exists())
 
 	def test_eliminar_masivo_sin_seleccion_muestra_advertencia(self):
 		response = self.client.post(reverse('reportes_moreapp_eliminar_masivo'), {})
