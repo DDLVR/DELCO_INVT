@@ -214,6 +214,8 @@
   </div>
 
   {% if user.is_authenticated %}
+  {% url 'soporte_ticket_rapido' as soporte_ticket_rapido_url %}
+  {% if soporte_ticket_rapido_url %}
   <!-- Popup ticket rápido (todos los roles) -->
   <div class="modal fade" id="modalTicketRapido" tabindex="-1" aria-labelledby="modalTicketRapidoLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -255,6 +257,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
   {% endif %}
 
   <script>
@@ -571,6 +574,7 @@
       var ticketUrlField = document.getElementById('ticketRapidoUrl');
       var ticketFeedback = document.getElementById('ticketRapidoFeedback');
       var ticketModalEl = document.getElementById('modalTicketRapido');
+      var ticketRapidoEndpoint = "{% url 'soporte_ticket_rapido' as ticket_rapido_js_url %}{{ ticket_rapido_js_url|default:''|escapejs }}";
       if (ticketModalEl) {
         ticketModalEl.addEventListener('show.bs.modal', function () {
           if (ticketUrlField) ticketUrlField.value = window.location.pathname + window.location.search;
@@ -582,9 +586,17 @@
       }
       formTicketRapido.addEventListener('submit', function (e) {
         e.preventDefault();
+        if (!ticketRapidoEndpoint) {
+          if (ticketFeedback) {
+            ticketFeedback.className = 'alert alert-danger mb-0';
+            ticketFeedback.textContent = 'El módulo de soporte no está disponible en este servidor.';
+            ticketFeedback.classList.remove('d-none');
+          }
+          return;
+        }
         var submitBtn = document.getElementById('ticketRapidoSubmit');
         if (submitBtn) submitBtn.disabled = true;
-        fetch("{% url 'soporte_ticket_rapido' %}", {
+        fetch(ticketRapidoEndpoint, {
           method: 'POST',
           body: new FormData(formTicketRapido),
           headers: { 'X-Requested-With': 'XMLHttpRequest' },

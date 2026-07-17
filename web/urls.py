@@ -15,17 +15,10 @@ from .views import (
 )
 from reportes.views import reportes_hub_view, reportes_export_view
 from catalogos.views import catalogo_diagnostico_list_view
-from soporte.views import (
-    soporte_hub_view,
-    soporte_list_view,
-    soporte_crear_view,
-    soporte_detalle_view,
-    soporte_ticket_rapido_view,
-)
 from ordenes_trabajo.views import (
-    ordenes_list_view as ordenes_trabajo_list, 
-    orden_crear_view, 
-    orden_detalle_view, 
+    ordenes_list_view as ordenes_trabajo_list,
+    orden_crear_view,
+    orden_detalle_view,
     cambiar_estado_orden_view,
     orden_editar_tecnico_view,
     orden_guardar_observaciones_view,
@@ -38,6 +31,24 @@ from ordenes_trabajo.views import (
     orden_subir_informe_view,
     orden_eliminar_view,
 )
+
+# Soporte es opcional en deploys parciales: si falta el paquete, el sitio no debe caer.
+try:
+    from soporte.views import (
+        soporte_hub_view,
+        soporte_list_view,
+        soporte_crear_view,
+        soporte_detalle_view,
+        soporte_ticket_rapido_view,
+    )
+    SOPORTE_DISPONIBLE = True
+except Exception:  # ImportError u otros fallos de carga del app
+    SOPORTE_DISPONIBLE = False
+    soporte_hub_view = None
+    soporte_list_view = None
+    soporte_crear_view = None
+    soporte_detalle_view = None
+    soporte_ticket_rapido_view = None
 
 urlpatterns = [
     # Entrada del sistema: http://127.0.0.1:8000/ → directo a login
@@ -106,7 +117,7 @@ urlpatterns = [
     path('movimientos/', movimientos_list_view, name='movimientos_list'),
     path('movimientos/<int:movimiento_id>/', movimientos_detalle_view, name='movimientos_detalle'),
     path('movimientos/historial/', movimientos_historial_equipo_view, name='movimientos_historial_equipo'),
-    
+
     # Reportes — Integraciones MoreApp (lectura directa de carpetas)
     path('reportes/moreapp/', reportes_moreapp_list, name='reportes_moreapp_list'),
     path('reportes/moreapp/<int:pk>/', reportes_moreapp_detalle, name='reportes_moreapp_detalle'),
@@ -120,19 +131,23 @@ urlpatterns = [
     path('reportes/exportar/<slug:slug>/', reportes_export_view, name='reportes_export'),
     path('auditoria/', auditoria_list_view, name='auditoria_list'),
     path('catalogos/diagnostico/', catalogo_diagnostico_list_view, name='catalogo_diagnostico_list'),
-    path('soporte/', soporte_hub_view, name='soporte_hub'),
-    path('soporte/tickets/', soporte_list_view, name='soporte_list'),
-    path('soporte/tickets/crear/', soporte_crear_view, name='soporte_crear'),
-    path('soporte/tickets/rapido/', soporte_ticket_rapido_view, name='soporte_ticket_rapido'),
-    path('soporte/tickets/<int:pk>/', soporte_detalle_view, name='soporte_detalle'),
     path('operacional/moreapp/<int:pk>/marcar-revision/', moreapp_marcar_revision_view, name='moreapp_marcar_revision'),
     path('reportes/moreapp/<int:pk>/reprocesar/', moreapp_reprocesar_view, name='moreapp_reprocesar'),
 
     # API Webhook MoreApp (tiempo real - sin autenticación Django)
     path('api/moreapp-webhook/', movimientos_importar_moreapp_webhook, name='movimientos_webhook_moreapp'),
-    
+
     # API - Búsqueda autocomplete inventario
     path('api/buscar-medidores/', api_buscar_medidores, name='api_buscar_medidores'),
     path('api/buscar-clientes/', api_buscar_clientes, name='api_buscar_clientes'),
     path('api/medidores/<int:medidor_id>/', api_obtener_medidor, name='api_obtener_medidor'),
 ]
+
+if SOPORTE_DISPONIBLE:
+    urlpatterns += [
+        path('soporte/', soporte_hub_view, name='soporte_hub'),
+        path('soporte/tickets/', soporte_list_view, name='soporte_list'),
+        path('soporte/tickets/crear/', soporte_crear_view, name='soporte_crear'),
+        path('soporte/tickets/rapido/', soporte_ticket_rapido_view, name='soporte_ticket_rapido'),
+        path('soporte/tickets/<int:pk>/', soporte_detalle_view, name='soporte_detalle'),
+    ]
