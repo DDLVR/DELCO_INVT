@@ -130,24 +130,33 @@
                         <div class="col-md-6 mb-3">
                             <label class="text-muted small">Técnico Responsable</label>
                             {% if puede_reasignar %}
-                            <form method="post" class="mt-1">
+                            <form method="post" class="mt-1" id="formReasignarTecnico">
                                 {% csrf_token %}
                                 <input type="hidden" name="accion" value="reasignar_tecnico">
-                                <div class="input-group input-group-sm">
-                                    <select name="tecnico_responsable" class="form-select" required>
-                                        <option value="">— Seleccionar técnico —</option>
-                                        {% for tec in tecnicos %}
-                                        <option value="{{ tec.id }}"
-                                            {% if orden.tecnico_responsable_id == tec.id %}selected{% endif %}>
-                                            {{ tec.nombre_interno }}
-                                        </option>
-                                        {% endfor %}
-                                    </select>
-                                    <button type="submit" class="btn btn-outline-primary">
-                                        <i class="bi bi-arrow-repeat"></i> Reasignar
-                                    </button>
-                                </div>
-                                <small class="text-muted">Al reasignar, la orden pasa a estado <strong>Reasignada</strong>.</small>
+                                <select name="tecnico_responsable" class="form-select form-select-sm mb-2" required>
+                                    <option value="">— Seleccionar técnico —</option>
+                                    {% for tec in tecnicos %}
+                                    <option value="{{ tec.id }}"
+                                        {% if orden.tecnico_responsable_id == tec.id %}selected{% endif %}>
+                                        {{ tec.nombre_interno }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <label class="form-label small mb-1" for="motivoReasignacion">
+                                    Comentario de reasignación <span class="text-danger">*</span>
+                                </label>
+                                <textarea
+                                    name="motivo_reasignacion"
+                                    id="motivoReasignacion"
+                                    class="form-control form-control-sm mb-2"
+                                    rows="2"
+                                    required
+                                    placeholder="Indique por qué se reasigna el técnico..."
+                                >{{ orden.motivo_reasignacion }}</textarea>
+                                <button type="submit" class="btn btn-sm btn-outline-primary w-100">
+                                    <i class="bi bi-arrow-repeat"></i> Reasignar
+                                </button>
+                                <small class="text-muted d-block mt-1">Al reasignar, la orden pasa a estado <strong>Reasignada</strong>. El comentario es obligatorio.</small>
                             </form>
                             {% else %}
                             <p class="mb-0">
@@ -158,6 +167,11 @@
                                 <em class="text-muted">Sin asignar</em>
                                 {% endif %}
                             </p>
+                            {% endif %}
+                            {% if orden.motivo_reasignacion %}
+                            <div class="alert alert-light border small mt-2 mb-0 py-2">
+                                <strong>Último motivo de reasignación:</strong> {{ orden.motivo_reasignacion }}
+                            </div>
                             {% endif %}
                         </div>
                     </div>
@@ -729,7 +743,15 @@
                     <h5 class="mb-0"><i class="bi bi-shield-check"></i> Validación administrativa</h5>
                 </div>
                 <div class="card-body">
-                    <p class="small text-muted">Revise el informe MoreApp y los equipos. Si aprueba, la orden queda validada y luego debe finalizarse. Si rechaza, se creará una OT derivada automáticamente.</p>
+                    <div class="d-flex align-items-center gap-2 mb-3 p-2 rounded border bg-body-tertiary">
+                        <i class="bi bi-person-badge fs-4 text-success"></i>
+                        <div>
+                            <div class="small text-muted mb-0">Se registra con la cuenta en uso</div>
+                            <strong>{{ user.nombre_interno }}</strong>
+                            <span class="badge bg-secondary ms-1">{{ user.get_rol_display }}</span>
+                        </div>
+                    </div>
+                    <p class="small text-muted">Revise el informe MoreApp y los equipos. Si aprueba, la orden queda validada a su nombre. Si rechaza, debe dejar comentario y se creará una OT derivada.</p>
                     <form method="post" action="{% url 'cambiar_estado_orden' orden.id %}" id="formValidacionOrden">
                         {% csrf_token %}
                         <label class="form-label">Resultado</label>
@@ -738,12 +760,23 @@
                             <option value="OBSERVADA">Observada (rechazar y crear OT derivada)</option>
                             <option value="PENDIENTE_VALIDACION">Mantener pendiente</option>
                         </select>
-                        <label class="form-label" for="observacionValidacion">Motivo (obligatorio si observa)</label>
-                        <textarea name="observacion_validacion" id="observacionValidacion" class="form-control mb-2" rows="3" placeholder="Indique qué debe corregirse en terreno...">{{ orden.observacion_validacion }}</textarea>
+                        <div id="bloqueMotivoValidacion" class="d-none">
+                            <label class="form-label" for="observacionValidacion">
+                                Comentario <span class="text-danger">*</span>
+                                <span class="text-muted fw-normal">(obligatorio al rechazar)</span>
+                            </label>
+                            <textarea name="observacion_validacion" id="observacionValidacion" class="form-control mb-2" rows="3" placeholder="Indique qué debe corregirse en terreno...">{{ orden.observacion_validacion }}</textarea>
+                        </div>
                         <button type="submit" class="btn btn-success w-100">
-                            <i class="bi bi-check2-circle"></i> Registrar validación
+                            <i class="bi bi-check2-circle"></i> Registrar validación como {{ user.nombre_interno }}
                         </button>
                     </form>
+                    {% if orden.validada_por %}
+                    <p class="small text-muted mb-0 mt-2">
+                        Última validación: <strong>{{ orden.validada_por.nombre_interno }}</strong>
+                        {% if orden.fecha_validacion %} · {{ orden.fecha_validacion|date:"d/m/Y H:i" }}{% endif %}
+                    </p>
+                    {% endif %}
                 </div>
             </div>
             {% endif %}
@@ -789,14 +822,38 @@
 </div>
 
 <script>
-document.getElementById('formValidacionOrden')?.addEventListener('submit', function(e) {
-    const estado = document.getElementById('selectResultadoValidacion')?.value;
-    const motivo = document.getElementById('observacionValidacion')?.value.trim();
+(function () {
+  const selectValidacion = document.getElementById('selectResultadoValidacion');
+  const bloqueMotivo = document.getElementById('bloqueMotivoValidacion');
+  const motivoValidacion = document.getElementById('observacionValidacion');
+
+  function syncMotivoValidacion() {
+    if (!selectValidacion || !bloqueMotivo || !motivoValidacion) return;
+    const esRechazo = selectValidacion.value === 'OBSERVADA';
+    bloqueMotivo.classList.toggle('d-none', !esRechazo);
+    motivoValidacion.required = esRechazo;
+  }
+
+  selectValidacion?.addEventListener('change', syncMotivoValidacion);
+  syncMotivoValidacion();
+
+  document.getElementById('formValidacionOrden')?.addEventListener('submit', function(e) {
+    const estado = selectValidacion?.value;
+    const motivo = motivoValidacion?.value.trim();
     if (estado === 'OBSERVADA' && !motivo) {
-        e.preventDefault();
-        alert('Debe indicar el motivo de la observación antes de rechazar el trabajo.');
+      e.preventDefault();
+      alert('Debe indicar el comentario antes de rechazar el trabajo.');
     }
-});
+  });
+
+  document.getElementById('formReasignarTecnico')?.addEventListener('submit', function(e) {
+    const motivo = document.getElementById('motivoReasignacion')?.value.trim();
+    if (!motivo) {
+      e.preventDefault();
+      alert('Debe indicar un comentario al reasignar la orden.');
+    }
+  });
+})();
 
 document.getElementById('formEliminarOrden')?.addEventListener('submit', async function(e) {
     e.preventDefault();
