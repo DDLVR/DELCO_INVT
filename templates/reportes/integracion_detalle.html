@@ -41,12 +41,12 @@
         <span class="badge bg-success fs-6 align-self-center">Procesado</span>
       {% elif registro.estado_sincronizacion == 'DUPLICADO' %}
         <span class="badge bg-secondary fs-6 align-self-center">Duplicado</span>
-      {% elif registro.estado_sincronizacion == 'ERROR_JSON' or registro.estado_sincronizacion == 'ERROR_LECTURA' %}
-        <span class="badge bg-danger fs-6 align-self-center">{{ registro.estado_sincronizacion }}</span>
+      {% elif registro.estado_sincronizacion == 'ERROR_JSON' or registro.estado_sincronizacion == 'ERROR_LECTURA' or registro.estado_sincronizacion == 'ERROR' %}
+        <span class="badge bg-danger fs-6 align-self-center">{{ registro.get_estado_sincronizacion_display }}</span>
       {% elif registro.estado_sincronizacion == 'ALERTA_REVISION' %}
-        <span class="badge bg-warning text-dark fs-6 align-self-center">Revisión</span>
+        <span class="badge bg-warning text-dark fs-6 align-self-center">{{ registro.get_estado_sincronizacion_display }}</span>
       {% else %}
-        <span class="badge delco-badge-muted fs-6 align-self-center">{{ registro.estado_sincronizacion }}</span>
+        <span class="badge delco-badge-muted fs-6 align-self-center">{{ registro.get_estado_sincronizacion_display|default:registro.estado_sincronizacion }}</span>
       {% endif %}
       {% if mostrar_panel_operativo and registro.datos_recibidos.data %}
       <form method="post" action="{% url 'moreapp_reprocesar' registro.pk %}">

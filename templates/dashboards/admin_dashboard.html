@@ -39,7 +39,7 @@
                     #{{ item.numero_correlativo|default:item.id }}
                     {% if item.nombre_formulario %}— {{ item.nombre_formulario }}{% endif %}
                     {% if item.orden_id %}· OT #{{ item.orden_id }}{% else %}· sin OT{% endif %}
-                    · {{ item.estado_revision }}
+                    · {{ item.estado_revision_label|default:item.estado_revision }}
                 </li>
                 {% endfor %}
             </ul>
