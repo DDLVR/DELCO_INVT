@@ -22,7 +22,21 @@ ESTADOS_POR_REVISAR = ('PENDIENTE', 'CON_ADVERTENCIA')
 def _qs_por_revisar():
     from ordenes_trabajo.models import IntegracionMoreApp
 
-    return IntegracionMoreApp.objects.filter(estado_revision__in=ESTADOS_POR_REVISAR)
+    return IntegracionMoreApp.objects.filter(
+        eliminado=False,
+        estado_revision__in=ESTADOS_POR_REVISAR,
+    )
+
+
+def invalidar_caches_aviso_moreapp() -> None:
+    """Invalida contadores cacheados del banner/badge/dashboard MoreApp."""
+    from web.perf_cache import cache_invalidate
+
+    cache_invalidate(
+        'moreapp:aviso_conteos',
+        'moreapp:list_kpis',
+        'moreapp:adv_breakdown',
+    )
 
 
 def marcar_aviso_moreapp_visto(request) -> None:
