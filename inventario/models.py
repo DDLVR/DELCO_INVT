@@ -153,6 +153,20 @@ class Medidor(models.Model):
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
     observaciones = models.TextField(blank=True)
+
+    eliminado = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Soft-delete: oculto en inventario, histórico en movimientos',
+    )
+    fecha_eliminacion = models.DateTimeField(null=True, blank=True)
+    eliminado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='medidores_eliminados',
+    )
     
     def __str__(self):
         return f'Medidor {self.serie} ({self.get_tipo_medidor_display()}) - Caja {self.caja}'
@@ -163,6 +177,7 @@ class Medidor(models.Model):
             models.Index(fields=['serie']),
             models.Index(fields=['caja']),
             models.Index(fields=['estado_inventario']),
+            models.Index(fields=['eliminado']),
         ]
 
 
@@ -330,12 +345,29 @@ class SimCard(models.Model):
     )
     
     fecha_creacion = models.DateTimeField(auto_now_add=True)
+
+    eliminado = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Soft-delete: oculto en inventario, histórico en movimientos',
+    )
+    fecha_eliminacion = models.DateTimeField(null=True, blank=True)
+    eliminado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='simcards_eliminadas',
+    )
     
     def __str__(self):
         return f'SIM {self.imei} ({self.operador})'
     
     class Meta:
         verbose_name_plural = 'SIM Cards'
+        indexes = [
+            models.Index(fields=['eliminado']),
+        ]
 
 
 class Modem(models.Model):
@@ -547,6 +579,20 @@ class Modem(models.Model):
     
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    eliminado = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Soft-delete: oculto en inventario, histórico en movimientos',
+    )
+    fecha_eliminacion = models.DateTimeField(null=True, blank=True)
+    eliminado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='modems_eliminados',
+    )
     
     def __str__(self):
         return f'Modem {self.serie} - {self.marca} {self.modelo}'
@@ -557,6 +603,7 @@ class Modem(models.Model):
             models.Index(fields=['serie']),
             models.Index(fields=['caja']),
             models.Index(fields=['estado_inventario']),
+            models.Index(fields=['eliminado']),
         ]
 
 
@@ -619,6 +666,42 @@ class MovimientoInventario(models.Model):
         db_index=True,
         help_text='Referencia textual de orden histórica (sin FK activa)'
     )
+
+    # Snapshot de eliminaciones (inventario, OT, MoreApp, clientes)
+    ENTIDAD_ELIMINADA_CHOICES = [
+        ('MEDIDOR', 'Medidor'),
+        ('SIM', 'SIM Card'),
+        ('MODEM', 'Módem'),
+        ('CLIENTE', 'Cliente'),
+        ('ORDEN_TRABAJO', 'Orden de trabajo'),
+        ('MOREAPP', 'Reporte MoreApp'),
+    ]
+    entidad_eliminada = models.CharField(
+        max_length=20,
+        choices=ENTIDAD_ELIMINADA_CHOICES,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text='Tipo de entidad eliminada (solo movimientos ELIMINACION)',
+    )
+    entidad_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        help_text='PK original de la entidad eliminada',
+    )
+    identificador_entidad = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text='Identificador legible (serie, submission_id, número cliente, OT#)',
+    )
+    datos_eliminacion = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Snapshot inmutable de la ficha eliminada (sin archivos binarios)',
+    )
     
     def __str__(self):
         return f'{self.get_tipo_display()} - {self.fecha_hora}'
@@ -629,6 +712,8 @@ class MovimientoInventario(models.Model):
             models.Index(fields=['-fecha_hora']),
             models.Index(fields=['tipo']),
             models.Index(fields=['origen_sistema']),
+            models.Index(fields=['entidad_eliminada']),
+            models.Index(fields=['identificador_entidad']),
         ]
 
 
