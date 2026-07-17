@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+
+{% block title %}Centro de Soporte{% endblock %}
+
+{% block content %}
+<style>
+  .soporte-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1rem;
+    padding: 2.25rem 1.75rem;
+    color: #f4f8fb;
+    background:
+      radial-gradient(ellipse 80% 60% at 10% 20%, rgba(74, 144, 226, 0.45), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 90% 80%, rgba(26, 58, 92, 0.9), transparent 50%),
+      linear-gradient(135deg, #0f2438 0%, #1a3a5c 45%, #2c5282 100%);
+    box-shadow: 0 18px 40px rgba(15, 36, 56, 0.28);
+  }
+  .soporte-hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 28px 28px;
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  .soporte-hero > * { position: relative; z-index: 1; }
+  .soporte-stat {
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(6px);
+    border-radius: 0.85rem;
+    padding: 1rem 1.1rem;
+  }
+  .soporte-cta {
+    animation: soportePulse 2.4s ease-in-out infinite;
+  }
+  @keyframes soportePulse {
+    0%, 100% { transform: translateY(0); box-shadow: 0 8px 20px rgba(74, 144, 226, 0.35); }
+    50% { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(74, 144, 226, 0.5); }
+  }
+  .soporte-card-link {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .soporte-card-link:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 24px rgba(15, 36, 56, 0.12);
+  }
+</style>
+
+<div class="container-fluid py-3">
+  <div class="soporte-hero mb-4">
+    <div class="row align-items-center g-4">
+      <div class="col-lg-7">
+        <p class="text-uppercase small mb-2 opacity-75" style="letter-spacing: 0.12em;">Solo administradores</p>
+        <h1 class="display-6 fw-semibold mb-2">Centro de Soporte Delco</h1>
+        <p class="mb-4 opacity-90" style="max-width: 36rem;">
+          Reporta bugs, fallas operativas y bloqueos del sistema. Cada ticket queda trazado con tu cuenta de administrador.
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+          <a href="{% url 'soporte_crear' %}" class="btn btn-light btn-lg soporte-cta text-primary fw-semibold">
+            <i class="bi bi-plus-circle me-1"></i> Levantar ticket
+          </a>
+          <a href="{% url 'soporte_list' %}" class="btn btn-outline-light btn-lg">
+            <i class="bi bi-ticket-detailed me-1"></i> Ver todos
+          </a>
+        </div>
+      </div>
+      <div class="col-lg-5">
+        <div class="row g-2">
+          <div class="col-6">
+            <div class="soporte-stat">
+              <div class="small opacity-75">Abiertos</div>
+              <div class="fs-3 fw-semibold">{{ contadores.abiertos|default:0 }}</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="soporte-stat">
+              <div class="small opacity-75">En revisión</div>
+              <div class="fs-3 fw-semibold">{{ contadores.en_revision|default:0 }}</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="soporte-stat">
+              <div class="small opacity-75">Críticos activos</div>
+              <div class="fs-3 fw-semibold text-warning">{{ contadores.criticos|default:0 }}</div>
+            </div>
+          </div>
+          <div class="col-6">
+            <div class="soporte-stat">
+              <div class="small opacity-75">Total</div>
+              <div class="fs-3 fw-semibold">{{ contadores.total|default:0 }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4">
+      <a href="{% url 'soporte_crear' %}?categoria=BUG" class="text-decoration-none">
+        <div class="card h-100 delco-panel-card soporte-card-link border-0 shadow-sm">
+          <div class="card-body">
+            <div class="text-danger mb-2"><i class="bi bi-bug fs-3"></i></div>
+            <h5 class="card-title">Reportar bug</h5>
+            <p class="card-text text-muted small mb-0">Errores de pantalla, datos incorrectos o fallas al guardar.</p>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-4">
+      <a href="{% url 'soporte_crear' %}?categoria=PROBLEMA" class="text-decoration-none">
+        <div class="card h-100 delco-panel-card soporte-card-link border-0 shadow-sm">
+          <div class="card-body">
+            <div class="text-warning mb-2"><i class="bi bi-exclamation-triangle fs-3"></i></div>
+            <h5 class="card-title">Problema operativo</h5>
+            <p class="card-text text-muted small mb-0">Flujos bloqueados, MoreApp, inventario o validaciones.</p>
+          </div>
+        </div>
+      </a>
+    </div>
+    <div class="col-md-4">
+      <a href="{% url 'soporte_crear' %}?categoria=MEJORA" class="text-decoration-none">
+        <div class="card h-100 delco-panel-card soporte-card-link border-0 shadow-sm">
+          <div class="card-body">
+            <div class="text-primary mb-2"><i class="bi bi-lightbulb fs-3"></i></div>
+            <h5 class="card-title">Proponer mejora</h5>
+            <p class="card-text text-muted small mb-0">Ideas de UX o automatizaciones para la operación.</p>
+          </div>
+        </div>
+      </a>
+    </div>
+  </div>
+
+  <div class="card delco-panel-card shadow-sm">
+    <div class="card-header card-header-delco d-flex justify-content-between align-items-center">
+      <h5 class="mb-0"><i class="bi bi-clock-history"></i> Tickets recientes</h5>
+      <a href="{% url 'soporte_list' %}" class="btn btn-sm btn-light">Ver lista</a>
+    </div>
+    <div class="card-body p-0">
+      {% if tickets_recientes %}
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead class="table-light">
+            <tr>
+              <th>#</th>
+              <th>Título</th>
+              <th>Prioridad</th>
+              <th>Estado</th>
+              <th>Creado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in tickets_recientes %}
+            <tr>
+              <td><strong>{{ t.id }}</strong></td>
+              <td>{{ t.titulo }}</td>
+              <td>
+                <span class="badge {% if t.prioridad == 'CRITICA' %}bg-danger{% elif t.prioridad == 'ALTA' %}bg-warning text-dark{% elif t.prioridad == 'MEDIA' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+                  {{ t.get_prioridad_display }}
+                </span>
+              </td>
+              <td>{{ t.get_estado_display }}</td>
+              <td>{{ t.fecha_creacion|date:"d/m/Y H:i" }}</td>
+              <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{% url 'soporte_detalle' t.id %}">Abrir</a></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted mb-0 p-4">Aún no hay tickets. Usa “Levantar ticket” para el primero.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

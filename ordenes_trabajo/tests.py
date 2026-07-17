@@ -430,6 +430,25 @@ class OrdenesValidacionAdministrativoTests(TestCase):
 		self.assertEqual(derivada.estado, 'ASIGNADA')
 		self.assertEqual(response.url, reverse('orden_detalle', args=[derivada.pk]))
 
+	def test_observada_sin_comentario_bloquea(self):
+		self.assertTrue(self.client.login(rut=self.administrativo.rut, password=self.password))
+		response = self.client.post(
+			reverse('cambiar_estado_orden', args=[self.orden.pk]),
+			{'nuevo_estado': 'OBSERVADA', 'observacion_validacion': ''},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.orden.refresh_from_db()
+		self.assertEqual(self.orden.estado, 'PENDIENTE_VALIDACION')
+
+	def test_detalle_muestra_usuario_validador_actual(self):
+		self.assertTrue(self.client.login(rut=self.administrativo.rut, password=self.password))
+		response = self.client.get(reverse('orden_detalle', args=[self.orden.pk]))
+		self.assertEqual(response.status_code, 200)
+		html = response.content.decode()
+		self.assertIn('Validación administrativa', html)
+		self.assertIn(self.administrativo.nombre_interno, html)
+		self.assertIn('Registrar validación como', html)
+
 
 class OrdenesValidacionesPdfTests(TestCase):
 	def setUp(self):
@@ -620,6 +639,7 @@ class OrdenesReasignacionTecnicoTests(TestCase):
 			{
 				'accion': 'reasignar_tecnico',
 				'tecnico_responsable': str(self.tecnico_2.pk),
+				'motivo_reasignacion': 'Técnico original no disponible esta semana',
 			},
 		)
 		self.assertEqual(response.status_code, 302)
@@ -627,3 +647,18 @@ class OrdenesReasignacionTecnicoTests(TestCase):
 		self.assertEqual(self.orden.tecnico_responsable_id, self.tecnico_2.id)
 		self.assertEqual(self.orden.estado, 'REASIGNADA')
 		self.assertFalse(self.orden.tecnico_solicito_reasignacion)
+		self.assertIn('no disponible', self.orden.motivo_reasignacion)
+
+	def test_reasignar_sin_comentario_bloquea(self):
+		response = self.client.post(
+			reverse('orden_detalle', kwargs={'pk': self.orden.pk}),
+			{
+				'accion': 'reasignar_tecnico',
+				'tecnico_responsable': str(self.tecnico_2.pk),
+				'motivo_reasignacion': '',
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.orden.refresh_from_db()
+		self.assertEqual(self.orden.tecnico_responsable_id, self.tecnico_1.id)
+		self.assertEqual(self.orden.estado, 'ASIGNADA')

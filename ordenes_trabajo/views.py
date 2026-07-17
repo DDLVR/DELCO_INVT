@@ -280,8 +280,12 @@ def orden_detalle_view(request, pk):
             return redirect('ordenes_list')
 
         tecnico_id = request.POST.get('tecnico_responsable', '').strip()
+        motivo_reasignacion = request.POST.get('motivo_reasignacion', '').strip()
         if not tecnico_id:
             messages.error(request, 'Debes seleccionar un técnico')
+            return redirect('orden_detalle', pk=pk)
+        if not motivo_reasignacion:
+            messages.error(request, 'Debes indicar un comentario al reasignar la orden.')
             return redirect('orden_detalle', pk=pk)
 
         try:
@@ -300,12 +304,14 @@ def orden_detalle_view(request, pk):
         orden.tecnico_responsable = nuevo_tecnico
         orden.estado = 'REASIGNADA'
         orden.tecnico_solicito_reasignacion = False
+        orden.motivo_reasignacion = motivo_reasignacion
         if not orden.fecha_asignacion:
             orden.fecha_asignacion = timezone.now()
         orden.save(update_fields=[
             'tecnico_responsable',
             'estado',
             'tecnico_solicito_reasignacion',
+            'motivo_reasignacion',
             'fecha_asignacion',
         ])
 
@@ -321,7 +327,10 @@ def orden_detalle_view(request, pk):
                 field_name='tecnico_responsable',
                 old_value=str(getattr(tecnico_anterior, 'id', '') or ''),
                 new_value=str(nuevo_tecnico.id),
-                reason=f'Reasignación de {anterior_txt} a {nuevo_tecnico.nombre_interno}',
+                reason=(
+                    f'Reasignación de {anterior_txt} a {nuevo_tecnico.nombre_interno} '
+                    f'por {usuario.nombre_interno}: {motivo_reasignacion}'
+                ),
             )
         )
         messages.success(
@@ -417,13 +426,15 @@ def cambiar_estado_orden_view(request, pk):
         messages.error(request, 'Debe indicar el motivo de la observación antes de rechazar.')
         return redirect('orden_detalle', pk=pk)
 
+    # La validación/rechazo siempre queda a nombre del usuario autenticado.
     resultado = orden.cambiar_estado(request.user, nuevo_estado, razon=observacion)
 
     if resultado['success']:
         if nuevo_estado == 'VALIDADA':
             messages.success(
                 request,
-                'Orden validada. Use Acciones → Finalizada para cerrar el trabajo en la plataforma.',
+                f'Orden validada por {request.user.nombre_interno}. '
+                'Use Acciones → Finalizada para cerrar el trabajo en la plataforma.',
             )
         elif nuevo_estado == 'OBSERVADA':
             nueva = crear_orden_derivada_por_observacion(orden, request.user, observacion)
