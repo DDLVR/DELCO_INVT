@@ -50,9 +50,9 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
     usuario = request.user
 
     if usuario.rol in ['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR']:
-        ordenes = OrdenTrabajo.objects.all()
+        ordenes = OrdenTrabajo.objects.filter(eliminado=False)
     elif usuario.rol == 'TECNICO':
-        ordenes = OrdenTrabajo.objects.filter(tecnico_responsable=usuario)
+        ordenes = OrdenTrabajo.objects.filter(tecnico_responsable=usuario, eliminado=False)
     else:
         ordenes = OrdenTrabajo.objects.none()
 
@@ -270,13 +270,72 @@ def orden_detalle_view(request, pk):
         else:
             messages.error(request, 'No tienes permiso para editar las observaciones técnicas')
         return redirect('orden_detalle', pk=pk)
+
+    if request.method == 'POST' and request.POST.get('accion') == 'reasignar_tecnico':
+        if usuario.rol not in ['ADMIN', 'ADMINISTRATIVO']:
+            messages.error(request, 'No tienes permiso para reasignar el técnico')
+            return redirect('orden_detalle', pk=pk)
+        if orden.eliminado:
+            messages.error(request, 'No se puede reasignar una orden eliminada')
+            return redirect('ordenes_list')
+
+        tecnico_id = request.POST.get('tecnico_responsable', '').strip()
+        if not tecnico_id:
+            messages.error(request, 'Debes seleccionar un técnico')
+            return redirect('orden_detalle', pk=pk)
+
+        try:
+            nuevo_tecnico = Usuario.objects.get(pk=int(tecnico_id), rol='TECNICO', is_active=True)
+        except (Usuario.DoesNotExist, ValueError, TypeError):
+            messages.error(request, 'Técnico no válido')
+            return redirect('orden_detalle', pk=pk)
+
+        tecnico_anterior = orden.tecnico_responsable
+        tecnico_anterior_id = getattr(tecnico_anterior, 'id', None)
+        if tecnico_anterior_id is not None:
+            if tecnico_anterior_id == nuevo_tecnico.id and orden.estado == 'REASIGNADA':
+                messages.info(request, 'El técnico ya está asignado a esta orden')
+                return redirect('orden_detalle', pk=pk)
+
+        orden.tecnico_responsable = nuevo_tecnico
+        orden.estado = 'REASIGNADA'
+        orden.tecnico_solicito_reasignacion = False
+        if not orden.fecha_asignacion:
+            orden.fecha_asignacion = timezone.now()
+        orden.save(update_fields=[
+            'tecnico_responsable',
+            'estado',
+            'tecnico_solicito_reasignacion',
+            'fecha_asignacion',
+        ])
+
+        anterior_txt = (
+            tecnico_anterior.nombre_interno if tecnico_anterior else 'sin asignar'
+        )
+        register_audit_event(
+            AuditEvent(
+                actor_id=getattr(usuario, 'id', None),
+                action='OT_REASSIGN_TECH',
+                entity='OrdenTrabajo',
+                entity_id=str(orden.pk),
+                field_name='tecnico_responsable',
+                old_value=str(getattr(tecnico_anterior, 'id', '') or ''),
+                new_value=str(nuevo_tecnico.id),
+                reason=f'Reasignación de {anterior_txt} a {nuevo_tecnico.nombre_interno}',
+            )
+        )
+        messages.success(
+            request,
+            f'Técnico reasignado a {nuevo_tecnico.nombre_interno}. Estado: Reasignada.',
+        )
+        return redirect('orden_detalle', pk=pk)
     
     # Obtener adjuntos e informes
     adjuntos = orden.adjuntos.all()
     informes = orden.informes.all()
     
     # Obtener integraciones MoreApp
-    sincronizaciones = orden.sincronizaciones_moreapp.all().order_by('-fecha_recepcion')
+    sincronizaciones = orden.sincronizaciones_moreapp.filter(eliminado=False).order_by('-fecha_recepcion')
     moreapp_count = sincronizaciones.count()
     sync_advertencia = sincronizaciones.filter(estado_revision='CON_ADVERTENCIA').exists()
     paso_operativo = paso_operativo_ot(orden, moreapp_count=moreapp_count, sync_advertencia=sync_advertencia)
@@ -288,15 +347,18 @@ def orden_detalle_view(request, pk):
     estados_revision = ('PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION')
     puede_validar = usuario.rol in ['ADMIN', 'ADMINISTRATIVO'] and orden.estado in estados_revision
     puede_observar = usuario.rol == 'AUDITOR' and orden.estado in estados_revision
+    puede_reasignar = usuario.rol in ['ADMIN', 'ADMINISTRATIVO'] and not orden.eliminado
 
     historial_ordenes_cliente = OrdenTrabajo.objects.none()
     if orden.cliente_id:
         historial_ordenes_cliente = (
-            OrdenTrabajo.objects.filter(cliente_id=orden.cliente_id)
+            OrdenTrabajo.objects.filter(cliente_id=orden.cliente_id, eliminado=False)
             .exclude(pk=orden.pk)
             .select_related('tecnico_responsable')
             .order_by('-fecha_creacion')[:30]
         )
+
+    tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
 
     context = {
         'orden': orden,
@@ -306,11 +368,13 @@ def orden_detalle_view(request, pk):
         'paso_operativo': paso_operativo,
         'historial_ordenes_cliente': historial_ordenes_cliente,
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
+        'puede_reasignar': puede_reasignar,
+        'tecnicos': tecnicos,
         'puede_validar': puede_validar,
         'puede_observar': puede_observar,
         'puede_finalizar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'] and orden.estado == 'VALIDADA',
-        'ordenes_derivadas': orden.ordenes_derivadas.order_by('-fecha_creacion'),
-        'puede_eliminar': usuario.rol == 'ADMIN',
+        'ordenes_derivadas': orden.ordenes_derivadas.filter(eliminado=False).order_by('-fecha_creacion'),
+        'puede_eliminar': usuario.rol == 'ADMIN' and not orden.eliminado,
         'es_tecnico_responsable': orden.tecnico_responsable == usuario if orden.tecnico_responsable else False,
         'puede_editar_observaciones': puede_editar_observaciones_orden(orden, usuario),
     }
@@ -765,20 +829,27 @@ def orden_subir_informe_view(request, pk):
 @admin_only
 @require_POST
 def orden_eliminar_view(request, pk):
-    """Elimina una orden de trabajo (solo rol ADMIN)."""
-    orden = get_object_or_404(OrdenTrabajo, pk=pk)
+    """Soft-delete de OT: oculta en listados y deja snapshot en movimientos."""
+    from web.services.eliminaciones import ENTIDAD_ORDEN, registrar_eliminacion
+
+    orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
     orden_id = orden.id
     titulo = orden.titulo
+    motivo = request.POST.get('motivo', '').strip()
 
-    for adjunto in orden.adjuntos.all():
-        if adjunto.archivo:
-            adjunto.archivo.delete(save=False)
-    for informe in orden.informes.all():
-        if informe.archivo:
-            informe.archivo.delete(save=False)
-
-    orden.delete()
-    messages.success(request, f'Orden #{orden_id} ({titulo}) eliminada correctamente.')
+    _, creado = registrar_eliminacion(
+        ENTIDAD_ORDEN,
+        orden,
+        request.user,
+        motivo=motivo,
+    )
+    if creado:
+        messages.success(
+            request,
+            f'Orden #{orden_id} ({titulo}) eliminada. Quedó registrada en Movimientos.',
+        )
+    else:
+        messages.warning(request, f'La orden #{orden_id} ya estaba eliminada.')
     return redirect('ordenes_list')
 
 
@@ -798,9 +869,9 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
         usuario = self.request.user
 
         if usuario.rol in ['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR']:
-            return OrdenTrabajo.objects.all()
+            return OrdenTrabajo.objects.filter(eliminado=False)
         elif usuario.rol == 'TECNICO':
-            return OrdenTrabajo.objects.filter(tecnico_responsable=usuario)
+            return OrdenTrabajo.objects.filter(tecnico_responsable=usuario, eliminado=False)
         
         return OrdenTrabajo.objects.none()
 

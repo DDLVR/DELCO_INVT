@@ -12,53 +12,42 @@ from django.conf import settings
 @login_required
 @require_POST
 def inventario_eliminar_view(request, pk):
-    """Elimina un equipo (medidor, sim, modem) y registra quién lo eliminó"""
+    """Soft-delete de equipo: oculta en inventario y deja snapshot en movimientos."""
+    from web.services.eliminaciones import (
+        ENTIDAD_MEDIDOR,
+        ENTIDAD_MODEM,
+        ENTIDAD_SIM,
+        registrar_eliminacion,
+    )
+
     tipo = request.POST.get('tipo', 'medidor')
+    motivo = request.POST.get('motivo', '').strip()
     try:
         if tipo == 'medidor':
-            equipo = get_object_or_404(Medidor, pk=pk)
-            identificador = equipo.serie
-            tipo_item = 'MEDIDOR'
+            equipo = get_object_or_404(Medidor, pk=pk, eliminado=False)
+            entidad = ENTIDAD_MEDIDOR
         elif tipo == 'sim':
-            equipo = get_object_or_404(SimCard, pk=pk)
-            identificador = equipo.imei or equipo.abonado or str(equipo.pk)
-            tipo_item = 'SIM'
+            equipo = get_object_or_404(SimCard, pk=pk, eliminado=False)
+            entidad = ENTIDAD_SIM
         elif tipo == 'modem':
-            equipo = get_object_or_404(Modem, pk=pk)
-            identificador = equipo.serie
-            tipo_item = 'MODEM'
+            equipo = get_object_or_404(Modem, pk=pk, eliminado=False)
+            entidad = ENTIDAD_MODEM
         else:
             return JsonResponse({'success': False, 'message': 'Tipo de equipo no válido'})
 
-        ubicacion = getattr(equipo, 'ubicacion_actual', None)
-        if ubicacion is None:
-            ubicacion = Ubicacion.objects.filter(nombre__icontains='Bodega').first()
-        if ubicacion is None:
-            ubicacion = Ubicacion.objects.create(tipo='BODEGA_DELCO', nombre='Bodega Principal')
-
-        movimiento = MovimientoInventario.objects.create(
-            tipo='ELIMINACION',
-            origen=ubicacion,
-            destino=ubicacion,
-            responsable=request.user,
-            observacion=(
-                f'Eliminación de {tipo_item} {identificador} por '
-                f'{request.user.nombre_interno if hasattr(request.user, "nombre_interno") else request.user}'
-            )
+        _, creado = registrar_eliminacion(
+            entidad,
+            equipo,
+            request.user,
+            motivo=motivo,
+            crear_item_inventario=True,
         )
-
-        from inventario.models import MovimientoItem
-        item_kwargs = {'movimiento': movimiento, 'tipo_equipo': tipo_item, 'cantidad': 1}
-        if tipo_item == 'MEDIDOR':
-            item_kwargs['medidor'] = equipo
-        elif tipo_item == 'SIM':
-            item_kwargs['simcard'] = equipo
-        else:
-            item_kwargs['modem'] = equipo
-        MovimientoItem.objects.create(**item_kwargs)
-
-        equipo.delete()
-        return JsonResponse({'success': True, 'message': f'{tipo.capitalize()} eliminado correctamente'})
+        if not creado:
+            return JsonResponse({'success': False, 'message': 'El equipo ya estaba eliminado'})
+        return JsonResponse({
+            'success': True,
+            'message': f'{tipo.capitalize()} eliminado. Quedó registrado en Movimientos.',
+        })
     except Exception as e:
         import traceback
         traceback.print_exc()
@@ -271,6 +260,7 @@ def dashboard_view(request):
             context['ot_colas'] = contadores_colas_ordenes(ot_qs)
             context['moreapp_sin_ot'] = IntegracionMoreApp.objects.filter(
                 orden__isnull=True,
+                eliminado=False,
             ).exclude(estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR')).count()
             context['clientes_reincidentes'] = (
                 OrdenTrabajo.objects.filter(fecha_creacion__date__gte=six_month_window_start())
@@ -376,24 +366,29 @@ def dashboard_view(request):
         try:
             from ordenes_trabajo.models import IntegracionMoreApp
             context['moreapp_pendientes'] = IntegracionMoreApp.objects.filter(
-                estado_revision='PENDIENTE'
+                estado_revision='PENDIENTE',
+                eliminado=False,
             ).count()
             context['moreapp_con_advertencia'] = IntegracionMoreApp.objects.filter(
-                estado_revision='CON_ADVERTENCIA'
+                estado_revision='CON_ADVERTENCIA',
+                eliminado=False,
             ).count()
             # Envejecimiento: registros con revisión pendiente > 7 días (Punto 11)
             umbral_7d = ahora - timedelta(days=7)
             context['moreapp_envejecidos'] = IntegracionMoreApp.objects.filter(
                 estado_revision='PENDIENTE',
+                eliminado=False,
                 fecha_recepcion__lt=umbral_7d,
             ).count()
             context['moreapp_sinc_breakdown'] = list(
-                IntegracionMoreApp.objects.values('estado_sincronizacion')
+                IntegracionMoreApp.objects.filter(eliminado=False)
+                .values('estado_sincronizacion')
                 .annotate(c=Count('id'))
                 .order_by('-c')
             )
             context['moreapp_formulario_breakdown'] = list(
-                IntegracionMoreApp.objects.values('nombre_formulario')
+                IntegracionMoreApp.objects.filter(eliminado=False)
+                .values('nombre_formulario')
                 .annotate(c=Count('id'))
                 .order_by('-c')
             )
@@ -463,7 +458,11 @@ def pendientes_operativos_view(request):
     if estado not in ('PENDIENTE', 'CON_ADVERTENCIA', 'REVISADO', 'DESCARTADO', 'CRITICA', 'TODOS'):
         estado = 'PENDIENTE'
 
-    qs = IntegracionMoreApp.objects.select_related('procesado_por').order_by('-fecha_recepcion')
+    qs = (
+        IntegracionMoreApp.objects.filter(eliminado=False)
+        .select_related('procesado_por')
+        .order_by('-fecha_recepcion')
+    )
     if estado == 'CRITICA':
         qs = qs.filter(descripcion_alerta__icontains='ALERTA_CRITICA')
     elif estado != 'TODOS':
@@ -472,14 +471,15 @@ def pendientes_operativos_view(request):
     ahora = timezone.now()
     umbral_7d = ahora - timedelta(days=7)
 
-    # Contadores para filtros rápidos (Punto 6)
+    # Contadores para filtros rápidos (Punto 6) — excluyen soft-deleted
+    qs_activos = IntegracionMoreApp.objects.filter(eliminado=False)
     contadores = {
-        'PENDIENTE': IntegracionMoreApp.objects.filter(estado_revision='PENDIENTE').count(),
-        'CON_ADVERTENCIA': IntegracionMoreApp.objects.filter(estado_revision='CON_ADVERTENCIA').count(),
-        'REVISADO': IntegracionMoreApp.objects.filter(estado_revision='REVISADO').count(),
-        'DESCARTADO': IntegracionMoreApp.objects.filter(estado_revision='DESCARTADO').count(),
-        'CRITICA': IntegracionMoreApp.objects.filter(descripcion_alerta__icontains='ALERTA_CRITICA').count(),
-        'envejecidos': IntegracionMoreApp.objects.filter(
+        'PENDIENTE': qs_activos.filter(estado_revision='PENDIENTE').count(),
+        'CON_ADVERTENCIA': qs_activos.filter(estado_revision='CON_ADVERTENCIA').count(),
+        'REVISADO': qs_activos.filter(estado_revision='REVISADO').count(),
+        'DESCARTADO': qs_activos.filter(estado_revision='DESCARTADO').count(),
+        'CRITICA': qs_activos.filter(descripcion_alerta__icontains='ALERTA_CRITICA').count(),
+        'envejecidos': qs_activos.filter(
             estado_revision='PENDIENTE', fecha_recepcion__lt=umbral_7d
         ).count(),
     }
@@ -701,37 +701,37 @@ def inventario_list_view(request):
             fecha_recepcion=equipo.fecha_recepcion,
         )
 
-    # Obtener datos base
+    # Obtener datos base (excluye soft-deleted)
     if tipo == 'medidor':
-        equipos = Medidor.objects.select_related(
+        equipos = Medidor.objects.filter(eliminado=False).select_related(
             'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
-        ).all().order_by('serie')
+        ).order_by('serie')
         titulo = 'Medidores'
     elif tipo == 'sim':
-        equipos = SimCard.objects.select_related(
+        equipos = SimCard.objects.filter(eliminado=False).select_related(
             'estado_inventario', 'ubicacion_actual', 'cliente', 'en_custodia_de', 'medidor'
-        ).all().order_by('imei')
+        ).order_by('imei')
         titulo = 'SIM Cards'
     elif tipo == 'modem':
-        equipos = Modem.objects.select_related(
+        equipos = Modem.objects.filter(eliminado=False).select_related(
             'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
-        ).all().order_by('-id')
+        ).order_by('-id')
         titulo = 'Módems'
     elif tipo == 'todos':
-        medidores_qs = Medidor.objects.select_related(
+        medidores_qs = Medidor.objects.filter(eliminado=False).select_related(
             'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
-        ).all().order_by('-id')
-        sims_qs = SimCard.objects.select_related(
+        ).order_by('-id')
+        sims_qs = SimCard.objects.filter(eliminado=False).select_related(
             'estado_inventario', 'ubicacion_actual', 'cliente', 'en_custodia_de', 'medidor'
-        ).all().order_by('-id')
-        modems_qs = Modem.objects.select_related(
+        ).order_by('-id')
+        modems_qs = Modem.objects.filter(eliminado=False).select_related(
             'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
-        ).all().order_by('-id')
+        ).order_by('-id')
         titulo = 'Inventario Consolidado'
     else:
-        equipos = Medidor.objects.select_related(
+        equipos = Medidor.objects.filter(eliminado=False).select_related(
             'estado_inventario', 'ubicacion_actual', 'cliente', 'entregado_a'
-        ).all().order_by('-id')
+        ).order_by('-id')
         titulo = 'Medidores'
         tipo = 'medidor'
     
@@ -3439,27 +3439,28 @@ def cliente_historial_view(request, pk):
 @login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
 def cliente_eliminar_view(request, pk):
-    """Elimina logicamente un cliente (roles ADMIN y ADMINISTRATIVO)."""
+    """Soft-delete de cliente + snapshot en movimientos."""
+    from web.services.eliminaciones import ENTIDAD_CLIENTE, registrar_eliminacion
+
     if request.method != 'POST':
         return redirect('clientes_list')
 
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
     cliente_numero = cliente.numero_cliente
-    cliente.activo = False
-    cliente.save(update_fields=['activo'])
-    register_audit_event(
-        AuditEvent(
-            actor_id=getattr(request.user, 'id', None),
-            action='CLIENT_SOFT_DELETE',
-            entity='Cliente',
-            entity_id=str(cliente.id),
-            field_name='activo',
-            old_value=True,
-            new_value=False,
-            reason='Eliminación lógica individual desde gestión',
-        )
+    motivo = request.POST.get('motivo', '').strip()
+    _, creado = registrar_eliminacion(
+        ENTIDAD_CLIENTE,
+        cliente,
+        request.user,
+        motivo=motivo or 'Eliminación lógica individual desde gestión',
     )
-    messages.success(request, f'Cliente {cliente_numero} eliminado correctamente.')
+    if creado:
+        messages.success(
+            request,
+            f'Cliente {cliente_numero} eliminado. Quedó registrado en Movimientos.',
+        )
+    else:
+        messages.warning(request, f'El cliente {cliente_numero} ya estaba eliminado.')
     return redirect('clientes_list')
 
 
@@ -3467,31 +3468,28 @@ def cliente_eliminar_view(request, pk):
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
 @require_POST
 def clientes_eliminar_masivo_view(request):
-    """Elimina lógicamente múltiples clientes seleccionados desde la gestión."""
+    """Soft-delete masivo de clientes + snapshot en movimientos."""
+    from web.services.eliminaciones import ENTIDAD_CLIENTE, registrar_eliminacion
+
     ids = request.POST.getlist('cliente_ids')
     if not ids:
         messages.warning(request, 'No se seleccionaron clientes para eliminar.')
         return redirect('clientes_list')
 
-    clientes = Cliente.objects.filter(pk__in=ids, activo=True)
-    total = clientes.count()
-    clientes_auditoria = list(clientes.values('id', 'numero_cliente'))
-    numeros = [item['numero_cliente'] for item in clientes_auditoria[:10]]
-    clientes.update(activo=False)
-
-    for item in clientes_auditoria:
-        register_audit_event(
-            AuditEvent(
-                actor_id=getattr(request.user, 'id', None),
-                action='CLIENT_SOFT_DELETE_MASSIVE',
-                entity='Cliente',
-                entity_id=str(item['id']),
-                field_name='activo',
-                old_value=True,
-                new_value=False,
-                reason='Eliminación lógica masiva desde gestión',
-            )
+    clientes = list(Cliente.objects.filter(pk__in=ids, activo=True))
+    total = 0
+    numeros = []
+    for cliente in clientes:
+        _, creado = registrar_eliminacion(
+            ENTIDAD_CLIENTE,
+            cliente,
+            request.user,
+            motivo='Eliminación lógica masiva desde gestión',
         )
+        if creado:
+            total += 1
+            if len(numeros) < 10:
+                numeros.append(cliente.numero_cliente)
 
     if total == 0:
         messages.warning(request, 'No se encontraron clientes activos para eliminar.')
@@ -3502,7 +3500,7 @@ def clientes_eliminar_masivo_view(request):
         numeros_txt = ', '.join(numeros)
         messages.success(
             request,
-            f'Se eliminaron {total} clientes seleccionados. {numeros_txt}{extra}'.strip()
+            f'Se eliminaron {total} clientes. Quedaron en Movimientos. {numeros_txt}{extra}'.strip()
         )
     return redirect('clientes_list')
 
@@ -3562,6 +3560,7 @@ def movimientos_list_view(request):
     origen_id = request.GET.get('origen', '')
     destino_id = request.GET.get('destino', '')
     origen_sistema = request.GET.get('origen_sistema', '')
+    entidad_eliminada = request.GET.get('entidad_eliminada', '')
     busqueda = request.GET.get('q', '')
     
     # Query base
@@ -3572,6 +3571,12 @@ def movimientos_list_view(request):
     # Aplicar filtros
     if tipo_filtro:
         movimientos = movimientos.filter(tipo=tipo_filtro)
+
+    if entidad_eliminada:
+        movimientos = movimientos.filter(
+            tipo='ELIMINACION',
+            entidad_eliminada=entidad_eliminada,
+        )
     
     if fecha_desde:
         try:
@@ -3615,7 +3620,9 @@ def movimientos_list_view(request):
         movimientos = movimientos.filter(
             Q(observacion__icontains=busqueda) |
             Q(referencia_ot__icontains=busqueda) |
-            Q(responsable__nombre_interno__icontains=busqueda)
+            Q(responsable__nombre_interno__icontains=busqueda) |
+            Q(identificador_entidad__icontains=busqueda) |
+            Q(entidad_id__icontains=busqueda)
         )
     
     # Anotar cantidad de items por movimiento
@@ -3656,6 +3663,9 @@ def movimientos_list_view(request):
             mov.item_origen_display = ', '.join(detalles[:3])
             if len(detalles) > 3:
                 mov.item_origen_display += f' (+{len(detalles) - 3} más)'
+        elif mov.tipo == 'ELIMINACION' and mov.identificador_entidad:
+            entidad_lbl = mov.get_entidad_eliminada_display() or mov.entidad_eliminada or 'Registro'
+            mov.item_origen_display = f'{entidad_lbl}: {mov.identificador_entidad}'
         else:
             mov.item_origen_display = '-'
 
@@ -3678,9 +3688,11 @@ def movimientos_list_view(request):
         'origen_id': origen_id,
         'destino_id': destino_id,
         'origen_sistema': origen_sistema,
+        'entidad_eliminada': entidad_eliminada,
         'busqueda': busqueda,
         'tipos_movimiento': MovimientoInventario.TIPO_CHOICES,
         'origen_sistema_choices': MovimientoInventario.ORIGEN_SISTEMA_CHOICES,
+        'entidades_eliminacion': MovimientoInventario.ENTIDAD_ELIMINADA_CHOICES,
         'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
         # Datos para gráfico (sobre TODOS los registros, no filtrados)
         'tipo_breakdown': list(
@@ -3694,6 +3706,7 @@ def movimientos_list_view(request):
             .order_by('-c')
         ),
         'total_global': MovimientoInventario.objects.count(),
+        'puede_ver_eliminaciones': request.user.rol in ['ADMIN', 'ADMINISTRATIVO', 'AUDITOR'],
     }
     
     return render(request, 'movimientos/list.html', context)
@@ -3772,6 +3785,22 @@ def movimientos_detalle_view(request, movimiento_id):
                 'historial_id': '',
             })
     
+    snapshot_items = []
+    if movimiento.tipo == 'ELIMINACION' and movimiento.datos_eliminacion:
+        for clave, valor in movimiento.datos_eliminacion.items():
+            if clave.startswith('_'):
+                continue
+            if isinstance(valor, (dict, list)):
+                try:
+                    valor_txt = json.dumps(valor, ensure_ascii=False, indent=2, default=str)
+                except Exception:
+                    valor_txt = str(valor)
+            else:
+                valor_txt = '' if valor is None else str(valor)
+            if valor_txt == '':
+                continue
+            snapshot_items.append({'campo': clave, 'valor': valor_txt})
+
     context = {
         'movimiento': movimiento,
         'items_detalle': items_detalle,
@@ -3780,6 +3809,8 @@ def movimientos_detalle_view(request, movimiento_id):
         'items_modems_count': resumen_por_tipo['MODEM'],
         'total_items': items.count(),
         'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
+        'snapshot_items': snapshot_items,
+        'es_eliminacion': movimiento.tipo == 'ELIMINACION',
     }
     
     return render(request, 'movimientos/detalle.html', context)
@@ -4333,6 +4364,8 @@ def _calcular_adv_breakdown(model_class):
         adv_doble = 0
         adv_critica = 0
         qs = model_class.objects.filter(
+            eliminado=False,
+        ).filter(
             _Q(estado_revision='CON_ADVERTENCIA') | _Q(alerta_doble_trabajo=True)
         ).only('datos_procesados', 'descripcion_alerta', 'alerta_doble_trabajo')
         for reg in qs.iterator(chunk_size=500):
@@ -4676,7 +4709,7 @@ def reportes_moreapp_list(request):
     # Autosync solo si MOREAPP_AUTO_SYNC_ENABLED=true (off por defecto en producción)
     _ejecutar_autosync_moreapp_si_corresponde()
 
-    qs_base = IntegracionMoreApp.objects.all().order_by('-fecha_recepcion')
+    qs_base = IntegracionMoreApp.objects.filter(eliminado=False).order_by('-fecha_recepcion')
 
     estado = request.GET.get('estado', '')
     alerta = request.GET.get('alerta', '')
@@ -4739,7 +4772,9 @@ def reportes_moreapp_list(request):
             if kpi == 'adv_doble' and 'doble' not in cats:
                 continue
             matched_ids.append(reg.pk)
-        qs = IntegracionMoreApp.objects.filter(pk__in=matched_ids).order_by('-fecha_recepcion')
+        qs = IntegracionMoreApp.objects.filter(
+            pk__in=matched_ids, eliminado=False
+        ).order_by('-fecha_recepcion')
 
     total = qs.count()
     page_obj = Paginator(qs, per_page).get_page(request.GET.get('page') or 1)
@@ -4772,20 +4807,21 @@ def reportes_moreapp_list(request):
     from web.perf_cache import cache_get_or_set, TTL_CORTO
 
     def _kpis_moreapp():
+        activos = IntegracionMoreApp.objects.filter(eliminado=False)
         return {
-            'pendientes': IntegracionMoreApp.objects.filter(estado_revision='PENDIENTE').count(),
-            'con_advertencia': IntegracionMoreApp.objects.filter(estado_revision='CON_ADVERTENCIA').count(),
-            'alertas': IntegracionMoreApp.objects.filter(alerta_doble_trabajo=True).count(),
-            'errores': IntegracionMoreApp.objects.filter(
+            'pendientes': activos.filter(estado_revision='PENDIENTE').count(),
+            'con_advertencia': activos.filter(estado_revision='CON_ADVERTENCIA').count(),
+            'alertas': activos.filter(alerta_doble_trabajo=True).count(),
+            'errores': activos.filter(
                 estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR')
             ).count(),
             'sinc_breakdown': list(
-                IntegracionMoreApp.objects.values('estado_sincronizacion')
+                activos.values('estado_sincronizacion')
                 .annotate(c=Count('id'))
                 .order_by('-c')
             ),
             'formula_breakdown': list(
-                IntegracionMoreApp.objects.values('nombre_formulario')
+                activos.values('nombre_formulario')
                 .annotate(c=Count('id'))
                 .order_by('-c')
             ),
@@ -4977,16 +5013,29 @@ def reportes_moreapp_sincronizar(request):
 @login_required
 @role_required(['ADMIN'])
 def reportes_moreapp_eliminar(request, pk):
-    """Elimina un registro de reportes MoreApp. Uso exclusivo para limpieza de pruebas."""
+    """Soft-delete MoreApp: no reaparece en sync; snapshot en movimientos."""
     from ordenes_trabajo.models import IntegracionMoreApp
+    from web.services.eliminaciones import ENTIDAD_MOREAPP, registrar_eliminacion
 
     if request.method != 'POST':
         return redirect('reportes_moreapp_list')
 
-    registro = get_object_or_404(IntegracionMoreApp, pk=pk)
+    registro = get_object_or_404(IntegracionMoreApp, pk=pk, eliminado=False)
     identificador = registro.moreapp_submission_id
-    registro.delete()
-    messages.success(request, f'Registro MoreApp {identificador} eliminado correctamente.')
+    motivo = request.POST.get('motivo', '').strip()
+    _, creado = registrar_eliminacion(
+        ENTIDAD_MOREAPP,
+        registro,
+        request.user,
+        motivo=motivo,
+    )
+    if creado:
+        messages.success(
+            request,
+            f'Registro MoreApp {identificador} eliminado. Quedó en Movimientos y no se reimportará.',
+        )
+    else:
+        messages.warning(request, f'El registro MoreApp {identificador} ya estaba eliminado.')
 
     destino = request.POST.get('next', '').strip()
     if destino:
@@ -4998,8 +5047,9 @@ def reportes_moreapp_eliminar(request, pk):
 @role_required(['ADMIN'])
 @require_POST
 def reportes_moreapp_eliminar_masivo(request):
-    """Elimina varios registros MoreApp seleccionados en la lista."""
+    """Soft-delete masivo MoreApp + snapshot en movimientos."""
     from ordenes_trabajo.models import IntegracionMoreApp
+    from web.services.eliminaciones import ENTIDAD_MOREAPP, registrar_eliminacion
 
     ids = []
     for raw in request.POST.getlist('ids'):
@@ -5013,18 +5063,25 @@ def reportes_moreapp_eliminar_masivo(request):
         destino = request.POST.get('next', '').strip()
         return redirect(destino or 'reportes_moreapp_list')
 
-    registros = IntegracionMoreApp.objects.filter(pk__in=ids)
-    total = registros.count()
-    if total == 0:
-        messages.warning(request, 'Los registros seleccionados ya no existen.')
-        destino = request.POST.get('next', '').strip()
-        return redirect(destino or 'reportes_moreapp_list')
+    registros = list(IntegracionMoreApp.objects.filter(pk__in=ids, eliminado=False))
+    total = 0
+    for registro in registros:
+        _, creado = registrar_eliminacion(
+            ENTIDAD_MOREAPP,
+            registro,
+            request.user,
+            motivo='Eliminación masiva desde reportes MoreApp',
+        )
+        if creado:
+            total += 1
 
-    registros.delete()
-    messages.success(
-        request,
-        f'Se eliminaron {total} registro(s) MoreApp correctamente.',
-    )
+    if total == 0:
+        messages.warning(request, 'Los registros seleccionados ya no existen o ya estaban eliminados.')
+    else:
+        messages.success(
+            request,
+            f'Se eliminaron {total} registro(s) MoreApp. Quedaron en Movimientos y no se reimportarán.',
+        )
 
     destino = request.POST.get('next', '').strip()
     if destino:

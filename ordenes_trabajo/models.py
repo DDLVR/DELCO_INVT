@@ -292,6 +292,20 @@ class OrdenTrabajo(models.Model):
         help_text='Detalle de la alerta de posible duplicidad',
     )
 
+    eliminado = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Soft-delete: oculta en listados, histórico en movimientos',
+    )
+    fecha_eliminacion = models.DateTimeField(null=True, blank=True)
+    eliminado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='ordenes_eliminadas',
+    )
+
     def __str__(self):
         return f'OT #{self.id} - {self.titulo}'
     
@@ -418,6 +432,7 @@ class OrdenTrabajo(models.Model):
             models.Index(fields=['tecnico_responsable']),
             models.Index(fields=['cliente']),
             models.Index(fields=['-fecha_creacion']),
+            models.Index(fields=['eliminado']),
         ]
 
 
@@ -647,6 +662,20 @@ class IntegracionMoreApp(models.Model):
         help_text='Estado de revisión operativa del registro',
     )
 
+    eliminado = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text='Soft-delete: oculto en reportes; sync no lo reprocesa ni recrea',
+    )
+    fecha_eliminacion = models.DateTimeField(null=True, blank=True)
+    eliminado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='moreapp_eliminados',
+    )
+
     def __str__(self):
         return f'MoreApp {self.moreapp_submission_id} - {self.estado_sincronizacion}'
 
@@ -660,5 +689,6 @@ class IntegracionMoreApp(models.Model):
             models.Index(fields=['-fecha_recepcion']),
             models.Index(fields=['alerta_doble_trabajo']),
             models.Index(fields=['estado_revision']),
+            models.Index(fields=['eliminado']),
         ]
 

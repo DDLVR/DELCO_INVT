@@ -137,9 +137,18 @@
             </select>
           </div>
           <div class="col-md-2">
+            <label class="form-label mb-1 small fw-semibold">Entidad eliminada</label>
+            <select name="entidad_eliminada" class="form-select form-select-sm">
+              <option value="">Todas</option>
+              {% for codigo, nombre in entidades_eliminacion %}
+              <option value="{{ codigo }}" {% if entidad_eliminada == codigo %}selected{% endif %}>{{ nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-2">
             <label class="form-label mb-1 small fw-semibold">Buscar</label>
             <input type="text" name="q" class="form-control form-control-sm"
-                   placeholder="OT, responsable…" value="{{ busqueda }}">
+                   placeholder="OT, responsable, identificador…" value="{{ busqueda }}">
           </div>
           <div class="col-12 d-flex gap-2 justify-content-end">
             <button type="submit" class="btn btn-sm btn-primary">
@@ -160,7 +169,7 @@
       <span class="fw-semibold small">
         <i class="bi bi-list-ul me-1"></i>
         Listado
-        {% if tipo_filtro or fecha_desde or fecha_hasta or responsable_id or origen_sistema or busqueda %}
+        {% if tipo_filtro or fecha_desde or fecha_hasta or responsable_id or origen_sistema or entidad_eliminada or busqueda %}
           <span class="badge bg-primary ms-1">Filtrado</span>
         {% endif %}
       </span>
@@ -174,7 +183,7 @@
               <th class="text-center" style="width:44px;">#</th>
               <th>Fecha / Hora</th>
               <th>Tipo</th>
-              <th>Ítems</th>
+              <th>Ítems / Entidad</th>
               <th>Origen → Destino</th>
               <th>Responsable</th>
               <th>OT</th>
@@ -208,12 +217,21 @@
                 <span class="badge delco-badge-muted small mt-1">{{ mov.get_origen_sistema_display }}</span>
               </td>
               <td>
-                <span class="badge bg-secondary">{{ mov.total_items }}</span>
-                <div class="small text-muted mt-1"
-                     style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
-                     title="{{ mov.item_origen_display }}">
-                  {{ mov.item_origen_display }}
-                </div>
+                {% if mov.tipo == 'ELIMINACION' %}
+                  <span class="badge bg-secondary">{{ mov.get_entidad_eliminada_display|default:mov.entidad_eliminada|default:"Registro" }}</span>
+                  <div class="small text-muted mt-1"
+                       style="max-width:220px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+                       title="{{ mov.identificador_entidad }}">
+                    {{ mov.identificador_entidad|default:mov.item_origen_display }}
+                  </div>
+                {% else %}
+                  <span class="badge bg-secondary">{{ mov.total_items }}</span>
+                  <div class="small text-muted mt-1"
+                       style="max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+                       title="{{ mov.item_origen_display }}">
+                    {{ mov.item_origen_display }}
+                  </div>
+                {% endif %}
               </td>
               <td class="small">
                 <span class="text-muted">{{ mov.origen.nombre|default:"—" }}</span>
@@ -234,7 +252,7 @@
             <tr>
               <td colspan="8" class="text-center text-muted py-5">
                 <i class="bi bi-inbox fs-3 d-block mb-2"></i>
-                No hay movimientos{% if tipo_filtro or fecha_desde or fecha_hasta or responsable_id or origen_sistema or busqueda %} con los filtros aplicados{% endif %}.
+                No hay movimientos{% if tipo_filtro or fecha_desde or fecha_hasta or responsable_id or origen_sistema or entidad_eliminada or busqueda %} con los filtros aplicados{% endif %}.
               </td>
             </tr>
             {% endfor %}
