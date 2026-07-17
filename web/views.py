@@ -2954,9 +2954,13 @@ def cliente_crear_view(request):
         # Dirección base se deriva de la instalación (ya no se pide por separado).
         direccion = installation_address
         proyecto = request.POST.get('proyecto', '').strip()
-        medidor_opcion = request.POST.get('medidor_opcion', 'crear_medidor').strip().lower()
-        if medidor_opcion not in {'crear_medidor', 'sin_medidor'}:
-            medidor_opcion = 'crear_medidor'
+        medidor_opcion = request.POST.get('medidor_opcion', '').strip().lower()
+        if medidor_opcion not in {'crear_medidor', 'sin_medidor', 'asignar_lista'}:
+            # Compatibilidad: si viene serie sin opción, asumir asignación.
+            if request.POST.get('meter_serial_n_1', '').strip():
+                medidor_opcion = 'asignar_lista'
+            else:
+                medidor_opcion = ''
         sin_medidor = medidor_opcion == 'sin_medidor'
         meter_manufacturer_id = request.POST.get('meter_manufacturer_id', '').strip()
         meter_serial_n_1 = '' if sin_medidor else request.POST.get('meter_serial_n_1', '').strip()
@@ -3021,11 +3025,11 @@ def cliente_crear_view(request):
         if not sin_medidor:
             campos_obligatorios.append(meter_serial_n_1)
 
-        if not all(campos_obligatorios):
-            if not sin_medidor and not meter_serial_n_1:
+        if not medidor_opcion or not all(campos_obligatorios):
+            if not medidor_opcion or (not sin_medidor and not meter_serial_n_1):
                 messages.error(
                     request,
-                    'El número de medidor es obligatorio. Crea un medidor con el popup o elige “Sin medidor”.',
+                    'El medidor es obligatorio. Elige uno de la lista, créalo con el popup o selecciona “Sin medidor”.',
                 )
             else:
                 messages.error(request, 'Faltan campos obligatorios: asegúrate de completar todos los datos requeridos.')
@@ -3178,9 +3182,27 @@ def cliente_crear_view(request):
     estados_disponibles.sort(
         key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99
     )
+
+    asignados_ids = set(
+        Cliente.objects.filter(activo=True, medidor_actual_id__isnull=False)
+        .values_list('medidor_actual_id', flat=True)
+    )
+    series_asignadas = {
+        (serie or '').strip().lower()
+        for serie in Cliente.objects.filter(activo=True)
+        .exclude(Q(meter_serial_n_1__isnull=True) | Q(meter_serial_n_1=''))
+        .values_list('meter_serial_n_1', flat=True)
+    }
+    medidores_libres = [
+        medidor
+        for medidor in Medidor.objects.filter(eliminado=False).order_by('serie')[:2000]
+        if medidor.id not in asignados_ids and (medidor.serie or '').strip().lower() not in series_asignadas
+    ]
+
     return render(request, 'clientes/crear.html', {
         'tipo_medidor_choices': Medidor.TIPO_MEDIDOR_CHOICES,
         'estados_disponibles': estados_disponibles,
+        'medidores_libres': medidores_libres,
     })
 
 
