@@ -16,6 +16,7 @@ _ORIGEN_AMIGABLE = {
     'manual_web': 'desde esta pantalla',
     'manual': 'manual',
     'cron': 'automática del servidor',
+    'auto': 'automática al navegar',
     'comando': 'desde el servidor',
 }
 
@@ -39,10 +40,10 @@ def registrar_resultado_sync(stats: Optional[Dict[str, Any]], origen: str = 'man
         'modo': str(stats.get('modo') or ''),
     }
     cache.set(CACHE_LAST_SYNC, payload, timeout=60 * 60 * 24 * 14)
+    from web.moreapp_avisos import invalidar_caches_aviso_moreapp
+
+    invalidar_caches_aviso_moreapp()
     for key in (
-        'moreapp:aviso_conteos',
-        'moreapp:list_kpis',
-        'moreapp:adv_breakdown',
         'operacional:codigos_moreapp',
         'operacional:cliente_ids',
     ):

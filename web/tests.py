@@ -727,6 +727,44 @@ class MoreAppAvisoTests(TestCase):
 		self.assertTrue(aviso['activo'])
 		self.assertEqual(aviso['por_revisar'], 1)
 
+	def test_aviso_ignora_registros_eliminados(self):
+		from web.moreapp_avisos import construir_aviso_moreapp, invalidar_caches_aviso_moreapp
+
+		activo = self._crear_registro('aviso-activo-1')
+		borrado = self._crear_registro('aviso-borrado-1')
+		borrado.eliminado = True
+		borrado.save(update_fields=['eliminado'])
+		invalidar_caches_aviso_moreapp()
+
+		aviso = construir_aviso_moreapp(self._request_as(self.admin))
+		self.assertEqual(aviso['por_revisar'], 1)
+		self.assertEqual(aviso['pendientes'], 1)
+		self.assertTrue(any(item['id'] == activo.id for item in aviso['recientes']))
+		self.assertFalse(any(item['id'] == borrado.id for item in aviso['recientes']))
+
+	def test_marcar_revisado_actualiza_conteo_dashboard(self):
+		from django.urls import reverse
+		from web.moreapp_avisos import construir_aviso_moreapp, invalidar_caches_aviso_moreapp
+
+		reg = self._crear_registro('aviso-rev-1')
+		invalidar_caches_aviso_moreapp()
+		aviso_antes = construir_aviso_moreapp(self._request_as(self.admin))
+		self.assertEqual(aviso_antes['por_revisar'], 1)
+
+		self.client = Client()
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		resp = self.client.post(
+			reverse('moreapp_marcar_revision', args=[reg.pk]),
+			{'estado_revision': 'REVISADO'},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+		)
+		self.assertEqual(resp.status_code, 200)
+		self.assertTrue(resp.json().get('success'))
+
+		aviso_despues = construir_aviso_moreapp(self._request_as(self.admin))
+		self.assertEqual(aviso_despues['por_revisar'], 0)
+		self.assertFalse(aviso_despues['activo'])
+
 
 class MoreAppOpsStatusTests(TestCase):
 	"""Panel ops / registro de última sync (Punto 6)."""

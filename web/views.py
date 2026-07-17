@@ -362,17 +362,14 @@ def dashboard_view(request):
             fecha_hora__date=timezone.localdate()
         ).count()
 
-        # Indicadores operativos (Puntos 6 y 11)
+        # Indicadores operativos (Puntos 6 y 11) — mismos criterios que el banner/badge
         try:
             from ordenes_trabajo.models import IntegracionMoreApp
-            context['moreapp_pendientes'] = IntegracionMoreApp.objects.filter(
-                estado_revision='PENDIENTE',
-                eliminado=False,
-            ).count()
-            context['moreapp_con_advertencia'] = IntegracionMoreApp.objects.filter(
-                estado_revision='CON_ADVERTENCIA',
-                eliminado=False,
-            ).count()
+            from web.moreapp_avisos import _conteos_globales_aviso
+
+            aviso_conteos = _conteos_globales_aviso()
+            context['moreapp_pendientes'] = int(aviso_conteos.get('pendientes') or 0)
+            context['moreapp_con_advertencia'] = int(aviso_conteos.get('advertencias') or 0)
             # Envejecimiento: registros con revisión pendiente > 7 días (Punto 11)
             umbral_7d = ahora - timedelta(days=7)
             context['moreapp_envejecidos'] = IntegracionMoreApp.objects.filter(
@@ -530,7 +527,7 @@ def moreapp_marcar_revision_view(request, pk):
     Acepta: REVISADO, DESCARTADO, CON_ADVERTENCIA.
     """
     from ordenes_trabajo.models import IntegracionMoreApp
-    from web.perf_cache import cache_invalidate
+    from web.moreapp_avisos import invalidar_caches_aviso_moreapp
 
     ESTADOS_VALIDOS = {'REVISADO', 'DESCARTADO', 'CON_ADVERTENCIA', 'PENDIENTE'}
     nuevo_estado = request.POST.get('estado_revision', '').strip().upper()
@@ -545,7 +542,7 @@ def moreapp_marcar_revision_view(request, pk):
     estado_anterior = registro.estado_revision
     registro.estado_revision = nuevo_estado
     registro.save(update_fields=['estado_revision'])
-    cache_invalidate('moreapp:aviso_conteos')
+    invalidar_caches_aviso_moreapp()
     register_audit_event(
         AuditEvent(
             actor_id=getattr(request.user, 'id', None),
@@ -4357,11 +4354,17 @@ def _ejecutar_autosync_moreapp_si_corresponde():
         max_segundos = getattr(settings, 'MOREAPP_WEB_SYNC_MAX_SEGUNDOS', 30)
         max_archivos = getattr(settings, 'MOREAPP_WEB_SYNC_MAX_ARCHIVOS', 40)
         skip_dup = getattr(settings, 'MOREAPP_WEB_SKIP_DUPLICATE_REPROCESS', True)
-        return leer_carpetas(
+        stats = leer_carpetas(
             reprocesar_duplicados=not skip_dup,
             max_archivos=max_archivos,
             max_segundos=max_segundos,
         )
+        # Siempre refrescar caches de pendientes/avisos tras un ciclo de sync
+        # (aunque no haya "nuevos", puede haber reprocesos que cambien revisión).
+        from web.moreapp_ops import registrar_resultado_sync
+
+        registrar_resultado_sync(stats or {}, origen='auto')
+        return stats
     except Exception:
         logger.exception('Fallo en autosincronización MoreApp')
         return None
@@ -5151,6 +5154,7 @@ def reportes_moreapp_eliminar(request, pk):
     """Soft-delete MoreApp: no reaparece en sync; snapshot en movimientos."""
     from ordenes_trabajo.models import IntegracionMoreApp
     from web.services.eliminaciones import ENTIDAD_MOREAPP, registrar_eliminacion
+    from web.moreapp_avisos import invalidar_caches_aviso_moreapp
 
     if request.method != 'POST':
         return redirect('reportes_moreapp_list')
@@ -5165,6 +5169,7 @@ def reportes_moreapp_eliminar(request, pk):
         motivo=motivo,
     )
     if creado:
+        invalidar_caches_aviso_moreapp()
         messages.success(
             request,
             f'Registro MoreApp {identificador} eliminado. Quedó en Movimientos y no se reimportará.',
@@ -5185,6 +5190,7 @@ def reportes_moreapp_eliminar_masivo(request):
     """Soft-delete masivo MoreApp + snapshot en movimientos."""
     from ordenes_trabajo.models import IntegracionMoreApp
     from web.services.eliminaciones import ENTIDAD_MOREAPP, registrar_eliminacion
+    from web.moreapp_avisos import invalidar_caches_aviso_moreapp
 
     ids = []
     for raw in request.POST.getlist('ids'):
@@ -5213,6 +5219,7 @@ def reportes_moreapp_eliminar_masivo(request):
     if total == 0:
         messages.warning(request, 'Los registros seleccionados ya no existen o ya estaban eliminados.')
     else:
+        invalidar_caches_aviso_moreapp()
         messages.success(
             request,
             f'Se eliminaron {total} registro(s) MoreApp. Quedaron en Movimientos y no se reimportarán.',
