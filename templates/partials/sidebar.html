@@ -69,6 +69,10 @@
 
   {% if user.is_authenticated %}
   <div class="sidebar-footer border-top bg-body p-2 flex-shrink-0">
+    <button type="button" class="btn btn-warning w-100 mb-2 d-flex align-items-center justify-content-center gap-2 text-dark fw-semibold" data-bs-toggle="modal" data-bs-target="#modalTicketRapido" title="Reportar bug o problema">
+      <i class="bi bi-life-preserver"></i>
+      <span class="delco-sidebar-label">Reportar ticket</span>
+    </button>
     <button type="button" class="btn btn-outline-primary w-100 mb-2 d-flex align-items-center justify-content-center gap-2 js-open-profile" title="Ver perfil">
       <i class="bi bi-person-circle"></i>
       <span class="delco-sidebar-label">Perfil</span>
