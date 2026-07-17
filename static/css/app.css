@@ -1,6 +1,6 @@
 :root {
   --mobile-gap: 12px;
-  --delco-sidebar-width: 240px;
+  --delco-sidebar-width: 220px;
 }
 
 html {
@@ -110,6 +110,13 @@ code {
 .delco-sidebar-collapsed .sidebar > * {
   opacity: 0;
   pointer-events: none;
+}
+
+@media (max-width: 991.98px) {
+  .delco-sidebar-collapsed .sidebar {
+    /* En móvil el menú es offcanvas; no colapsar el layout */
+    width: 0 !important;
+  }
 }
 
 .card-kpi-mov {

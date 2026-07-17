@@ -243,7 +243,8 @@ class OrdenTrabajo(models.Model):
         null=True,
         blank=True,
         related_name='ordenes_validadas',
-        limit_choices_to={'rol': 'ADMINISTRATIVO'}
+        limit_choices_to={'rol__in': ['ADMIN', 'ADMINISTRATIVO']},
+        help_text='Usuario (admin/administrativo) que registró la validación con su propia cuenta',
     )
 
     orden_origen = models.ForeignKey(
@@ -281,6 +282,11 @@ class OrdenTrabajo(models.Model):
     observacion_validacion = models.TextField(
         blank=True,
         help_text='Observaciones si la validación rechaza la OT'
+    )
+
+    motivo_reasignacion = models.TextField(
+        blank=True,
+        help_text='Comentario obligatorio al reasignar el técnico responsable',
     )
 
     alerta_duplicado = models.BooleanField(

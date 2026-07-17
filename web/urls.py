@@ -15,6 +15,12 @@ from .views import (
 )
 from reportes.views import reportes_hub_view, reportes_export_view
 from catalogos.views import catalogo_diagnostico_list_view
+from soporte.views import (
+    soporte_hub_view,
+    soporte_list_view,
+    soporte_crear_view,
+    soporte_detalle_view,
+)
 from ordenes_trabajo.views import (
     ordenes_list_view as ordenes_trabajo_list, 
     orden_crear_view, 
@@ -113,6 +119,10 @@ urlpatterns = [
     path('reportes/exportar/<slug:slug>/', reportes_export_view, name='reportes_export'),
     path('auditoria/', auditoria_list_view, name='auditoria_list'),
     path('catalogos/diagnostico/', catalogo_diagnostico_list_view, name='catalogo_diagnostico_list'),
+    path('soporte/', soporte_hub_view, name='soporte_hub'),
+    path('soporte/tickets/', soporte_list_view, name='soporte_list'),
+    path('soporte/tickets/crear/', soporte_crear_view, name='soporte_crear'),
+    path('soporte/tickets/<int:pk>/', soporte_detalle_view, name='soporte_detalle'),
     path('operacional/moreapp/<int:pk>/marcar-revision/', moreapp_marcar_revision_view, name='moreapp_marcar_revision'),
     path('reportes/moreapp/<int:pk>/reprocesar/', moreapp_reprocesar_view, name='moreapp_reprocesar'),
 

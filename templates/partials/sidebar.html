@@ -57,6 +57,9 @@
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'usuarios_list' %}active bg-primary text-white{% endif %}" href="{% url 'usuarios_list' %}">
         <i class="bi bi-people me-2"></i> Usuarios
       </a>
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'soporte_hub' or request.resolver_match.url_name == 'soporte_list' or request.resolver_match.url_name == 'soporte_crear' or request.resolver_match.url_name == 'soporte_detalle' %}active bg-primary text-white{% endif %}" href="{% url 'soporte_hub' %}">
+        <i class="bi bi-life-preserver me-2"></i> Soporte / Tickets
+      </a>
     {% endif %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'registro_errores' or request.resolver_match.url_name == 'importacion_errores' %}active bg-primary text-white{% endif %}" href="{% url 'registro_errores' %}">
         <i class="bi bi-exclamation-octagon me-2"></i> Registro de errores

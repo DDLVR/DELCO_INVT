@@ -1,0 +1,68 @@
+{% extends 'base.html' %}
+
+{% block title %}Ticket #{{ ticket.id }}{% endblock %}
+
+{% block content %}
+<div class="container" style="max-width: 900px;">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+      <a href="{% url 'soporte_list' %}" class="btn btn-sm btn-outline-secondary mb-2">← Lista</a>
+      <h1 class="h3 mb-1">Ticket #{{ ticket.id }} — {{ ticket.titulo }}</h1>
+      <div class="d-flex flex-wrap gap-2">
+        <span class="badge bg-secondary">{{ ticket.get_categoria_display }}</span>
+        <span class="badge {% if ticket.prioridad == 'CRITICA' %}bg-danger{% elif ticket.prioridad == 'ALTA' %}bg-warning text-dark{% elif ticket.prioridad == 'MEDIA' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+          {{ ticket.get_prioridad_display }}
+        </span>
+        <span class="badge bg-dark">{{ ticket.get_estado_display }}</span>
+      </div>
+    </div>
+    <a href="{% url 'soporte_crear' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nuevo</a>
+  </div>
+
+  <div class="card delco-panel-card shadow-sm mb-3">
+    <div class="card-body">
+      <dl class="row mb-0">
+        <dt class="col-sm-3">Creado por</dt>
+        <dd class="col-sm-9">{{ ticket.creado_por.nombre_interno }} · {{ ticket.fecha_creacion|date:"d/m/Y H:i" }}</dd>
+        {% if ticket.pagina_url %}
+        <dt class="col-sm-3">Pantalla / URL</dt>
+        <dd class="col-sm-9"><code>{{ ticket.pagina_url }}</code></dd>
+        {% endif %}
+        <dt class="col-sm-3">Descripción</dt>
+        <dd class="col-sm-9" style="white-space: pre-wrap;">{{ ticket.descripcion }}</dd>
+        {% if ticket.respuesta %}
+        <dt class="col-sm-3">Seguimiento</dt>
+        <dd class="col-sm-9" style="white-space: pre-wrap;">{{ ticket.respuesta }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+  <div class="card delco-panel-card shadow-sm">
+    <div class="card-header card-header-delco">
+      <h5 class="mb-0">Actualizar estado</h5>
+    </div>
+    <div class="card-body">
+      <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="actualizar_estado">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">Estado</label>
+            <select name="estado" class="form-select">
+              {% for codigo, nombre in estados %}
+              <option value="{{ codigo }}" {% if ticket.estado == codigo %}selected{% endif %}>{{ nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-md-8">
+            <label class="form-label">Notas de seguimiento</label>
+            <textarea name="respuesta" class="form-control" rows="3" placeholder="Qué se hizo o qué falta...">{{ ticket.respuesta }}</textarea>
+          </div>
+        </div>
+        <button type="submit" class="btn btn-success mt-3">Guardar cambios</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

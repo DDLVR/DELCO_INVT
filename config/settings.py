@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     'integraciones.apps.IntegracionesConfig',
     'catalogos.apps.CatalogosConfig',
     'reportes.apps.ReportesConfig',
+    'soporte.apps.SoporteConfig',
 ]
 
 MIDDLEWARE = [
