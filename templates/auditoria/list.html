@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Auditoría del sistema{% endblock %}
 
@@ -11,31 +12,43 @@
 
     <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-body">
-            <form method="get" class="row g-3 align-items-end">
+            <form method="get" class="row g-2 align-items-end">
                 <div class="col-md-3">
-                    <label class="form-label">Entidad</label>
-                    <input type="text" name="entity" class="form-control" value="{{ entity }}" placeholder="Cliente, OrdenTrabajo...">
+                    <label class="form-label mb-1" for="filtroEntidad">Entidad</label>
+                    <select name="entity" id="filtroEntidad" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        {% for op in entidades_opciones %}
+                        <option value="{{ op.codigo }}" {% if entity == op.codigo %}selected{% endif %}>{{ op.label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">Acción</label>
-                    <input type="text" name="action" class="form-control" value="{{ action }}" placeholder="OT_STATE_CHANGE...">
+                    <label class="form-label mb-1" for="filtroAccion">Acción</label>
+                    <select name="action" id="filtroAccion" class="form-select form-select-sm" onchange="this.form.submit()">
+                        <option value="">Todas</option>
+                        {% for op in acciones_opciones %}
+                        <option value="{{ op.codigo }}" {% if action == op.codigo %}selected{% endif %}>{{ op.label }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="col-md-3">
-                    <label class="form-label">ID entidad</label>
-                    <input type="text" name="entity_id" class="form-control" value="{{ entity_id }}">
+                    <label class="form-label mb-1" for="filtroReferencia">Correlativo / Nº cliente</label>
+                    <input type="text" name="referencia" id="filtroReferencia" class="form-control form-control-sm" value="{{ referencia }}" placeholder="Ej: 208 o 3047206">
+                    <small class="text-muted">Correlativo MoreApp, Nº de cliente o ID interno.</small>
                 </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Filtrar</button>
+                    <a href="{% url 'auditoria_list' %}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="alert alert-info">Mostrando hasta 500 registros. Total filtrado: {{ total }}.</div>
+    <div class="alert alert-info py-2">Mostrando hasta 500 registros. Total filtrado: <strong>{{ total }}</strong>.</div>
 
     <div class="card shadow-sm delco-panel-card">
         <div class="table-responsive">
-            <table class="table table-sm table-hover mb-0">
+            <table class="table table-sm table-hover mb-0 align-middle">
                 <thead class="table-delco">
                     <tr>
                         <th>Fecha</th>
@@ -51,14 +64,19 @@
                 <tbody>
                     {% for reg in registros %}
                     <tr>
-                        <td>{{ reg.created_at|date:"d/m/Y H:i" }}</td>
+                        <td class="text-nowrap">{{ reg.created_at|date:"d/m/Y H:i" }}</td>
                         <td>{{ reg.actor.nombre_interno|default:"Sistema" }}</td>
-                        <td><code>{{ reg.action }}</code></td>
-                        <td>{{ reg.entity }} #{{ reg.entity_id }}</td>
-                        <td>{{ reg.field_name|default:"-" }}</td>
-                        <td class="text-muted small">{{ reg.old_value|default:"-"|truncatechars:60 }}</td>
-                        <td class="small">{{ reg.new_value|default:"-"|truncatechars:60 }}</td>
-                        <td class="small">{{ reg.reason|default:"-"|truncatechars:80 }}</td>
+                        <td>
+                            <span class="badge bg-light text-dark border text-wrap text-start">{{ reg.action|audit_action_label }}</span>
+                        </td>
+                        <td>
+                            <span class="fw-semibold">{{ reg.entity|audit_entity_label }}</span>
+                            <span class="text-muted">{{ reg.referencia_label }}</span>
+                        </td>
+                        <td>{{ reg.field_name|audit_field_label }}</td>
+                        <td class="text-muted small">{{ reg.old_value|audit_value_label|truncatechars:60 }}</td>
+                        <td class="small">{{ reg.new_value|audit_value_label|truncatechars:60 }}</td>
+                        <td class="small">{{ reg.reason|default:"—"|truncatechars:80 }}</td>
                     </tr>
                     {% empty %}
                     <tr>

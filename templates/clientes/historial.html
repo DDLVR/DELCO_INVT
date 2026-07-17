@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Historial Cliente {{ cliente.numero_cliente }}{% endblock %}
 
@@ -271,10 +272,10 @@
             {% for log in auditoria %}
             <tr>
               <td>{{ log.created_at|date:"d/m/Y H:i" }}</td>
-              <td>{{ log.action }}</td>
-              <td>{{ log.field_name|default:"—" }}</td>
-              <td class="small">{{ log.old_value|default:"—" }}</td>
-              <td class="small">{{ log.new_value|default:"—" }}</td>
+              <td>{{ log.action|audit_action_label }}</td>
+              <td>{{ log.field_name|audit_field_label }}</td>
+              <td class="small">{{ log.old_value|audit_value_label }}</td>
+              <td class="small">{{ log.new_value|audit_value_label }}</td>
               <td class="small">{{ log.reason|default:"—" }}</td>
             </tr>
             {% empty %}

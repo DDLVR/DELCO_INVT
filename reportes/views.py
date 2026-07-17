@@ -81,10 +81,7 @@ def _opciones_filtro_reportes():
 @login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR'])
 def reportes_hub_view(request):
-    """
-    Hub liviano: no ejecuta los 19 reportes en cada carga.
-    Los conteos se calculan solo al exportar o vía endpoint puntual.
-    """
+    """Hub de reportes con filtros y conteos por informe."""
     filters_raw = request.GET
     query = urlencode({
         k: v for k, v in {
@@ -105,26 +102,73 @@ def reportes_hub_view(request):
         OrdenTrabajo.objects.exists() or clientes_operativos_qs().exists()
     )
 
-    catalog = []
-    for slug, meta in REPORT_CATALOG.items():
-        catalog.append({
-            'slug': slug,
-            'title': meta.get('title') or slug,
-            'description': meta['description'],
-            'supports_date_range': meta.get('supports_date_range', False),
-            'supports_tecnico': meta.get('supports_tecnico', False),
-            'supports_empresa': meta.get('supports_empresa', False),
-            'supports_estado': meta.get('supports_estado', False),
-            'supports_tipo': meta.get('supports_tipo', False),
-            'supports_comuna': meta.get('supports_comuna', False),
-            'row_count': None,
-            'error': False,
-        })
+    filtros_parseados = parse_report_filters(filters_raw) if hay_datos_exportables else {}
+
+    def _conteos_catalogo():
+        items = []
+        for slug, meta in REPORT_CATALOG.items():
+            row_count = None
+            error = False
+            try:
+                if hay_datos_exportables and tiene_actividad:
+                    _, rows = run_report(slug, filtros_parseados)
+                    row_count = len(rows)
+                elif hay_datos_exportables:
+                    row_count = 0
+            except Exception:
+                logger.exception('Error calculando conteo reporte %s', slug)
+                error = True
+                row_count = None
+            items.append({
+                'slug': slug,
+                'title': meta.get('title') or slug,
+                'description': meta['description'],
+                'supports_date_range': meta.get('supports_date_range', False),
+                'supports_tecnico': meta.get('supports_tecnico', False),
+                'supports_empresa': meta.get('supports_empresa', False),
+                'supports_estado': meta.get('supports_estado', False),
+                'supports_tipo': meta.get('supports_tipo', False),
+                'supports_comuna': meta.get('supports_comuna', False),
+                'row_count': row_count,
+                'error': error,
+            })
+        return items
+
+    cache_key = f'reportes:hub_conteos:{query or "all"}'
+    if hay_datos_exportables:
+        catalog = cache_get_or_set(cache_key, _conteos_catalogo, TTL_CORTO)
+    else:
+        catalog = []
+        for slug, meta in REPORT_CATALOG.items():
+            catalog.append({
+                'slug': slug,
+                'title': meta.get('title') or slug,
+                'description': meta['description'],
+                'supports_date_range': meta.get('supports_date_range', False),
+                'supports_tecnico': meta.get('supports_tecnico', False),
+                'supports_empresa': meta.get('supports_empresa', False),
+                'supports_estado': meta.get('supports_estado', False),
+                'supports_tipo': meta.get('supports_tipo', False),
+                'supports_comuna': meta.get('supports_comuna', False),
+                'row_count': None,
+                'error': False,
+            })
 
     opciones = _opciones_filtro_reportes()
-    # Reconstruir queryset liviano de técnicos desde cache de dicts
     tecnicos_ids = [t['id'] for t in opciones.get('tecnicos', [])]
-    tecnicos = Usuario.objects.filter(pk__in=tecnicos_ids).order_by('nombre_interno') if tecnicos_ids else Usuario.objects.none()
+    tecnicos = (
+        Usuario.objects.filter(pk__in=tecnicos_ids).order_by('nombre_interno')
+        if tecnicos_ids else Usuario.objects.none()
+    )
+
+    filtros_activos = any([
+        request.GET.get('periodo'),
+        request.GET.get('tecnico_id'),
+        request.GET.get('empresa'),
+        request.GET.get('estado_ot'),
+        request.GET.get('tipo_trabajo'),
+        request.GET.get('comuna'),
+    ])
 
     return render(request, 'reportes/hub.html', {
         'catalog': catalog,
@@ -137,17 +181,12 @@ def reportes_hub_view(request):
         'tipos_trabajo': opciones.get('tipos_trabajo', []),
         'hay_actividad_operativa': tiene_actividad,
         'hay_datos_en_reportes': hay_datos_exportables,
-        'total_filas_reportes': None,
         'mostrar_catalogo': bool(hay_datos_exportables),
-        'conteos_diferidos': True,
-        'filtros_activos': any([
-            request.GET.get('periodo'),
-            request.GET.get('tecnico_id'),
-            request.GET.get('empresa'),
-            request.GET.get('estado_ot'),
-            request.GET.get('tipo_trabajo'),
-            request.GET.get('comuna'),
-        ]),
+        'conteos_diferidos': False,
+        'filtros_activos': filtros_activos,
+        'total_registros_catalogo': sum(
+            (item.get('row_count') or 0) for item in catalog if not item.get('error')
+        ),
     })
 
 

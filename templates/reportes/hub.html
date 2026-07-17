@@ -4,12 +4,20 @@
 
 {% block content %}
 <div class="container-fluid py-4">
-    <div class="mb-4">
-        <h2 class="mb-1">Reportes operativos</h2>
-        <p class="text-muted mb-0">
-            Informes de OT y alertas de terreno. Exporta en Excel o PDF.
-            Los filtros se aplican a trabajos y clientes con actividad operativa (no a importaciones de fichas).
-        </p>
+    <div class="mb-4 d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+            <h2 class="mb-1">Reportes operativos</h2>
+            <p class="text-muted mb-0">
+                Informes de OT y alertas de terreno. Exporta en Excel o PDF.
+                Los filtros se aplican a trabajos y clientes con actividad operativa.
+            </p>
+        </div>
+        {% if mostrar_catalogo %}
+        <div class="text-end">
+            <div class="small text-muted">Total filas (con filtros)</div>
+            <div class="fs-4 fw-semibold text-primary">{{ total_registros_catalogo|default:0 }}</div>
+        </div>
+        {% endif %}
     </div>
 
     {% if not mostrar_catalogo %}
@@ -32,10 +40,16 @@
     {% else %}
     <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-body">
-            <form method="get" class="row g-3 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label">Período</label>
-                    <select name="periodo" class="form-select">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                <h3 class="h6 mb-0"><i class="bi bi-funnel me-1"></i> Filtros</h3>
+                {% if filtros_activos %}
+                <span class="badge bg-info text-dark">Filtros activos</span>
+                {% endif %}
+            </div>
+            <form method="get" id="formFiltrosReportes" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label mb-1" for="filtroPeriodo">Período</label>
+                    <select name="periodo" id="filtroPeriodo" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="" {% if not filters.periodo %}selected{% endif %}>Todo</option>
                         <option value="hoy" {% if filters.periodo == 'hoy' %}selected{% endif %}>Hoy</option>
                         <option value="7" {% if filters.periodo == '7' %}selected{% endif %}>Últimos 7 días</option>
@@ -43,109 +57,135 @@
                         <option value="mes" {% if filters.periodo == 'mes' %}selected{% endif %}>Este mes</option>
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Estado OT</label>
-                    <select name="estado_ot" class="form-select">
+                <div class="col-md-2">
+                    <label class="form-label mb-1" for="filtroEstadoOt">Estado OT</label>
+                    <select name="estado_ot" id="filtroEstadoOt" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todos</option>
                         {% for codigo, label in estados_ot %}
                         <option value="{{ codigo }}" {% if filters.estado_ot == codigo %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Tipo de trabajo</label>
-                    <select name="tipo_trabajo" class="form-select">
+                <div class="col-md-2">
+                    <label class="form-label mb-1" for="filtroTipoTrabajo">Tipo trabajo</label>
+                    <select name="tipo_trabajo" id="filtroTipoTrabajo" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todos</option>
                         {% for codigo, label in tipos_trabajo %}
                         <option value="{{ codigo }}" {% if filters.tipo_trabajo == codigo %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Técnico</label>
-                    <select name="tecnico_id" class="form-select">
+                <div class="col-md-2">
+                    <label class="form-label mb-1" for="filtroTecnico">Técnico</label>
+                    <select name="tecnico_id" id="filtroTecnico" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todos</option>
                         {% for tecnico in tecnicos %}
                         <option value="{{ tecnico.id }}" {% if filters.tecnico_id == tecnico.id|stringformat:"s" %}selected{% endif %}>
                             {{ tecnico.nombre_interno }}
                         </option>
                         {% empty %}
-                        <option value="" disabled>Sin técnicos asignados aún</option>
+                        <option value="" disabled>Sin técnicos</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Empresa</label>
-                    <select name="empresa" class="form-select">
+                <div class="col-md-2">
+                    <label class="form-label mb-1" for="filtroEmpresa">Empresa</label>
+                    <select name="empresa" id="filtroEmpresa" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todas</option>
                         {% for emp in empresas %}
                         <option value="{{ emp }}" {% if filters.empresa == emp %}selected{% endif %}>{{ emp }}</option>
                         {% empty %}
-                        <option value="" disabled>Sin empresa en clientes operativos</option>
+                        <option value="" disabled>Sin empresa</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label">Comuna</label>
-                    <select name="comuna" class="form-select">
+                <div class="col-md-2">
+                    <label class="form-label mb-1" for="filtroComuna">Comuna</label>
+                    <select name="comuna" id="filtroComuna" class="form-select form-select-sm" onchange="this.form.submit()">
                         <option value="">Todas</option>
                         {% for c in comunas %}
                         <option value="{{ c }}" {% if filters.comuna == c %}selected{% endif %}>{{ c }}</option>
                         {% empty %}
-                        <option value="" disabled>Sin comuna en clientes operativos</option>
+                        <option value="" disabled>Sin comuna</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-3 d-flex gap-2">
-                    <button type="submit" class="btn btn-primary flex-grow-1">Aplicar filtros</button>
-                    <a href="{% url 'reportes_hub' %}" class="btn btn-outline-secondary">Limpiar</a>
+                <div class="col-12 d-flex flex-wrap gap-2 align-items-center mt-1">
+                    <a href="{% url 'reportes_hub' %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-arrow-clockwise"></i> Limpiar filtros
+                    </a>
+                    <span class="text-muted small">
+                        El período usa la fecha de creación de la OT. Al cambiar un filtro se actualizan los conteos.
+                    </span>
                 </div>
             </form>
-            <p class="text-muted small mb-0 mt-3">
-                El período usa la <strong>fecha de creación</strong> de la OT (útil aunque aún no estén finalizadas).
-                Estado y tipo de trabajo son los filtros más operativos día a día.
-                {% if filtros_activos %}
-                <span class="badge bg-info text-dark ms-1">Filtros activos</span>
+            {% if filtros_activos %}
+            <div class="d-flex flex-wrap gap-1 mt-3">
+                {% if filters.periodo %}
+                <span class="badge delco-badge-muted">Período: {{ filters.periodo }}</span>
                 {% endif %}
-            </p>
+                {% if filters.estado_ot %}
+                <span class="badge delco-badge-muted">Estado: {{ filters.estado_ot }}</span>
+                {% endif %}
+                {% if filters.tipo_trabajo %}
+                <span class="badge delco-badge-muted">Tipo: {{ filters.tipo_trabajo }}</span>
+                {% endif %}
+                {% if filters.tecnico_id %}
+                <span class="badge delco-badge-muted">Técnico #{{ filters.tecnico_id }}</span>
+                {% endif %}
+                {% if filters.empresa %}
+                <span class="badge delco-badge-muted">Empresa: {{ filters.empresa }}</span>
+                {% endif %}
+                {% if filters.comuna %}
+                <span class="badge delco-badge-muted">Comuna: {{ filters.comuna }}</span>
+                {% endif %}
+            </div>
+            {% endif %}
         </div>
     </div>
 
     <div class="card shadow-sm delco-panel-card">
+        <div class="card-header bg-body d-flex justify-content-between align-items-center py-2">
+            <span><i class="bi bi-table me-1"></i> Catálogo de reportes</span>
+            <span class="small text-muted">{{ catalog|length }} informes</span>
+        </div>
         <div class="table-responsive">
-            <table class="table table-hover mb-0">
+            <table class="table table-hover mb-0 align-middle">
                 <thead class="table-delco">
                     <tr>
                         <th>Reporte</th>
                         <th>Descripción</th>
-                        <th>Registros</th>
-                        <th>Filtros que aplica</th>
-                        <th class="text-end">Exportar</th>
+                        <th class="text-center" style="width:110px;">Registros</th>
+                        <th>Aplica</th>
+                        <th class="text-end" style="width:160px;">Exportar</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for item in catalog %}
                     <tr>
                         <td class="fw-semibold">{{ item.title }}</td>
-                        <td class="text-muted">{{ item.description }}</td>
-                        <td>
+                        <td class="text-muted small">{{ item.description }}</td>
+                        <td class="text-center">
                             {% if item.error %}
                             <span class="badge bg-danger">Error</span>
-                            {% elif conteos_diferidos and item.row_count is None %}
-                            <span class="badge bg-light text-muted border" title="El conteo se calcula al exportar (páginas más rápidas)">Al exportar</span>
+                            {% elif item.row_count is None %}
+                            <span class="badge bg-secondary">—</span>
                             {% elif item.row_count == 0 %}
                             <span class="badge bg-secondary">0</span>
                             {% else %}
                             <span class="badge bg-primary">{{ item.row_count }}</span>
                             {% endif %}
                         </td>
-                        <td>
+                        <td class="small">
                             {% if item.supports_date_range %}<span class="badge delco-badge-muted me-1">Período</span>{% endif %}
                             {% if item.supports_estado %}<span class="badge delco-badge-muted me-1">Estado</span>{% endif %}
                             {% if item.supports_tipo %}<span class="badge delco-badge-muted me-1">Tipo</span>{% endif %}
                             {% if item.supports_tecnico %}<span class="badge delco-badge-muted me-1">Técnico</span>{% endif %}
                             {% if item.supports_empresa %}<span class="badge delco-badge-muted me-1">Empresa</span>{% endif %}
                             {% if item.supports_comuna %}<span class="badge delco-badge-muted me-1">Comuna</span>{% endif %}
+                            {% if not item.supports_date_range and not item.supports_estado and not item.supports_tipo and not item.supports_tecnico and not item.supports_empresa and not item.supports_comuna %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
                         </td>
                         <td class="text-end text-nowrap">
                             <a class="btn btn-sm btn-success"
