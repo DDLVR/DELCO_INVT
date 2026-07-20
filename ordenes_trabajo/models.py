@@ -389,8 +389,11 @@ class OrdenTrabajo(models.Model):
                 estado_nuevo=nuevo_estado,
             )
 
-        from ordenes_trabajo.sync import sincronizar_orden_completa
-        sync_result = sincronizar_orden_completa(self, usuario, nuevo_estado)
+        # Observación no debe reescribir equipos/inventario
+        sync_result = {'skipped': True, 'reason': 'OBSERVADA'}
+        if nuevo_estado != 'OBSERVADA':
+            from ordenes_trabajo.sync import sincronizar_orden_completa
+            sync_result = sincronizar_orden_completa(self, usuario, nuevo_estado)
 
         register_audit_event(
             AuditEvent(
