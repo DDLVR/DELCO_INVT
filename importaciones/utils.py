@@ -15,10 +15,12 @@ from usuarios.models import Usuario
 from web.services.validators import (
     merge_issues,
     normalize_ip_value,
+    parece_fecha_numero_cliente,
     validate_ip_format,
     validate_ip_port_coherence,
     validate_meter_uniqueness,
     validate_modem_assignment,
+    validate_numero_cliente,
 )
 from web.services.audit import AuditEvent, register_audit_event
 
@@ -307,6 +309,8 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
         num = _as_text_id(numero)
         if not num or num.upper() in {'#N/A', 'N/A', 'NONE', 'NULL'}:
             return None
+        if parece_fecha_numero_cliente(num):
+            return None
         if num in cache_clientes:
             return cache_clientes[num]
 
@@ -314,6 +318,13 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
             cliente = Cliente.objects.filter(numero_cliente=num, activo=True).first()
             if cliente:
                 return cliente
+            inactivo = Cliente.objects.filter(numero_cliente=num, activo=False).first()
+            if inactivo:
+                inactivo.activo = True
+                inactivo.fecha_eliminacion = None
+                inactivo.eliminado_por = None
+                inactivo.save(update_fields=['activo', 'fecha_eliminacion', 'eliminado_por'])
+                return inactivo
             return Cliente.objects.create(
                 numero_cliente=num,
                 direccion=f'Cliente {num}',
@@ -379,14 +390,19 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
             cache_medidores[serie_m] = obj
             return obj
 
+        avisos_reactivacion = []
+
         def _upsert_equipo(model, lookup_field, lookup_value, defaults):
-            """Actualiza/crea solo equipos activos; revive soft-deleted de forma explícita."""
+            """Actualiza/crea solo equipos activos; revive soft-deleted de forma explícita.
+
+            Returns: (objeto, creado, reactivado)
+            """
             activo = model.objects.filter(**{lookup_field: lookup_value}, eliminado=False).first()
             if activo:
                 for key, value in defaults.items():
                     setattr(activo, key, value)
                 activo.save()
-                return activo, False
+                return activo, False, False
 
             eliminado = model.objects.filter(**{lookup_field: lookup_value}, eliminado=True).first()
             if eliminado:
@@ -398,9 +414,9 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                 if hasattr(eliminado, 'eliminado_por_id'):
                     eliminado.eliminado_por = None
                 eliminado.save()
-                return eliminado, False
+                return eliminado, False, True
 
-            return model.objects.create(**{lookup_field: lookup_value}, **defaults), True
+            return model.objects.create(**{lookup_field: lookup_value}, **defaults), True, False
 
         for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), start=2):
             valores = [cell.value for cell in row]
@@ -481,7 +497,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     if correlativo not in (None, ''):
                         defaults['observaciones'] = f'Correlativo: {_as_text_id(correlativo)}'
 
-                    medidor, created = _con_reintento_sqlite(
+                    medidor, created, reactivado = _con_reintento_sqlite(
                         lambda: _upsert_equipo(Medidor, 'serie', serie, defaults)
                     )
                     if created:
@@ -489,6 +505,10 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         registrar_movimiento_importacion(medidor, 'MEDIDOR', f'Serie {serie}', idx)
                     else:
                         actualizadas += 1
+                    if reactivado:
+                        avisos_reactivacion.append(
+                            f'Fila {idx}: Medidor serie {serie} reactivado (estaba eliminado).'
+                        )
 
                 elif tipo == 'SIM':
                     imei = _as_text_id(get_val(valores, 'imei', 'icc', 'iccid'))
@@ -548,7 +568,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         defaults['medidor_otro'] = ''
                     elif medidor_texto:
                         defaults['medidor_otro'] = medidor_texto
-                    sim, created = _con_reintento_sqlite(
+                    sim, created, reactivado = _con_reintento_sqlite(
                         lambda: _upsert_equipo(SimCard, 'imei', imei, defaults)
                     )
                     if created:
@@ -556,6 +576,10 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         registrar_movimiento_importacion(sim, 'SIM', f'IMEI {imei}', idx)
                     else:
                         actualizadas += 1
+                    if reactivado:
+                        avisos_reactivacion.append(
+                            f'Fila {idx}: SIM IMEI {imei} reactivada (estaba eliminada).'
+                        )
 
                 elif tipo == 'MODEMS':
                     marca = _as_text_id(get_val(valores, 'marca'))
@@ -677,7 +701,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         defaults['medidor_otro'] = ''
                     elif medidor_texto:
                         defaults['medidor_otro'] = medidor_texto
-                    modem, created = _con_reintento_sqlite(
+                    modem, created, reactivado = _con_reintento_sqlite(
                         lambda: _upsert_equipo(Modem, 'serie', serie, defaults)
                     )
                     if created:
@@ -685,6 +709,10 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         registrar_movimiento_importacion(modem, 'MODEM', f'Serie {serie}', idx)
                     else:
                         actualizadas += 1
+                    if reactivado:
+                        avisos_reactivacion.append(
+                            f'Fila {idx}: Módem serie {serie} reactivado (estaba eliminado).'
+                        )
                 else:
                     raise ValueError(f'Tipo de equipo no soportado: {tipo_equipo}')
 
@@ -710,11 +738,15 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
         importacion.exitosas = exitosas
         importacion.fallidas = fallidas
         importacion.estado = 'COMPLETADO'
-        importacion.observaciones = (
+        obs = (
             f'Hoja "{ws.title}": {exitosas}/{contador_filas} OK '
             f'(nuevos: {creadas}, actualizados: {actualizadas}, fallidos: {fallidas})'
         )
+        if avisos_reactivacion:
+            obs += f'. Reactivados desde soft-delete: {len(avisos_reactivacion)}'
+        importacion.observaciones = obs
         importacion.save()
+        importacion.warnings = list(avisos_reactivacion)
 
     except Exception as exc:
         importacion.estado = 'ERROR'
@@ -813,8 +845,16 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
 
     def normalizar_numero_cliente(valor):
         """Normaliza Numero Cliente para evitar variantes como 100.0 vs 100."""
+        from datetime import datetime, date
+
         if valor is None:
             return None
+
+        # Excel a veces parsea el correlativo como fecha de celda
+        if isinstance(valor, datetime):
+            return valor.strftime('%d-%m-%Y')
+        if isinstance(valor, date):
+            return valor.strftime('%d-%m-%Y')
 
         if isinstance(valor, (int,)):
             return str(valor)
@@ -1104,8 +1144,9 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                     'meter_serial_n_1': meter_serial_n_1 or '',
                 })
 
-                if numero_text == '0':
-                    raise ValueError(error_columna('Numero Cliente', 'valor inválido', numero_text))
+                if numero_text == '0' or parece_fecha_numero_cliente(numero_text):
+                    for issue in validate_numero_cliente(numero_text):
+                        raise ValueError(error_columna('Numero Cliente', issue.message, numero_text))
 
                 if sector and str(sector).strip() == '0':
                     sector = None
@@ -1115,6 +1156,20 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                     meter_serial_n_1__iexact=serie_text,
                     activo=True,
                 ).first()
+                if not cliente_existente:
+                    cliente_inactivo = Cliente.objects.filter(
+                        numero_cliente=numero_text,
+                        meter_serial_n_1__iexact=serie_text,
+                        activo=False,
+                    ).first()
+                    if cliente_inactivo:
+                        cliente_inactivo.activo = True
+                        cliente_inactivo.fecha_eliminacion = None
+                        cliente_inactivo.eliminado_por = None
+                        cliente_existente = cliente_inactivo
+                        advertencias.append(
+                            f'Fila {idx}: Cliente {numero_text} reactivado (estaba inactivo/eliminado).'
+                        )
 
                 ip_key = normalizar_clave(ip)
                 if ip_key:

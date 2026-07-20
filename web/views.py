@@ -2133,6 +2133,7 @@ def inventario_importar_view(request):
             'fallidas': importacion.fallidas,
             'importacion_id': importacion.id,
             'errores_resumen': errores_resumen,
+            'warnings': list(getattr(importacion, 'warnings', []) or [])[:40],
         })
     
     except Exception as e:
