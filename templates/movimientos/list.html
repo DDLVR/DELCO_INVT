@@ -186,7 +186,7 @@
               <th>Ítems / Entidad</th>
               <th>Origen → Destino</th>
               <th>Responsable</th>
-              <th>OT</th>
+              <th>OT / MoreApp</th>
               <th class="text-end">Acciones</th>
             </tr>
           </thead>
@@ -239,7 +239,28 @@
                 <span>{{ mov.destino.nombre|default:"—" }}</span>
               </td>
               <td class="small">{{ mov.responsable.nombre_interno }}</td>
-              <td class="small text-muted">{{ mov.referencia_ot|default:"—" }}</td>
+              <td class="small">
+                {% if mov.referencia_ot %}
+                  <div>{{ mov.referencia_ot }}</div>
+                {% endif %}
+                {% if mov.moreapp_submission_id %}
+                  <div class="mt-1">
+                    {% if mov.moreapp_registro_id %}
+                    <a href="{% url 'reportes_moreapp_detalle' mov.moreapp_registro_id %}"
+                       class="text-decoration-none"
+                       title="{{ mov.moreapp_submission_id }}">
+                      <span class="badge badge-delco-moreapp">MoreApp</span>
+                      <span class="font-monospace text-muted">{{ mov.moreapp_submission_id|truncatechars:12 }}</span>
+                    </a>
+                    {% else %}
+                      <span class="badge badge-delco-moreapp">MoreApp</span>
+                      <span class="font-monospace text-muted" title="{{ mov.moreapp_submission_id }}">{{ mov.moreapp_submission_id|truncatechars:12 }}</span>
+                    {% endif %}
+                  </div>
+                {% elif not mov.referencia_ot %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
               <td class="text-end">
                 <a href="{% url 'movimientos_detalle' mov.id %}"
                    class="btn btn-sm btn-outline-primary py-0 px-2"

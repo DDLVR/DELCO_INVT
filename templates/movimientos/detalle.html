@@ -78,6 +78,19 @@
               <div class="text-muted small mb-1">Origen sistema</div>
               <span class="badge delco-badge-muted">{{ movimiento.get_origen_sistema_display }}</span>
             </div>
+            {% if moreapp_submission_id %}
+            <div class="col-sm-8">
+              <div class="text-muted small mb-1">Submission MoreApp</div>
+              <div class="d-flex flex-wrap align-items-center gap-2">
+                <code class="small mb-0">{{ moreapp_submission_id }}</code>
+                {% if moreapp_registro %}
+                <a href="{% url 'reportes_moreapp_detalle' moreapp_registro.id %}" class="btn btn-sm btn-outline-primary py-0">
+                  Ver informe{% if moreapp_registro.numero_correlativo %} #{{ moreapp_registro.numero_correlativo }}{% endif %}
+                </a>
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
             {% if movimiento.referencia_ot %}
             <div class="col-12">
               <div class="text-muted small mb-1">Orden de Trabajo</div>

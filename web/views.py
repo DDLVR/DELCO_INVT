@@ -108,6 +108,14 @@ def _ordenes_trabajo_habilitadas():
     return getattr(settings, 'ORDENES_TRABAJO_HABILITADAS', True)
 
 
+def _extraer_submission_moreapp(observacion: str) -> str:
+    """Saca el submission id desde la observación de un movimiento MOREAPP."""
+    if not observacion:
+        return ''
+    match = re.search(r'submission:\s*([a-f0-9]+)', str(observacion), re.IGNORECASE)
+    return match.group(1).strip() if match else ''
+
+
 def _tipo_movimiento_desde_estado(estado_nombre):
     """Mapea estado de inventario a tipo de movimiento Kardex."""
     nombre = (estado_nombre or '').strip().lower()
@@ -3781,6 +3789,7 @@ def movimientos_list_view(request):
     page_obj = paginator.get_page(page_number)
 
     movimientos_render = list(page_obj.object_list)
+    submission_ids = set()
     for mov in movimientos_render:
         detalles = []
         for item in mov.items.all():
@@ -3804,6 +3813,25 @@ def movimientos_list_view(request):
         else:
             mov.item_origen_display = '-'
 
+        mov.moreapp_submission_id = ''
+        mov.moreapp_registro_id = None
+        if mov.origen_sistema == 'MOREAPP':
+            sid = _extraer_submission_moreapp(mov.observacion or '')
+            mov.moreapp_submission_id = sid
+            if sid:
+                submission_ids.add(sid)
+
+    reporte_por_submission = {}
+    if submission_ids:
+        from ordenes_trabajo.models import IntegracionMoreApp
+        for reporte in IntegracionMoreApp.objects.filter(
+            eliminado=False,
+            moreapp_submission_id__in=submission_ids,
+        ).only('id', 'moreapp_submission_id'):
+            reporte_por_submission[reporte.moreapp_submission_id] = reporte.id
+        for mov in movimientos_render:
+            if mov.moreapp_submission_id:
+                mov.moreapp_registro_id = reporte_por_submission.get(mov.moreapp_submission_id)
     query_params = request.GET.copy()
     query_params.pop('page', None)
     query_string = query_params.urlencode()
@@ -3936,6 +3964,17 @@ def movimientos_detalle_view(request, movimiento_id):
                 continue
             snapshot_items.append({'campo': clave, 'valor': valor_txt})
 
+    moreapp_submission_id = ''
+    moreapp_registro = None
+    if movimiento.origen_sistema == 'MOREAPP':
+        moreapp_submission_id = _extraer_submission_moreapp(movimiento.observacion or '')
+        if moreapp_submission_id:
+            from ordenes_trabajo.models import IntegracionMoreApp
+            moreapp_registro = IntegracionMoreApp.objects.filter(
+                eliminado=False,
+                moreapp_submission_id=moreapp_submission_id,
+            ).only('id', 'moreapp_submission_id', 'numero_correlativo', 'nombre_formulario').first()
+
     context = {
         'movimiento': movimiento,
         'items_detalle': items_detalle,
@@ -3946,6 +3985,8 @@ def movimientos_detalle_view(request, movimiento_id):
         'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
         'snapshot_items': snapshot_items,
         'es_eliminacion': movimiento.tipo == 'ELIMINACION',
+        'moreapp_submission_id': moreapp_submission_id,
+        'moreapp_registro': moreapp_registro,
     }
     
     return render(request, 'movimientos/detalle.html', context)
