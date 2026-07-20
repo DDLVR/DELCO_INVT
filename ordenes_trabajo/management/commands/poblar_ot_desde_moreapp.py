@@ -152,6 +152,11 @@ class Command(BaseCommand):
             help='Solo muestra el plan (equivalente a no pasar --aplicar/--excel).',
         )
         parser.add_argument(
+            '--aplicar',
+            action='store_true',
+            help='Crea/actualiza clientes y OT en la base de datos.',
+        )
+        parser.add_argument(
             '--excel',
             action='store_true',
             help='Genera datos_prueba/ordenes_import_moreapp.xlsx para importar por UI.',
@@ -288,8 +293,8 @@ class Command(BaseCommand):
                                 orden.estado = 'REALIZADA'
                                 if not orden.fecha_inicio_ejecucion:
                                     orden.fecha_inicio_ejecucion = fecha
-                                if not orden.fecha_finalizacion:
-                                    orden.fecha_finalizacion = fecha
+                                if not orden.fecha_fin_ejecucion:
+                                    orden.fecha_fin_ejecucion = fecha
                                 orden.save()
                         else:
                             orden = OrdenTrabajo(
@@ -310,7 +315,7 @@ class Command(BaseCommand):
                             if estado == 'REALIZADA':
                                 orden.fecha_asignacion = fecha
                                 orden.fecha_inicio_ejecucion = fecha
-                                orden.fecha_finalizacion = fecha
+                                orden.fecha_fin_ejecucion = fecha
                             orden.save()
                             stats['ot_creadas'] += 1
 
