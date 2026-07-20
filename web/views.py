@@ -246,12 +246,18 @@ def dashboard_view(request):
             from ordenes_trabajo.models import OrdenTrabajo, IntegracionMoreApp
             from ordenes_trabajo.services import six_month_window_start
             from ordenes_trabajo.utils import contadores_colas_ordenes
-            from reportes.services import ESTADOS_EJECUTADOS, ESTADOS_PENDIENTES_OT
+            from reportes.services import ESTADOS_PENDIENTES_OT
 
             ot_qs = OrdenTrabajo.objects.filter(eliminado=False)
             context['total_ordenes'] = ot_qs.count()
             context['ordenes_pendientes'] = ot_qs.filter(estado__in=ESTADOS_PENDIENTES_OT).count()
-            context['ordenes_completadas'] = ot_qs.filter(estado__in=ESTADOS_EJECUTADOS).count()
+            # Cerradas = validadas/finalizadas (no confundir con post-MoreApp)
+            context['ordenes_completadas'] = ot_qs.filter(
+                estado__in={'VALIDADA', 'FINALIZADA', 'REALIZADA'}
+            ).count()
+            context['ordenes_por_validar'] = ot_qs.filter(
+                estado__in={'REALIZADA_PENDIENTE_COMPROBACION', 'PENDIENTE_VALIDACION'}
+            ).count()
             context['ordenes_canceladas'] = ot_qs.filter(estado='CANCELADA').count()
             context['ordenes_cerradas_sin_ejecutar'] = ot_qs.filter(
                 estado='CANCELADA',
@@ -277,6 +283,7 @@ def dashboard_view(request):
             context['total_ordenes'] = 0
             context['ordenes_pendientes'] = 0
             context['ordenes_completadas'] = 0
+            context['ordenes_por_validar'] = 0
             context['ordenes_canceladas'] = 0
             context['ordenes_cerradas_sin_ejecutar'] = 0
             context['ot_colas'] = {}

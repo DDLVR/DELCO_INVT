@@ -26,7 +26,7 @@
                 {% endif %}
             </div>
             <div class="small mb-0">
-                Pendientes: <strong>{{ moreapp_aviso.pendientes }}</strong>
+                Pendientes MoreApp: <strong>{{ moreapp_aviso.pendientes }}</strong>
                 · Con advertencia: <strong>{{ moreapp_aviso.advertencias }}</strong>
                 {% if moreapp_aviso.llegaron_hoy %}
                 · Últimas 24 h: <strong>{{ moreapp_aviso.llegaron_hoy }}</strong>
@@ -47,7 +47,7 @@
         </div>
         <div class="d-flex flex-column gap-2">
             <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm {% if moreapp_aviso.nuevos %}btn-danger{% else %}btn-warning{% endif %}">
-                Abrir cola de pendientes
+                Abrir cola Pendientes MoreApp
             </a>
             <a href="{% url 'ordenes_list' %}?cola=validar" class="btn btn-sm btn-outline-secondary">
                 OT por validar
@@ -231,13 +231,20 @@
             </a>
         </div>
         <div class="col-6 col-lg-3">
+            <a href="{% url 'ordenes_list' %}?cola=validar" class="text-decoration-none text-reset d-block h-100">
             <div class="card shadow-sm delco-panel-card h-100 border-success">
                 <div class="card-body py-3">
-                    <div class="text-muted small mb-1">Completadas</div>
+                    <div class="text-muted small mb-1">OT cerradas (validadas)</div>
                     <div class="delco-kpi-value text-success">{{ ordenes_completadas }}</div>
-                    <div class="small text-muted mt-1"><i class="bi bi-x-circle"></i> {{ ordenes_canceladas }} canceladas</div>
+                    <div class="small text-muted mt-1">
+                        <i class="bi bi-hourglass-split"></i> {{ ordenes_por_validar|default:0 }} por validar (post-MoreApp)
+                    </div>
+                    {% if ordenes_canceladas %}
+                    <div class="small text-muted"><i class="bi bi-x-circle"></i> {{ ordenes_canceladas }} canceladas</div>
+                    {% endif %}
                 </div>
             </div>
+            </a>
         </div>
         {% endif %}
         <div class="col-6 col-lg-3">
@@ -270,13 +277,13 @@
                 <div class="card-header card-header-delco py-2"><i class="bi bi-diagram-3 me-1"></i> Cola operativa de órdenes</div>
                 <div class="card-body">
                     <div class="d-flex flex-wrap gap-2">
-                        <a href="{% url 'ordenes_list' %}?cola=sin_asignar" class="btn btn-sm btn-outline-warning">Sin asignar <span class="badge bg-warning text-dark ms-1">{{ ot_colas.sin_asignar }}</span></a>
-                        <a href="{% url 'ordenes_list' %}?cola=en_campo" class="btn btn-sm btn-outline-info">En campo <span class="badge bg-info text-dark ms-1">{{ ot_colas.en_campo }}</span></a>
-                        <a href="{% url 'ordenes_list' %}?cola=esperando_moreapp" class="btn btn-sm btn-outline-primary">Sin MoreApp <span class="badge bg-primary ms-1">{{ ot_colas.esperando_moreapp }}</span></a>
-                        <a href="{% url 'ordenes_list' %}?cola=post_moreapp" class="btn btn-sm btn-outline-secondary">Post-MoreApp <span class="badge bg-secondary ms-1">{{ ot_colas.post_moreapp }}</span></a>
-                        <a href="{% url 'ordenes_list' %}?cola=validar" class="btn btn-sm btn-outline-success">Por validar <span class="badge bg-success ms-1">{{ ot_colas.validar }}</span></a>
-                        <a href="{% url 'ordenes_list' %}?cola=pendientes" class="btn btn-sm btn-outline-danger">OT pendientes <span class="badge bg-danger ms-1">{{ ot_colas.pendientes }}</span></a>
-                        <a href="{% url 'ordenes_list' %}?cola=observadas" class="btn btn-sm btn-outline-dark">Observadas <span class="badge bg-dark ms-1">{{ ot_colas.observadas }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=sin_asignar" class="btn btn-sm {% if ot_colas.sin_asignar %}btn-outline-warning{% else %}btn-outline-secondary opacity-50{% endif %}" {% if not ot_colas.sin_asignar %}title="Sin casos en esta cola"{% endif %}>OT sin asignar <span class="badge {% if ot_colas.sin_asignar %}bg-warning text-dark{% else %}delco-badge-muted{% endif %} ms-1">{{ ot_colas.sin_asignar }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=en_campo" class="btn btn-sm {% if ot_colas.en_campo %}btn-outline-info{% else %}btn-outline-secondary opacity-50{% endif %}" {% if not ot_colas.en_campo %}title="Sin casos en esta cola"{% endif %}>OT en campo <span class="badge {% if ot_colas.en_campo %}bg-info text-dark{% else %}delco-badge-muted{% endif %} ms-1">{{ ot_colas.en_campo }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=esperando_moreapp" class="btn btn-sm {% if ot_colas.esperando_moreapp %}btn-outline-primary{% else %}btn-outline-secondary opacity-50{% endif %}" {% if not ot_colas.esperando_moreapp %}title="Sin casos en esta cola"{% endif %}>OT sin MoreApp <span class="badge {% if ot_colas.esperando_moreapp %}bg-primary{% else %}delco-badge-muted{% endif %} ms-1">{{ ot_colas.esperando_moreapp }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=post_moreapp" class="btn btn-sm {% if ot_colas.post_moreapp %}btn-outline-secondary{% else %}btn-outline-secondary opacity-50{% endif %}">OT post-MoreApp <span class="badge {% if ot_colas.post_moreapp %}bg-secondary{% else %}delco-badge-muted{% endif %} ms-1">{{ ot_colas.post_moreapp }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=validar" class="btn btn-sm {% if ot_colas.validar %}btn-outline-success{% else %}btn-outline-secondary opacity-50{% endif %}">OT por validar <span class="badge {% if ot_colas.validar %}bg-success{% else %}delco-badge-muted{% endif %} ms-1">{{ ot_colas.validar }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=pendientes" class="btn btn-sm {% if ot_colas.pendientes %}btn-outline-danger{% else %}btn-outline-secondary opacity-50{% endif %}">OT pendientes <span class="badge {% if ot_colas.pendientes %}bg-danger{% else %}delco-badge-muted{% endif %} ms-1">{{ ot_colas.pendientes }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=observadas" class="btn btn-sm {% if ot_colas.observadas %}btn-outline-dark{% else %}btn-outline-secondary opacity-50{% endif %}">OT observadas <span class="badge {% if ot_colas.observadas %}bg-dark{% else %}delco-badge-muted{% endif %} ms-1">{{ ot_colas.observadas }}</span></a>
                         {% if moreapp_sin_ot %}
                         <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm btn-outline-danger">MoreApp sin OT <span class="badge bg-danger ms-1">{{ moreapp_sin_ot }}</span></a>
                         {% endif %}
@@ -305,8 +312,8 @@
                         {% endif %}
                         {% if moreapp_pendientes %}
                         <div class="d-flex justify-content-between align-items-center border rounded p-2 delco-timeline-item">
-                            <div><span class="fw-bold text-primary">{{ moreapp_pendientes }}</span> <span class="small text-muted">pendientes de revisión</span></div>
-                            <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm btn-outline-primary">Cola</a>
+                            <div><span class="fw-bold text-primary">{{ moreapp_pendientes }}</span> <span class="small text-muted">MoreApp pendientes de revisión</span></div>
+                            <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm btn-outline-primary">Cola MoreApp</a>
                         </div>
                         {% endif %}
                     </div>

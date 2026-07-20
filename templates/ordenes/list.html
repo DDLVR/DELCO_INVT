@@ -46,23 +46,29 @@
         <div class="col-12">
             <div class="d-flex flex-wrap gap-2">
                 <a href="{% url 'ordenes_list' %}" class="btn btn-sm {% if not cola_filtro %}btn-primary{% else %}btn-outline-primary{% endif %}">Todas</a>
-                <a href="?cola=sin_asignar" class="btn btn-sm {% if cola_filtro == 'sin_asignar' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-                    Sin asignar <span class="badge bg-dark">{{ colas_conteo.sin_asignar }}</span>
+                <a href="?cola=sin_asignar" class="btn btn-sm {% if cola_filtro == 'sin_asignar' %}btn-warning{% elif colas_conteo.sin_asignar %}btn-outline-warning{% else %}btn-outline-secondary opacity-50{% endif %}" {% if not colas_conteo.sin_asignar and cola_filtro != 'sin_asignar' %}title="Sin casos"{% endif %}>
+                    OT sin asignar <span class="badge bg-dark">{{ colas_conteo.sin_asignar }}</span>
                 </a>
-                <a href="?cola=en_campo" class="btn btn-sm {% if cola_filtro == 'en_campo' %}btn-info{% else %}btn-outline-info{% endif %}">
-                    En campo <span class="badge bg-dark">{{ colas_conteo.en_campo }}</span>
+                <a href="?cola=en_campo" class="btn btn-sm {% if cola_filtro == 'en_campo' %}btn-info{% elif colas_conteo.en_campo %}btn-outline-info{% else %}btn-outline-secondary opacity-50{% endif %}" {% if not colas_conteo.en_campo and cola_filtro != 'en_campo' %}title="Sin casos"{% endif %}>
+                    OT en campo <span class="badge bg-dark">{{ colas_conteo.en_campo }}</span>
                 </a>
-                <a href="?cola=esperando_moreapp" class="btn btn-sm {% if cola_filtro == 'esperando_moreapp' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                    Sin MoreApp <span class="badge bg-dark">{{ colas_conteo.esperando_moreapp }}</span>
+                <a href="?cola=esperando_moreapp" class="btn btn-sm {% if cola_filtro == 'esperando_moreapp' %}btn-primary{% elif colas_conteo.esperando_moreapp %}btn-outline-primary{% else %}btn-outline-secondary opacity-50{% endif %}" {% if not colas_conteo.esperando_moreapp and cola_filtro != 'esperando_moreapp' %}title="Sin casos"{% endif %}>
+                    OT sin MoreApp <span class="badge bg-dark">{{ colas_conteo.esperando_moreapp }}</span>
                 </a>
-                <a href="?cola=post_moreapp" class="btn btn-sm {% if cola_filtro == 'post_moreapp' %}btn-info text-dark{% else %}btn-outline-info{% endif %}">
-                    Post-MoreApp <span class="badge bg-dark">{{ colas_conteo.post_moreapp }}</span>
+                <a href="?cola=post_moreapp" class="btn btn-sm {% if cola_filtro == 'post_moreapp' %}btn-info text-dark{% elif colas_conteo.post_moreapp %}btn-outline-info{% else %}btn-outline-secondary opacity-50{% endif %}">
+                    OT post-MoreApp <span class="badge bg-dark">{{ colas_conteo.post_moreapp }}</span>
                 </a>
-                <a href="?cola=validar" class="btn btn-sm {% if cola_filtro == 'validar' %}btn-success{% else %}btn-outline-success{% endif %}">
-                    Por validar <span class="badge bg-dark">{{ colas_conteo.validar }}</span>
+                <a href="?cola=validar" class="btn btn-sm {% if cola_filtro == 'validar' %}btn-success{% elif colas_conteo.validar %}btn-outline-success{% else %}btn-outline-secondary opacity-50{% endif %}">
+                    OT por validar <span class="badge bg-dark">{{ colas_conteo.validar }}</span>
+                </a>
+                <a href="?cola=pendientes" class="btn btn-sm {% if cola_filtro == 'pendientes' %}btn-danger{% elif colas_conteo.pendientes %}btn-outline-danger{% else %}btn-outline-secondary opacity-50{% endif %}">
+                    OT pendientes <span class="badge bg-dark">{{ colas_conteo.pendientes }}</span>
+                </a>
+                <a href="?cola=observadas" class="btn btn-sm {% if cola_filtro == 'observadas' %}btn-dark{% elif colas_conteo.observadas %}btn-outline-dark{% else %}btn-outline-secondary opacity-50{% endif %}">
+                    OT observadas <span class="badge bg-dark">{{ colas_conteo.observadas }}</span>
                 </a>
             </div>
-            <p class="text-muted small mt-2 mb-0">Flujo: Delco crea → técnico ejecuta → MoreApp informa → Delco valida. Para ver el detalle de una OT, haz clic en <strong>Ver</strong> o en el <strong>#ID</strong>.</p>
+            <p class="text-muted small mt-2 mb-0">Flujo: Delco crea → técnico ejecuta → MoreApp informa → Delco valida. Las colas en gris (0) no tienen casos ahora. La revisión de informes es en <strong>Pendientes MoreApp</strong>.</p>
         </div>
     </div>
     {% endif %}
