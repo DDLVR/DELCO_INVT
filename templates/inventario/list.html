@@ -548,54 +548,121 @@
 </div>
 
 <!-- Modal para importar Excel -->
-<div class="modal fade" id="modalImportar" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Importar desde Excel</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+<div class="modal fade" id="modalImportar" tabindex="-1" aria-labelledby="modalImportarInventarioLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content delco-import-clientes-modal">
+            <div class="modal-header delco-import-clientes-header">
+                <div>
+                    <h5 class="modal-title" id="modalImportarInventarioLabel">
+                        <i class="bi bi-file-earmark-excel me-2" aria-hidden="true"></i>Importar inventario
+                    </h5>
+                    <p class="delco-import-clientes-subtitle mb-0">
+                        {% if tipo == 'medidor' %}Medidores{% elif tipo == 'sim' %}SIM Cards{% elif tipo == 'modem' %}Módems{% else %}Equipos{% endif %}
+                        · Excel (.xlsx / .xls)
+                    </p>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
             </div>
             <form id="formImportar" enctype="multipart/form-data">
                 {% csrf_token %}
+                <input type="hidden" name="tipo" value="{{ tipo }}">
                 <div class="modal-body">
-                    <p class="text-muted mb-3">
-                        Carga un archivo Excel (.xlsx) con los equipos a importar.
-                    </p>
-                    <input type="hidden" name="tipo" value="{{ tipo }}">
-                    <div class="mb-3">
-                        <label for="archivoImportar" class="form-label">Archivo Excel</label>
-                        <input type="file" class="form-control" id="archivoImportar" name="archivo" 
-                               accept=".xlsx,.xls" required>
-                        <small class="form-text text-muted">
-                            Formato esperado:
-                            {% if tipo == 'medidor' %}
-                            <strong>AMARILLO (importar):</strong> Fecha Recepción, Bodega, Marca, Caja, Serie, Módulo, Tipo Medidor (DIRECTO/INDIRECTO)<br>
-                            <strong>VERDE (rellenar después):</strong> Fecha Entrega, Entregado A, Estado, Cliente
-                            {% elif tipo == 'sim' %}
-                            <strong>AMARILLO (importar):</strong> IMEI, OPERADOR, ABONADO, DIRECCIÓN IP, APN, FECHA DE RECEPCIÓN, ENTREGADO A<br>
-                            <strong>VERDE (rellenar después):</strong> FECHA ENTREGA, ESTADO, CLIENTE, MEDIDOR
-                            {% elif tipo == 'modem' %}
-                            <strong>AMARILLO (importar):</strong> Fecha Recepción, Bodega, Marca, Caja, Serie, Módulo<br>
-                            <strong>VERDE (rellenar después):</strong> Fecha Entrega, Entregado A, Estado, Cliente
-                            {% endif %}
-                        </small>
-                    </div>
+                    <section class="delco-import-section">
+                        <div class="delco-import-section-label">1. Archivo</div>
+                        <label for="archivoImportar" class="delco-import-file-zone">
+                            <span class="delco-import-file-icon" aria-hidden="true"><i class="bi bi-cloud-upload"></i></span>
+                            <span class="delco-import-file-copy">
+                                <span class="delco-import-file-title">Seleccionar archivo Excel</span>
+                                <span class="delco-import-file-hint" id="archivoImportarNombre">.xlsx o .xls · una fila por equipo</span>
+                            </span>
+                            <input type="file" class="form-control" id="archivoImportar" name="archivo"
+                                   accept=".xlsx,.xls" required>
+                        </label>
+                    </section>
+
+                    <section class="delco-import-section mb-0">
+                        <div class="delco-import-section-label">2. Formato esperado</div>
+                        <div class="delco-import-format">
+                            <div class="delco-import-format-required">
+                                <span class="delco-import-format-kicker">Tipo actual</span>
+                                <strong>
+                                    {% if tipo == 'medidor' %}Medidores{% elif tipo == 'sim' %}SIM Cards{% elif tipo == 'modem' %}Módems{% else %}Equipos{% endif %}
+                                </strong>
+                                <span class="text-muted small">respeta encabezados y orden de columnas</span>
+                            </div>
+                            <div class="accordion accordion-flush delco-import-accordion" id="accordionFormatoInventario">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="headingColsInventario">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseColsInventario" aria-expanded="false" aria-controls="collapseColsInventario">
+                                            Columnas de esta importación
+                                        </button>
+                                    </h2>
+                                    <div id="collapseColsInventario" class="accordion-collapse collapse" aria-labelledby="headingColsInventario" data-bs-parent="#accordionFormatoInventario">
+                                        <div class="accordion-body">
+                                            {% if tipo == 'medidor' %}
+                                            <ul class="delco-import-cols mb-2">
+                                                <li><strong>Obligatorias:</strong> Fecha Recepción, Serie (Medidor), Tipo Medidor (DIRECTO / INDIRECTO)</li>
+                                                <li><strong>Importar (amarillo):</strong> Bodega, Marca, Caja, Módulo</li>
+                                                <li><strong>Completar después (verde):</strong> Fecha Entrega, Entregado A, Estado, Cliente</li>
+                                            </ul>
+                                            {% elif tipo == 'sim' %}
+                                            <ul class="delco-import-cols mb-2">
+                                                <li><strong>Obligatoria:</strong> IMEI</li>
+                                                <li><strong>Importar:</strong> Operador, Abonado, Dirección IP, APN, Fecha Recepción, Entregado A</li>
+                                                <li><strong>Completar después:</strong> Fecha Entrega, Estado, Cliente, Medidor</li>
+                                            </ul>
+                                            {% elif tipo == 'modem' %}
+                                            <ul class="delco-import-cols mb-2">
+                                                <li><strong>Obligatorias:</strong> Marca, Serie</li>
+                                                <li><strong>Importar:</strong> Fecha Recepción, Bodega, Caja, Modelo, IMEI, etc.</li>
+                                                <li><strong>Completar después:</strong> Fecha Entrega, Entregado A, Estado, Cliente</li>
+                                            </ul>
+                                            {% endif %}
+                                            <p class="small text-muted mb-0">
+                                                Tip: usa <strong>Formato</strong> en la barra superior para la guía completa, o exporta una plantilla con <strong>Exportar Excel</strong>.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="headingReglasInventario">
+                                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseReglasInventario" aria-expanded="false" aria-controls="collapseReglasInventario">
+                                            Buenas prácticas
+                                        </button>
+                                    </h2>
+                                    <div id="collapseReglasInventario" class="accordion-collapse collapse" aria-labelledby="headingReglasInventario" data-bs-parent="#accordionFormatoInventario">
+                                        <div class="accordion-body">
+                                            <ul class="delco-import-rules mb-0">
+                                                <li>Una fila por equipo; no repetir serie / IMEI.</li>
+                                                <li>Fechas: <code>DD-MM-YYYY</code>, <code>DD/MM/YYYY</code> o <code>YYYY-MM-DD</code>.</li>
+                                                <li>No uses fórmulas ni celdas combinadas.</li>
+                                                <li>Si un equipo ya existe, la importación lo actualiza (incluye reactivación soft-delete).</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
                     <div class="delco-import-progress mt-3" style="display:none;">
                         <div class="d-flex justify-content-between mb-1">
                             <small class="delco-import-progress-label text-muted">Preparando importación...</small>
                             <small class="delco-import-progress-pct fw-semibold">0%</small>
                         </div>
-                        <div class="progress" style="height:22px;">
-                            <div class="progress-bar progress-bar-striped progress-bar-animated delco-import-progress-bar" role="progressbar" style="width:0%">0%</div>
+                        <div class="progress" style="height:10px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated delco-import-progress-bar" role="progressbar" style="width:0%; font-size:0;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
                         </div>
                     </div>
-                    <div id="importResultados" class="mt-3" style="display:none;">
-                        <div id="importMensaje" class="alert"></div>
+                    <div id="importResultados" class="delco-import-results mt-3" style="display:none;">
+                        <div id="importMensaje" class="alert mb-0"></div>
                     </div>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" id="btnImportarSubmit">Importar</button>
+                <div class="modal-footer delco-import-clientes-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" id="btnImportarSubmit">
+                        <i class="bi bi-upload me-1" aria-hidden="true"></i>Importar
+                    </button>
                 </div>
             </form>
         </div>
@@ -2124,6 +2191,33 @@ if (btnExportarCompleto) {
 
 // Importar Excel con barra de progreso
 const btnImportarSubmit = document.getElementById('btnImportarSubmit');
+const modalImportarInventario = document.getElementById('modalImportar');
+const archivoImportarInput = document.getElementById('archivoImportar');
+const archivoImportarNombre = document.getElementById('archivoImportarNombre');
+
+if (archivoImportarInput && archivoImportarNombre) {
+    archivoImportarInput.addEventListener('change', function() {
+        var tieneArchivo = !!(archivoImportarInput.files && archivoImportarInput.files.length);
+        archivoImportarNombre.textContent = tieneArchivo
+            ? archivoImportarInput.files[0].name
+            : '.xlsx o .xls · una fila por equipo';
+        var zone = archivoImportarInput.closest('.delco-import-file-zone');
+        if (zone) {
+            if (tieneArchivo) zone.classList.add('has-file');
+            else zone.classList.remove('has-file');
+        }
+    });
+}
+
+if (modalImportarInventario) {
+    modalImportarInventario.addEventListener('show.bs.modal', function() {
+        var resultados = document.getElementById('importResultados');
+        var progress = modalImportarInventario.querySelector('.delco-import-progress');
+        if (resultados) resultados.style.display = 'none';
+        if (progress) progress.style.display = 'none';
+    });
+}
+
 if (btnImportarSubmit) {
     btnImportarSubmit.addEventListener('click', function() {
         const form = document.getElementById('formImportar');
@@ -2138,6 +2232,7 @@ if (btnImportarSubmit) {
             url: "{% url 'inventario_importar' %}",
             form: form,
             submitBtn: btnImportarSubmit,
+            modalEl: modalImportarInventario,
             onSuccess: function(data) {
                 const resultadosDiv = document.getElementById('importResultados');
                 const mensajeDiv = document.getElementById('importMensaje');
@@ -2145,7 +2240,7 @@ if (btnImportarSubmit) {
 
                 if (data.success) {
                     showToast(`✓ Importación exitosa: ${data.exitosas} registros importados.`, 'success', 6000);
-                    mensajeDiv.className = 'alert alert-success';
+                    mensajeDiv.className = 'alert alert-success mb-0';
                     let html = `<strong>✓ Importación exitosa!</strong><br>${data.message}<br>Exitosas: ${data.exitosas}<br>Fallidas: ${data.fallidas}`;
                     if (data.fallidas > 0 && data.errores_resumen && data.errores_resumen.length > 0) {
                         html += `<div class="mt-3 p-2 bg-light border rounded"><strong><i class="bi bi-exclamation-circle text-warning"></i> Resumen de Errores Más Comunes:</strong><ul class="mb-2 mt-2 small">`;
@@ -2156,7 +2251,7 @@ if (btnImportarSubmit) {
                     setTimeout(() => location.reload(), 3000);
                 } else {
                     showToast(`✗ Importación con errores: ${data.fallidas || 0} fallidas.`, 'danger', 0);
-                    mensajeDiv.className = 'alert alert-danger';
+                    mensajeDiv.className = 'alert alert-danger mb-0';
                     let html = `<strong>✗ Error en la importación</strong><br>${data.message}<br>Exitosas: ${data.exitosas || 0}<br>Fallidas: ${data.fallidas || 0}`;
                     if (data.fallidas > 0 && data.errores_resumen && data.errores_resumen.length > 0) {
                         html += `<div class="mt-3 p-2 bg-light border rounded"><strong><i class="bi bi-exclamation-circle text-danger"></i> Errores Más Comunes:</strong><ul class="mb-2 mt-2 small">`;
@@ -2171,7 +2266,7 @@ if (btnImportarSubmit) {
             },
             onError: function(err) {
                 showToast('Error de conexión al importar: ' + (err.message || ''), 'danger', 0);
-                document.getElementById('importMensaje').className = 'alert alert-danger';
+                document.getElementById('importMensaje').className = 'alert alert-danger mb-0';
                 document.getElementById('importMensaje').textContent = 'Error: ' + (err.message || '');
                 document.getElementById('importResultados').style.display = 'block';
             }
