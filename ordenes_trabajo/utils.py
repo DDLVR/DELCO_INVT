@@ -453,6 +453,8 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
 
 def exportar_ordenes_excel(ordenes):
     """Genera workbook Excel con las órdenes recibidas."""
+    from importaciones.utils import aplicar_estilo_hoja_exportacion
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = 'Ordenes de Trabajo'
@@ -501,6 +503,7 @@ def exportar_ordenes_excel(ordenes):
             orden.descripcion_alerta_duplicado or '',
         ])
 
+    aplicar_estilo_hoja_exportacion(ws)
     return wb
 
 
