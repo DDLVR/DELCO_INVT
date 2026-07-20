@@ -24,6 +24,18 @@ from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
+# Revisiones ya cerradas manualmente: el sync no debe reabrirlas
+ESTADOS_REVISION_CERRADOS = frozenset({'REVISADO', 'DESCARTADO'})
+
+
+def _asignar_estado_revision(registro, nuevo_estado: str) -> None:
+    """Actualiza estado_revision respetando REVISADO/DESCARTADO manuales."""
+    actual = (getattr(registro, 'estado_revision', None) or '').strip().upper()
+    if actual in ESTADOS_REVISION_CERRADOS:
+        return
+    registro.estado_revision = nuevo_estado
+
+
 # Ruta base donde MoreApp deposita los registros (configurable desde settings)
 DEFAULT_REGISTROS_BASE = os.path.join(
     str(Path(__file__).resolve().parent.parent),
@@ -49,7 +61,7 @@ def _cargar_estado_sync(base_dir: str) -> Dict[str, Any]:
         return {'version': 1, 'forms': {}}
 
     try:
-        with open(path, 'r', encoding='utf-8') as fh:
+        with open(path, 'r', encoding='utf-8-sig') as fh:
             data = json.load(fh)
         if not isinstance(data, dict):
             return {'version': 1, 'forms': {}}
@@ -555,7 +567,7 @@ def _registrar_alerta_critica_asignacion(
         detalle += f' | CONTEXTO: {contexto}'
     logger.error('[MoreApp] %s', detalle)
     registro.alerta_doble_trabajo = True
-    registro.estado_revision = 'CON_ADVERTENCIA'
+    _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
     if registro.descripcion_alerta:
         registro.descripcion_alerta += f' | {detalle}'
     else:
@@ -1157,9 +1169,9 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
 
         # Punto 8: estado_revision para el bloque REG_MEDIDORES
         if resumen['pendientes_revision'] or registro.alerta_doble_trabajo:
-            registro.estado_revision = 'CON_ADVERTENCIA'
+            _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
         else:
-            registro.estado_revision = 'REVISADO'
+            _asignar_estado_revision(registro, 'REVISADO')
 
         if cliente_obj:
             from ordenes_trabajo.sync import vincular_moreapp_a_orden
@@ -1266,11 +1278,11 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
 
     # Punto 8: establecer estado_revision según resultados
     if resumen['pendientes_revision']:
-        registro.estado_revision = 'CON_ADVERTENCIA'
+        _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
     elif registro.alerta_doble_trabajo:
-        registro.estado_revision = 'CON_ADVERTENCIA'
+        _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
     else:
-        registro.estado_revision = 'REVISADO'
+        _asignar_estado_revision(registro, 'REVISADO')
 
     # Vincular informe entrante con orden de trabajo del cliente
     if cliente_obj:
@@ -1953,7 +1965,7 @@ def _procesar_json(
                     existente.descripcion_alerta += f' | {detalle}'
                 else:
                     existente.descripcion_alerta = detalle
-                existente.estado_revision = 'CON_ADVERTENCIA'
+                _asignar_estado_revision(existente, 'CON_ADVERTENCIA')
                 existente.fecha_procesamiento = timezone.now()
                 existente.save(
                     update_fields=[
@@ -2011,7 +2023,7 @@ def _procesar_json(
     except Exception as exc:
         logger.exception('Error operativo MoreApp id=%s', submission_id)
         registro.alerta_doble_trabajo = True
-        registro.estado_revision = 'CON_ADVERTENCIA'
+        _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
         detalle = f'ERROR_SYNC | {exc}'
         if registro.descripcion_alerta:
             registro.descripcion_alerta += f' | {detalle}'
@@ -2163,7 +2175,7 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
     except Exception as exc:
         logger.exception('Error operativo webhook MoreApp id=%s', submission_id)
         registro.alerta_doble_trabajo = True
-        registro.estado_revision = 'CON_ADVERTENCIA'
+        _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
         detalle = f'ERROR_SYNC | {exc}'
         if registro.descripcion_alerta:
             registro.descripcion_alerta += f' | {detalle}'

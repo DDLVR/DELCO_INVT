@@ -253,7 +253,7 @@ def orden_detalle_view(request, pk):
     """
     Detalle de una orden de trabajo con toda la información
     """
-    orden = get_object_or_404(OrdenTrabajo, pk=pk)
+    orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
     
     # Verificar permisos
     usuario = request.user
@@ -412,7 +412,7 @@ def orden_guardar_observaciones_view(request, pk):
     if request.method != 'POST':
         return redirect('orden_detalle', pk=pk)
 
-    orden = get_object_or_404(OrdenTrabajo, pk=pk)
+    orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
 
     if not puede_editar_observaciones_orden(orden, request.user):
         messages.error(request, 'No tienes permiso para editar las observaciones técnicas')
@@ -429,7 +429,7 @@ def cambiar_estado_orden_view(request, pk):
     """
     Cambia el estado de una orden validando permisos por rol.
     """
-    orden = get_object_or_404(OrdenTrabajo, pk=pk)
+    orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
     nuevo_estado = request.POST.get('nuevo_estado')
     observacion = request.POST.get('observacion_validacion', '').strip()
 
@@ -471,7 +471,7 @@ def orden_editar_tecnico_view(request, pk):
     """
     Permite al técnico editar orden (máximo 2 veces)
     """
-    orden = get_object_or_404(OrdenTrabajo, pk=pk)
+    orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
     
     # Validar que es el técnico responsable
     if orden.tecnico_responsable != request.user:
@@ -530,7 +530,7 @@ def orden_subir_adjunto_view(request, pk):
     Subir adjunto (foto, PDF) a una orden
     """
     if request.method == 'POST':
-        orden = get_object_or_404(OrdenTrabajo, pk=pk)
+        orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
         
         # Verificar permisos
         if request.user.rol not in ['ADMIN', 'ADMINISTRATIVO'] and orden.tecnico_responsable != request.user:
@@ -569,7 +569,7 @@ def orden_registrar_equipos_view(request, pk):
     Permite al técnico registrar los equipos que utilizó en el trabajo
     """
     if request.method == 'POST':
-        orden = get_object_or_404(OrdenTrabajo, pk=pk)
+        orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
         
         # Verificar que sea el técnico responsable
         if orden.tecnico_responsable != request.user:
@@ -776,7 +776,7 @@ def ordenes_modificar_masivo_view(request):
             'message': 'No elegiste ningún cambio. Completa al menos un campo o cancela.',
         })
 
-    ordenes = OrdenTrabajo.objects.filter(pk__in=ids)
+    ordenes = OrdenTrabajo.objects.filter(pk__in=ids, eliminado=False)
     actualizadas = 0
 
     for orden in ordenes:
@@ -818,7 +818,7 @@ def ordenes_modificar_masivo_view(request):
 @require_POST
 def orden_subir_informe_view(request, pk):
     """Sube un informe PDF del cliente vinculado a la orden."""
-    orden = get_object_or_404(OrdenTrabajo, pk=pk)
+    orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
 
     if request.user.rol not in ['ADMIN', 'ADMINISTRATIVO'] and orden.tecnico_responsable != request.user:
         return JsonResponse({'success': False, 'message': 'No tienes permisos'}, status=403)

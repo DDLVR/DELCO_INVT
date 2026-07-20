@@ -190,7 +190,7 @@ class ReportesSoloActividadOperativaTests(TestCase):
         request.user = self.admin
         response = reportes_hub_view(request)
         content = response.content.decode()
-        self.assertIn('Aplicar filtros', content)
+        self.assertIn('Limpiar filtros', content)
         self.assertIn('Estado OT', content)
         self.assertIn('Período', content)
         self.assertNotIn('Fecha desde', content)

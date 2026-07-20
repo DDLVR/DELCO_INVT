@@ -277,6 +277,7 @@ def detectar_duplicado_orden(
         cliente=cliente,
         fecha_creacion__gte=desde,
         estado__in=estados_relevantes,
+        eliminado=False,
     ).exclude(estado='CANCELADA')
 
     if exclude_orden_id:
@@ -563,6 +564,7 @@ def vincular_informe_cliente_a_orden(
 
     orden = OrdenTrabajo.objects.filter(
         cliente=cliente,
+        eliminado=False,
         estado__in=list(OrdenTrabajo.ESTADOS_ABIERTOS) + ['REALIZADA'],
     ).order_by('-fecha_creacion').first()
 
@@ -600,7 +602,7 @@ def vincular_informe_cliente_a_orden(
 
 def asignar_ordenes_masivo(ids, tecnico_id, usuario) -> Dict[str, Any]:
     tecnico = Usuario.objects.get(pk=tecnico_id, rol='TECNICO', is_active=True)
-    ordenes = OrdenTrabajo.objects.filter(pk__in=ids)
+    ordenes = OrdenTrabajo.objects.filter(pk__in=ids, eliminado=False)
     actualizadas = 0
     alertas = 0
 

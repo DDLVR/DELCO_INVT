@@ -48,7 +48,11 @@ def _estados_abiertos() -> set:
 
 
 def has_open_ot_for_cliente(cliente_id: int, exclude_orden_id: Optional[int] = None) -> bool:
-    qs = OrdenTrabajo.objects.filter(cliente_id=cliente_id, estado__in=_estados_abiertos())
+    qs = OrdenTrabajo.objects.filter(
+        cliente_id=cliente_id,
+        estado__in=_estados_abiertos(),
+        eliminado=False,
+    )
     if exclude_orden_id:
         qs = qs.exclude(pk=exclude_orden_id)
     return qs.exists()
@@ -63,6 +67,7 @@ def has_same_requirement_ot(
         cliente_id=cliente_id,
         tipo_trabajo=tipo_trabajo,
         estado__in=_estados_abiertos(),
+        eliminado=False,
     )
     if exclude_orden_id:
         qs = qs.exclude(pk=exclude_orden_id)
@@ -74,6 +79,7 @@ def count_visits_last_6_months(cliente_id: int, exclude_orden_id: Optional[int] 
     qs = OrdenTrabajo.objects.filter(
         cliente_id=cliente_id,
         fecha_creacion__date__gte=desde,
+        eliminado=False,
     ).exclude(estado='CANCELADA')
     if exclude_orden_id:
         qs = qs.exclude(pk=exclude_orden_id)
@@ -102,6 +108,7 @@ def validate_ot_for_creation(
     pending_validation = OrdenTrabajo.objects.filter(
         cliente_id=cliente.pk,
         estado='PENDIENTE_VALIDACION',
+        eliminado=False,
     )
     if exclude_orden_id:
         pending_validation = pending_validation.exclude(pk=exclude_orden_id)
@@ -112,6 +119,7 @@ def validate_ot_for_creation(
         cliente_id=cliente.pk,
         estado='CANCELADA',
         fecha_inicio_ejecucion__isnull=True,
+        eliminado=False,
     )
     if exclude_orden_id:
         closed_without_execution = closed_without_execution.exclude(pk=exclude_orden_id)
