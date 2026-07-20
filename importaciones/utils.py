@@ -35,7 +35,9 @@ def aplicar_estilo_hoja_exportacion(
     header_fill_hex: str = '1F4E79',
     freeze: str = 'A2',
     zebra: bool = True,
-    auto_filter: bool = True,
+    auto_filter: bool = False,
+    filter_from_col: int = 1,
+    filter_to_col: int = None,
     min_width: int = 10,
     max_width: int = 40,
     header_height: int = 30,
@@ -43,6 +45,10 @@ def aplicar_estilo_hoja_exportacion(
     """Aplica formato visual uniforme a una hoja de exportación Excel.
 
     No altera valores ni encabezados: solo presentación para revisión cómoda.
+
+    auto_filter: por defecto False (muchas columnas no aportan filtro útil).
+    filter_from_col / filter_to_col: rango 1-based de columnas con filtro
+    (p. ej. saltar '#' o textos largos / IDs).
     """
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
@@ -92,11 +98,94 @@ def aplicar_estilo_hoja_exportacion(
 
     if freeze:
         ws.freeze_panes = freeze
-    if auto_filter:
-        ws.auto_filter.ref = ws.dimensions
+    if auto_filter and ws.max_row >= 1:
+        inicio = max(1, min(int(filter_from_col or 1), ws.max_column))
+        fin = ws.max_column if filter_to_col is None else int(filter_to_col)
+        fin = max(inicio, min(fin, ws.max_column))
+        ws.auto_filter.ref = (
+            f'{get_column_letter(inicio)}1:'
+            f'{get_column_letter(fin)}{ws.max_row}'
+        )
 
     ws.sheet_view.showGridLines = False
     return ws
+
+
+# Encabezados legibles para exportación completa (evita cliente_label, nombre_interno, etc.)
+_ETIQUETAS_EXPORT_COMPLETO = {
+    'id': 'ID',
+    'serie': 'Serie',
+    'imei': 'IMEI',
+    'marca': 'Marca',
+    'modelo': 'Modelo',
+    'caja': 'Caja',
+    'bodega': 'Bodega',
+    'modulo': 'Módulo',
+    'tipo_medidor': 'Tipo medidor',
+    'tipo_medidor_display': 'Tipo medidor (texto)',
+    'fecha_recepcion': 'Fecha recepción',
+    'fecha_entrega': 'Fecha entrega',
+    'fecha_creacion': 'Fecha creación',
+    'fecha_actualizacion': 'Fecha actualización',
+    'fecha_eliminacion': 'Fecha eliminación',
+    'entregado_a_info': 'Entregado a (texto Excel)',
+    'entregado_a_otro': 'Entregado a (manual)',
+    'entregado_a_nombre': 'Entregado a',
+    'entregado_a_id': 'ID entregado a',
+    'entregado_a_label': 'Entregado a',
+    'en_custodia_de_id': 'ID en custodia de',
+    'en_custodia_de_label': 'En custodia de',
+    'estado_inventario_id': 'ID estado',
+    'estado_inventario_label': 'Estado',
+    'ubicacion_actual_id': 'ID ubicación',
+    'ubicacion_actual_label': 'Ubicación',
+    'cliente_id': 'ID cliente',
+    'cliente_label': 'Nº cliente',
+    'cliente_otro': 'Cliente (manual)',
+    'medidor_id': 'ID medidor',
+    'medidor_label': 'Serie medidor',
+    'medidor_otro': 'Medidor (manual)',
+    'eliminado_por_id': 'ID eliminado por',
+    'eliminado_por_label': 'Eliminado por',
+    'eliminado': 'Eliminado',
+    'proyecto': 'Proyecto',
+    'observaciones': 'Observaciones',
+    'operador': 'Operador',
+    'abonado': 'Abonado',
+    'direccion_ip': 'Dirección IP',
+    'apn': 'APN',
+    'msisdn': 'MSISDN',
+    'ip_fija': 'IP fija',
+    'serie_plastico': 'Serie plástico',
+    'proveedor': 'Proveedor',
+    'tecnico_responsable': 'Técnico responsable',
+    'ip': 'IP',
+    'puerto': 'Puerto',
+    'marca_secundaria': 'Marca secundaria',
+    'retirado': 'Retirado',
+    'serie_secundaria': 'Serie secundaria',
+    'irregularidad': 'Irregularidad',
+}
+
+
+def _etiqueta_columna_export_completo(clave: str) -> str:
+    """Convierte claves técnicas (snake_case) en encabezados legibles."""
+    if clave in _ETIQUETAS_EXPORT_COMPLETO:
+        return _ETIQUETAS_EXPORT_COMPLETO[clave]
+
+    sufijo = ''
+    base = clave
+    if clave.endswith('_display'):
+        base, sufijo = clave[:-8], ' (texto)'
+    elif clave.endswith('_label'):
+        base = clave[:-6]
+    elif clave.endswith('_id'):
+        base, sufijo = clave[:-3], ' (ID)'
+
+    texto = base.replace('_', ' ').strip()
+    if not texto:
+        return clave
+    return texto[0].upper() + texto[1:] + sufijo
 
 
 def _normalizar_serie_medidor_cliente(valor) -> str:
@@ -1584,7 +1673,9 @@ def exportar_clientes_excel(clientes):
         ]
         ws.append(row)
 
-    aplicar_estilo_hoja_exportacion(ws)
+    # Filtro solo en Sector / Tipo / Nº cliente / Comuna.
+    # Sin filtro en Nombre, Dirección, Marca, Proyecto, Serie (texto largo o casi único).
+    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=1, filter_to_col=4)
     return wb
 
 
@@ -1687,7 +1778,11 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
         
         ws.append(row)
 
-    aplicar_estilo_hoja_exportacion(ws)
+    # En medidores la columna '#' no aporta filtro; el resto sí.
+    if tipo_equipo.upper() == 'MEDIDORES':
+        aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=2)
+    else:
+        aplicar_estilo_hoja_exportacion(ws, auto_filter=True)
     return wb
 
 
@@ -1736,13 +1831,13 @@ def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
     ws.title = f'{tipo_equipo}_COMPLETO'
 
     columnas = []
-    headers = []
+    claves = []
 
     for campo in model._meta.concrete_fields:
         if campo.is_relation:
-            headers.append(f'{campo.name}_id')
+            claves.append(f'{campo.name}_id')
             columnas.append((f'{campo.name}_id', lambda obj, nombre=campo.attname: normalizar_valor(getattr(obj, nombre, None))))
-            headers.append(f'{campo.name}_label')
+            claves.append(f'{campo.name}_label')
             columnas.append((
                 f'{campo.name}_label',
                 lambda obj, campo_rel=campo: normalizar_valor(
@@ -1750,10 +1845,10 @@ def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
                 )
             ))
         else:
-            headers.append(campo.name)
+            claves.append(campo.name)
             if getattr(campo, 'choices', None):
                 columnas.append((campo.name, lambda obj, nombre=campo.name: normalizar_valor(getattr(obj, nombre, None))))
-                headers.append(f'{campo.name}_display')
+                claves.append(f'{campo.name}_display')
                 columnas.append((
                     f'{campo.name}_display',
                     lambda obj, nombre=campo.name: normalizar_valor(getattr(obj, f'get_{nombre}_display')()) if getattr(obj, nombre, None) not in (None, '') else ''
@@ -1761,13 +1856,13 @@ def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
             else:
                 columnas.append((campo.name, lambda obj, nombre=campo.name: normalizar_valor(getattr(obj, nombre, None))))
 
-    ws.append(headers)
+    ws.append([_etiqueta_columna_export_completo(clave) for clave in claves])
 
     for equipo in equipos:
         ws.append([funcion(equipo) for _, funcion in columnas])
 
-    # Dorado para distinguir exportación completa de la estándar
-    aplicar_estilo_hoja_exportacion(ws, header_fill_hex='7F6000', max_width=36)
+    # Completo: sin filtro (demasiadas columnas técnicas / IDs no filtrables de forma útil)
+    aplicar_estilo_hoja_exportacion(ws, header_fill_hex='7F6000', max_width=36, auto_filter=False)
     return wb
 
 
