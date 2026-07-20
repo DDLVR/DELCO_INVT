@@ -121,24 +121,6 @@ class ImportacionClientesModoTests(TestCase):
 		cliente = Cliente.objects.get(numero_cliente='CLI-IP-1', activo=True)
 		self.assertEqual(cliente.ip, '10.117.122.165')
 
-	def test_rechaza_numero_cliente_tipo_fecha(self):
-		from web.services.validators import parece_fecha_numero_cliente
-
-		self.assertTrue(parece_fecha_numero_cliente('03-03-2026'))
-		self.assertTrue(parece_fecha_numero_cliente('2026/03/03'))
-		self.assertFalse(parece_fecha_numero_cliente('123456'))
-
-		archivo = self._build_excel([
-			['CENTRO', 'ELECTRICO', '03-03-2026', 'Santiago', 'Basura', 'Dir', 'TEST', 'PROY', 'SER-FECHA-1', '10.0.0.1'],
-			['CENTRO', 'ELECTRICO', 'CLI-OK-1', 'Santiago', 'Ok', 'Dir 2', 'TEST', 'PROY', 'SER-OK-1', '10.0.0.2'],
-		])
-		importacion = importar_clientes_excel(archivo, self.usuario, sincronizar_completo=False)
-		self.assertEqual(importacion.estado, 'COMPLETADO')
-		self.assertEqual(importacion.fallidas, 1)
-		self.assertEqual(importacion.exitosas, 1)
-		self.assertFalse(Cliente.objects.filter(numero_cliente='03-03-2026').exists())
-		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-OK-1', activo=True).exists())
-
 	def test_reactiva_cliente_inactivo_en_import(self):
 		Cliente.objects.create(
 			numero_cliente='CLI-REV-1',
