@@ -629,11 +629,15 @@ COLAS_ORDEN = (
     ('esperando_moreapp', 'Sin informe MoreApp'),
     ('post_moreapp', 'Post-MoreApp'),
     ('validar', 'Por validar'),
+    ('pendientes', 'OT pendientes'),
+    ('observadas', 'Observadas'),
 )
 
 
 def aplicar_cola_ordenes(qs, cola: str):
     """Filtros rápidos alineados al flujo Delco → técnico → MoreApp → validación."""
+    from reportes.services import ESTADOS_PENDIENTES_OT
+
     if cola == 'sin_asignar':
         return qs.filter(estado='CREADA', tecnico_responsable__isnull=True)
     if cola == 'en_campo':
@@ -647,11 +651,17 @@ def aplicar_cola_ordenes(qs, cola: str):
         return qs.filter(estado='REALIZADA_PENDIENTE_COMPROBACION')
     if cola == 'validar':
         return qs.filter(estado__in=['PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION'])
+    if cola == 'pendientes':
+        return qs.filter(estado__in=ESTADOS_PENDIENTES_OT)
+    if cola == 'observadas':
+        return qs.filter(estado='OBSERVADA')
     return qs
 
 
 def contadores_colas_ordenes(qs) -> Dict[str, int]:
     """Conteos para pestañas de cola operativa en listado de OT."""
+    from reportes.services import ESTADOS_PENDIENTES_OT
+
     base = qs.annotate(_n_moreapp=Count('sincronizaciones_moreapp', distinct=True))
     return {
         'sin_asignar': base.filter(estado='CREADA', tecnico_responsable__isnull=True).count(),
@@ -664,6 +674,8 @@ def contadores_colas_ordenes(qs) -> Dict[str, int]:
         'validar': base.filter(
             estado__in=['PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION']
         ).count(),
+        'pendientes': base.filter(estado__in=ESTADOS_PENDIENTES_OT).count(),
+        'observadas': base.filter(estado='OBSERVADA').count(),
     }
 
 

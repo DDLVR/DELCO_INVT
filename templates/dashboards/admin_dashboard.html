@@ -75,7 +75,7 @@
                 <a href="{% url 'movimientos_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-arrow-left-right"></i> Movimientos</a>
                 <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-cloud-download"></i> MoreApp</a>
                 <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm delco-dash-btn-outline">
-                    <i class="bi bi-list-task"></i> Pendientes
+                    <i class="bi bi-list-task"></i> Pendientes MoreApp
                     {% if moreapp_aviso.activo %}
                     <span class="badge {% if moreapp_aviso.nuevos %}bg-danger{% else %}bg-warning text-dark{% endif %} ms-1">{{ moreapp_aviso.por_revisar }}</span>
                     {% endif %}
@@ -217,13 +217,18 @@
     <div class="row g-3 mb-4">
         {% if ordenes_habilitadas %}
         <div class="col-6 col-lg-3">
+            <a href="{% url 'ordenes_list' %}?cola=pendientes" class="text-decoration-none text-reset d-block h-100">
             <div class="card shadow-sm delco-panel-card delco-dash-kpi h-100">
                 <div class="card-body py-3">
                     <div class="text-muted small mb-1">Órdenes totales</div>
                     <div class="delco-kpi-value text-primary">{{ total_ordenes }}</div>
-                    <div class="small text-muted mt-1"><i class="bi bi-clock"></i> {{ ordenes_pendientes }} pendientes</div>
+                    <div class="small text-muted mt-1">
+                        <i class="bi bi-clock"></i> {{ ordenes_pendientes }} OT pendientes
+                        <span class="text-primary">(ver listado)</span>
+                    </div>
                 </div>
             </div>
+            </a>
         </div>
         <div class="col-6 col-lg-3">
             <div class="card shadow-sm delco-panel-card h-100 border-success">
@@ -270,6 +275,8 @@
                         <a href="{% url 'ordenes_list' %}?cola=esperando_moreapp" class="btn btn-sm btn-outline-primary">Sin MoreApp <span class="badge bg-primary ms-1">{{ ot_colas.esperando_moreapp }}</span></a>
                         <a href="{% url 'ordenes_list' %}?cola=post_moreapp" class="btn btn-sm btn-outline-secondary">Post-MoreApp <span class="badge bg-secondary ms-1">{{ ot_colas.post_moreapp }}</span></a>
                         <a href="{% url 'ordenes_list' %}?cola=validar" class="btn btn-sm btn-outline-success">Por validar <span class="badge bg-success ms-1">{{ ot_colas.validar }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=pendientes" class="btn btn-sm btn-outline-danger">OT pendientes <span class="badge bg-danger ms-1">{{ ot_colas.pendientes }}</span></a>
+                        <a href="{% url 'ordenes_list' %}?cola=observadas" class="btn btn-sm btn-outline-dark">Observadas <span class="badge bg-dark ms-1">{{ ot_colas.observadas }}</span></a>
                         {% if moreapp_sin_ot %}
                         <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm btn-outline-danger">MoreApp sin OT <span class="badge bg-danger ms-1">{{ moreapp_sin_ot }}</span></a>
                         {% endif %}
