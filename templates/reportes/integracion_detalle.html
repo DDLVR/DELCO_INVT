@@ -633,37 +633,80 @@
       </div>
 
       {% if mostrar_panel_operativo %}
-      <div class="card shadow-sm mb-4 border-warning delco-panel-card">
-        <div class="card-header py-2 bg-warning-subtle">
-          <h6 class="mb-0"><i class="bi bi-activity"></i> Panel operativo de integración (interno)</h6>
+      <div class="card shadow-sm mb-4 border-success delco-panel-card" id="impacto-inventario">
+        <div class="card-header py-2 bg-success text-white">
+          <h6 class="mb-0"><i class="bi bi-box-arrow-in-down"></i> Impacto en inventario</h6>
         </div>
         <div class="card-body small">
+          <p class="text-muted mb-3">
+            Resumen de lo que este informe MoreApp dejó en el sistema (cliente, equipos y movimientos).
+          </p>
+
+          <div class="d-flex flex-wrap gap-2 mb-3">
+            {% if registro.actualizo_equipos %}
+            <span class="badge bg-success">Equipos actualizados: Sí</span>
+            {% else %}
+            <span class="badge bg-secondary">Equipos actualizados: No</span>
+            {% endif %}
+            {% if registro.actualizo_cliente %}
+            <span class="badge bg-success">Cliente actualizado: Sí</span>
+            {% else %}
+            <span class="badge bg-secondary">Cliente actualizado: No</span>
+            {% endif %}
+            {% if registro.orden %}
+            <a class="badge bg-primary text-decoration-none" href="{% url 'orden_detalle' registro.orden.id %}">OT #{{ registro.orden.id }}</a>
+            {% endif %}
+          </div>
+
           {% if resultado_operativo %}
           <dl class="row mb-3">
             <dt class="col-sm-6">Estado inventario aplicado</dt>
             <dd class="col-sm-6">{{ resultado_operativo.estado_aplicado|default:"No determinado" }}</dd>
             <dt class="col-sm-6">Cliente encontrado</dt>
             <dd class="col-sm-6">{% if resultado_operativo.cliente_encontrado %}Sí{% else %}No{% endif %}</dd>
-            <dt class="col-sm-6">Medidor encontrado</dt>
+            <dt class="col-sm-6">Medidor encontrado / creado</dt>
             <dd class="col-sm-6">{% if resultado_operativo.medidor_encontrado %}Sí{% else %}No{% endif %}</dd>
-            <dt class="col-sm-6">Módem encontrado</dt>
+            <dt class="col-sm-6">Módem encontrado / creado</dt>
             <dd class="col-sm-6">{% if resultado_operativo.modem_encontrado %}Sí{% else %}No{% endif %}</dd>
-            <dt class="col-sm-6">SIM encontrada</dt>
+            <dt class="col-sm-6">SIM encontrada / creada</dt>
             <dd class="col-sm-6">{% if resultado_operativo.sim_encontrada %}Sí{% else %}No{% endif %}</dd>
-            <dt class="col-sm-6">Movimientos generados</dt>
+            <dt class="col-sm-6">Movimientos en este proceso</dt>
             <dd class="col-sm-6">{{ resultado_operativo.movimientos_generados|default:0 }}</dd>
           </dl>
 
+          {% if resultado_operativo.equipos_alta_automatica %}
+          <h6 class="mb-2">Altas automáticas</h6>
+          <ul class="mb-3">
+            {% for alta in resultado_operativo.equipos_alta_automatica %}
+            <li>{{ alta.tipo }} · {{ alta.identificador }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+
+          {% if resultado_operativo.equipos_reactivados %}
+          <h6 class="mb-2">Equipos reactivados</h6>
+          <ul class="mb-3">
+            {% for eq in resultado_operativo.equipos_reactivados %}
+            <li>{{ eq.tipo }} · {{ eq.identificador }}</li>
+            {% endfor %}
+          </ul>
+          {% endif %}
+
           {% if movimientos_operativos %}
-          <h6 class="mb-2">Movimientos de inventario creados</h6>
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <h6 class="mb-0">Movimientos de inventario</h6>
+            <a class="small" href="{% url 'movimientos_list' %}?origen_sistema=MOREAPP&q={{ registro.moreapp_submission_id }}">
+              Ver en movimientos
+            </a>
+          </div>
           <div class="table-responsive mb-3">
             <table class="table table-sm table-striped mb-0">
               <thead>
                 <tr>
                   <th>Fecha</th>
                   <th>Tipo</th>
-                  <th>Responsable</th>
                   <th>Equipos</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -671,8 +714,8 @@
                 <tr>
                   <td class="text-nowrap">{{ mov.fecha_hora|date:"d/m/Y H:i" }}</td>
                   <td>{{ mov.get_tipo_display }}</td>
-                  <td>{{ mov.responsable.nombre_interno|default:mov.responsable }}</td>
                   <td>{{ mov.detalle_items }}</td>
+                  <td><a href="{% url 'movimientos_detalle' mov.id %}">Ver</a></td>
                 </tr>
                 {% endfor %}
               </tbody>
@@ -680,13 +723,14 @@
           </div>
           {% else %}
           <div class="alert alert-secondary border mb-3">
-            No se encontraron movimientos trazables para este submission.
+            Aún no hay movimientos de inventario para este informe.
+            Usa <strong>Reprocesar inventario</strong> arriba si corresponde.
           </div>
           {% endif %}
 
           {% if bloqueos_operativos %}
-          <h6 class="mb-2">Alertas y pendientes operativos</h6>
-          <div class="list-group mb-3">
+          <h6 class="mb-2">Alertas y pendientes</h6>
+          <div class="list-group mb-0">
             {% for b in bloqueos_operativos %}
             <div class="list-group-item {% if b.origen == 'regla_operativa' %}list-group-item-danger{% elif b.origen == 'pendiente_revision' %}list-group-item-warning{% else %}list-group-item-secondary{% endif %}">
               <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
@@ -707,13 +751,15 @@
             </div>
             {% endfor %}
           </div>
-          {% else %}
+          {% elif resultado_operativo.medidor_encontrado or resultado_operativo.modem_encontrado or resultado_operativo.sim_encontrada %}
           <div class="alert alert-success mb-0">
-            Todos los equipos detectados en el reporte se encontraron en la base de inventario.
+            Los equipos del informe quedaron aplicados en inventario sin pendientes bloqueantes.
           </div>
           {% endif %}
           {% else %}
-          <div class="alert alert-secondary mb-0">No hay resumen operativo disponible para este registro.</div>
+          <div class="alert alert-secondary mb-0">
+            No hay resumen de impacto todavía. Pulsa <strong>Reprocesar inventario</strong> para aplicar este informe a inventario.
+          </div>
           {% endif %}
         </div>
       </div>
