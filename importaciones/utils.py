@@ -29,6 +29,76 @@ from django.db.utils import IntegrityError
 logger = logging.getLogger(__name__)
 
 
+def aplicar_estilo_hoja_exportacion(
+    ws,
+    *,
+    header_fill_hex: str = '1F4E79',
+    freeze: str = 'A2',
+    zebra: bool = True,
+    auto_filter: bool = True,
+    min_width: int = 10,
+    max_width: int = 40,
+    header_height: int = 30,
+):
+    """Aplica formato visual uniforme a una hoja de exportación Excel.
+
+    No altera valores ni encabezados: solo presentación para revisión cómoda.
+    """
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    if ws.max_row < 1 or ws.max_column < 1:
+        return ws
+
+    header_fill = PatternFill(start_color=header_fill_hex, end_color=header_fill_hex, fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=11, name='Calibri')
+    header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    body_font = Font(size=10, name='Calibri', color='212121')
+    body_align = Alignment(vertical='center', wrap_text=True)
+    zebra_fill = PatternFill(start_color='F5F7FA', end_color='F5F7FA', fill_type='solid')
+    thin = Border(
+        left=Side(style='thin', color='D0D7DE'),
+        right=Side(style='thin', color='D0D7DE'),
+        top=Side(style='thin', color='D0D7DE'),
+        bottom=Side(style='thin', color='D0D7DE'),
+    )
+
+    ws.row_dimensions[1].height = header_height
+    for cell in ws[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_align
+        cell.border = thin
+
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=ws.max_column):
+        ws.row_dimensions[row[0].row].height = 18
+        for cell in row:
+            cell.font = body_font
+            cell.alignment = body_align
+            cell.border = thin
+            if zebra and (cell.row % 2 == 0):
+                cell.fill = zebra_fill
+
+    for col_idx in range(1, ws.max_column + 1):
+        letter = get_column_letter(col_idx)
+        max_len = 0
+        for cell in ws[letter]:
+            if cell.value is None:
+                continue
+            texto = str(cell.value).split('\n', 1)[0].strip()
+            if len(texto) > max_len:
+                max_len = len(texto)
+        ws.column_dimensions[letter].width = min(max(max_len + 3, min_width), max_width)
+
+    if freeze:
+        ws.freeze_panes = freeze
+    if auto_filter:
+        ws.auto_filter.ref = ws.dimensions
+
+    ws.sheet_view.showGridLines = False
+    return ws
+
+
 def _normalizar_serie_medidor_cliente(valor) -> str:
     """Normaliza serie de medidor para comparar fichas de cliente."""
     if valor is None:
@@ -1482,8 +1552,6 @@ def exportar_clientes_excel(clientes):
     """
     Exporta clientes a archivo Excel.
     """
-    from openpyxl.styles import Font, PatternFill, Alignment
-
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = 'CLIENTES'
@@ -1500,20 +1568,7 @@ def exportar_clientes_excel(clientes):
         'Serie Medidor',
     ]
 
-    col_widths = [18, 20, 18, 18, 28, 30, 22, 22, 22]
-
-    header_fill = PatternFill(start_color='366092', end_color='366092', fill_type='solid')
-    header_font = Font(bold=True, color='FFFFFF', size=11)
-    header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-
     ws.append(headers)
-    for cell in ws[1]:
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = header_alignment
-
-    for idx, width in enumerate(col_widths, start=1):
-        ws.column_dimensions[openpyxl.utils.get_column_letter(idx)].width = width
 
     for cliente in clientes:
         row = [
@@ -1529,6 +1584,7 @@ def exportar_clientes_excel(clientes):
         ]
         ws.append(row)
 
+    aplicar_estilo_hoja_exportacion(ws)
     return wb
 
 
@@ -1552,49 +1608,25 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
     Returns:
         openpyxl Workbook object
     """
-    from openpyxl.styles import Font, PatternFill, Alignment
-    
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = tipo_equipo
     
-    # Estilos
-    header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-    header_font = Font(bold=True, color="FFFFFF", size=11)
-    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    
-    # Encabezados según tipo
+    # Encabezados según tipo (mismos nombres/orden que usa la importación)
     if tipo_equipo.upper() == 'MEDIDORES':
-        # Mismo orden/nombres que el maestro Excel de medidores
         headers = [
             '#', 'FECHA DE RECEPCION', 'BODEGA', 'MARCA', 'CAJA', 'MEDIDOR', 'MODULO',
             'FECHA DE ENTREGA', 'ENTREGADO A:', 'ESTADO', 'CLIENTE', 'Tipo Medidor',
         ]
-        col_widths = [6, 18, 12, 12, 12, 14, 10, 16, 18, 14, 14, 14]
     elif tipo_equipo.upper() == 'SIM':
         headers = ['IMEI', 'OPERADOR', 'ABONADO', 'DIRECCIÓN IP', 'APN', 'FECHA RECEPCIÓN', 'ENTREGADO A', 'FECHA ENTREGA', 'ESTADO', 'CLIENTE', 'MEDIDOR']
-        col_widths = [18, 15, 18, 18, 25, 18, 18, 18, 15, 15, 15]
     elif tipo_equipo.upper() == 'MODEMS':
         headers = ['MARCA', 'MODELO', 'IMEI', 'SERIE', 'Fecha Recepción', 'Fecha Entrega', 'Caja', 'Técnico Responsable', 'Cliente', 'Medidor', 'IP', 'Puerto', 'Marca Secundaria', 'Observaciones', 'Retirado', 'Serie Secundaria', 'Irregularidad', 'Proyecto']
-        col_widths = [15, 15, 20, 20, 15, 15, 12, 20, 15, 15, 15, 10, 15, 25, 12, 20, 20, 15]
     else:
         headers = ['Datos']
-        col_widths = [20]
     
-    # Agregar encabezados
     ws.append(headers)
     
-    # Formatear encabezados
-    for cell in ws[1]:
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = header_alignment
-    
-    # Ajustar ancho de columnas
-    for idx, width in enumerate(col_widths, 1):
-        ws.column_dimensions[openpyxl.utils.get_column_letter(idx)].width = width
-    
-    # Agregar datos
     for indice, equipo in enumerate(equipos, start=1):
         if tipo_equipo.upper() == 'MEDIDORES':
             row = [
@@ -1630,9 +1662,6 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
                 _serie_medidor_display(equipo),
             ]
         elif tipo_equipo.upper() == 'MODEMS':
-            # VERDE: MARCA, MODELO, IMEI, SERIE, Fecha Recepción, Fecha Entrega, Caja, Técnico
-            # AMARILLO: Cliente, Medidor
-            # NARANJA: IP, Puerto, Marca Sec, Obs, Retirado, Serie Sec, Irregularidad, Proyecto
             row = [
                 equipo.marca or '',
                 equipo.modelo or '',
@@ -1657,7 +1686,8 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
             row = ['']
         
         ws.append(row)
-    
+
+    aplicar_estilo_hoja_exportacion(ws)
     return wb
 
 
@@ -1665,7 +1695,6 @@ def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
     """Exporta todos los campos reales del modelo y columnas legibles de apoyo."""
     from datetime import date, datetime
     from decimal import Decimal
-    from openpyxl.styles import Font, PatternFill, Alignment
 
     def normalizar_valor(valor):
         if valor is None:
@@ -1706,10 +1735,6 @@ def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
     ws = wb.active
     ws.title = f'{tipo_equipo}_COMPLETO'
 
-    header_fill = PatternFill(start_color='7F6000', end_color='7F6000', fill_type='solid')
-    header_font = Font(bold=True, color='FFFFFF', size=11)
-    header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-
     columnas = []
     headers = []
 
@@ -1738,19 +1763,11 @@ def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
 
     ws.append(headers)
 
-    for cell in ws[1]:
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = header_alignment
-
     for equipo in equipos:
         ws.append([funcion(equipo) for _, funcion in columnas])
 
-    for indice, header in enumerate(headers, start=1):
-        largo = max(len(header), 14)
-        ws.column_dimensions[openpyxl.utils.get_column_letter(indice)].width = min(largo + 4, 36)
-
-    ws.freeze_panes = 'A2'
+    # Dorado para distinguir exportación completa de la estándar
+    aplicar_estilo_hoja_exportacion(ws, header_fill_hex='7F6000', max_width=36)
     return wb
 
 
