@@ -979,6 +979,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         'estado_aplicado': estado_obj.nombre if estado_obj else '',
         'movimientos_generados': 0,
         'pendientes_revision': [],
+        'equipos_reactivados': [],
+        'equipos_alta_automatica': [],
         'identificadores_cruce': {
             'medidor_serie': medidor_serie,
             'medidor_activo_serie': medidor_activo_serie,
@@ -1001,6 +1003,12 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             'identificador': ident,
             'motivo': motivo,
         })
+
+    def _nota_alta(serie_o_ip: str) -> str:
+        return (
+            f'Alta automática MoreApp ({formulario_canonico}) '
+            f'| id: {serie_o_ip} | submission: {registro.moreapp_submission_id}'
+        )
 
     if cliente_obj:
         cambios_cliente = []
@@ -1031,36 +1039,120 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             cliente_obj.save(update_fields=cambios_cliente)
             registro.actualizo_cliente = True
 
+    def _revivir_equipo(equipo, etiqueta: str, identificador: str):
+        if not equipo or not getattr(equipo, 'eliminado', False):
+            return equipo
+        equipo.eliminado = False
+        if hasattr(equipo, 'fecha_eliminacion'):
+            equipo.fecha_eliminacion = None
+        if hasattr(equipo, 'eliminado_por_id'):
+            equipo.eliminado_por = None
+        equipo.save()
+        resumen['equipos_reactivados'].append({
+            'tipo': etiqueta,
+            'identificador': identificador,
+        })
+        return equipo
+
     def _buscar_medidor(serie):
         serie = _identificador_operativo_util(serie)
         if not serie:
             return None
-        return Medidor.objects.filter(serie__iexact=serie).first()
+        medidor = Medidor.objects.filter(serie__iexact=serie, eliminado=False).first()
+        if medidor:
+            return medidor
+        eliminado = Medidor.objects.filter(serie__iexact=serie, eliminado=True).first()
+        return _revivir_equipo(eliminado, 'MEDIDOR', serie)
 
     def _buscar_modem(serie):
         serie = _identificador_operativo_util(serie)
         if not serie:
             return None
-        modem = Modem.objects.filter(serie__iexact=serie).first()
+        modem = Modem.objects.filter(serie__iexact=serie, eliminado=False).first()
         if modem:
             return modem
 
         serie_compacta = _limpiar_identificador_operativo(serie)
         if serie_compacta and serie_compacta != serie:
-            modem = Modem.objects.filter(serie__iexact=serie_compacta).first()
+            modem = Modem.objects.filter(serie__iexact=serie_compacta, eliminado=False).first()
             if modem:
                 return modem
 
-        return Modem.objects.filter(imei__iexact=serie_compacta or serie).first()
+        modem = Modem.objects.filter(imei__iexact=serie_compacta or serie, eliminado=False).first()
+        if modem:
+            return modem
+
+        eliminado = Modem.objects.filter(serie__iexact=serie, eliminado=True).first()
+        if not eliminado and serie_compacta and serie_compacta != serie:
+            eliminado = Modem.objects.filter(serie__iexact=serie_compacta, eliminado=True).first()
+        if not eliminado:
+            eliminado = Modem.objects.filter(imei__iexact=serie_compacta or serie, eliminado=True).first()
+        return _revivir_equipo(eliminado, 'MODEM', serie)
 
     def _buscar_sim_por_ip(ip):
         ip = _identificador_operativo_util(ip, modo='ip')
         if not ip:
             return None
-        sim = SimCard.objects.filter(direccion_ip__iexact=ip).first()
+        sim = SimCard.objects.filter(direccion_ip__iexact=ip, eliminado=False).first()
         if sim:
             return sim
-        return SimCard.objects.filter(ip_fija__iexact=ip).first()
+        sim = SimCard.objects.filter(ip_fija__iexact=ip, eliminado=False).first()
+        if sim:
+            return sim
+        eliminado = (
+            SimCard.objects.filter(direccion_ip__iexact=ip, eliminado=True).first()
+            or SimCard.objects.filter(ip_fija__iexact=ip, eliminado=True).first()
+        )
+        return _revivir_equipo(eliminado, 'SIM', ip)
+
+    def _alta_medidor(serie, marca=''):
+        serie = _identificador_operativo_util(serie)
+        if not serie:
+            return None
+        bodega = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+        estado_bodega = _obtener_estado_por_nombre('En bodega')
+        medidor = Medidor.objects.create(
+            serie=serie,
+            marca=_as_text(marca) or '',
+            tipo_medidor='DIRECTO',
+            estado_inventario=estado_bodega,
+            ubicacion_actual=bodega,
+            observaciones=_nota_alta(serie),
+        )
+        resumen['equipos_alta_automatica'].append({'tipo': 'MEDIDOR', 'identificador': serie})
+        return medidor
+
+    def _alta_modem(serie, marca=''):
+        serie = _identificador_operativo_util(serie)
+        if not serie:
+            return None
+        bodega = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+        estado_bodega = _obtener_estado_por_nombre('En bodega')
+        modem = Modem.objects.create(
+            serie=serie,
+            marca=_as_text(marca) or '',
+            estado_inventario=estado_bodega,
+            ubicacion_actual=bodega,
+            observaciones=_nota_alta(serie),
+        )
+        resumen['equipos_alta_automatica'].append({'tipo': 'MODEM', 'identificador': serie})
+        return modem
+
+    def _alta_sim(ip):
+        ip = _identificador_operativo_util(ip, modo='ip')
+        if not ip:
+            return None
+        bodega = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+        estado_bodega = _obtener_estado_por_nombre('En bodega')
+        sim = SimCard.objects.create(
+            direccion_ip=ip,
+            ip_fija=ip,
+            estado_inventario=estado_bodega,
+            ubicacion_actual=bodega,
+            entregado_a_nombre=f'MoreApp auto {_as_text(registro.moreapp_submission_id)[:40]}',
+        )
+        resumen['equipos_alta_automatica'].append({'tipo': 'SIM', 'identificador': ip})
+        return sim
 
     observacion_base = (
         f'Actualización MoreApp ({formulario_canonico}) '
@@ -1105,6 +1197,11 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         equipo_reg_sim = None
 
         medidor_instalado = _buscar_medidor(medidor_dejado_serie)
+        if not medidor_instalado and medidor_dejado_serie:
+            medidor_instalado = _alta_medidor(
+                medidor_dejado_serie,
+                marca=datos_norm.get('marca_medidor_dejado') or datos_norm.get('marca_medidor'),
+            )
         if medidor_instalado:
             resumen['medidor_encontrado'] = True
             actualizado = _actualizar_equipo_operativo(
@@ -1125,6 +1222,11 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             _agregar_pendiente('MEDIDOR', medidor_dejado_serie, 'Serie de medidor dejado no encontrada en inventario')
 
         modem_instalado = _buscar_modem(modem_dejado_serie)
+        if not modem_instalado and modem_dejado_serie:
+            modem_instalado = _alta_modem(
+                modem_dejado_serie,
+                marca=datos_norm.get('marca_modem_dejado') or datos_norm.get('marca_aparato'),
+            )
         if modem_instalado:
             resumen['modem_encontrado'] = True
             actualizado = _actualizar_equipo_operativo(
@@ -1147,6 +1249,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             _agregar_pendiente('MODEM', modem_dejado_serie, 'Serie de módem dejado no encontrada en inventario')
 
         sim_instalada = _buscar_sim_por_ip(sim_ip)
+        if not sim_instalada and sim_ip:
+            sim_instalada = _alta_sim(sim_ip)
         if sim_instalada:
             resumen['sim_encontrada'] = True
             actualizado = _actualizar_equipo_operativo(
@@ -1203,7 +1307,26 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         if actualizado:
             resumen['movimientos_generados'] += 1
     elif medidor_serie:
-        _agregar_pendiente('MEDIDOR', medidor_serie, 'Serie de medidor no encontrada en inventario')
+        medidor_principal = _alta_medidor(
+            medidor_serie,
+            marca=datos_norm.get('marca_medidor') or datos_norm.get('marca_aparato'),
+        )
+        if medidor_principal:
+            resumen['medidor_encontrado'] = True
+            actualizado = _actualizar_equipo_operativo(
+                medidor_principal,
+                'MEDIDOR',
+                estado_obj,
+                cliente_obj,
+                f'{observacion_base} - alta y actualización medidor por serie',
+                registro,
+                registrar_pendiente=_agregar_pendiente,
+                responsable_movimiento=responsable_movimiento,
+            )
+            if actualizado:
+                resumen['movimientos_generados'] += 1
+        else:
+            _agregar_pendiente('MEDIDOR', medidor_serie, 'Serie de medidor no encontrada en inventario')
 
     modem_encontrado = None
     if formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3' and modem_encontrado_serie and modem_dejado_serie:
@@ -1228,6 +1351,11 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
 
     if modem_serie:
         modem_encontrado = _buscar_modem(modem_serie)
+        if not modem_encontrado:
+            modem_encontrado = _alta_modem(
+                modem_serie,
+                marca=datos_norm.get('marca_modem_dejado') or datos_norm.get('marca_aparato'),
+            )
     if modem_encontrado:
         resumen['modem_encontrado'] = True
         estado_modem = estado_obj
@@ -1253,6 +1381,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         _agregar_pendiente('MODEM', modem_serie, 'Serie de módem no encontrada en inventario')
 
     sim = _buscar_sim_por_ip(sim_ip)
+    if not sim and sim_ip:
+        sim = _alta_sim(sim_ip)
     if sim:
         resumen['sim_encontrada'] = True
         estado_sim = estado_obj

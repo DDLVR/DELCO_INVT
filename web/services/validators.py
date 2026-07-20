@@ -6,7 +6,9 @@ The goal is to have one source of truth for create/edit/import rules.
 from __future__ import annotations
 
 import ipaddress
+import re
 from dataclasses import dataclass
+from datetime import date, datetime
 from typing import List
 
 
@@ -17,6 +19,80 @@ class ValidationIssue:
     code: str
     message: str
     severity: str  # "error" or "warning"
+
+
+# Números de cliente que Excel malinterpretó como fechas (ej. 03-03-2026).
+_NUMERO_CLIENTE_FECHA_RE = (
+    re.compile(r'^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$'),
+    re.compile(r'^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$'),
+)
+
+
+def parece_fecha_numero_cliente(valor) -> bool:
+    """True si el valor parece una fecha (no un correlativo comercial válido)."""
+    if valor is None or isinstance(valor, bool):
+        return False
+    if isinstance(valor, datetime):
+        return True
+    if isinstance(valor, date):
+        return True
+
+    texto = str(valor).strip()
+    if not texto:
+        return False
+
+    # datetime serializado desde Excel: "2026-03-03 00:00:00"
+    if re.match(r'^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$', texto):
+        return True
+
+    for patron in _NUMERO_CLIENTE_FECHA_RE:
+        match = patron.match(texto)
+        if not match:
+            continue
+        a, b, c = (int(p) for p in match.groups())
+        # dd-mm-yyyy / mm-dd-yyyy (año al final) o yyyy-mm-dd (año al inicio)
+        if c >= 1900 or (c <= 99 and 1 <= a <= 31 and 1 <= b <= 12):
+            return True
+        if a >= 1900 and 1 <= b <= 12 and 1 <= c <= 31:
+            return True
+    return False
+
+
+def validate_numero_cliente(valor) -> List[ValidationIssue]:
+    """Valida que el número de cliente no sea basura tipo fecha / cero."""
+    issues: List[ValidationIssue] = []
+    if valor is None or (isinstance(valor, str) and not valor.strip()):
+        issues.append(
+            ValidationIssue(
+                code='CLIENT_NUMBER_EMPTY',
+                message='Número de cliente vacío.',
+                severity='error',
+            )
+        )
+        return issues
+
+    texto = str(valor).strip() if not isinstance(valor, (date, datetime)) else ''
+    if isinstance(valor, (date, datetime)) or parece_fecha_numero_cliente(valor):
+        mostrado = texto or str(valor)
+        issues.append(
+            ValidationIssue(
+                code='CLIENT_NUMBER_LOOKS_LIKE_DATE',
+                message=(
+                    f'Número de cliente inválido (parece una fecha): {mostrado}. '
+                    'Revise la columna en Excel; no use celdas con formato fecha.'
+                ),
+                severity='error',
+            )
+        )
+    elif texto == '0':
+        issues.append(
+            ValidationIssue(
+                code='CLIENT_NUMBER_INVALID',
+                message='Número de cliente inválido: 0.',
+                severity='error',
+            )
+        )
+    return issues
 
 
 def normalize_ip_value(ip_value) -> str | None:

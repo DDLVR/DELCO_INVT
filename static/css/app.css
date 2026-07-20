@@ -898,3 +898,274 @@ td.cliente-numero-duplicado strong {
     min-height: 42px;
   }
 }
+
+/* Modal importar clientes */
+.delco-import-clientes-header {
+  background: linear-gradient(120deg, #0b2342 0%, #124b79 55%, #0f7173 100%);
+  color: #fff;
+  border-bottom: 0;
+  align-items: flex-start;
+  padding: 1rem 1.25rem;
+}
+
+.delco-import-clientes-header .modal-title {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.delco-import-clientes-subtitle {
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  opacity: 0.85;
+}
+
+.delco-import-clientes-modal .modal-body {
+  padding: 1.25rem;
+}
+
+.delco-import-section {
+  margin-bottom: 1.15rem;
+}
+
+.delco-import-section-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #6c757d;
+  margin-bottom: 0.55rem;
+}
+
+.delco-import-file-zone {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1.5px dashed var(--bs-border-color);
+  border-radius: 0.65rem;
+  background: var(--bs-tertiary-bg);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.delco-import-file-zone:hover,
+.delco-import-file-zone:focus-within {
+  border-color: #124b79;
+  background: rgba(18, 75, 121, 0.04);
+  box-shadow: 0 0 0 3px rgba(18, 75, 121, 0.08);
+}
+
+.delco-import-file-zone.has-file {
+  border-style: solid;
+  border-color: #0f7173;
+}
+
+.delco-import-file-zone input[type="file"] {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.delco-import-file-icon {
+  flex: 0 0 auto;
+  width: 2.4rem;
+  height: 2.4rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  background: #124b79;
+  color: #fff;
+  font-size: 1.15rem;
+}
+
+.delco-import-file-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.delco-import-file-title {
+  font-weight: 600;
+  color: var(--bs-body-color);
+  font-size: 0.95rem;
+}
+
+.delco-import-file-hint {
+  font-size: 0.8rem;
+  color: #6c757d;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.delco-import-mode-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+@media (max-width: 575.98px) {
+  .delco-import-mode-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.delco-import-mode-card {
+  margin: 0;
+  cursor: pointer;
+}
+
+.delco-import-mode-card input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.delco-import-mode-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  height: 100%;
+  padding: 0.85rem 0.95rem;
+  border: 1.5px solid var(--bs-border-color);
+  border-radius: 0.65rem;
+  background: var(--bs-body-bg);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.delco-import-mode-card:hover .delco-import-mode-card-body {
+  border-color: #124b79;
+}
+
+.delco-import-mode-card input:checked + .delco-import-mode-card-body {
+  border-color: #0f7173;
+  background: rgba(15, 113, 115, 0.06);
+  box-shadow: 0 0 0 3px rgba(15, 113, 115, 0.12);
+}
+
+.delco-import-mode-badge {
+  align-self: flex-start;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  background: #e7f5f5;
+  color: #0f7173;
+}
+
+.delco-import-mode-badge--warn {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.delco-import-mode-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--bs-body-color);
+}
+
+.delco-import-mode-desc {
+  font-size: 0.8rem;
+  line-height: 1.35;
+  color: #6c757d;
+}
+
+.delco-import-format {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.65rem;
+  overflow: hidden;
+  background: var(--bs-body-bg);
+}
+
+.delco-import-format-required {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.65rem;
+  padding: 0.75rem 0.95rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  background: var(--bs-tertiary-bg);
+}
+
+.delco-import-format-kicker {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #124b79;
+}
+
+.delco-import-accordion .accordion-button {
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0.7rem 0.95rem;
+  box-shadow: none !important;
+}
+
+.delco-import-accordion .accordion-button:not(.collapsed) {
+  background: rgba(18, 75, 121, 0.06);
+  color: #0b2342;
+}
+
+.delco-import-accordion .accordion-body {
+  padding: 0.55rem 0.95rem 0.9rem;
+}
+
+.delco-import-cols,
+.delco-import-rules {
+  padding-left: 1.1rem;
+  margin: 0;
+  color: #495057;
+  line-height: 1.45;
+}
+
+.delco-import-cols li + li,
+.delco-import-rules li + li {
+  margin-top: 0.25rem;
+}
+
+.delco-import-results .alert {
+  margin-bottom: 0.5rem;
+}
+
+.delco-import-errors {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  padding: 0.55rem 0.85rem 0.55rem 1.35rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+  background: var(--bs-tertiary-bg);
+  color: #842029;
+}
+
+.delco-import-clientes-footer {
+  border-top: 1px solid var(--bs-border-color);
+  padding: 0.85rem 1.25rem;
+}
+
+[data-bs-theme="dark"] .delco-import-file-zone:hover,
+[data-bs-theme="dark"] .delco-import-file-zone:focus-within {
+  background: rgba(15, 113, 115, 0.12);
+}
+
+[data-bs-theme="dark"] .delco-import-mode-card input:checked + .delco-import-mode-card-body {
+  background: rgba(15, 113, 115, 0.18);
+}
+
+[data-bs-theme="dark"] .delco-import-accordion .accordion-button:not(.collapsed) {
+  color: #fff;
+}
+
+[data-bs-theme="dark"] .delco-import-mode-title,
+[data-bs-theme="dark"] .delco-import-file-title {
+  color: var(--bs-body-color);
+}
