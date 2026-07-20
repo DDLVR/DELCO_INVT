@@ -873,6 +873,21 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
             equipo.ip_fija = ip_dejada
             cambios.append('ip_fija')
 
+        # Limpiar placeholder histórico "MoreApp auto <submission_id>" y, si hay
+        # técnico real, usar su nombre en Entregado a / custodia.
+        nombre_actual = _as_text(getattr(equipo, 'entregado_a_nombre', ''))
+        nombre_tecnico = ''
+        if responsable_movimiento and getattr(responsable_movimiento, 'rol', None) == 'TECNICO':
+            nombre_tecnico = _as_text(getattr(responsable_movimiento, 'nombre_interno', ''))
+            if getattr(equipo, 'en_custodia_de_id', None) != responsable_movimiento.id:
+                equipo.en_custodia_de = responsable_movimiento
+                cambios.append('en_custodia_de')
+        if nombre_actual.startswith('MoreApp auto') or (not nombre_actual and nombre_tecnico):
+            nuevo_nombre = nombre_tecnico
+            if nombre_actual != nuevo_nombre:
+                equipo.entregado_a_nombre = nuevo_nombre
+                cambios.append('entregado_a_nombre')
+
     if tipo_equipo == 'MODEM':
         if medidor_asociado and equipo.medidor_id != medidor_asociado.id:
             equipo.medidor = medidor_asociado
@@ -1144,12 +1159,13 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             return None
         bodega = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
         estado_bodega = _obtener_estado_por_nombre('En bodega')
+        # No usar el submission id en "Entregado a": no es un técnico y confunde la revisión.
         sim = SimCard.objects.create(
             direccion_ip=ip,
             ip_fija=ip,
             estado_inventario=estado_bodega,
             ubicacion_actual=bodega,
-            entregado_a_nombre=f'MoreApp auto {_as_text(registro.moreapp_submission_id)[:40]}',
+            entregado_a_nombre='',
         )
         resumen['equipos_alta_automatica'].append({'tipo': 'SIM', 'identificador': ip})
         return sim
