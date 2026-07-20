@@ -426,12 +426,14 @@
       submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importando...';
     }
     if (wrap) wrap.style.display = 'block';
-    setProgress(3, 'Preparando archivo...');
+    // La barra es progreso GLOBAL de la importación (no solo la subida):
+    // 0–40% subida · 40–95% proceso en servidor · 100% listo.
+    setProgress(3, 'Preparando importación...');
 
     return new Promise(function (resolve, reject) {
       var xhr = new XMLHttpRequest();
       var timer = null;
-      var serverPct = 45;
+      var serverPct = 42;
 
       xhr.open('POST', url, true);
       if (csrfToken) xhr.setRequestHeader('X-CSRFToken', csrfToken);
@@ -439,19 +441,23 @@
 
       xhr.upload.addEventListener('progress', function (ev) {
         if (ev.lengthComputable && ev.total > 0) {
+          // Mapear subida a 5–40% de la barra global (misma cifra en texto y barra).
           var uploadPct = 5 + Math.round((ev.loaded / ev.total) * 35);
-          setProgress(uploadPct, 'Subiendo archivo... (' + Math.round((ev.loaded / ev.total) * 100) + '%)');
+          setProgress(uploadPct, 'Subiendo archivo al servidor...');
         } else {
-          setProgress(20, 'Subiendo archivo...');
+          setProgress(20, 'Subiendo archivo al servidor...');
         }
       });
 
       xhr.upload.addEventListener('loadend', function () {
-        setProgress(45, 'Archivo recibido. Procesando filas en el servidor...');
+        setProgress(42, 'Archivo recibido. Procesando filas en el servidor...');
         timer = setInterval(function () {
-          if (serverPct < 92) {
+          if (serverPct < 95) {
             serverPct += 1;
-            setProgress(serverPct, 'Procesando filas en el servidor...');
+            setProgress(
+              serverPct,
+              'Procesando filas en el servidor... (archivos grandes pueden demorar)'
+            );
           }
         }, 350);
       });
