@@ -143,3 +143,75 @@ class ImportacionClientesModoTests(TestCase):
 		cliente = Cliente.objects.get(numero_cliente='CLI-REV-1', meter_serial_n_1='SER-REV-1')
 		self.assertTrue(cliente.activo)
 		self.assertTrue(any('reactivado' in w.lower() for w in getattr(importacion, 'warnings', [])))
+
+	def test_actualiza_unica_ficha_sin_crear_duplicado_por_serie(self):
+		"""Si la ficha no tiene serie, el Excel la completa sin crear otra."""
+		Cliente.objects.create(
+			numero_cliente='CLI-UPD-1',
+			direccion='Dir 1',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='NORTE',
+			customer_name='Viejo',
+			installation_address='Inst 1',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='',
+			activo=True,
+		)
+		archivo = self._build_excel([
+			['CENTRO', 'ELECTRICO', 'CLI-UPD-1', 'Santiago', 'Nuevo Nombre', 'Inst 2', 'TEST', 'PROY', 'SER-NEW', '10.0.0.55'],
+		])
+		importacion = importar_clientes_excel(archivo, self.usuario, sincronizar_completo=False)
+		self.assertEqual(importacion.estado, 'COMPLETADO')
+		self.assertEqual(Cliente.objects.filter(numero_cliente='CLI-UPD-1').count(), 1)
+		cliente = Cliente.objects.get(numero_cliente='CLI-UPD-1', activo=True)
+		self.assertEqual(cliente.meter_serial_n_1, 'SER-NEW')
+		self.assertEqual(cliente.customer_name, 'Nuevo Nombre')
+		self.assertEqual(cliente.ip, '10.0.0.55')
+
+	def test_reimport_mismo_numero_serie_actualiza_no_duplica(self):
+		Cliente.objects.create(
+			numero_cliente='CLI-SAME',
+			direccion='Dir 1',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='NORTE',
+			customer_name='Viejo',
+			installation_address='Inst 1',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-1',
+			ip='10.0.0.1',
+			activo=True,
+		)
+		archivo = self._build_excel([
+			['CENTRO', 'ELECTRICO', 'CLI-SAME', 'Maipú', 'Actualizado', 'Inst 2', 'TEST', 'PROY', 'SER-1', '10.0.0.2'],
+		])
+		importacion = importar_clientes_excel(archivo, self.usuario, sincronizar_completo=False)
+		self.assertEqual(importacion.estado, 'COMPLETADO')
+		self.assertEqual(Cliente.objects.filter(numero_cliente='CLI-SAME').count(), 1)
+		cliente = Cliente.objects.get(numero_cliente='CLI-SAME', activo=True)
+		self.assertEqual(cliente.comuna, 'Maipú')
+		self.assertEqual(cliente.customer_name, 'Actualizado')
+		self.assertEqual(cliente.ip, '10.0.0.2')
+
+	def test_crea_segunda_ficha_si_ya_hay_otra_serie_activa(self):
+		Cliente.objects.create(
+			numero_cliente='CLI-MULTI',
+			direccion='Dir 1',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='NORTE',
+			customer_name='Ficha A',
+			installation_address='Inst 1',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-A',
+			activo=True,
+		)
+		archivo = self._build_excel([
+			['CENTRO', 'ELECTRICO', 'CLI-MULTI', 'Santiago', 'Ficha B', 'Inst 2', 'TEST', 'PROY', 'SER-B', '10.0.0.66'],
+		])
+		importacion = importar_clientes_excel(archivo, self.usuario, sincronizar_completo=False)
+		self.assertEqual(importacion.estado, 'COMPLETADO')
+		self.assertEqual(Cliente.objects.filter(numero_cliente='CLI-MULTI', activo=True).count(), 2)
+		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-MULTI', meter_serial_n_1='SER-A', activo=True).exists())
+		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-MULTI', meter_serial_n_1='SER-B', activo=True).exists())
