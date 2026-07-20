@@ -4569,6 +4569,8 @@ def api_buscar_medidores(request):
 
     try:
         medidores = Medidor.objects.filter(
+            eliminado=False,
+        ).filter(
             Q(serie__icontains=query)
             | Q(caja__icontains=query)
             | Q(marca__icontains=query)
@@ -4599,7 +4601,9 @@ def api_buscar_medidores(request):
 def api_obtener_medidor(request, medidor_id):
     """API para obtener detalles completos de un medidor"""
     try:
-        medidor = Medidor.objects.select_related('en_custodia_de', 'entregado_a').get(id=medidor_id)
+        medidor = Medidor.objects.filter(eliminado=False).select_related(
+            'en_custodia_de', 'entregado_a'
+        ).get(id=medidor_id)
         custodia = (
             getattr(getattr(medidor, 'en_custodia_de', None), 'nombre_interno', None)
             or getattr(getattr(medidor, 'entregado_a', None), 'nombre_interno', None)

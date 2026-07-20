@@ -57,8 +57,8 @@ for codigo, etiqueta in OrdenTrabajo.ESTADO_CHOICES:
 # Columnas reconocidas al importar (compatible con el Excel que genera exportar_ordenes_excel)
 COLUMNAS_ORDEN = {
     'numero_cliente': (
-        'numero_cliente', 'numero cliente', 'n cliente', 'cliente', 'n° cliente',
-        'nº cliente', 'id cliente',
+        'numero_cliente', 'numero cliente', 'n cliente', 'n° cliente',
+        'nº cliente', 'id cliente', 'nro cliente', 'nro. cliente',
     ),
     'titulo': ('titulo', 'título', 'titulo trabajo', 'asunto'),
     'descripcion': ('descripcion', 'descripción', 'detalle'),
@@ -178,7 +178,7 @@ def _buscar_orden_existente_en_importacion(
 ) -> Optional[OrdenTrabajo]:
     """Evita crear OT duplicadas al reimportar el mismo Excel."""
     if orden_id:
-        encontrada = OrdenTrabajo.objects.filter(pk=orden_id).first()
+        encontrada = OrdenTrabajo.objects.filter(pk=orden_id, eliminado=False).first()
         if encontrada:
             return encontrada
 
@@ -187,6 +187,7 @@ def _buscar_orden_existente_en_importacion(
         encontrada = OrdenTrabajo.objects.filter(
             cliente=cliente,
             titulo=titulo_norm,
+            eliminado=False,
         ).order_by('-id').first()
         if encontrada:
             return encontrada
@@ -195,6 +196,7 @@ def _buscar_orden_existente_en_importacion(
     if correlativo:
         encontrada = OrdenTrabajo.objects.filter(
             cliente=cliente,
+            eliminado=False,
             observaciones_tecnicas__icontains=f'correlativo: {correlativo}',
         ).order_by('-id').first()
         if encontrada:
@@ -222,19 +224,20 @@ def _resolver_tecnico(texto: str) -> Optional[Usuario]:
 
 
 def _obtener_o_crear_cliente(numero_cliente: str, valores, indice) -> Cliente:
-    cliente = Cliente.objects.filter(numero_cliente=numero_cliente).first()
+    cliente = Cliente.objects.filter(numero_cliente=numero_cliente, activo=True).first()
     if not cliente:
-        cliente = Cliente.objects.filter(numero_cliente__iexact=numero_cliente).first()
+        cliente = Cliente.objects.filter(numero_cliente__iexact=numero_cliente, activo=True).first()
     if cliente:
         return cliente
 
     direccion = _valor_fila(valores, indice, 'direccion_cliente') or f'Cliente {numero_cliente}'
     comuna = _valor_fila(valores, indice, 'comuna') or 'Por definir'
-    cliente, _ = Cliente.objects.get_or_create(
+    return Cliente.objects.create(
         numero_cliente=numero_cliente,
-        defaults={'direccion': direccion, 'comuna': comuna},
+        direccion=direccion,
+        comuna=comuna,
+        activo=True,
     )
-    return cliente
 
 
 def _aplicar_tecnico_a_orden(orden: OrdenTrabajo, tecnico: Optional[Usuario]) -> None:
@@ -384,8 +387,7 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                         orden.tipo_trabajo = tipo_trabajo
                         if observaciones_tecnicas:
                             orden.observaciones_tecnicas = observaciones_tecnicas
-                        if estado_import:
-                            orden.estado = estado_import
+                        # El estado no se fuerza desde Excel (evita saltarse flujo/validación)
                         if tecnico:
                             _aplicar_tecnico_a_orden(orden, tecnico)
                         elif not tecnico_nombre:
@@ -407,8 +409,6 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                         )
                         if observaciones_tecnicas:
                             orden.observaciones_tecnicas = observaciones_tecnicas
-                        if estado_import and estado_import != 'CREADA':
-                            orden.estado = estado_import
                         if tecnico:
                             _aplicar_tecnico_a_orden(orden, tecnico)
                         orden.save()

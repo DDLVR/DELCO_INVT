@@ -885,11 +885,13 @@ def orden_eliminar_view(request, pk):
 
 class OrdenTrabajoViewSet(viewsets.ModelViewSet):
     """
-    API REST para gestionar Órdenes de Trabajo
+    API REST para gestionar Órdenes de Trabajo.
+    Estado solo vía action cambiar_estado; destroy = soft-delete.
     """
 
     serializer_class = OrdenTrabajoSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
 
     def get_queryset(self):
         usuario = self.request.user
@@ -898,17 +900,41 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
             return OrdenTrabajo.objects.filter(eliminado=False)
         elif usuario.rol == 'TECNICO':
             return OrdenTrabajo.objects.filter(tecnico_responsable=usuario, eliminado=False)
-        
+
         return OrdenTrabajo.objects.none()
+
+    def perform_create(self, serializer):
+        usuario = self.request.user
+        if usuario.rol not in ['ADMIN', 'ADMINISTRATIVO']:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Solo ADMIN/ADMINISTRATIVO pueden crear OT por API.')
+        serializer.save(creada_por=usuario, estado='CREADA')
+
+    def perform_update(self, serializer):
+        usuario = self.request.user
+        if usuario.rol not in ['ADMIN', 'ADMINISTRATIVO', 'TECNICO']:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied('Sin permiso para editar OT por API.')
+        serializer.save()
+
+    def destroy(self, request, *args, **kwargs):
+        from rest_framework.exceptions import PermissionDenied
+        from web.services.eliminaciones import ENTIDAD_ORDEN, registrar_eliminacion
+
+        if request.user.rol not in ['ADMIN', 'ADMINISTRATIVO']:
+            raise PermissionDenied('Sin permiso para eliminar OT.')
+        orden = self.get_object()
+        registrar_eliminacion(ENTIDAD_ORDEN, orden, request.user, motivo='API destroy')
+        return Response({'success': True, 'soft_deleted': True}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'])
     def cambiar_estado(self, request, pk=None):
         """Endpoint para cambiar estado de orden"""
         orden = self.get_object()
         nuevo_estado = request.data.get('estado')
-        
+
         resultado = orden.cambiar_estado(request.user, nuevo_estado)
-        
+
         if resultado['success']:
             return Response(resultado, status=status.HTTP_200_OK)
         else:

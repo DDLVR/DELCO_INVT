@@ -311,13 +311,14 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
             return cache_clientes[num]
 
         def _get():
-            cliente = Cliente.objects.filter(numero_cliente=num).first()
+            cliente = Cliente.objects.filter(numero_cliente=num, activo=True).first()
             if cliente:
                 return cliente
             return Cliente.objects.create(
                 numero_cliente=num,
                 direccion=f'Cliente {num}',
                 comuna='Por definir',
+                activo=True,
             )
 
         cliente = _con_reintento_sqlite(_get)
@@ -374,9 +375,32 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                 return None
             if serie_m in cache_medidores:
                 return cache_medidores[serie_m]
-            obj = Medidor.objects.filter(serie=serie_m).first()
+            obj = Medidor.objects.filter(serie=serie_m, eliminado=False).first()
             cache_medidores[serie_m] = obj
             return obj
+
+        def _upsert_equipo(model, lookup_field, lookup_value, defaults):
+            """Actualiza/crea solo equipos activos; revive soft-deleted de forma explícita."""
+            activo = model.objects.filter(**{lookup_field: lookup_value}, eliminado=False).first()
+            if activo:
+                for key, value in defaults.items():
+                    setattr(activo, key, value)
+                activo.save()
+                return activo, False
+
+            eliminado = model.objects.filter(**{lookup_field: lookup_value}, eliminado=True).first()
+            if eliminado:
+                for key, value in defaults.items():
+                    setattr(eliminado, key, value)
+                eliminado.eliminado = False
+                if hasattr(eliminado, 'fecha_eliminacion'):
+                    eliminado.fecha_eliminacion = None
+                if hasattr(eliminado, 'eliminado_por_id'):
+                    eliminado.eliminado_por = None
+                eliminado.save()
+                return eliminado, False
+
+            return model.objects.create(**{lookup_field: lookup_value}, **defaults), True
 
         for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), start=2):
             valores = [cell.value for cell in row]
@@ -458,7 +482,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         defaults['observaciones'] = f'Correlativo: {_as_text_id(correlativo)}'
 
                     medidor, created = _con_reintento_sqlite(
-                        lambda: Medidor.objects.update_or_create(serie=serie, defaults=defaults)
+                        lambda: _upsert_equipo(Medidor, 'serie', serie, defaults)
                     )
                     if created:
                         creadas += 1
@@ -525,7 +549,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     elif medidor_texto:
                         defaults['medidor_otro'] = medidor_texto
                     sim, created = _con_reintento_sqlite(
-                        lambda: SimCard.objects.update_or_create(imei=imei, defaults=defaults)
+                        lambda: _upsert_equipo(SimCard, 'imei', imei, defaults)
                     )
                     if created:
                         creadas += 1
@@ -654,7 +678,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                     elif medidor_texto:
                         defaults['medidor_otro'] = medidor_texto
                     modem, created = _con_reintento_sqlite(
-                        lambda: Modem.objects.update_or_create(serie=serie, defaults=defaults)
+                        lambda: _upsert_equipo(Modem, 'serie', serie, defaults)
                     )
                     if created:
                         creadas += 1
@@ -1089,6 +1113,7 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                 cliente_existente = Cliente.objects.filter(
                     numero_cliente=numero_text,
                     meter_serial_n_1__iexact=serie_text,
+                    activo=True,
                 ).first()
 
                 ip_key = normalizar_clave(ip)
@@ -1130,7 +1155,7 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                 if meter_serial_n_1:
                     serie_detectada_count += 1
                     medidor_text = str(meter_serial_n_1).strip()
-                    medidor_obj = Medidor.objects.filter(serie__iexact=medidor_text).first()
+                    medidor_obj = Medidor.objects.filter(serie__iexact=medidor_text, eliminado=False).first()
                     # La serie se guarda en Cliente aunque el medidor no exista en inventario.
                     # Solo validamos asignación duplicada cuando sí existe objeto Medidor.
                     if medidor_obj and Cliente.objects.filter(medidor_actual=medidor_obj, activo=True).exclude(numero_cliente=numero_text).exists():
@@ -1154,7 +1179,6 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                 proyecto_final = proyecto or 'SIN PROYECTO'
 
                 if cliente_existente:
-                    cliente_existente.activo = True
                     if sector:
                         cliente_existente.sector = sector
                     if tipo_suministro:
