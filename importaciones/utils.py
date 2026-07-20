@@ -15,12 +15,10 @@ from usuarios.models import Usuario
 from web.services.validators import (
     merge_issues,
     normalize_ip_value,
-    parece_fecha_numero_cliente,
     validate_ip_format,
     validate_ip_port_coherence,
     validate_meter_uniqueness,
     validate_modem_assignment,
-    validate_numero_cliente,
 )
 from web.services.audit import AuditEvent, register_audit_event
 
@@ -308,8 +306,6 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
             return None
         num = _as_text_id(numero)
         if not num or num.upper() in {'#N/A', 'N/A', 'NONE', 'NULL'}:
-            return None
-        if parece_fecha_numero_cliente(num):
             return None
         if num in cache_clientes:
             return cache_clientes[num]
@@ -845,16 +841,8 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
 
     def normalizar_numero_cliente(valor):
         """Normaliza Numero Cliente para evitar variantes como 100.0 vs 100."""
-        from datetime import datetime, date
-
         if valor is None:
             return None
-
-        # Excel a veces parsea el correlativo como fecha de celda
-        if isinstance(valor, datetime):
-            return valor.strftime('%d-%m-%Y')
-        if isinstance(valor, date):
-            return valor.strftime('%d-%m-%Y')
 
         if isinstance(valor, (int,)):
             return str(valor)
@@ -1144,9 +1132,8 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                     'meter_serial_n_1': meter_serial_n_1 or '',
                 })
 
-                if numero_text == '0' or parece_fecha_numero_cliente(numero_text):
-                    for issue in validate_numero_cliente(numero_text):
-                        raise ValueError(error_columna('Numero Cliente', issue.message, numero_text))
+                if numero_text == '0':
+                    raise ValueError(error_columna('Numero Cliente', 'valor inválido', numero_text))
 
                 if sector and str(sector).strip() == '0':
                     sector = None
