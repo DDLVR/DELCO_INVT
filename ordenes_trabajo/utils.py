@@ -503,7 +503,9 @@ def exportar_ordenes_excel(ordenes):
             orden.descripcion_alerta_duplicado or '',
         ])
 
-    aplicar_estilo_hoja_exportacion(ws)
+    # Filtro solo en Tipo Trabajo / Técnico / Estado / Dirección / Comuna.
+    # Sin filtro en Nº/Título/Descripción, equipos, fechas, ID y alertas.
+    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=4, filter_to_col=8)
     return wb
 
 
