@@ -220,4 +220,18 @@ def registrar_eliminacion(
     except Exception:
         logger.exception('No se pudo registrar audit de eliminación %s #%s', entidad, instance.pk)
 
+    try:
+        from web.perf_cache import cache_invalidate
+        from web.moreapp_avisos import invalidar_caches_aviso_moreapp
+
+        cache_invalidate(
+            'operacional:codigos_moreapp',
+            'operacional:cliente_ids',
+            'reportes:opciones_filtro',
+            'dashboard:admin_inv_kpis',
+        )
+        invalidar_caches_aviso_moreapp()
+    except Exception:
+        logger.exception('No se pudo invalidar caches tras eliminación %s #%s', entidad, instance.pk)
+
     return movimiento, True

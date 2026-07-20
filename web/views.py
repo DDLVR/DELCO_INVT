@@ -8,8 +8,10 @@ from django.db import models
 from inventario.models import MovimientoInventario, MovimientoItem, Ubicacion, Medidor, SimCard, Modem
 from django.views.decorators.http import require_POST
 from django.conf import settings
+from .decorators import admin_or_administrativo
 
 @login_required
+@admin_or_administrativo
 @require_POST
 def inventario_eliminar_view(request, pk):
     """Soft-delete de equipo: oculta en inventario y deja snapshot en movimientos."""
@@ -294,15 +296,15 @@ def dashboard_view(request):
                 'usuarios_activos': request.user.__class__.objects.filter(is_active=True).count(),
                 'total_tecnicos': request.user.__class__.objects.filter(rol='TECNICO', is_active=True).count(),
                 'total_administrativos': request.user.__class__.objects.filter(rol='ADMINISTRATIVO', is_active=True).count(),
-                'total_medidores': Medidor.objects.count(),
-                'medidores_bodega': Medidor.objects.filter(estado_inventario__nombre='En bodega').count(),
-                'medidores_instalados': Medidor.objects.filter(estado_inventario__nombre='Instalado').count(),
-                'total_sims': SimCard.objects.count(),
-                'sims_bodega': SimCard.objects.filter(estado_inventario__nombre='En bodega').count(),
-                'sims_instaladas': SimCard.objects.filter(estado_inventario__nombre='Instalado').count(),
-                'total_modems': Modem.objects.count(),
-                'modems_bodega': Modem.objects.filter(estado_inventario__nombre='En bodega').count(),
-                'modems_instalados': Modem.objects.filter(estado_inventario__nombre='Instalado').count(),
+                'total_medidores': Medidor.objects.filter(eliminado=False).count(),
+                'medidores_bodega': Medidor.objects.filter(eliminado=False, estado_inventario__nombre='En bodega').count(),
+                'medidores_instalados': Medidor.objects.filter(eliminado=False, estado_inventario__nombre='Instalado').count(),
+                'total_sims': SimCard.objects.filter(eliminado=False).count(),
+                'sims_bodega': SimCard.objects.filter(eliminado=False, estado_inventario__nombre='En bodega').count(),
+                'sims_instaladas': SimCard.objects.filter(eliminado=False, estado_inventario__nombre='Instalado').count(),
+                'total_modems': Modem.objects.filter(eliminado=False).count(),
+                'modems_bodega': Modem.objects.filter(eliminado=False, estado_inventario__nombre='En bodega').count(),
+                'modems_instalados': Modem.objects.filter(eliminado=False, estado_inventario__nombre='Instalado').count(),
                 'total_clientes': (
                     Cliente.objects.filter(activo=True)
                     .exclude(numero_cliente__in=['', '0'])
@@ -311,17 +313,17 @@ def dashboard_view(request):
                     .count()
                 ),
                 'medidores_por_estado': list(
-                    Medidor.objects.values('estado_inventario__nombre')
+                    Medidor.objects.filter(eliminado=False).values('estado_inventario__nombre')
                     .annotate(cantidad=Count('id'))
                     .order_by('-cantidad')[:5]
                 ),
                 'sims_por_estado': list(
-                    SimCard.objects.values('estado_inventario__nombre')
+                    SimCard.objects.filter(eliminado=False).values('estado_inventario__nombre')
                     .annotate(cantidad=Count('id'))
                     .order_by('-cantidad')[:5]
                 ),
                 'modems_por_estado': list(
-                    Modem.objects.values('estado_inventario__nombre')
+                    Modem.objects.filter(eliminado=False).values('estado_inventario__nombre')
                     .annotate(cantidad=Count('id'))
                     .order_by('-cantidad')[:5]
                 ),
@@ -3378,16 +3380,18 @@ def cliente_historial_view(request, pk):
     numero = (cliente.numero_cliente or '').strip()
 
     ordenes = (
-        OrdenTrabajo.objects.filter(cliente=cliente)
+        OrdenTrabajo.objects.filter(cliente=cliente, eliminado=False)
         .select_related('tecnico_responsable')
         .order_by('-fecha_creacion')[:50]
     )
     ordenes_abiertas = OrdenTrabajo.objects.filter(
         cliente=cliente,
+        eliminado=False,
         estado__in=OrdenTrabajo.ESTADOS_ABIERTOS,
     ).count()
     ordenes_con_alerta = OrdenTrabajo.objects.filter(
         cliente=cliente,
+        eliminado=False,
         alerta_duplicado=True,
     ).count()
     visitas_6m = count_visits_last_6_months(cliente.pk)
@@ -3502,26 +3506,41 @@ def cliente_historial_view(request, pk):
 
     moreapp_regs = []
     if numero:
-        moreapp_qs = IntegracionMoreApp.objects.order_by('-fecha_recepcion')[:300]
-        for reg in moreapp_qs:
-            data = reg.datos_procesados or {}
-            raw = (reg.datos_recibidos or {}).get('data') or {}
-            candidatos = [
-                data.get('cliente'),
-                data.get('numero_cliente'),
-                data.get('codigo_cliente'),
-                raw.get('cliente'),
-            ]
-            buscar = raw.get('buscarCliente') or {}
-            if isinstance(buscar, dict):
-                candidatos.append(buscar.get('CLIENTE1'))
-            mant = raw.get('clienteParaMantenimiento') or {}
-            if isinstance(mant, dict):
-                candidatos.append(mant.get('NROCLIENTE'))
-            if any(str(c).strip() == numero for c in candidatos if c is not None):
-                moreapp_regs.append(reg)
-            if len(moreapp_regs) >= 20:
-                break
+        moreapp_qs = (
+            IntegracionMoreApp.objects.filter(eliminado=False)
+            .filter(
+                models.Q(datos_procesados__cliente_codigo=numero)
+                | models.Q(datos_procesados__cliente_codigo=str(numero))
+            )
+            .order_by('-fecha_recepcion')[:20]
+        )
+        moreapp_regs = list(moreapp_qs)
+        if len(moreapp_regs) < 20:
+            # Fallback por payload crudo / campos legacy (solo activos)
+            vistos = {r.pk for r in moreapp_regs}
+            for reg in IntegracionMoreApp.objects.filter(eliminado=False).order_by('-fecha_recepcion')[:200]:
+                if reg.pk in vistos:
+                    continue
+                data = reg.datos_procesados or {}
+                raw = (reg.datos_recibidos or {}).get('data') or {}
+                candidatos = [
+                    data.get('cliente'),
+                    data.get('numero_cliente'),
+                    data.get('codigo_cliente'),
+                    data.get('cliente_codigo'),
+                    raw.get('cliente'),
+                ]
+                buscar = raw.get('buscarCliente') or {}
+                if isinstance(buscar, dict):
+                    candidatos.append(buscar.get('CLIENTE1'))
+                mant = raw.get('clienteParaMantenimiento') or {}
+                if isinstance(mant, dict):
+                    candidatos.append(mant.get('NROCLIENTE'))
+                if any(str(c).strip() == numero for c in candidatos if c is not None):
+                    moreapp_regs.append(reg)
+                    vistos.add(reg.pk)
+                if len(moreapp_regs) >= 20:
+                    break
 
     auditoria = AuditLog.objects.filter(
         entity='Cliente',
@@ -3994,7 +4013,8 @@ def movimientos_historial_equipo_view(request):
     # Consulta única para todos los submission_ids encontrados
     if sid_map:
         reportes = IntegracionMoreApp.objects.filter(
-            moreapp_submission_id__in=sid_map.keys()
+            eliminado=False,
+            moreapp_submission_id__in=sid_map.keys(),
         ).only('id', 'moreapp_submission_id', 'estado_revision', 'estado_sincronizacion')
         for reporte in reportes:
             for item in sid_map.get(reporte.moreapp_submission_id, []):
