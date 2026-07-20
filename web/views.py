@@ -244,14 +244,12 @@ def dashboard_view(request):
             from ordenes_trabajo.models import OrdenTrabajo, IntegracionMoreApp
             from ordenes_trabajo.services import six_month_window_start
             from ordenes_trabajo.utils import contadores_colas_ordenes
+            from reportes.services import ESTADOS_EJECUTADOS, ESTADOS_PENDIENTES_OT
 
-            estados_abiertos = OrdenTrabajo.ESTADOS_ABIERTOS
-            estados_pendientes = estados_abiertos | {'PENDIENTE_VALIDACION', 'REALIZADA_PENDIENTE_COMPROBACION'}
-            estados_completadas = {'REALIZADA', 'VALIDADA', 'FINALIZADA'}
-            ot_qs = OrdenTrabajo.objects.all()
+            ot_qs = OrdenTrabajo.objects.filter(eliminado=False)
             context['total_ordenes'] = ot_qs.count()
-            context['ordenes_pendientes'] = ot_qs.filter(estado__in=estados_pendientes).count()
-            context['ordenes_completadas'] = ot_qs.filter(estado__in=estados_completadas).count()
+            context['ordenes_pendientes'] = ot_qs.filter(estado__in=ESTADOS_PENDIENTES_OT).count()
+            context['ordenes_completadas'] = ot_qs.filter(estado__in=ESTADOS_EJECUTADOS).count()
             context['ordenes_canceladas'] = ot_qs.filter(estado='CANCELADA').count()
             context['ordenes_cerradas_sin_ejecutar'] = ot_qs.filter(
                 estado='CANCELADA',
@@ -263,7 +261,10 @@ def dashboard_view(request):
                 eliminado=False,
             ).exclude(estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR')).count()
             context['clientes_reincidentes'] = (
-                OrdenTrabajo.objects.filter(fecha_creacion__date__gte=six_month_window_start())
+                OrdenTrabajo.objects.filter(
+                    eliminado=False,
+                    fecha_creacion__date__gte=six_month_window_start(),
+                )
                 .exclude(estado='CANCELADA')
                 .values('cliente_id')
                 .annotate(visitas=Count('id'))
@@ -576,7 +577,7 @@ def moreapp_reprocesar_view(request, pk):
     from ordenes_trabajo.models import IntegracionMoreApp
     from integraciones.reader import reprocesar_registro_moreapp
 
-    registro = get_object_or_404(IntegracionMoreApp, pk=pk)
+    registro = get_object_or_404(IntegracionMoreApp, pk=pk, eliminado=False)
     resultado = reprocesar_registro_moreapp(registro)
 
     if resultado.get('success'):
@@ -4478,6 +4479,7 @@ def _calcular_adv_breakdown(model_class):
         adv_critica = 0
         qs = model_class.objects.filter(
             eliminado=False,
+            estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
         ).filter(
             _Q(estado_revision='CON_ADVERTENCIA') | _Q(alerta_doble_trabajo=True)
         ).only('datos_procesados', 'descripcion_alerta', 'alerta_doble_trabajo')
@@ -4869,13 +4871,19 @@ def reportes_moreapp_list(request):
     if alerta == '1':
         qs = qs.filter(alerta_doble_trabajo=True)
     if alerta == 'critica':
-        qs = qs.filter(descripcion_alerta__icontains='ALERTA_CRITICA')
+        qs = qs.filter(
+            descripcion_alerta__icontains='ALERTA_CRITICA',
+            estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
+        )
     if revision:
         qs = qs.filter(estado_revision=revision)
     if kpi == 'advertencia':
         qs = qs.filter(estado_revision='CON_ADVERTENCIA')
     if kpi == 'adv_critica':
-        qs = qs.filter(descripcion_alerta__icontains='ALERTA_CRITICA')
+        qs = qs.filter(
+            descripcion_alerta__icontains='ALERTA_CRITICA',
+            estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
+        )
     if q:
         qs = qs.filter(
             Q(nombre_formulario__icontains=q) |
@@ -5016,7 +5024,7 @@ def reportes_moreapp_detalle(request, pk):
         messages.error(request, 'No tienes permiso para acceder a Reportes.')
         return redirect('dashboard')
 
-    registro = get_object_or_404(IntegracionMoreApp, pk=pk)
+    registro = get_object_or_404(IntegracionMoreApp, pk=pk, eliminado=False)
     datos_procesados = registro.datos_procesados if isinstance(registro.datos_procesados, dict) else {}
     resultado_operativo = datos_procesados.get('resultado_operativo', {}) if isinstance(datos_procesados, dict) else {}
 

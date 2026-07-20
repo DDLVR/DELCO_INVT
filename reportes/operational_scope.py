@@ -22,9 +22,10 @@ def hay_actividad_operativa() -> bool:
     No se cachea: ``exists()`` es barato y un False stale ocultaría el hub
     justo después de crear la primera OT.
     """
-    if OrdenTrabajo.objects.exists():
+    if OrdenTrabajo.objects.filter(eliminado=False).exists():
         return True
     return IntegracionMoreApp.objects.filter(
+        eliminado=False,
         estado_sincronizacion__in=ESTADOS_MOREAPP_PROCESADOS,
     ).exists()
 
@@ -37,6 +38,7 @@ def _codigos_cliente_desde_moreapp() -> Set[str]:
         # Solo campos ya normalizados: evita recorrer datos_recibidos en cada request
         for codigo in (
             IntegracionMoreApp.objects.filter(
+                eliminado=False,
                 estado_sincronizacion__in=ESTADOS_MOREAPP_PROCESADOS,
             )
             .exclude(datos_procesados__cliente_codigo__isnull=True)
@@ -58,7 +60,8 @@ def cliente_ids_operativos() -> Set[int]:
 
     def _calc():
         ids: Set[int] = set(
-            OrdenTrabajo.objects.exclude(cliente_id__isnull=True)
+            OrdenTrabajo.objects.filter(eliminado=False)
+            .exclude(cliente_id__isnull=True)
             .values_list('cliente_id', flat=True)
             .distinct()
         )

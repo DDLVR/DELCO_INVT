@@ -23,7 +23,8 @@ def _opciones_filtro_reportes():
 
     def _calc():
         tecnico_ids = set(
-            OrdenTrabajo.objects.exclude(tecnico_responsable_id=None)
+            OrdenTrabajo.objects.filter(eliminado=False)
+            .exclude(tecnico_responsable_id=None)
             .values_list('tecnico_responsable_id', flat=True)
             .distinct()
         )
@@ -43,7 +44,8 @@ def _opciones_filtro_reportes():
         )
         if not empresas:
             empresas = list(
-                OrdenTrabajo.objects.exclude(cliente__empresa__isnull=True)
+                OrdenTrabajo.objects.filter(eliminado=False)
+                .exclude(cliente__empresa__isnull=True)
                 .exclude(cliente__empresa='')
                 .order_by('cliente__empresa')
                 .values_list('cliente__empresa', flat=True)
@@ -60,7 +62,8 @@ def _opciones_filtro_reportes():
         )
         if not comunas:
             comunas = list(
-                OrdenTrabajo.objects.exclude(cliente__comuna__isnull=True)
+                OrdenTrabajo.objects.filter(eliminado=False)
+                .exclude(cliente__comuna__isnull=True)
                 .exclude(cliente__comuna='')
                 .order_by('cliente__comuna')
                 .values_list('cliente__comuna', flat=True)
@@ -99,7 +102,7 @@ def reportes_hub_view(request):
     tiene_actividad = hay_actividad_operativa()
     # Catálogo solo si hay OT o clientes operativos linkeados (MoreApp huérfano no basta)
     hay_datos_exportables = (
-        OrdenTrabajo.objects.exists() or clientes_operativos_qs().exists()
+        OrdenTrabajo.objects.filter(eliminado=False).exists() or clientes_operativos_qs().exists()
     )
 
     filtros_parseados = parse_report_filters(filters_raw) if hay_datos_exportables else {}

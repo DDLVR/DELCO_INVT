@@ -32,6 +32,16 @@ ESTADOS_PENDIENTES_OT = OrdenTrabajo.ESTADOS_ABIERTOS | {
 }
 
 
+def ordenes_operativas_qs():
+    """OT no eliminadas (base para reportes y KPIs)."""
+    return OrdenTrabajo.objects.filter(eliminado=False)
+
+
+def moreapp_operativos_qs():
+    """Registros MoreApp no eliminados."""
+    return IntegracionMoreApp.objects.filter(eliminado=False)
+
+
 def parse_report_filters(params) -> Dict[str, Any]:
     periodo = (params.get('periodo') or '').strip().lower()
     tecnico_id = (params.get('tecnico_id') or '').strip()
@@ -142,7 +152,7 @@ def report_clientes_completos(filters: Dict[str, Any]) -> ReportResult:
 
 
 def report_clientes_ejecutados(filters: Dict[str, Any]) -> ReportResult:
-    ot_qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS, cliente_id__isnull=False)
+    ot_qs = ordenes_operativas_qs().filter(estado__in=ESTADOS_EJECUTADOS, cliente_id__isnull=False)
     ot_qs = _filter_ordenes(ot_qs, filters, fecha_field='fecha_creacion')
     cliente_ids = ot_qs.values_list('cliente_id', flat=True).distinct()
     qs = _filter_clientes(Cliente.objects.filter(pk__in=cliente_ids, activo=True), filters).order_by('numero_cliente')
@@ -155,11 +165,11 @@ def report_clientes_pendientes(filters: Dict[str, Any]) -> ReportResult:
         return CLIENTE_HEADERS + ['Motivo Pendiente'], []
 
     pendientes_ot = set(
-        OrdenTrabajo.objects.filter(estado__in=ESTADOS_PENDIENTES_OT, cliente_id__isnull=False)
+        ordenes_operativas_qs().filter(estado__in=ESTADOS_PENDIENTES_OT, cliente_id__isnull=False)
         .values_list('cliente_id', flat=True)
     )
     pendientes_moreapp = {
-        codigo for codigo in IntegracionMoreApp.objects.filter(
+        codigo for codigo in moreapp_operativos_qs().filter(
             estado_revision__in={'PENDIENTE', 'CON_ADVERTENCIA'},
         ).values_list('datos_procesados__cliente_codigo', flat=True)
         if codigo
@@ -184,7 +194,7 @@ def report_ot_cerradas_sin_ejecutar(_filters: Dict[str, Any]) -> ReportResult:
     headers = [
         'ID OT', 'Cliente', 'Titulo', 'Estado', 'Tecnico', 'Fecha Creacion', 'Observaciones',
     ]
-    qs = OrdenTrabajo.objects.filter(estado='CANCELADA', fecha_inicio_ejecucion__isnull=True)
+    qs = ordenes_operativas_qs().filter(estado='CANCELADA', fecha_inicio_ejecucion__isnull=True)
     qs = _filter_ordenes_fecha(qs, _filters)
     rows = [
         [
@@ -240,9 +250,9 @@ def report_trabajos_por_fecha(filters: Dict[str, Any]) -> ReportResult:
         'Fecha Inicio', 'Fecha Fin', 'Comuna',
     ]
     if filters.get('estado_ot'):
-        qs = OrdenTrabajo.objects.all()
+        qs = ordenes_operativas_qs()
     else:
-        qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS)
+        qs = ordenes_operativas_qs().filter(estado__in=ESTADOS_EJECUTADOS)
     # Período operativo siempre sobre fecha de creación (más útil con OT abiertas)
     qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     rows = [
@@ -264,7 +274,7 @@ def report_trabajos_por_fecha(filters: Dict[str, Any]) -> ReportResult:
 
 def report_trabajos_por_tecnico(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Tecnico', 'Total Ejecutados', 'Pendientes', 'En Ejecucion']
-    qs = OrdenTrabajo.objects.filter(tecnico_responsable__isnull=False)
+    qs = ordenes_operativas_qs().filter(tecnico_responsable__isnull=False)
     qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     aggregated = (
         qs.values('tecnico_responsable__nombre_interno')
@@ -284,7 +294,7 @@ def report_trabajos_por_tecnico(filters: Dict[str, Any]) -> ReportResult:
 
 def report_trabajos_por_empresa(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Empresa', 'Total OT', 'Ejecutadas', 'Pendientes']
-    qs = OrdenTrabajo.objects.filter(cliente__isnull=False)
+    qs = ordenes_operativas_qs().filter(cliente__isnull=False)
     qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     aggregated = (
         qs.values('cliente__empresa')
@@ -304,9 +314,9 @@ def report_trabajos_por_empresa(filters: Dict[str, Any]) -> ReportResult:
 
 def report_trabajos_pendientes_por_causa(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Tipo Trabajo', 'Estado OT', 'Cantidad']
-    qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_PENDIENTES_OT)
+    qs = ordenes_operativas_qs().filter(estado__in=ESTADOS_PENDIENTES_OT)
     if filters.get('estado_ot'):
-        qs = OrdenTrabajo.objects.all()
+        qs = ordenes_operativas_qs()
     qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     aggregated = (
         qs.values('tipo_trabajo', 'estado')
@@ -324,10 +334,10 @@ def report_trabajos_pendientes_por_causa(filters: Dict[str, Any]) -> ReportResul
 
 def report_trabajos_diarios(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Fecha', 'OT Creadas', 'OT Ejecutadas']
-    qs = OrdenTrabajo.objects.filter(fecha_creacion__isnull=False)
+    qs = ordenes_operativas_qs().filter(fecha_creacion__isnull=False)
     qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     creadas = qs.values('fecha_creacion__date').annotate(cantidad=Count('id')).order_by('fecha_creacion__date')
-    ejecutadas_qs = OrdenTrabajo.objects.filter(estado__in=ESTADOS_EJECUTADOS)
+    ejecutadas_qs = ordenes_operativas_qs().filter(estado__in=ESTADOS_EJECUTADOS)
     ejecutadas_qs = _filter_ordenes(ejecutadas_qs, {**filters, 'estado_ot': None}, fecha_field='fecha_creacion')
     ejecutadas = {
         item['fecha_creacion__date']: item['cantidad']
@@ -345,7 +355,7 @@ def report_trabajos_diarios(filters: Dict[str, Any]) -> ReportResult:
 
 def report_resultado_diario_tecnico(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Fecha', 'Tecnico', 'Ejecutadas', 'Pendientes']
-    qs = OrdenTrabajo.objects.filter(tecnico_responsable__isnull=False)
+    qs = ordenes_operativas_qs().filter(tecnico_responsable__isnull=False)
     qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     aggregated = (
         qs.values('fecha_creacion__date', 'tecnico_responsable__nombre_interno')
@@ -370,7 +380,7 @@ def report_resultado_diario_tecnico(filters: Dict[str, Any]) -> ReportResult:
 def report_clientes_reincidentes(filters: Dict[str, Any]) -> ReportResult:
     headers = ['Numero Cliente', 'Nombre', 'Comuna', 'Visitas 6 Meses']
     desde = six_month_window_start()
-    qs = OrdenTrabajo.objects.filter(fecha_creacion__date__gte=desde).exclude(estado='CANCELADA')
+    qs = ordenes_operativas_qs().filter(fecha_creacion__date__gte=desde).exclude(estado='CANCELADA')
     qs = _filter_ordenes(qs, {**filters, 'fecha_desde': None, 'fecha_hasta': None}, fecha_field='fecha_creacion')
     aggregated = (
         qs.values('cliente_id', 'cliente__numero_cliente', 'cliente__customer_name', 'cliente__comuna')
