@@ -29,6 +29,81 @@ from django.db.utils import IntegrityError
 logger = logging.getLogger(__name__)
 
 
+def _normalizar_serie_medidor_cliente(valor) -> str:
+    """Normaliza serie de medidor para comparar fichas de cliente."""
+    if valor is None:
+        return ''
+    if isinstance(valor, float) and valor.is_integer():
+        return str(int(valor))
+    texto = str(valor).strip()
+    if texto.endswith('.0') and texto[:-2].isdigit():
+        return texto[:-2]
+    return texto
+
+
+def _serie_cliente_vacia(serie) -> bool:
+    return not _normalizar_serie_medidor_cliente(serie)
+
+
+def _serie_cliente_igual(a, b) -> bool:
+    return _normalizar_serie_medidor_cliente(a).casefold() == _normalizar_serie_medidor_cliente(b).casefold()
+
+
+def _buscar_cliente_para_importacion(numero_text: str, serie_text: str):
+    """Resuelve ficha a actualizar/reactivar para evitar duplicados innecesarios.
+
+    Orden:
+    1) Match exacto Nº + serie (activo, luego inactivo).
+    2) Una sola ficha activa de ese Nº → actualizarla (aunque cambie la serie).
+    3) Match por serie entre activas del mismo Nº.
+    4) Igual lógica sobre inactivas (reactivar).
+    5) None → crear (p. ej. mismo Nº con otra serie cuando ya hay varias fichas).
+    """
+    serie_text = _normalizar_serie_medidor_cliente(serie_text)
+    base = Cliente.objects.filter(numero_cliente=numero_text)
+
+    def _match_serie(qs):
+        if serie_text:
+            for obj in qs:
+                if _serie_cliente_igual(obj.meter_serial_n_1, serie_text):
+                    return obj
+            return None
+        for obj in qs:
+            if _serie_cliente_vacia(obj.meter_serial_n_1):
+                return obj
+        return None
+
+    activos = list(base.filter(activo=True).order_by('id'))
+    exacto_activo = _match_serie(activos)
+    if exacto_activo:
+        return exacto_activo, False
+
+    if len(activos) == 1:
+        actual = activos[0]
+        actual_serie = _normalizar_serie_medidor_cliente(actual.meter_serial_n_1)
+        # Misma ficha si no hay serie nueva, la actual no tiene serie, o coinciden.
+        if not serie_text or not actual_serie or _serie_cliente_igual(actual_serie, serie_text):
+            return actual, False
+        # Serie distinta y ambas informadas → otro medidor del mismo Nº (crear).
+
+    inactivos = list(base.filter(activo=False).order_by('-fecha_actualizacion', '-id'))
+    exacto_inactivo = _match_serie(inactivos)
+    if exacto_inactivo:
+        return exacto_inactivo, True
+
+    if not activos and len(inactivos) == 1:
+        actual = inactivos[0]
+        actual_serie = _normalizar_serie_medidor_cliente(actual.meter_serial_n_1)
+        if not serie_text or not actual_serie or _serie_cliente_igual(actual_serie, serie_text):
+            return actual, True
+
+    if not activos and inactivos and not serie_text:
+        vacio = next((c for c in inactivos if _serie_cliente_vacia(c.meter_serial_n_1)), None)
+        return (vacio or inactivos[0]), True
+
+    return None, False
+
+
 def _con_reintento_sqlite(callable_fn, intentos=6, espera=0.4):
     """Reintenta operaciones cuando SQLite responde database is locked."""
     import time
@@ -1137,26 +1212,29 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
 
                 if sector and str(sector).strip() == '0':
                     sector = None
-                serie_text = str(meter_serial_n_1).strip() if meter_serial_n_1 else ''
-                cliente_existente = Cliente.objects.filter(
-                    numero_cliente=numero_text,
-                    meter_serial_n_1__iexact=serie_text,
-                    activo=True,
-                ).first()
-                if not cliente_existente:
-                    cliente_inactivo = Cliente.objects.filter(
-                        numero_cliente=numero_text,
-                        meter_serial_n_1__iexact=serie_text,
-                        activo=False,
-                    ).first()
-                    if cliente_inactivo:
-                        cliente_inactivo.activo = True
-                        cliente_inactivo.fecha_eliminacion = None
-                        cliente_inactivo.eliminado_por = None
-                        cliente_existente = cliente_inactivo
-                        advertencias.append(
-                            f'Fila {idx}: Cliente {numero_text} reactivado (estaba inactivo/eliminado).'
-                        )
+                serie_text = _normalizar_serie_medidor_cliente(meter_serial_n_1)
+                if meter_serial_n_1 and serie_text != str(meter_serial_n_1).strip():
+                    meter_serial_n_1 = serie_text
+                elif serie_text:
+                    meter_serial_n_1 = serie_text
+                else:
+                    meter_serial_n_1 = None
+
+                cliente_existente, reactivar = _buscar_cliente_para_importacion(numero_text, serie_text)
+                if cliente_existente and reactivar:
+                    cliente_existente.activo = True
+                    cliente_existente.fecha_eliminacion = None
+                    cliente_existente.eliminado_por = None
+                    advertencias.append(
+                        f'Fila {idx}: Cliente {numero_text} reactivado (estaba inactivo/eliminado).'
+                    )
+                elif cliente_existente and serie_text and not _serie_cliente_igual(
+                    cliente_existente.meter_serial_n_1, serie_text
+                ):
+                    advertencias.append(
+                        f'Fila {idx}: Cliente {numero_text} actualizado '
+                        f'(serie {cliente_existente.meter_serial_n_1 or "—"} → {serie_text}).'
+                    )
 
                 ip_key = normalizar_clave(ip)
                 if ip_key:

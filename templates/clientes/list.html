@@ -247,7 +247,7 @@
                 <span class="delco-import-mode-card-body">
                   <span class="delco-import-mode-badge">Recomendado</span>
                   <span class="delco-import-mode-title">Incremental</span>
-                  <span class="delco-import-mode-desc">Crea y actualiza. Conserva clientes que no vienen en el Excel.</span>
+                  <span class="delco-import-mode-desc">Actualiza fichas existentes (mismo Nº cliente) y solo crea si es un medidor nuevo. Conserva clientes que no vienen en el Excel.</span>
                 </span>
               </label>
               <label class="delco-import-mode-card">
@@ -267,7 +267,7 @@
               <div class="delco-import-format-required">
                 <span class="delco-import-format-kicker">Obligatoria</span>
                 <code>Numero Cliente</code>
-                <span class="text-muted small">llave para crear / actualizar</span>
+                <span class="text-muted small">llave principal; Serie Medidor distingue fichas del mismo Nº</span>
               </div>
               <div class="accordion accordion-flush delco-import-accordion" id="accordionFormatoClientes">
                 <div class="accordion-item">
@@ -298,7 +298,7 @@
                   <div id="collapseReglas" class="accordion-collapse collapse" aria-labelledby="headingReglas" data-bs-parent="#accordionFormatoClientes">
                     <div class="accordion-body">
                       <ul class="delco-import-rules mb-0">
-                        <li><strong>Duplicados</strong> en el Excel se aceptan y se listan como advertencias para revisión (mismo Nº cliente con distinta serie de medidor es válido).</li>
+                        <li><strong>Duplicados</strong>: mismo Nº con distinta serie = ficha extra (varios medidores). Si solo hay una ficha de ese Nº, la importación la <strong>actualiza</strong> (no crea otra).</li>
                         <li><strong>Numero Cliente</strong> no puede ser <code>0</code>.</li>
                         <li>Clientes inactivos con la misma llave se <strong>reactivan</strong> en lugar de duplicarse.</li>
                       </ul>
