@@ -739,12 +739,13 @@ def ordenes_exportar_view(request):
     wb.save(stream)
     stream.seek(0)
 
-    timestamp = timezone.now().strftime('%d-%m-%Y')
+    from web.services.export_filenames import nombre_exportacion_con_fecha
+    filename = nombre_exportacion_con_fecha('ordenes_trabajo.xlsx')
     response = HttpResponse(
         stream.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
-    response['Content-Disposition'] = f'attachment; filename="ordenes_trabajo_{timestamp}.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     response['Cache-Control'] = 'no-store'
     return response
 

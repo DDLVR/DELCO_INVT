@@ -11,6 +11,7 @@ from usuarios.models import Usuario
 
 from importaciones.utils import exportar_clientes_excel_completo
 from web.services.filtros_export import queryset_clientes_filtrado
+from web.services.export_filenames import nombre_exportacion_con_fecha
 from web.services.movimientos_display import (
 	enriquecer_movimiento_ubicaciones,
 	etiqueta_ubicacion_movimiento,
@@ -118,6 +119,21 @@ class UxPolishTests(TestCase):
 		# Sin encabezados en inglés
 		for no_esperado in ('Customer name', 'Installation address', 'City', 'Client type', 'Note'):
 			self.assertNotIn(no_esperado, headers)
+
+	def test_nombres_exportacion_incluyen_fecha_y_hora(self):
+		nombre = nombre_exportacion_con_fecha('clientes_completos.xlsx')
+		self.assertRegex(
+			nombre,
+			r'^clientes_completos_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.xlsx$',
+		)
+
+		response = self.client.get(reverse('clientes_exportar'), {'modo': 'completo'})
+		self.assertEqual(response.status_code, 200)
+		disposition = response['Content-Disposition']
+		self.assertRegex(
+			disposition,
+			r'filename="clientes_completos_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}\.xlsx"',
+		)
 
 	def test_etiqueta_ubicacion_movimiento_cliente_muestra_numero(self):
 		item = SimpleNamespace(medidor=self.medidor, simcard=None, modem=None)

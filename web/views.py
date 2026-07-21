@@ -2156,8 +2156,9 @@ def inventario_exportar_view(request):
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-    timestamp = datetime.now().strftime("%d-%m-%Y")
-    response['Content-Disposition'] = f'attachment; filename="{nombre_seccion}-{sufijo_archivo}-{timestamp}.xlsx"'
+    from web.services.export_filenames import nombre_exportacion_con_fecha
+    filename = nombre_exportacion_con_fecha(f'{nombre_seccion}-{sufijo_archivo}.xlsx')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
     wb.save(response)
     return response
@@ -2945,6 +2946,7 @@ def clientes_list_view(request):
 def clientes_exportar_view(request):
     """Exportar clientes a Excel (respeta filtros activos salvo padrón completo)."""
     from web.services.filtros_export import queryset_clientes_filtrado
+    from web.services.export_filenames import nombre_exportacion_con_fecha
 
     modo = (request.GET.get('modo') or 'filtrado').strip().lower()
     if modo in ('completo_padron', 'padron', 'todos', 'full'):
@@ -2957,7 +2959,8 @@ def clientes_exportar_view(request):
         response = HttpResponse(
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
         )
-        response['Content-Disposition'] = 'attachment; filename="clientes_completo.xlsx"'
+        filename = nombre_exportacion_con_fecha('clientes_completos.xlsx')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         wb.save(response)
         return response
     else:
@@ -2969,6 +2972,7 @@ def clientes_exportar_view(request):
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
+    filename = nombre_exportacion_con_fecha(filename)
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     wb.save(response)
     return response
