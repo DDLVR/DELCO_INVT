@@ -109,10 +109,12 @@ class UxPolishTests(TestCase):
 		ws = wb['CLIENTES COMPLETOS']
 		headers = [c.value for c in ws[1]]
 		self.assertGreaterEqual(len(headers), 35)
-		for esperado in ('Número cliente', 'Nombre cliente', 'SIM ICCID', 'Referencia'):
+		for esperado in ('Número cliente', 'Nombre cliente', 'SIM ICCID', 'Referencia', 'Medidor actual (serie)'):
 			self.assertIn(esperado, headers)
 		self.assertNotIn('ID', headers)
 		self.assertNotIn('Pod', headers)
+		self.assertNotIn('ID medidor actual', headers)
+		self.assertFalse(any(h and str(h).startswith('ID ') for h in headers))
 		# Sin encabezados en inglés
 		for no_esperado in ('Customer name', 'Installation address', 'City', 'Client type', 'Note'):
 			self.assertNotIn(no_esperado, headers)

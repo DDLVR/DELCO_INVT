@@ -63,7 +63,7 @@
                                 <select id="crearTecnicoSelect" class="form-select">
                                     <option value="">— O elige de la lista —</option>
                                     {% for tecnico in tecnicos %}
-                                    <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}{% if tecnico.get_full_name %} · {{ tecnico.get_full_name }}{% endif %}</option>
+                                    <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}{% if tecnico.nombre or tecnico.apellido %} · {{ tecnico.nombre }} {{ tecnico.apellido }}{% endif %}</option>
                                     {% endfor %}
                                 </select>
                                 <small class="text-muted">Opcional. Puedes buscar escribiendo o elegir de la lista.</small>

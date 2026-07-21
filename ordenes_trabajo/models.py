@@ -344,10 +344,11 @@ class OrdenTrabajo(models.Model):
 
     def cambiar_estado(self, usuario, nuevo_estado, razon=''):
         """Cambia estado validando permisos"""
+        nuevo_estado_label = dict(self.ESTADO_CHOICES).get(nuevo_estado, nuevo_estado)
         if not self.puede_cambiar_estado(usuario, nuevo_estado):
             return {
                 'success': False,
-                'mensaje': f'No tienes permiso para cambiar a {nuevo_estado}'
+                'mensaje': f'No tienes permiso para cambiar a "{nuevo_estado_label}"'
             }
 
         estado_anterior = self.estado
@@ -410,7 +411,7 @@ class OrdenTrabajo(models.Model):
 
         return {
             'success': True,
-            'mensaje': f'Estado actualizado a {nuevo_estado}',
+            'mensaje': f'Estado actualizado a "{nuevo_estado_label}"',
             'sync_inventario': sync_result,
         }
 

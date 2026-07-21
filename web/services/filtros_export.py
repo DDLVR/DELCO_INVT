@@ -25,8 +25,10 @@ def queryset_clientes_filtrado(request, *, aplicar_filtros: bool = True):
     solo_duplicados = (request.GET.get('solo_duplicados') or '') == '1'
 
     if solo_duplicados:
+        # order_by() evita que un ordenamiento futuro del queryset contamine el GROUP BY
         numeros_duplicados = (
-            base.values('numero_cliente')
+            base.order_by()
+            .values('numero_cliente')
             .annotate(c=Count('id'))
             .filter(c__gt=1)
             .values_list('numero_cliente', flat=True)
