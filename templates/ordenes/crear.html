@@ -51,29 +51,48 @@
                             
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Técnico Responsable</label>
-                                <select name="tecnico_responsable" class="form-select">
-                                    <option value="">— Asignar después (queda Creada) —</option>
+                                <input type="hidden" name="tecnico_responsable" id="crearTecnicoId" value="">
+                                <div class="delco-ac mb-2"
+                                     data-ac-url="{% url 'api_buscar_tecnicos' %}"
+                                     data-ac-hidden="#crearTecnicoId"
+                                     data-ac-select="#crearTecnicoSelect"
+                                     data-ac-min="2">
+                                    <input type="text" class="form-control delco-ac-input" id="crearTecnicoSearch" placeholder="Escribe para buscar técnico..." autocomplete="off">
+                                    <div class="delco-ac-results list-group shadow-sm d-none"></div>
+                                </div>
+                                <select id="crearTecnicoSelect" class="form-select">
+                                    <option value="">— O elige de la lista —</option>
                                     {% for tecnico in tecnicos %}
-                                    <option value="{{ tecnico.id }}">
-                                        👤 {{ tecnico.nombre_interno }}{% if tecnico.email %} - {{ tecnico.email }}{% endif %}
-                                    </option>
+                                    <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}{% if tecnico.get_full_name %} · {{ tecnico.get_full_name }}{% endif %}</option>
                                     {% endfor %}
                                 </select>
-                                <small class="text-muted">Opcional. Puedes asignar después con edición múltiple.</small>
+                                <small class="text-muted">Opcional. Puedes buscar escribiendo o elegir de la lista.</small>
                             </div>
                         </div>
                         
                         <div class="mb-3">
                             <label class="form-label">Cliente</label>
-                            <select name="cliente" class="form-select">
-                                <option value="">-- Sin cliente asignado --</option>
+                            <input type="hidden" name="cliente" id="crearClienteId" value="">
+                            <div class="delco-ac mb-2"
+                                 data-ac-url="{% url 'api_buscar_clientes' %}"
+                                 data-ac-hidden="#crearClienteId"
+                                 data-ac-select="#crearClienteSelect"
+                                 data-ac-min="2">
+                                <input type="text" class="form-control delco-ac-input" id="crearClienteSearch" placeholder="Escribe Nº, nombre, comuna o dirección..." autocomplete="off">
+                                <div class="delco-ac-results list-group shadow-sm d-none"></div>
+                            </div>
+                            <select id="crearClienteSelect" class="form-select">
+                                <option value="">— O elige de la lista —</option>
                                 {% for cliente in clientes %}
                                 <option value="{{ cliente.id }}">
-                                    🏢 {{ cliente.numero_cliente }} - {{ cliente.customer_name|truncatewords:5 }}
+                                    {{ cliente.numero_cliente }}{% if cliente.customer_name %} · {{ cliente.customer_name }}{% elif cliente.comuna %} · {{ cliente.comuna }}{% endif %}
                                 </option>
                                 {% endfor %}
                             </select>
-                            <small class="text-muted">Seleccionar cliente atendido (opcional)</small>
+                            <small class="text-muted">
+                                Busca escribiendo (cualquier cliente) o elige de la lista
+                                {% if clientes %}(muestra hasta {{ clientes|length }}){% endif %}.
+                            </small>
                         </div>
                         
                         <div class="mb-3">
@@ -118,17 +137,16 @@
             
             <div class="card border-primary delco-panel-card">
                 <div class="card-header bg-primary text-white">
-                    <h6 class="mb-0"><i class="bi bi-people"></i> Personal y Clientes</h6>
+                    <h6 class="mb-0"><i class="bi bi-people"></i> Cómo elegir cliente / técnico</h6>
                 </div>
                 <div class="card-body">
-                    <div class="mb-2">
-                        <strong>👤 Técnicos Activos:</strong>
-                        <span class="badge bg-success float-end">{{ tecnicos|length }}</span>
-                    </div>
-                    <div class="mb-0">
-                        <strong>🏢 Clientes Registrados:</strong>
-                        <span class="badge bg-info float-end">{{ clientes|length }}</span>
-                    </div>
+                    <p class="small mb-2">
+                        Tienes <strong>dos formas</strong>, sincronizadas entre sí:
+                    </p>
+                    <ul class="small mb-0">
+                        <li><strong>Escribir</strong>: con 2 o más letras aparece la sugerencia automática (busca en todo el padrón).</li>
+                        <li><strong>Lista</strong>: abre el desplegable y elige a ojo.</li>
+                    </ul>
                 </div>
             </div>
             
@@ -152,4 +170,29 @@
     </div>
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function syncSelectToSearch(selectId, searchId, hiddenId) {
+        var select = document.getElementById(selectId);
+        var search = document.getElementById(searchId);
+        var hidden = document.getElementById(hiddenId);
+        if (!select || !search || !hidden) return;
+        select.addEventListener('change', function () {
+            var opt = select.options[select.selectedIndex];
+            if (!opt || !opt.value) {
+                hidden.value = '';
+                search.value = '';
+                return;
+            }
+            hidden.value = opt.value;
+            search.value = opt.textContent.trim();
+        });
+    }
+    syncSelectToSearch('crearClienteSelect', 'crearClienteSearch', 'crearClienteId');
+    syncSelectToSearch('crearTecnicoSelect', 'crearTecnicoSearch', 'crearTecnicoId');
+});
+</script>
 {% endblock %}

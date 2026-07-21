@@ -29,9 +29,26 @@
                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarOrdenes">
                     <i class="bi bi-upload"></i> Importar Excel
                 </button>
-                <a href="{% url 'ordenes_exportar' %}" class="btn btn-info">
-                    <i class="bi bi-download"></i> Exportar Excel
-                </a>
+                <div class="btn-group">
+                    <a href="{% url 'ordenes_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}" class="btn btn-info">
+                        <i class="bi bi-download"></i> Exportar filtradas
+                    </a>
+                    <button type="button" class="btn btn-info dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                        <span class="visually-hidden">Más opciones</span>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li>
+                            <a class="dropdown-item" href="{% url 'ordenes_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}">
+                                Exportar filtradas
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{% url 'ordenes_exportar' %}?todas=1">
+                                Exportar todas
+                            </a>
+                        </li>
+                    </ul>
+                </div>
                 <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalFormatoOrdenes">
                     <i class="bi bi-info-circle"></i> Formato
                 </button>
@@ -104,26 +121,28 @@
                         {% if request.user.rol != 'TECNICO' %}
                         <div class="col-md-2">
                             <label class="form-label">Técnico</label>
-                            <select name="tecnico" class="form-select">
-                                <option value="">Todos</option>
-                                {% for tecnico in tecnicos %}
-                                <option value="{{ tecnico.id }}" {% if tecnico.id|stringformat:"s" == tecnico_filtro %}selected{% endif %}>
-                                    {{ tecnico.nombre_interno }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <input type="hidden" name="tecnico" id="filtroTecnicoId" value="{{ tecnico_filtro|default:'' }}">
+                            <div class="delco-ac"
+                                 data-ac-url="{% url 'api_buscar_tecnicos' %}"
+                                 data-ac-hidden="#filtroTecnicoId"
+                                 data-ac-min="2">
+                                <input type="text" class="form-control delco-ac-input" placeholder="Buscar técnico..."
+                                       value="{{ tecnico_filtro_label|default:'' }}" autocomplete="off">
+                                <div class="delco-ac-results list-group shadow-sm d-none"></div>
+                            </div>
                         </div>
                         {% endif %}
                         <div class="col-md-2">
                             <label class="form-label">Cliente</label>
-                            <select name="cliente" class="form-select">
-                                <option value="">Todos</option>
-                                {% for cliente in clientes %}
-                                <option value="{{ cliente.id }}" {% if cliente.id|stringformat:"s" == cliente_filtro %}selected{% endif %}>
-                                    {{ cliente.numero_cliente }}
-                                </option>
-                                {% endfor %}
-                            </select>
+                            <input type="hidden" name="cliente" id="filtroClienteId" value="{{ cliente_filtro|default:'' }}">
+                            <div class="delco-ac"
+                                 data-ac-url="{% url 'api_buscar_clientes' %}"
+                                 data-ac-hidden="#filtroClienteId"
+                                 data-ac-min="2">
+                                <input type="text" class="form-control delco-ac-input" placeholder="Buscar cliente..."
+                                       value="{{ cliente_filtro_label|default:'' }}" autocomplete="off">
+                                <div class="delco-ac-results list-group shadow-sm d-none"></div>
+                            </div>
                         </div>
                         <div class="col-md-3">
                             <label class="form-label">Buscar</label>
@@ -167,7 +186,7 @@
                             {% for orden in ordenes %}
                             <tr class="{% if orden.alerta_duplicado %}table-warning{% endif %}" data-orden-id="{{ orden.id }}">
                                 {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
-                                <td><input type="checkbox" class="check-orden" value="{{ orden.id }}"></td>
+                                <td><input type="checkbox" class="orden-checkbox check-orden" value="{{ orden.id }}"></td>
                                 {% endif %}
                                 <td data-order="{{ orden.id }}">
                                     <a href="{% url 'orden_detalle' orden.id %}" class="text-decoration-none fw-bold">#{{ orden.id }}</a>
@@ -249,6 +268,18 @@
             </div>
         </div>
     </div>
+
+    {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
+    <div id="ordenesSeleccionBandeja" class="delco-seleccion-bandeja mt-3 p-3 rounded d-none">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+                <strong id="ordenesSeleccionCount">0</strong> orden(es) seleccionadas
+                <span class="text-muted small ms-2" id="ordenesSeleccionIdsPreview"></span>
+            </div>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiarSeleccionOrdenes">Limpiar selección</button>
+        </div>
+    </div>
+    {% endif %}
 </div>
 
 {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
@@ -455,7 +486,7 @@
                 {% csrf_token %}
                 <input type="hidden" name="ids" id="bulkAsignarIds">
                 <div class="modal-body">
-                    <p id="bulkAsignarResumen" class="mb-1"></p>
+                    <p id="bulkAsignarResumen" class="mb-1 fw-semibold"></p>
                     <div class="mb-3">
                         <label class="form-label">Técnico que hará el trabajo *</label>
                         <select name="tecnico_responsable" class="form-select" required>
@@ -477,24 +508,90 @@
         </div>
     </div>
 </div>
+
 {% endif %}
 {% endblock %}
 
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // --- Handlers críticos primero (no deben quedar bloqueados por DataTables) ---
+    var OT_SEL_KEY = 'delco.ordenes.selected';
+
+    function getOtSelectedSet() {
+        try {
+            var raw = sessionStorage.getItem(OT_SEL_KEY);
+            var arr = raw ? JSON.parse(raw) : [];
+            return new Set((arr || []).map(String));
+        } catch (e) {
+            return new Set();
+        }
+    }
+    function saveOtSelectedSet(set) {
+        try { sessionStorage.setItem(OT_SEL_KEY, JSON.stringify(Array.from(set))); } catch (e) {}
+    }
+    function actualizarBandejaOrdenes() {
+        var set = getOtSelectedSet();
+        var bandeja = document.getElementById('ordenesSeleccionBandeja');
+        var countEl = document.getElementById('ordenesSeleccionCount');
+        var previewEl = document.getElementById('ordenesSeleccionIdsPreview');
+        if (countEl) countEl.textContent = String(set.size);
+        if (previewEl) {
+            var ids = Array.from(set).slice(0, 10);
+            previewEl.textContent = set.size ? ('#' + ids.join(', #') + (set.size > 10 ? '…' : '')) : '';
+        }
+        if (bandeja) {
+            if (set.size) bandeja.classList.remove('d-none');
+            else bandeja.classList.add('d-none');
+        }
+    }
+    function restaurarChecksOrdenes() {
+        var set = getOtSelectedSet();
+        document.querySelectorAll('.orden-checkbox').forEach(function(el) {
+            el.checked = set.has(String(el.value));
+        });
+        actualizarBandejaOrdenes();
+    }
 
     function obtenerSeleccionadas() {
-        return Array.from(document.querySelectorAll('.check-orden:checked'));
+        return Array.from(getOtSelectedSet()).map(function(id) {
+            return { value: id };
+        });
     }
 
     const checkAll = document.getElementById('checkAllOrdenes');
     if (checkAll) {
         checkAll.addEventListener('change', function() {
-            document.querySelectorAll('.check-orden').forEach(cb => cb.checked = checkAll.checked);
+            var set = getOtSelectedSet();
+            document.querySelectorAll('.orden-checkbox').forEach(function(cb) {
+                cb.checked = checkAll.checked;
+                if (checkAll.checked) set.add(String(cb.value));
+                else set.delete(String(cb.value));
+            });
+            saveOtSelectedSet(set);
+            actualizarBandejaOrdenes();
         });
     }
+
+    document.addEventListener('change', function(ev) {
+        if (ev.target && ev.target.classList && ev.target.classList.contains('orden-checkbox')) {
+            var set = getOtSelectedSet();
+            if (ev.target.checked) set.add(String(ev.target.value));
+            else set.delete(String(ev.target.value));
+            saveOtSelectedSet(set);
+            actualizarBandejaOrdenes();
+        }
+    });
+
+    var btnLimpiarOt = document.getElementById('btnLimpiarSeleccionOrdenes');
+    if (btnLimpiarOt) {
+        btnLimpiarOt.addEventListener('click', function() {
+            saveOtSelectedSet(new Set());
+            document.querySelectorAll('.orden-checkbox').forEach(function(cb) { cb.checked = false; });
+            if (checkAll) { checkAll.checked = false; checkAll.indeterminate = false; }
+            actualizarBandejaOrdenes();
+        });
+    }
+    restaurarChecksOrdenes();
 
     function abrirModalSeleccion(modalId, idsFieldId, resumenId) {
         const seleccionados = obtenerSeleccionadas();
@@ -510,8 +607,8 @@ $(document).ready(function() {
         const resumen = document.getElementById(resumenId);
         if (resumen) {
             resumen.textContent = seleccionados.length === 1
-                ? 'Vas a trabajar con 1 orden.'
-                : `Vas a trabajar con ${seleccionados.length} órdenes.`;
+                ? 'Vas a trabajar con 1 orden seleccionada.'
+                : `Vas a trabajar con ${seleccionados.length} órdenes seleccionadas.`;
         }
         new bootstrap.Modal(document.getElementById(modalId)).show();
         return true;
@@ -526,6 +623,7 @@ $(document).ready(function() {
             abrirModalSeleccion('modalEditarMasivoOrdenes', 'bulkOrdenIds', 'bulkOrdenResumen')
         );
     }
+
     const modalImportarOrdenes = document.getElementById('modalImportarOrdenes');
     const archivoImportarOrdenes = document.getElementById('archivoImportarOrdenes');
     const archivoImportarOrdenesNombre = document.getElementById('archivoImportarOrdenesNombre');
@@ -633,7 +731,10 @@ $(document).ready(function() {
                     } else {
                         alert(data.message);
                     }
-                    if (data.success) setTimeout(() => location.reload(), 900);
+                    if (data.success) {
+                        saveOtSelectedSet(new Set());
+                        setTimeout(() => location.reload(), 900);
+                    }
                 })
                 .catch(() => {
                     if (window.showToast) showToast('No hay conexión con el servidor. Intenta de nuevo.', 'danger');
@@ -654,7 +755,10 @@ $(document).ready(function() {
                     } else {
                         alert(data.message);
                     }
-                    if (data.success) setTimeout(() => location.reload(), 900);
+                    if (data.success) {
+                        saveOtSelectedSet(new Set());
+                        setTimeout(() => location.reload(), 900);
+                    }
                 })
                 .catch(() => {
                     if (window.showToast) showToast('No hay conexión con el servidor. Intenta de nuevo.', 'danger');

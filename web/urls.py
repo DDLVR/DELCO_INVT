@@ -4,14 +4,14 @@ from .views import (
     inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, inventario_eliminar_view, inventario_crear_view, inventario_modificar_masivo_view, profile_view, update_profile_view,
     usuarios_list_view, usuario_crear_view, usuario_editar_view, usuario_reset_password_view, usuario_eliminar_view,
     clientes_list_view, clientes_exportar_view, clientes_importar_view, cliente_crear_view, cliente_editar_view, cliente_historial_view, cliente_eliminar_view,
-    clientes_eliminar_masivo_view,
+    clientes_eliminar_masivo_view, clientes_modificar_masivo_view,
     registro_errores_view, importacion_errores_view, importacion_corregir_fila_view,
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
     reportes_moreapp_list, reportes_moreapp_detalle, reportes_moreapp_sincronizar, reportes_moreapp_eliminar,
     reportes_moreapp_eliminar_masivo,
     pendientes_operativos_view, moreapp_marcar_revision_view, moreapp_reprocesar_view,
     auditoria_list_view,
-    api_buscar_medidores, api_buscar_clientes, api_obtener_medidor,
+    api_buscar_medidores, api_buscar_clientes, api_buscar_tecnicos, api_obtener_medidor,
 )
 from reportes.views import reportes_hub_view, reportes_export_view
 from catalogos.views import catalogo_diagnostico_list_view
@@ -96,6 +96,7 @@ urlpatterns = [
     path('clientes/<int:pk>/editar/', cliente_editar_view, name='cliente_editar'),
     path('clientes/<int:pk>/eliminar/', cliente_eliminar_view, name='cliente_eliminar'),
     path('clientes/eliminar-masivo/', clientes_eliminar_masivo_view, name='clientes_eliminar_masivo'),
+    path('clientes/modificar-masivo/', clientes_modificar_masivo_view, name='clientes_modificar_masivo'),
 
     # Órdenes de Trabajo
     path('ordenes/', ordenes_trabajo_list, name='ordenes_list'),
@@ -140,6 +141,7 @@ urlpatterns = [
     # API - Búsqueda autocomplete inventario
     path('api/buscar-medidores/', api_buscar_medidores, name='api_buscar_medidores'),
     path('api/buscar-clientes/', api_buscar_clientes, name='api_buscar_clientes'),
+    path('api/buscar-tecnicos/', api_buscar_tecnicos, name='api_buscar_tecnicos'),
     path('api/medidores/<int:medidor_id>/', api_obtener_medidor, name='api_obtener_medidor'),
 ]
 

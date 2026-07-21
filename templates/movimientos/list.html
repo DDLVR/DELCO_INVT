@@ -234,9 +234,9 @@
                 {% endif %}
               </td>
               <td class="small">
-                <span class="text-muted">{{ mov.origen.nombre|default:"—" }}</span>
+                <span class="text-muted">{{ mov.origen_display|default:mov.origen.nombre|default:"—" }}</span>
                 <i class="bi bi-arrow-right mx-1 text-muted"></i>
-                <span>{{ mov.destino.nombre|default:"—" }}</span>
+                <span>{{ mov.destino_display|default:mov.destino.nombre|default:"—" }}</span>
               </td>
               <td class="small">{{ mov.responsable.nombre_interno }}</td>
               <td class="small">

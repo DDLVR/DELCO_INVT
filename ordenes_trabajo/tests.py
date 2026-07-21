@@ -286,6 +286,18 @@ class OrdenesBasicasWorkflowTests(TestCase):
 		self.assertEqual(orden.estado, 'ASIGNADA')
 
 	def test_reimportar_mismo_excel_no_duplica_ordenes(self):
+		Cliente.objects.create(
+			numero_cliente='CLI-OT-002',
+			direccion='Dir OT 2',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='CENTRO',
+			customer_name='Cliente OT 2',
+			installation_address='Inst OT 2',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-OT-002',
+			activo=True,
+		)
 		archivo = self._excel_ordenes([
 			[
 				'CLI-OT-002',
@@ -306,6 +318,16 @@ class OrdenesBasicasWorkflowTests(TestCase):
 			OrdenTrabajo.objects.filter(titulo='OT MoreApp #212 — Cliente prueba').count(),
 			1,
 		)
+
+	def test_importacion_ot_falla_si_cliente_no_existe(self):
+		archivo = self._excel_ordenes([
+			['CLI-INEXISTENTE', 'OT Fantasma', 'Desc', 'INSTALACION', 'tecnico_ot', 'CREADA', 'Obs'],
+		])
+		importacion = importar_ordenes_excel(archivo, self.admin)
+		self.assertEqual(importacion.exitosas, 0)
+		self.assertGreaterEqual(importacion.fallidas, 1)
+		self.assertFalse(OrdenTrabajo.objects.filter(titulo='OT Fantasma').exists())
+		self.assertFalse(Cliente.objects.filter(numero_cliente='CLI-INEXISTENTE').exists())
 
 	def test_tecnico_ve_solo_sus_ordenes_en_listado(self):
 		orden_1 = OrdenTrabajo.objects.create(
@@ -592,6 +614,10 @@ class OrdenesSyncInventarioTests(TestCase):
 		self.medidor.save()
 		self.cliente.medidor_actual = self.medidor
 		self.cliente.save()
+
+		# Cerrar la OT del setUp para que solo quede una abierta a vincular.
+		self.orden.estado = 'CERRADA'
+		self.orden.save(update_fields=['estado'])
 
 		orden_abierta = OrdenTrabajo.objects.create(
 			titulo='OT abierta moreapp',

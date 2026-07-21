@@ -1169,3 +1169,48 @@ td.cliente-numero-duplicado strong {
 [data-bs-theme="dark"] .delco-import-file-title {
   color: var(--bs-body-color);
 }
+
+/* Autocomplete DELCO */
+.delco-ac {
+  position: relative;
+}
+
+.delco-ac-results {
+  position: absolute;
+  z-index: 1050;
+  max-height: 240px;
+  overflow: auto;
+  width: 100%;
+  background-color: var(--bs-body-bg);
+  border-radius: var(--bs-border-radius);
+}
+
+/* Fondo sólido: la regla global de dark deja los list-group-item
+   transparentes y los resultados se mezclaban con la tabla de atrás. */
+.delco-ac-results .list-group-item,
+[data-bs-theme="dark"] .delco-ac-results .list-group-item:not(.active) {
+  background-color: var(--bs-body-bg);
+  color: var(--bs-body-color);
+  border-color: var(--bs-border-color);
+}
+
+.delco-ac-results .list-group-item-action:hover,
+.delco-ac-results .list-group-item-action:focus,
+[data-bs-theme="dark"] .delco-ac-results .list-group-item-action:not(.active):hover,
+[data-bs-theme="dark"] .delco-ac-results .list-group-item-action:not(.active):focus {
+  background-color: var(--bs-tertiary-bg);
+  color: var(--bs-body-color);
+}
+
+.delco-ac-results:not(.d-none):not([hidden]) {
+  display: block;
+}
+
+.delco-seleccion-bandeja {
+  position: sticky;
+  bottom: 0;
+  z-index: 1020;
+  background: var(--bs-body-bg);
+  border-top: 1px solid var(--bs-border-color);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
+}
