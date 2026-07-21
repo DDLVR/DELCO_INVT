@@ -395,7 +395,18 @@
     }
 
     function lockModal() {
-      if (modalEl) modalEl.dataset.importing = '1';
+      if (modalEl) {
+        modalEl.dataset.importing = '1';
+        if (!modalEl.dataset.importGuardBound) {
+          modalEl.addEventListener('hide.bs.modal', function (e) {
+            if (modalEl.dataset.importing === '1') {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+          });
+          modalEl.dataset.importGuardBound = '1';
+        }
+      }
       dismissButtons.forEach(function (btn) { btn.disabled = true; });
     }
 
@@ -464,12 +475,12 @@
 
       xhr.onload = function () {
         if (timer) clearInterval(timer);
-        setProgress(100, 'Importación finalizada');
 
         var data = null;
         try {
           data = JSON.parse(xhr.responseText);
         } catch (e) {
+          setProgress(0, 'Error al importar');
           var err = new Error('Respuesta inválida del servidor (código ' + xhr.status + ').');
           unlockModal();
           if (typeof config.onError === 'function') config.onError(err);
@@ -478,9 +489,11 @@
         }
 
         if (xhr.status >= 200 && xhr.status < 300) {
+          setProgress(100, 'Importación finalizada');
           if (typeof config.onSuccess === 'function') config.onSuccess(data);
           resolve(data);
         } else {
+          setProgress(0, 'Error al importar');
           var errHttp = new Error((data && data.message) ? data.message : ('Error HTTP ' + xhr.status));
           unlockModal();
           if (typeof config.onError === 'function') config.onError(errHttp, data);
