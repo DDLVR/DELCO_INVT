@@ -97,7 +97,7 @@
                                     <td class="small text-muted">
                                         {% if reg.detalle_extra %}{{ reg.detalle_extra }}{% endif %}
                                         {% if reg.estado_anterior and reg.estado_nuevo %}
-                                        <div>{{ reg.estado_anterior }} → {{ reg.estado_nuevo }}</div>
+                                        <div>{{ reg.estado_anterior|audit_value_label }} → {{ reg.estado_nuevo|audit_value_label }}</div>
                                         {% endif %}
                                     </td>
                                 </tr>
