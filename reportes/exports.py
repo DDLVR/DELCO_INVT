@@ -9,6 +9,8 @@ import openpyxl
 from django.http import HttpResponse
 from django.utils import timezone
 
+from web.services.export_filenames import nombre_exportacion_con_fecha
+
 
 def _as_cell_text(value) -> str:
     if value is None:
@@ -31,6 +33,7 @@ def build_excel_response(filename: str, headers: Sequence[str], rows: Iterable[S
         buffer.getvalue(),
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )
+    filename = nombre_exportacion_con_fecha(filename)
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
@@ -142,5 +145,6 @@ def build_pdf_response(
     buffer.seek(0)
 
     response = HttpResponse(buffer.getvalue(), content_type='application/pdf')
+    filename = nombre_exportacion_con_fecha(filename)
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
