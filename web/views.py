@@ -890,7 +890,12 @@ def inventario_list_view(request):
                 'operador': 'operador__icontains',
                 'abonado': 'abonado__icontains',
                 'direccion_ip': 'direccion_ip__icontains',
-                'entregado_a': 'entregado_a_nombre__icontains',
+                # La custodia real vive en en_custodia_de; el texto del Excel en entregado_a_nombre.
+                'entregado_a': [
+                    'en_custodia_de__nombre_interno__icontains',
+                    'entregado_a_nombre__icontains',
+                    'entregado_a_otro__icontains',
+                ],
                 'proyecto': 'proyecto__icontains',
                 'cliente': 'cliente__numero_cliente__icontains',
             }
@@ -900,7 +905,9 @@ def inventario_list_view(request):
                 'abonado__icontains',
                 'direccion_ip__icontains',
                 'ip_fija__icontains',
+                'en_custodia_de__nombre_interno__icontains',
                 'entregado_a_nombre__icontains',
+                'entregado_a_otro__icontains',
                 'proyecto__icontains',
                 'estado_inventario__nombre__icontains',
                 'cliente__numero_cliente__icontains',
@@ -912,7 +919,12 @@ def inventario_list_view(request):
                 'imei': 'imei__icontains',
                 'serie': 'serie__icontains',
                 'caja': 'caja__icontains',
-                'tecnico': 'tecnico_responsable__icontains',
+                # El asignado real puede estar en entregado_a (FK) y no en el texto del Excel.
+                'tecnico': [
+                    'tecnico_responsable__icontains',
+                    'entregado_a__nombre_interno__icontains',
+                    'entregado_a_otro__icontains',
+                ],
                 'cliente': 'cliente__numero_cliente__icontains',
                 'proyecto': 'proyecto__icontains',
             }
@@ -923,6 +935,8 @@ def inventario_list_view(request):
                 'serie__icontains',
                 'caja__icontains',
                 'tecnico_responsable__icontains',
+                'entregado_a__nombre_interno__icontains',
+                'entregado_a_otro__icontains',
                 'estado_inventario__nombre__icontains',
                 'cliente__numero_cliente__icontains',
                 'proyecto__icontains',
@@ -938,7 +952,14 @@ def inventario_list_view(request):
                 else:
                     equipos = equipos.none()
             elif campo_busqueda in campos_por_tipo:
-                equipos = equipos.filter(**{campos_por_tipo[campo_busqueda]: busqueda})
+                lookups = campos_por_tipo[campo_busqueda]
+                if isinstance(lookups, (list, tuple)):
+                    q_campo = Q()
+                    for lookup in lookups:
+                        q_campo |= Q(**{lookup: busqueda})
+                    equipos = equipos.filter(q_campo)
+                else:
+                    equipos = equipos.filter(**{lookups: busqueda})
             else:
                 query = Q()
                 for lookup in campos_all:
@@ -1054,7 +1075,7 @@ def inventario_list_view(request):
 
     sim_resumen = None
     if tipo == 'sim':
-        base_sim = SimCard.objects.all()
+        base_sim = SimCard.objects.filter(eliminado=False)
         total_sim = base_sim.count()
         por_estado = list(
             base_sim.values('estado_inventario_id', 'estado_inventario__nombre')
@@ -1084,8 +1105,8 @@ def inventario_list_view(request):
         'tipo_medidor_seleccionado': tipo_medidor_filtro,
         'proyectos_disponibles': proyectos_disponibles,
         'tipo_medidor_choices': Medidor.TIPO_MEDIDOR_CHOICES,
-        'total_medidores_directos': Medidor.objects.filter(tipo_medidor='DIRECTO').count(),
-        'total_medidores_indirectos': Medidor.objects.filter(tipo_medidor='INDIRECTO').count(),
+        'total_medidores_directos': Medidor.objects.filter(tipo_medidor='DIRECTO', eliminado=False).count(),
+        'total_medidores_indirectos': Medidor.objects.filter(tipo_medidor='INDIRECTO', eliminado=False).count(),
         'sim_resumen': sim_resumen,
         'busqueda': busqueda,
         'campo_busqueda': campo_busqueda,
@@ -1108,13 +1129,13 @@ def inventario_obtener_datos_view(request, pk):
     tipo = request.GET.get('tipo', 'medidor')
     
     try:
-        # Obtener el equipo según tipo
+        # Obtener el equipo según tipo (solo activos; los eliminados no se consultan)
         if tipo == 'medidor':
-            equipo = get_object_or_404(Medidor, pk=pk)
+            equipo = get_object_or_404(Medidor, pk=pk, eliminado=False)
         elif tipo == 'sim':
-            equipo = get_object_or_404(SimCard, pk=pk)
+            equipo = get_object_or_404(SimCard, pk=pk, eliminado=False)
         elif tipo == 'modem':
-            equipo = get_object_or_404(Modem, pk=pk)
+            equipo = get_object_or_404(Modem, pk=pk, eliminado=False)
         else:
             return JsonResponse({
                 'success': False,
@@ -1261,13 +1282,13 @@ def inventario_modificar_view(request, pk):
     tipo = request.POST.get('tipo', 'medidor')
     
     try:
-        # Obtener el equipo según tipo
+        # Obtener el equipo según tipo (solo activos; los eliminados no se editan)
         if tipo == 'medidor':
-            equipo = get_object_or_404(Medidor, pk=pk)
+            equipo = get_object_or_404(Medidor, pk=pk, eliminado=False)
         elif tipo == 'sim':
-            equipo = get_object_or_404(SimCard, pk=pk)
+            equipo = get_object_or_404(SimCard, pk=pk, eliminado=False)
         elif tipo == 'modem':
-            equipo = get_object_or_404(Modem, pk=pk)
+            equipo = get_object_or_404(Modem, pk=pk, eliminado=False)
         else:
             return JsonResponse({
                 'success': False,
@@ -1310,7 +1331,7 @@ def inventario_modificar_view(request, pk):
                 return None, valor_otro
             if valor_selector:
                 try:
-                    return Medidor.objects.get(pk=int(valor_selector)), ''
+                    return Medidor.objects.get(pk=int(valor_selector), eliminado=False), ''
                 except (ValueError, TypeError, Medidor.DoesNotExist):
                     return None, valor_otro
             return None, valor_otro
@@ -1784,13 +1805,13 @@ def inventario_modificar_masivo_view(request):
         return JsonResponse({'success': False, 'message': 'La selección de equipos no es válida. Vuelve a marcarlos e intenta de nuevo.'})
 
     if tipo == 'medidor':
-        queryset = Medidor.objects.filter(pk__in=ids)
+        queryset = Medidor.objects.filter(pk__in=ids, eliminado=False)
         tipo_item = 'MEDIDOR'
     elif tipo == 'sim':
-        queryset = SimCard.objects.filter(pk__in=ids)
+        queryset = SimCard.objects.filter(pk__in=ids, eliminado=False)
         tipo_item = 'SIM'
     elif tipo == 'modem':
-        queryset = Modem.objects.filter(pk__in=ids)
+        queryset = Modem.objects.filter(pk__in=ids, eliminado=False)
         tipo_item = 'MODEM'
     else:
         return JsonResponse({'success': False, 'message': 'Tipo de equipo no reconocido.'})
@@ -1815,7 +1836,7 @@ def inventario_modificar_masivo_view(request):
 
     cliente_obj = None
     if cliente_texto:
-        cliente_obj = Cliente.objects.filter(numero_cliente=cliente_texto).first()
+        cliente_obj = Cliente.objects.filter(numero_cliente=cliente_texto, activo=True).first()
         if not cliente_obj:
             cliente_obj = Cliente.objects.create(
                 numero_cliente=cliente_texto,
@@ -1838,7 +1859,7 @@ def inventario_modificar_masivo_view(request):
     medidor_obj = None
     if medidor_id:
         try:
-            medidor_obj = Medidor.objects.get(pk=int(medidor_id))
+            medidor_obj = Medidor.objects.get(pk=int(medidor_id), eliminado=False)
         except (ValueError, TypeError, Medidor.DoesNotExist):
             pass
 
@@ -1942,21 +1963,21 @@ def inventario_exportar_view(request):
     caja_filtro = (request.GET.get('caja') or '').strip()
     tipo_medidor_filtro = (request.GET.get('tipo_medidor') or '').strip()
     
-    # Obtener datos base
+    # Obtener datos base (solo activos: los soft-eliminados no se exportan)
     if tipo == 'medidor':
-        equipos = Medidor.objects.select_related('entregado_a', 'estado_inventario', 'cliente', 'en_custodia_de', 'ubicacion_actual').order_by('serie')
+        equipos = Medidor.objects.filter(eliminado=False).select_related('entregado_a', 'estado_inventario', 'cliente', 'en_custodia_de', 'ubicacion_actual').order_by('serie')
         tipo_nombre = 'MEDIDORES'
         nombre_seccion = 'Medidores'
     elif tipo == 'sim':
-        equipos = SimCard.objects.select_related('estado_inventario', 'cliente', 'medidor', 'ubicacion_actual', 'en_custodia_de').order_by('imei')
+        equipos = SimCard.objects.filter(eliminado=False).select_related('estado_inventario', 'cliente', 'medidor', 'ubicacion_actual', 'en_custodia_de').order_by('imei')
         tipo_nombre = 'SIM'
         nombre_seccion = 'SIM-Cards'
     elif tipo == 'modem':
-        equipos = Modem.objects.select_related('cliente', 'medidor', 'entregado_a', 'estado_inventario', 'en_custodia_de', 'ubicacion_actual').order_by('serie')
+        equipos = Modem.objects.filter(eliminado=False).select_related('cliente', 'medidor', 'entregado_a', 'estado_inventario', 'en_custodia_de', 'ubicacion_actual').order_by('serie')
         tipo_nombre = 'MODEMS'
         nombre_seccion = 'Modems'
     else:
-        equipos = Medidor.objects.select_related('entregado_a', 'estado_inventario', 'cliente', 'en_custodia_de', 'ubicacion_actual').order_by('serie')
+        equipos = Medidor.objects.filter(eliminado=False).select_related('entregado_a', 'estado_inventario', 'cliente', 'en_custodia_de', 'ubicacion_actual').order_by('serie')
         tipo_nombre = 'MEDIDORES'
         nombre_seccion = 'Medidores'
     
@@ -1998,7 +2019,9 @@ def inventario_exportar_view(request):
                     Q(imei__icontains=search)
                     | Q(operador__icontains=search)
                     | Q(abonado__icontains=search)
+                    | Q(en_custodia_de__nombre_interno__icontains=search)
                     | Q(entregado_a_nombre__icontains=search)
+                    | Q(entregado_a_otro__icontains=search)
                     | Q(estado_inventario__nombre__icontains=search)
                     | Q(cliente__numero_cliente__icontains=search)
                     | Q(proyecto__icontains=search)
@@ -2011,6 +2034,8 @@ def inventario_exportar_view(request):
                     | Q(serie__icontains=search)
                     | Q(caja__icontains=search)
                     | Q(tecnico_responsable__icontains=search)
+                    | Q(entregado_a__nombre_interno__icontains=search)
+                    | Q(entregado_a_otro__icontains=search)
                     | Q(estado_inventario__nombre__icontains=search)
                     | Q(cliente__numero_cliente__icontains=search)
                     | Q(proyecto__icontains=search)
@@ -2031,7 +2056,7 @@ def inventario_exportar_view(request):
                     '1': 'imei',
                     '2': 'operador',
                     '3': 'abonado',
-                    '7': 'entregado_a_nombre',
+                    '7': ['en_custodia_de__nombre_interno', 'entregado_a_nombre', 'entregado_a_otro'],
                     '9': 'proyecto',
                     '10': 'estado_inventario__nombre',
                     '11': 'cliente__numero_cliente',
@@ -2042,7 +2067,7 @@ def inventario_exportar_view(request):
                     '3': 'imei',
                     '4': 'serie',
                     '7': 'caja',
-                    '8': 'tecnico_responsable',
+                    '8': ['tecnico_responsable', 'entregado_a__nombre_interno', 'entregado_a_otro'],
                     '9': 'estado_inventario__nombre',
                     '10': 'cliente__numero_cliente',
                     '11': 'proyecto',
@@ -2058,7 +2083,12 @@ def inventario_exportar_view(request):
                     equipos = equipos.none()
             else:
                 campo = field_map.get(tipo, {}).get(search_field)
-                if campo:
+                if isinstance(campo, (list, tuple)):
+                    q_campo = Q()
+                    for c in campo:
+                        q_campo |= Q(**{f'{c}__icontains': search})
+                    equipos = equipos.filter(q_campo)
+                elif campo:
                     equipos = equipos.filter(**{f'{campo}__icontains': search})
 
     # Aplicar cantidad visible (selector Mostrar)

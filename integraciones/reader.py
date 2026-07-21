@@ -846,13 +846,27 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
         equipo.estado_inventario = estado_obj
         cambios.append('estado_inventario')
 
+    es_retiro = bool(estado_obj) and 'retir' in _normalizar_texto(getattr(estado_obj, 'nombre', ''))
+
     if _es_estado_instalado(estado_obj):
         destino_cliente = _obtener_o_crear_ubicacion('CLIENTE', 'Instalado en cliente')
         if hasattr(equipo, 'ubicacion_actual_id') and equipo.ubicacion_actual_id != destino_cliente.id:
             equipo.ubicacion_actual = destino_cliente
             cambios.append('ubicacion_actual')
 
-    if _intentar_asignar_cliente_equipo(
+    if es_retiro:
+        # Un equipo retirado deja de estar asignado: liberar cliente y, si era
+        # el medidor_actual de alguna ficha, soltarlo (el snapshot queda en el movimiento).
+        if getattr(equipo, 'cliente_id', None):
+            equipo.cliente = None
+            cambios.append('cliente')
+        if tipo_equipo == 'MEDIDOR':
+            from clientes.models import Cliente as _Cliente
+            _Cliente.objects.filter(medidor_actual=equipo).update(medidor_actual=None)
+        if tipo_equipo in ('SIM', 'MODEM') and getattr(equipo, 'medidor_id', None):
+            equipo.medidor = None
+            cambios.append('medidor')
+    elif _intentar_asignar_cliente_equipo(
         equipo,
         tipo_equipo,
         cliente_obj,
@@ -899,7 +913,13 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
             equipo.puerto = puerto
             cambios.append('puerto')
 
-    if tipo_equipo == 'MEDIDOR' and cliente_obj and cliente_obj.medidor_actual_id != equipo.id:
+    # medidor_actual solo se toca al instalar; en retiro ya se liberó arriba.
+    if (
+        tipo_equipo == 'MEDIDOR'
+        and cliente_obj
+        and _es_estado_instalado(estado_obj)
+        and cliente_obj.medidor_actual_id != equipo.id
+    ):
         _asignar_medidor_actual_si_disponible(
             cliente_obj,
             equipo,
