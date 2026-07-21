@@ -215,3 +215,60 @@ class ImportacionClientesModoTests(TestCase):
 		self.assertEqual(Cliente.objects.filter(numero_cliente='CLI-MULTI', activo=True).count(), 2)
 		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-MULTI', meter_serial_n_1='SER-A', activo=True).exists())
 		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-MULTI', meter_serial_n_1='SER-B', activo=True).exists())
+
+	def test_sync_completo_no_desactiva_si_excel_trae_serie_vacia(self):
+		"""Si el Excel trae el Nº sin serie pero la ficha ya tiene serie, no desactivar en sync."""
+		Cliente.objects.create(
+			numero_cliente='CLI-KEEP-SERIE',
+			direccion='Dir keep',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='NORTE',
+			customer_name='Con Serie',
+			installation_address='Inst keep',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-REAL-1',
+			activo=True,
+		)
+		Cliente.objects.create(
+			numero_cliente='CLI-DROP-OTHER',
+			direccion='Dir drop',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='SUR',
+			customer_name='Otro',
+			installation_address='Inst drop',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-DROP',
+			activo=True,
+		)
+		# Misma ficha: Nº coincidente, serie vacía en Excel (no debe borrar la serie ni desactivar).
+		archivo = self._build_excel([
+			['CENTRO', 'ELECTRICO', 'CLI-KEEP-SERIE', 'Santiago', 'Actualizado', 'Inst 2', 'TEST', 'PROY', '', '10.0.0.77'],
+		])
+		importacion = importar_clientes_excel(archivo, self.usuario, sincronizar_completo=True)
+		self.assertEqual(importacion.estado, 'COMPLETADO')
+		keep = Cliente.objects.get(numero_cliente='CLI-KEEP-SERIE', meter_serial_n_1='SER-REAL-1')
+		self.assertTrue(keep.activo)
+		self.assertEqual(keep.customer_name, 'Actualizado')
+		self.assertFalse(Cliente.objects.filter(numero_cliente='CLI-DROP-OTHER', activo=True).exists())
+
+	def test_sync_completo_normaliza_serie_casefold(self):
+		Cliente.objects.create(
+			numero_cliente='CLI-CASE',
+			direccion='Dir',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='NORTE',
+			customer_name='Case',
+			installation_address='Inst',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='ser-abc',
+			activo=True,
+		)
+		archivo = self._build_excel([
+			['NORTE', 'ELECTRICO', 'CLI-CASE', 'Santiago', 'Case Up', 'Inst 2', 'TEST', 'PROY', 'SER-ABC', '10.0.0.88'],
+		])
+		importacion = importar_clientes_excel(archivo, self.usuario, sincronizar_completo=True)
+		self.assertEqual(importacion.estado, 'COMPLETADO')
+		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-CASE', activo=True).exists())

@@ -208,6 +208,14 @@ def _serie_cliente_igual(a, b) -> bool:
     return _normalizar_serie_medidor_cliente(a).casefold() == _normalizar_serie_medidor_cliente(b).casefold()
 
 
+def _clave_cliente_sync(numero, serie) -> tuple:
+    """Clave estable para sincronización completa (Nº + serie normalizada)."""
+    return (
+        str(numero or '').strip(),
+        _normalizar_serie_medidor_cliente(serie).casefold(),
+    )
+
+
 def _buscar_cliente_para_importacion(numero_text: str, serie_text: str):
     """Resuelve ficha a actualizar/reactivar para evitar duplicados innecesarios.
 
@@ -783,11 +791,13 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
                         'direccion_ip': direccion_ip,
                         'apn': apn,
                         'fecha_recepcion': fecha_recepcion,
-                        'entregado_a_nombre': entregado_a_nombre,
                         'fecha_entrega': fecha_entrega,
                         'estado_inventario': estado_obj,
                         'ubicacion_actual': bodega,
                     }
+                    # No borrar "Entregado a" de MoreApp/manual si el Excel viene vacío.
+                    if entregado_a_nombre:
+                        defaults['entregado_a_nombre'] = entregado_a_nombre
                     if cliente_obj is not None:
                         defaults['cliente'] = cliente_obj
                         defaults['cliente_otro'] = ''
@@ -1546,8 +1556,13 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                 if serie_key:
                     series_importadas[serie_key] = (idx, numero_text)
 
-                # Solo sincronizar activos con claves exactas efectivamente procesadas sin error.
-                numeros_excel.add((numero_text, serie_text))
+                # Clave post-save: si el Excel trae serie vacía pero la ficha ya tenía
+                # serie, no usar '' (eso desactivaría el cliente en sync completo).
+                if cliente_existente:
+                    serie_sync = cliente_existente.meter_serial_n_1
+                else:
+                    serie_sync = meter_serial_n_1
+                numeros_excel.add(_clave_cliente_sync(numero_text, serie_sync))
 
                 exitosas += 1
 
@@ -1563,9 +1578,9 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
         desactivadas = 0
         if sincronizar_completo and numeros_excel:
             for cliente_activo in Cliente.objects.filter(activo=True):
-                clave_cliente = (
-                    str(cliente_activo.numero_cliente).strip(),
-                    str(cliente_activo.meter_serial_n_1).strip() if cliente_activo.meter_serial_n_1 else '',
+                clave_cliente = _clave_cliente_sync(
+                    cliente_activo.numero_cliente,
+                    cliente_activo.meter_serial_n_1,
                 )
                 if clave_cliente not in numeros_excel:
                     cliente_activo.activo = False
@@ -1746,7 +1761,11 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
                 equipo.direccion_ip or '',
                 equipo.apn or '',
                 equipo.fecha_recepcion.strftime('%d-%m-%Y') if equipo.fecha_recepcion else '',
-                equipo.entregado_a_nombre or '',
+                (
+                    getattr(equipo, 'entregado_a_nombre', '') or ''
+                ) or (getattr(equipo, 'entregado_a_otro', '') or '') or (
+                    equipo.en_custodia_de.nombre_interno if getattr(equipo, 'en_custodia_de', None) else ''
+                ),
                 equipo.fecha_entrega.strftime('%d-%m-%Y') if equipo.fecha_entrega else '',
                 equipo.estado_inventario.nombre if equipo.estado_inventario else '',
                 equipo.cliente.numero_cliente if equipo.cliente else (getattr(equipo, 'cliente_otro', '') or ''),
