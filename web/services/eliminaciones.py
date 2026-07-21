@@ -103,6 +103,40 @@ def _identificador_para(entidad: str, instance: models.Model) -> str:
     return str(instance.pk)
 
 
+def _limpiar_vinculos_tras_eliminacion(instance: models.Model, entidad: str) -> None:
+    """Desengancha vínculos vivos tras el soft-delete (el snapshot ya los guardó).
+
+    - Equipo eliminado: deja de figurar como asignado a un cliente y, si era
+      el medidor_actual de alguna ficha, se libera.
+    - Cliente eliminado: los equipos que apuntaban a él quedan libres.
+    """
+    from clientes.models import Cliente
+    from inventario.models import Medidor, Modem, SimCard
+
+    if entidad == ENTIDAD_MEDIDOR:
+        Cliente.objects.filter(medidor_actual=instance).update(medidor_actual=None)
+
+    if entidad in (ENTIDAD_MEDIDOR, ENTIDAD_SIM, ENTIDAD_MODEM):
+        campos = []
+        if getattr(instance, 'cliente_id', None):
+            instance.cliente = None
+            campos.append('cliente')
+        if entidad in (ENTIDAD_SIM, ENTIDAD_MODEM) and getattr(instance, 'medidor_id', None):
+            instance.medidor = None
+            campos.append('medidor')
+        if campos:
+            instance.save(update_fields=campos)
+        return
+
+    if entidad == ENTIDAD_CLIENTE:
+        if getattr(instance, 'medidor_actual_id', None):
+            instance.medidor_actual = None
+            instance.save(update_fields=['medidor_actual'])
+        Medidor.objects.filter(cliente=instance).update(cliente=None)
+        SimCard.objects.filter(cliente=instance).update(cliente=None)
+        Modem.objects.filter(cliente=instance).update(cliente=None)
+
+
 def _marcar_soft_delete(instance: models.Model, usuario, entidad: str) -> None:
     """Aplica soft-delete según el tipo de entidad."""
     ahora = timezone.now()
@@ -116,6 +150,7 @@ def _marcar_soft_delete(instance: models.Model, usuario, entidad: str) -> None:
             instance.eliminado_por = usuario
             update_fields.append('eliminado_por')
         instance.save(update_fields=update_fields)
+        _limpiar_vinculos_tras_eliminacion(instance, entidad)
         return
 
     instance.eliminado = True
@@ -127,6 +162,7 @@ def _marcar_soft_delete(instance: models.Model, usuario, entidad: str) -> None:
         instance.eliminado_por = usuario
         update_fields.append('eliminado_por')
     instance.save(update_fields=update_fields)
+    _limpiar_vinculos_tras_eliminacion(instance, entidad)
 
 
 def _ya_eliminado(instance: models.Model, entidad: str) -> bool:
