@@ -129,9 +129,9 @@
                     <div class="row g-2 mt-1 small">
                       <div class="col-sm-4">
                         <span class="text-muted">Origen:</span><br>
-                        {{ item.movimiento.origen.nombre|default:"—" }}
+                        {{ item.movimiento.origen_display|default:item.movimiento.origen.nombre|default:"—" }}
                         <i class="bi bi-arrow-right mx-1 text-muted"></i>
-                        {{ item.movimiento.destino.nombre|default:"—" }}
+                        {{ item.movimiento.destino_display|default:item.movimiento.destino.nombre|default:"—" }}
                       </div>
                       <div class="col-sm-4">
                         <span class="text-muted">Responsable:</span><br>

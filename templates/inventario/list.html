@@ -450,6 +450,23 @@
             </div>
         </div>
     </div>
+
+    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
+    {% if tipo != 'todos' %}
+    <div id="inventarioSeleccionBandeja" class="delco-seleccion-bandeja mt-3 p-3 rounded d-none">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+                <strong id="inventarioSeleccionCount">0</strong> equipo(s) seleccionados
+                <span class="text-muted small ms-2" id="inventarioSeleccionIdsPreview"></span>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-dark" id="btnAbrirMasivoBandeja">Cambiar varios</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiarSeleccionInventario">Limpiar selección</button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
 </div>
 
 <!-- Modal de Ayuda - Formato de Importación -->
@@ -806,7 +823,7 @@
                 <div class="modal-body">
                     <input type="hidden" name="tipo" value="{{ tipo }}">
                     <input type="hidden" name="ids" id="bulkIds">
-                    <p class="small mb-1" id="bulkResumenSeleccion">Ningún equipo seleccionado</p>
+                    <p class="small mb-1 fw-semibold" id="bulkResumenSeleccion">Ningún equipo seleccionado</p>
                     <p class="small text-muted mb-3">
                         Completa solo lo que quieras modificar. Si un campo queda en
                         <strong>Sin cambio</strong>, ese dato se mantiene igual.
@@ -822,21 +839,32 @@
                         </select>
                     </div>
 
+                    <div class="mb-3">
+                        <label class="form-label">Entregar a / técnico</label>
+                        <input type="hidden" name="entregado_a_id" id="masivoTecnicoId" value="">
+                        <div class="delco-ac"
+                             data-ac-url="{% url 'api_buscar_tecnicos' %}"
+                             data-ac-hidden="#masivoTecnicoId"
+                             data-ac-min="2">
+                            <input type="text" class="form-control delco-ac-input" placeholder="Buscar técnico (vacío = sin cambio)..." autocomplete="off">
+                            <div class="delco-ac-results list-group shadow-sm d-none"></div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Cliente</label>
+                        <input type="hidden" name="cliente_id" id="masivoClienteId" value="">
+                        <div class="delco-ac"
+                             data-ac-url="{% url 'api_buscar_clientes' %}"
+                             data-ac-hidden="#masivoClienteId"
+                             data-ac-min="2">
+                            <input type="text" class="form-control delco-ac-input" placeholder="Buscar cliente (vacío = sin cambio)..." autocomplete="off">
+                            <div class="delco-ac-results list-group shadow-sm d-none"></div>
+                        </div>
+                        <input type="hidden" name="cliente_texto" id="masivoClienteTexto" value="">
+                    </div>
+
                     {% if tipo == 'medidor' %}
-                    <div class="mb-3">
-                        <label class="form-label">Entregar a (técnico)</label>
-                        <select class="form-select" name="entregado_a_id">
-                            <option value="">Sin cambio</option>
-                            {% for usuario in usuarios %}
-                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Cliente (número)</label>
-                        <input type="text" class="form-control" name="cliente_texto" placeholder="Dejar vacío = sin cambio">
-                        <small class="text-muted">Ejemplo: 1027336</small>
-                    </div>
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
                         <input type="text" class="form-control" name="proyecto" placeholder="Dejar vacío = sin cambio">
@@ -852,26 +880,14 @@
                     </div>
                     {% elif tipo == 'sim' %}
                     <div class="mb-3">
-                        <label class="form-label">Responsable / custodia</label>
-                        <select class="form-select" name="entregado_a_id">
-                            <option value="">Sin cambio</option>
-                            {% for usuario in usuarios %}
-                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Cliente (número)</label>
-                        <input type="text" class="form-control" name="cliente_texto" placeholder="Dejar vacío = sin cambio">
-                    </div>
-                    <div class="mb-3">
                         <label class="form-label">Medidor asociado</label>
-                        <div class="inventario-ac position-relative mb-1"
+                        <div class="delco-ac"
                              data-ac-url="{% url 'api_buscar_medidores' %}"
-                             data-ac-select="masivoMedidorSim">
-                            <input type="search" class="form-control form-control-sm inventario-ac-input"
+                             data-ac-select="#masivoMedidorSim"
+                             data-ac-min="2">
+                            <input type="search" class="form-control form-control-sm delco-ac-input"
                                    placeholder="Buscar por serie, caja o marca..." autocomplete="off">
-                            <div class="list-group inventario-ac-results shadow-sm" hidden></div>
+                            <div class="delco-ac-results list-group shadow-sm d-none"></div>
                         </div>
                         <select class="form-select" name="medidor_id" id="masivoMedidorSim">
                             <option value="">Sin cambio</option>
@@ -883,35 +899,14 @@
                     </div>
                     {% else %}
                     <div class="mb-3">
-                        <label class="form-label">Entregar a (técnico)</label>
-                        <select class="form-select" name="entregado_a_id">
-                            <option value="">Sin cambio</option>
-                            {% for usuario in usuarios %}
-                            <option value="{{ usuario.id }}">{{ usuario.nombre_interno }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Cliente</label>
-                        <div class="inventario-ac position-relative mb-1"
-                             data-ac-url="{% url 'api_buscar_clientes' %}"
-                             data-ac-select="masivoClienteId">
-                            <input type="search" class="form-control form-control-sm inventario-ac-input"
-                                   placeholder="Buscar por número o dirección..." autocomplete="off">
-                            <div class="list-group inventario-ac-results shadow-sm" hidden></div>
-                        </div>
-                        <select class="form-select" name="cliente_id" id="masivoClienteId">
-                            <option value="">Sin cambio</option>
-                        </select>
-                    </div>
-                    <div class="mb-3">
                         <label class="form-label">Medidor asociado</label>
-                        <div class="inventario-ac position-relative mb-1"
+                        <div class="delco-ac"
                              data-ac-url="{% url 'api_buscar_medidores' %}"
-                             data-ac-select="masivoMedidorOtro">
-                            <input type="search" class="form-control form-control-sm inventario-ac-input"
+                             data-ac-select="#masivoMedidorOtro"
+                             data-ac-min="2">
+                            <input type="search" class="form-control form-control-sm delco-ac-input"
                                    placeholder="Buscar por serie, caja o marca..." autocomplete="off">
-                            <div class="list-group inventario-ac-results shadow-sm" hidden></div>
+                            <div class="delco-ac-results list-group shadow-sm d-none"></div>
                         </div>
                         <select class="form-select" name="medidor_id" id="masivoMedidorOtro">
                             <option value="">Sin cambio</option>
@@ -2067,42 +2062,113 @@ if (btnGuardar) {
     console.error('Botón btnGuardarModificacion no encontrado');
 }
 
-// Selección múltiple y edición masiva
+// Selección múltiple y edición masiva (persistente por tipo)
+const INV_SEL_KEY = 'delco.inventario.selected.{{ tipo }}';
+
+function getInvSelectedSet() {
+    try {
+        const raw = sessionStorage.getItem(INV_SEL_KEY);
+        const arr = raw ? JSON.parse(raw) : [];
+        return new Set((arr || []).map(String));
+    } catch (e) {
+        return new Set();
+    }
+}
+function saveInvSelectedSet(set) {
+    try { sessionStorage.setItem(INV_SEL_KEY, JSON.stringify(Array.from(set))); } catch (e) {}
+}
+function actualizarBandejaInventario() {
+    const set = getInvSelectedSet();
+    const bandeja = document.getElementById('inventarioSeleccionBandeja');
+    const countEl = document.getElementById('inventarioSeleccionCount');
+    const previewEl = document.getElementById('inventarioSeleccionIdsPreview');
+    if (countEl) countEl.textContent = String(set.size);
+    if (previewEl) {
+        const ids = Array.from(set).slice(0, 10);
+        previewEl.textContent = set.size ? ('IDs: ' + ids.join(', ') + (set.size > 10 ? '…' : '')) : '';
+    }
+    if (bandeja) {
+        if (set.size) bandeja.classList.remove('d-none');
+        else bandeja.classList.add('d-none');
+    }
+}
+function restaurarChecksInventario() {
+    const set = getInvSelectedSet();
+    document.querySelectorAll('.equipo-checkbox').forEach(cb => {
+        cb.checked = set.has(String(cb.value));
+    });
+    actualizarBandejaInventario();
+}
+function abrirModalMasivoInventario() {
+    const set = getInvSelectedSet();
+    if (!set.size) {
+        showToast('Marca al menos un equipo en la lista para cambiar varios a la vez.', 'warning');
+        return;
+    }
+    document.getElementById('bulkIds').value = Array.from(set).join(',');
+    document.getElementById('bulkResumenSeleccion').textContent =
+        set.size === 1
+            ? '1 equipo seleccionado.'
+            : (set.size + ' equipos seleccionados.');
+    const modalEl = document.getElementById('modalEditarMasivo');
+    bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+
 const selectAllEquipos = document.getElementById('selectAllEquipos');
 if (selectAllEquipos) {
     selectAllEquipos.addEventListener('change', function() {
+        const set = getInvSelectedSet();
         document.querySelectorAll('.equipo-checkbox').forEach(cb => {
             cb.checked = this.checked;
+            if (this.checked) set.add(String(cb.value));
+            else set.delete(String(cb.value));
         });
+        saveInvSelectedSet(set);
+        actualizarBandejaInventario();
     });
 }
 
+document.addEventListener('change', function(ev) {
+    if (ev.target && ev.target.classList && ev.target.classList.contains('equipo-checkbox')) {
+        const set = getInvSelectedSet();
+        if (ev.target.checked) set.add(String(ev.target.value));
+        else set.delete(String(ev.target.value));
+        saveInvSelectedSet(set);
+        actualizarBandejaInventario();
+    }
+});
+
+restaurarChecksInventario();
+
 const btnAbrirMasivo = document.getElementById('btnAbrirMasivo');
-if (btnAbrirMasivo) {
-    btnAbrirMasivo.addEventListener('click', function() {
-        const seleccionados = Array.from(document.querySelectorAll('.equipo-checkbox:checked'));
-        if (!seleccionados.length) {
-            showToast('Marca al menos un equipo en la lista para cambiar varios a la vez.', 'warning');
-            return;
-        }
-
-        const ids = seleccionados.map(cb => cb.value).join(',');
-        document.getElementById('bulkIds').value = ids;
-        document.getElementById('bulkResumenSeleccion').textContent =
-            seleccionados.length === 1
-                ? 'Vas a modificar 1 equipo.'
-                : `Vas a modificar ${seleccionados.length} equipos.`;
-
-        const modalEl = document.getElementById('modalEditarMasivo');
-        const modal = new bootstrap.Modal(modalEl);
-        modal.show();
+if (btnAbrirMasivo) btnAbrirMasivo.addEventListener('click', abrirModalMasivoInventario);
+const btnAbrirMasivoBandeja = document.getElementById('btnAbrirMasivoBandeja');
+if (btnAbrirMasivoBandeja) btnAbrirMasivoBandeja.addEventListener('click', abrirModalMasivoInventario);
+const btnLimpiarInv = document.getElementById('btnLimpiarSeleccionInventario');
+if (btnLimpiarInv) {
+    btnLimpiarInv.addEventListener('click', function() {
+        saveInvSelectedSet(new Set());
+        document.querySelectorAll('.equipo-checkbox').forEach(cb => { cb.checked = false; });
+        if (selectAllEquipos) { selectAllEquipos.checked = false; selectAllEquipos.indeterminate = false; }
+        actualizarBandejaInventario();
     });
 }
 
 const formEditarMasivo = document.getElementById('formEditarMasivo');
 if (formEditarMasivo) {
-    formEditarMasivo.addEventListener('submit', function(e) {
+    formEditarMasivo.addEventListener('submit', async function(e) {
         e.preventDefault();
+        const ids = (document.getElementById('bulkIds')?.value || '').split(',').filter(Boolean);
+        const confirmado = window.showConfirm
+            ? await window.showConfirm(
+                '¿Aplicar cambios a ' + ids.length + ' equipo(s) seleccionado(s)?',
+                'Confirmar edición masiva',
+                'Sí, aplicar',
+                'Cancelar'
+            )
+            : confirm('¿Aplicar cambios a ' + ids.length + ' equipos?');
+        if (!confirmado) return;
+
         const formData = new FormData(formEditarMasivo);
 
         fetch("{% url 'inventario_modificar_masivo' %}", {
@@ -2113,6 +2179,7 @@ if (formEditarMasivo) {
         .then(data => {
             if (data.success) {
                 showToast(data.message || 'Cambios guardados correctamente.', 'success');
+                saveInvSelectedSet(new Set());
                 setTimeout(() => location.reload(), 1000);
             } else {
                 showToast(data.message || 'No se pudieron guardar los cambios. Revisa los datos e intenta de nuevo.', 'danger');
@@ -2162,6 +2229,7 @@ function construirUrlExportacionInventario(modo) {
     const proyecto = document.getElementById('filtroProyecto')?.value || '';
     const caja = document.getElementById('filtroCaja')?.value || '';
     const tipoMedidor = document.getElementById('filtroTipoMedidor')?.value || '';
+    const estado = document.getElementById('filtroEstado')?.value || '';
 
     if (search) url.searchParams.append('search', search);
     url.searchParams.append('search_field', searchField);
@@ -2170,6 +2238,7 @@ function construirUrlExportacionInventario(modo) {
     if (proyecto) url.searchParams.append('proyecto', proyecto);
     if (caja) url.searchParams.append('caja', caja);
     if (tipoMedidor) url.searchParams.append('tipo_medidor', tipoMedidor);
+    if (estado) url.searchParams.append('estado', estado);
 
     return url;
 }

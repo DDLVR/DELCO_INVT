@@ -24,6 +24,7 @@ from web.services.audit import AuditEvent, register_audit_event
 
 
 from django.db import OperationalError, transaction
+from django.db.models import Q
 from django.db.utils import IntegrityError
 
 logger = logging.getLogger(__name__)
@@ -165,6 +166,35 @@ _ETIQUETAS_EXPORT_COMPLETO = {
     'retirado': 'Retirado',
     'serie_secundaria': 'Serie secundaria',
     'irregularidad': 'Irregularidad',
+    # Cliente: campos con nombre técnico en inglés → encabezado en español
+    'numero_cliente': 'Número cliente',
+    'direccion': 'Dirección',
+    'customer_name': 'Nombre cliente',
+    'installation_address': 'Dirección instalación',
+    'city': 'Ciudad',
+    'client_type': 'Tipo cliente',
+    'note': 'Nota',
+    'meter_manufacturer_id': 'Marca medidor',
+    'meter_serial_n_1': 'Serie medidor',
+    'medidor_actual_id': 'ID medidor actual',
+    'medidor_actual_label': 'Medidor actual (serie)',
+    'sim_operador': 'SIM operador',
+    'sim_iccid': 'SIM ICCID',
+    'sim_abonado': 'SIM abonado',
+    'sim_estado': 'SIM estado',
+    'sim_estado_display': 'SIM estado (texto)',
+    'estado_telemetria': 'Estado telemetría',
+    'estado_telemetria_display': 'Estado telemetría (texto)',
+    'estado_stb': 'Estado STB',
+    'estado_stb_display': 'Estado STB (texto)',
+    'estado_sci4': 'Estado SCi4',
+    'estado_sci4_display': 'Estado SCi4 (texto)',
+    'ultimo_acceso': 'Último acceso',
+    'ultimo_perfil_carga': 'Último perfil carga',
+    'ultimo_perfil_instrumentacion': 'Último perfil instrumentación',
+    'ultimo_reset': 'Último reset',
+    'ultimo_registro_facturacion': 'Último registro facturación',
+    'fecha_registro': 'Fecha registro',
 }
 
 
@@ -1694,6 +1724,175 @@ def exportar_clientes_excel(clientes):
     return wb
 
 
+def _exportar_clientes_excel_completo_multihoja_legacy(clientes):
+    """Exportación profesional multihoja: padrón reimportable + historial operativo.
+
+    Hojas:
+      CLIENTES            — 9 columnas reimportables (mismo contrato que importación)
+      CLIENTES_COMPLETO   — todos los campos del modelo (igual que inventario completo)
+      OT                  — órdenes de esos clientes
+      MOREAPP             — reportes MoreApp vinculados
+      AUDITORIA           — cambios de campo (AuditLog)
+      MOVIMIENTOS         — movimientos de equipos asociados
+    """
+    from clientes.models import Cliente
+    from ordenes_trabajo.models import OrdenTrabajo, IntegracionMoreApp
+    from inventario.models import MovimientoItem
+    from web.models import AuditLog
+
+    clientes_list = list(clientes)
+    cliente_ids = [c.pk for c in clientes_list]
+    numeros = [str(c.numero_cliente).strip() for c in clientes_list if c.numero_cliente]
+
+    wb = openpyxl.Workbook()
+
+    # --- CLIENTES (reimportable) ---
+    ws = wb.active
+    ws.title = 'CLIENTES'
+    headers_std = [
+        'Sector', 'Tipo Suministro', 'Numero Cliente', 'Comuna', 'Nombre Cliente',
+        'Dirección Instalación', 'Marca Medidor', 'Proyecto', 'Serie Medidor',
+    ]
+    ws.append(headers_std)
+    for c in clientes_list:
+        ws.append([
+            c.sector or '', c.tipo_suministro or '', c.numero_cliente, c.comuna or '',
+            c.customer_name or '', c.installation_address or '',
+            c.meter_manufacturer_id or '', c.proyecto or '', c.meter_serial_n_1 or '',
+        ])
+    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=1, filter_to_col=4)
+
+    # --- CLIENTES_COMPLETO: todos los campos del modelo, como inventario completo ---
+    ws_op = wb.create_sheet('CLIENTES_COMPLETO')
+    llenar_hoja_modelo_completo(ws_op, clientes_list, Cliente)
+
+    # --- OT ---
+    ws_ot = wb.create_sheet('OT')
+    ws_ot.append([
+        'ID Orden', 'Numero Cliente', 'Titulo', 'Tipo Trabajo', 'Estado',
+        'Tecnico', 'Fecha Creacion', 'Fecha Asignacion', 'Fecha Fin', 'Alerta Duplicado',
+    ])
+    if cliente_ids:
+        for ot in (
+            OrdenTrabajo.objects.filter(cliente_id__in=cliente_ids, eliminado=False)
+            .select_related('cliente', 'tecnico_responsable')
+            .order_by('id')
+        ):
+            ws_ot.append([
+                ot.id,
+                ot.cliente.numero_cliente if ot.cliente else '',
+                ot.titulo or '',
+                ot.get_tipo_trabajo_display(),
+                ot.get_estado_display(),
+                ot.tecnico_responsable.nombre_interno if ot.tecnico_responsable else '',
+                ot.fecha_creacion.strftime('%d-%m-%Y %H:%M') if ot.fecha_creacion else '',
+                ot.fecha_asignacion.strftime('%d-%m-%Y %H:%M') if ot.fecha_asignacion else '',
+                ot.fecha_fin_ejecucion.strftime('%d-%m-%Y %H:%M') if ot.fecha_fin_ejecucion else '',
+                'SI' if ot.alerta_duplicado else 'NO',
+            ])
+    aplicar_estilo_hoja_exportacion(ws_ot, auto_filter=True, filter_from_col=2, filter_to_col=5)
+
+    # --- MOREAPP ---
+    ws_ma = wb.create_sheet('MOREAPP')
+    ws_ma.append([
+        'ID', 'Submission', 'Correlativo', 'Cliente codigo', 'Formulario',
+        'Estado sync', 'Estado revision', 'Fecha', 'Actualizo equipos',
+    ])
+    if numeros:
+        for reg in (
+            IntegracionMoreApp.objects.filter(eliminado=False)
+            .filter(datos_procesados__cliente_codigo__in=numeros)
+            .order_by('-id')[:5000]
+        ):
+            datos = reg.datos_procesados if isinstance(reg.datos_procesados, dict) else {}
+            ws_ma.append([
+                reg.id,
+                reg.moreapp_submission_id or '',
+                reg.numero_correlativo or '',
+                datos.get('cliente_codigo') or '',
+                getattr(reg, 'nombre_formulario', '') or '',
+                reg.estado_sincronizacion or '',
+                reg.estado_revision or '',
+                reg.fecha_recepcion.strftime('%d-%m-%Y %H:%M') if getattr(reg, 'fecha_recepcion', None) else '',
+                'SI' if getattr(reg, 'actualizo_equipos', False) else 'NO',
+            ])
+    aplicar_estilo_hoja_exportacion(ws_ma, auto_filter=True, filter_from_col=4, filter_to_col=7)
+
+    # --- AUDITORIA ---
+    ws_au = wb.create_sheet('AUDITORIA')
+    ws_au.append([
+        'Fecha', 'Actor', 'Accion', 'Campo', 'Valor anterior', 'Valor nuevo', 'Motivo', 'Cliente ID',
+    ])
+    if cliente_ids:
+        id_strs = [str(i) for i in cliente_ids]
+        for log in (
+            AuditLog.objects.filter(entity__iexact='Cliente', entity_id__in=id_strs)
+            .select_related('actor')
+            .order_by('-created_at')[:5000]
+        ):
+            actor = ''
+            if getattr(log, 'actor', None):
+                actor = getattr(log.actor, 'nombre_interno', '') or str(log.actor)
+            ws_au.append([
+                log.created_at.strftime('%d-%m-%Y %H:%M') if log.created_at else '',
+                actor,
+                getattr(log, 'action', '') or '',
+                getattr(log, 'field_name', '') or '',
+                getattr(log, 'old_value', '') or '',
+                getattr(log, 'new_value', '') or '',
+                getattr(log, 'reason', '') or '',
+                getattr(log, 'entity_id', '') or '',
+            ])
+    aplicar_estilo_hoja_exportacion(ws_au, auto_filter=True, filter_from_col=2, filter_to_col=4)
+
+    # --- MOVIMIENTOS ---
+    ws_mv = wb.create_sheet('MOVIMIENTOS')
+    ws_mv.append([
+        'Fecha', 'Tipo', 'Origen sistema', 'Equipo', 'Cliente', 'Origen', 'Destino', 'Responsable', 'Observacion',
+    ])
+    if cliente_ids:
+        items_qs = (
+            MovimientoItem.objects.filter(
+                Q(medidor__cliente_id__in=cliente_ids)
+                | Q(simcard__cliente_id__in=cliente_ids)
+                | Q(modem__cliente_id__in=cliente_ids)
+            )
+            .select_related(
+                'movimiento__origen', 'movimiento__destino', 'movimiento__responsable',
+                'medidor__cliente', 'simcard__cliente', 'modem__cliente',
+            )
+            .order_by('-movimiento__fecha_hora')[:5000]
+        )
+        for item in items_qs:
+            mov = item.movimiento
+            if item.medidor:
+                equipo = f'Medidor {item.medidor.serie}'
+                cli = item.medidor.cliente
+            elif item.simcard:
+                equipo = f'SIM {item.simcard.imei or item.simcard.pk}'
+                cli = item.simcard.cliente
+            elif item.modem:
+                equipo = f'Módem {item.modem.serie or item.modem.pk}'
+                cli = item.modem.cliente
+            else:
+                equipo = item.get_tipo_equipo_display()
+                cli = None
+            ws_mv.append([
+                mov.fecha_hora.strftime('%d-%m-%Y %H:%M') if mov.fecha_hora else '',
+                mov.get_tipo_display(),
+                mov.get_origen_sistema_display(),
+                equipo,
+                cli.numero_cliente if cli else '',
+                mov.origen.nombre if mov.origen else '',
+                mov.destino.nombre if mov.destino else '',
+                mov.responsable.nombre_interno if mov.responsable else '',
+                (mov.observacion or '')[:500],
+            ])
+    aplicar_estilo_hoja_exportacion(ws_mv, auto_filter=True, filter_from_col=2, filter_to_col=5)
+
+    return wb
+
+
 def _serie_medidor_display(equipo) -> str:
     """Serie de medidor vinculada o texto importado (medidor_otro)."""
     medidor = getattr(equipo, 'medidor', None)
@@ -1805,54 +2004,57 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
     return wb
 
 
-def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
-    """Exporta todos los campos reales del modelo y columnas legibles de apoyo."""
+def _normalizar_valor_export_completo(valor):
     from datetime import date, datetime
     from decimal import Decimal
 
-    def normalizar_valor(valor):
-        if valor is None:
-            return ''
-        if isinstance(valor, bool):
-            return 'SI' if valor else 'NO'
-        if isinstance(valor, datetime):
-            return valor.strftime('%d-%m-%Y %H:%M:%S')
-        if isinstance(valor, date):
-            return valor.strftime('%d-%m-%Y')
-        if isinstance(valor, Decimal):
-            return float(valor)
-        return str(valor)
+    if valor is None:
+        return ''
+    if isinstance(valor, bool):
+        return 'SI' if valor else 'NO'
+    if isinstance(valor, datetime):
+        return valor.strftime('%d-%m-%Y %H:%M:%S')
+    if isinstance(valor, date):
+        return valor.strftime('%d-%m-%Y')
+    if isinstance(valor, Decimal):
+        return float(valor)
+    return str(valor)
 
-    def etiqueta_relacion(campo, relacionado, obj=None):
-        if relacionado is None:
-            if campo.name == 'medidor' and obj is not None:
-                return getattr(obj, 'medidor_otro', '') or ''
-            return ''
 
-        if campo.name == 'cliente':
-            return getattr(relacionado, 'numero_cliente', '') or str(relacionado)
-        if campo.name in ('entregado_a', 'en_custodia_de'):
-            return getattr(relacionado, 'nombre_interno', '') or getattr(relacionado, 'username', '') or str(relacionado)
-        if campo.name == 'estado_inventario':
-            return getattr(relacionado, 'nombre', '') or str(relacionado)
-        if campo.name == 'ubicacion_actual':
-            return str(relacionado)
-        if campo.name == 'medidor':
-            return getattr(relacionado, 'serie', '') or str(relacionado)
+def _etiqueta_relacion_export_completo(campo, relacionado, obj=None):
+    if relacionado is None:
+        if campo.name == 'medidor' and obj is not None:
+            return getattr(obj, 'medidor_otro', '') or ''
+        return ''
+
+    if campo.name == 'cliente':
+        return getattr(relacionado, 'numero_cliente', '') or str(relacionado)
+    if campo.name in ('entregado_a', 'en_custodia_de', 'eliminado_por'):
+        return getattr(relacionado, 'nombre_interno', '') or getattr(relacionado, 'username', '') or str(relacionado)
+    if campo.name == 'estado_inventario':
+        return getattr(relacionado, 'nombre', '') or str(relacionado)
+    if campo.name == 'ubicacion_actual':
         return str(relacionado)
+    if campo.name in ('medidor', 'medidor_actual'):
+        return getattr(relacionado, 'serie', '') or str(relacionado)
+    return str(relacionado)
 
-    model = getattr(equipos, 'model', None)
-    if model is None:
-        raise ValueError('El exportador completo requiere un QuerySet del modelo')
 
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = f'{tipo_equipo}_COMPLETO'
+def llenar_hoja_modelo_completo(ws, objetos, model, excluir_campos=None):
+    """Vuelca en la hoja todos los campos concretos del modelo.
 
+    Relaciones → columnas `_id` + `_label`; choices → valor + `_display`.
+    Mismo formato que la exportación completa de inventario.
+    """
+    normalizar_valor = _normalizar_valor_export_completo
+
+    excluir_campos = set(excluir_campos or ())
     columnas = []
     claves = []
 
     for campo in model._meta.concrete_fields:
+        if campo.name in excluir_campos:
+            continue
         if campo.is_relation:
             claves.append(f'{campo.name}_id')
             columnas.append((f'{campo.name}_id', lambda obj, nombre=campo.attname: normalizar_valor(getattr(obj, nombre, None))))
@@ -1860,7 +2062,7 @@ def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
             columnas.append((
                 f'{campo.name}_label',
                 lambda obj, campo_rel=campo: normalizar_valor(
-                    etiqueta_relacion(campo_rel, getattr(obj, campo_rel.name, None), obj)
+                    _etiqueta_relacion_export_completo(campo_rel, getattr(obj, campo_rel.name, None), obj)
                 )
             ))
         else:
@@ -1877,11 +2079,39 @@ def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
 
     ws.append([_etiqueta_columna_export_completo(clave) for clave in claves])
 
-    for equipo in equipos:
-        ws.append([funcion(equipo) for _, funcion in columnas])
+    for obj in objetos:
+        ws.append([funcion(obj) for _, funcion in columnas])
 
     # Completo: sin filtro (demasiadas columnas técnicas / IDs no filtrables de forma útil)
     aplicar_estilo_hoja_exportacion(ws, header_fill_hex='7F6000', max_width=36, auto_filter=False)
+
+
+def exportar_clientes_excel_completo(clientes):
+    """Exporta todos los datos vigentes del cliente en una única hoja."""
+    from clientes.models import Cliente
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'CLIENTES COMPLETOS'
+    llenar_hoja_modelo_completo(
+        ws,
+        clientes,
+        Cliente,
+        excluir_campos={'id', 'pod'},
+    )
+    return wb
+
+
+def exportar_equipos_excel_completo(equipos, tipo_equipo='MEDIDORES'):
+    """Exporta todos los campos reales del modelo y columnas legibles de apoyo."""
+    model = getattr(equipos, 'model', None)
+    if model is None:
+        raise ValueError('El exportador completo requiere un QuerySet del modelo')
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = f'{tipo_equipo}_COMPLETO'
+    llenar_hoja_modelo_completo(ws, equipos, model)
     return wb
 
 

@@ -15,20 +15,52 @@
             Clientes: <strong id="totalClientesVisibles">{{ total_clientes }}</strong>
             <span class="mx-2">|</span>
             <span class="{% if total_numeros_duplicados %}text-danger fw-semibold{% else %}text-muted{% endif %}">
-              Clientes duplicados: <strong id="totalClientesDuplicados">{{ total_numeros_duplicados }}</strong>
-            </span>          </p>
+              <i class="bi bi-exclamation-triangle{% if not total_numeros_duplicados %} d-none{% endif %}"></i>
+              Duplicados: <strong id="totalClientesDuplicados">{{ total_numeros_duplicados }}</strong>
+            </span>
+          </p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
           {% if puede_editar %}
-            <a href="{% url 'cliente_crear' %}" class="btn btn-primary">➕ Nuevo Cliente</a>
+            <a href="{% url 'cliente_crear' %}" class="btn btn-primary">
+              <i class="bi bi-plus-circle"></i> Nuevo Cliente
+            </a>
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarClientes">
               <i class="bi bi-upload me-1" aria-hidden="true"></i>Importar clientes
             </button>
+            <button type="button" class="btn btn-outline-dark" id="btnEditarSeleccionadosClientes">
+              <i class="bi bi-check2-square"></i> Editar seleccionados
+            </button>
             <button type="button" class="btn btn-danger" id="btnEliminarSeleccionadosClientes">
-              🗑️ Eliminar seleccionados
+              <i class="bi bi-trash"></i> Eliminar seleccionados
             </button>
           {% endif %}
-          <a href="{% url 'clientes_exportar' %}" class="btn btn-success">⬇️ Exportar Clientes</a>
+          <div class="btn-group">
+            <button type="button" class="btn btn-info dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+              <i class="bi bi-download"></i> Exportar
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end" style="min-width: 320px;">
+              <li>
+                <a class="dropdown-item py-2 text-wrap" href="{% url 'clientes_exportar' %}?{{ query_string }}">
+                  <div><i class="bi bi-funnel me-1"></i><strong>Solo los filtrados</strong></div>
+                  <small class="text-muted">Los clientes que ves en la lista, con los filtros aplicados. Formato reimportable.</small>
+                </a>
+              </li>
+              <li>
+                <a class="dropdown-item py-2 text-wrap" href="{% url 'clientes_exportar' %}?modo=padron">
+                  <div><i class="bi bi-people me-1"></i><strong>Todos los clientes</strong></div>
+                  <small class="text-muted">El padrón completo, ignorando los filtros. Formato reimportable.</small>
+                </a>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <a class="dropdown-item py-2 text-wrap" href="{% url 'clientes_exportar' %}?modo=completo{% if query_string %}&{{ query_string }}{% endif %}">
+                  <div><i class="bi bi-file-earmark-spreadsheet me-1"></i><strong>Clientes completos</strong></div>
+                  <small class="text-muted">Respeta los filtros e incluye toda la información disponible de cada cliente en una sola hoja.</small>
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
@@ -47,6 +79,10 @@
                 <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
                 <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
               </select>
+            </div>
+            <div class="col-md-3">
+              <label for="filtroQClientes" class="form-label mb-1">Buscar</label>
+              <input type="text" id="filtroQClientes" name="q" class="form-control form-control-sm" placeholder="Nº, nombre, comuna, serie..." value="{{ q|default:'' }}">
             </div>
             <div class="col-md-2">
               <label for="filtroNumeroCliente" class="form-label mb-1">Nº Cliente</label>
@@ -99,7 +135,7 @@
                 Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
                 · {{ total_clientes }} cliente{{ total_clientes|pluralize }}
                 {% if total_fichas != total_clientes %} ({{ total_fichas }} fichas){% endif %}.
-                Exportar descarga el padrón completo.
+                Usa el menú Exportar para descargar el padrón o la ficha completa.
               </p>
               {% endif %}
             </div>
@@ -135,11 +171,14 @@
           <tr data-cliente-id="{{ cliente.id }}">
             <td>
               {% if puede_editar %}
-                <input type="checkbox" class="cliente-selector" value="{{ cliente.id }}" aria-label="Seleccionar cliente {{ cliente.numero_cliente }}">
+                <input type="checkbox" class="cliente-checkbox" value="{{ cliente.id }}" aria-label="Seleccionar cliente {{ cliente.numero_cliente }}">
               {% endif %}
             </td>
             <td class="{% if cliente.numero_cliente in numeros_duplicados %}cliente-numero-duplicado{% endif %}">
               <strong {% if cliente.numero_cliente in numeros_duplicados %}class="cliente-numero-duplicado" title="Numero Cliente duplicado"{% endif %}>{{ cliente.numero_cliente }}</strong>
+              {% if cliente.numero_cliente in numeros_duplicados %}
+              <span class="badge bg-danger ms-1" title="Este número de cliente aparece más de una vez">Duplicado</span>
+              {% endif %}
             </td>
             <td>{{ cliente.customer_name|default_if_none:'' }}</td>
             <td>{{ cliente.comuna|default_if_none:'' }}</td>
@@ -160,7 +199,7 @@
             <td>
               <div class="d-flex flex-wrap gap-1">
                 <a href="{% url 'cliente_historial' cliente.id %}" class="btn btn-sm btn-success" title="Ver historial y alertas">
-                  🕒 Historial
+                  <i class="bi bi-clock-history"></i> Historial
                 </a>
                 {% if puede_editar %}
                 <button type="button"
@@ -177,11 +216,11 @@
                         data-proyecto="{{ cliente.proyecto|default:'' }}"
                         data-meter-manufacturer-id="{{ cliente.meter_manufacturer_id|default:'' }}"
                         data-meter-serial="{{ cliente.meter_serial_n_1|default:'' }}">
-                  ✏️ Editar
+                  <i class="bi bi-pencil"></i> Editar
                 </button>
                 <form action="{% url 'cliente_eliminar' cliente.id %}" method="post" style="display:inline;" class="form-eliminar-cliente" data-cliente-numero="{{ cliente.numero_cliente }}">
                   {% csrf_token %}
-                  <button type="submit" class="btn btn-sm btn-danger">🗑️ Eliminar</button>
+                  <button type="submit" class="btn btn-sm btn-danger"><i class="bi bi-trash"></i> Eliminar</button>
                 </form>
                 {% else %}
                 <span class="text-muted align-self-center small">Solo lectura</span>
@@ -209,6 +248,21 @@
       {% endif %}
     </ul>
   </nav>
+  {% endif %}
+
+  {% if puede_editar %}
+  <div id="clientesSeleccionBandeja" class="delco-seleccion-bandeja mt-3 p-3 rounded d-none">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <div>
+        <strong id="clientesSeleccionCount">0</strong> cliente(s) seleccionados
+        <span class="text-muted small ms-2" id="clientesSeleccionIdsPreview"></span>
+      </div>
+      <div class="d-flex gap-2 flex-wrap">
+        <button type="button" class="btn btn-sm btn-outline-dark" id="btnEditarDesdeBandeja">Editar seleccionados</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiarSeleccionClientes">Limpiar selección</button>
+      </div>
+    </div>
+  </div>
   {% endif %}
 
 </div>
@@ -404,6 +458,45 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="modalEditarMasivoClientes" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title"><i class="bi bi-check2-square"></i> Editar clientes seleccionados</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form id="formEditarMasivoClientes">
+        {% csrf_token %}
+        <input type="hidden" name="ids" id="bulkClienteIds">
+        <div class="modal-body">
+          <p id="bulkClienteResumen" class="mb-2"></p>
+          <p class="small text-muted mb-3">Deja vacío un campo para no cambiarlo.</p>
+          <div class="mb-3">
+            <label class="form-label" for="bulkClienteSector">Sector</label>
+            <input type="text" class="form-control" name="sector" id="bulkClienteSector" placeholder="Sin cambio">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="bulkClienteComuna">Comuna</label>
+            <input type="text" class="form-control" name="comuna" id="bulkClienteComuna" placeholder="Sin cambio">
+          </div>
+          <div class="mb-3">
+            <label class="form-label" for="bulkClienteTipo">Tipo suministro</label>
+            <input type="text" class="form-control" name="tipo_suministro" id="bulkClienteTipo" placeholder="Sin cambio">
+          </div>
+          <div class="mb-0">
+            <label class="form-label" for="bulkClienteProyecto">Proyecto</label>
+            <input type="text" class="form-control" name="proyecto" id="bulkClienteProyecto" placeholder="Sin cambio">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Aplicar cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
 {% endif %}
 {% endblock %}
 
@@ -569,14 +662,55 @@
             }
 
             function obtenerIdsClientesSeleccionados() {
-              return Array.from(document.querySelectorAll('.cliente-selector:checked')).map(function(el) {
-                return el.value;
+              return Array.from(getSelectedClientesSet());
+            }
+
+            var CLIENTES_SEL_KEY = 'delco.clientes.selected';
+
+            function getSelectedClientesSet() {
+              try {
+                var raw = sessionStorage.getItem(CLIENTES_SEL_KEY);
+                var arr = raw ? JSON.parse(raw) : [];
+                return new Set((arr || []).map(String));
+              } catch (e) {
+                return new Set();
+              }
+            }
+
+            function saveSelectedClientesSet(set) {
+              try {
+                sessionStorage.setItem(CLIENTES_SEL_KEY, JSON.stringify(Array.from(set)));
+              } catch (e) { /* ignore */ }
+            }
+
+            function actualizarBandejaClientes() {
+              var set = getSelectedClientesSet();
+              var bandeja = document.getElementById('clientesSeleccionBandeja');
+              var countEl = document.getElementById('clientesSeleccionCount');
+              var previewEl = document.getElementById('clientesSeleccionIdsPreview');
+              if (countEl) countEl.textContent = String(set.size);
+              if (previewEl) {
+                var ids = Array.from(set).slice(0, 8);
+                previewEl.textContent = set.size ? ('IDs: ' + ids.join(', ') + (set.size > 8 ? '…' : '')) : '';
+              }
+              if (bandeja) {
+                if (set.size) bandeja.classList.remove('d-none');
+                else bandeja.classList.add('d-none');
+              }
+            }
+
+            function restaurarChecksClientes() {
+              var set = getSelectedClientesSet();
+              document.querySelectorAll('.cliente-checkbox').forEach(function(el) {
+                el.checked = set.has(String(el.value));
               });
+              sincronizarSeleccionTotal();
+              actualizarBandejaClientes();
             }
 
             function sincronizarSeleccionTotal() {
               if (!seleccionarTodosClientes) return;
-              var checkboxes = Array.from(document.querySelectorAll('.cliente-selector'));
+              var checkboxes = Array.from(document.querySelectorAll('.cliente-checkbox'));
               if (!checkboxes.length) {
                 seleccionarTodosClientes.checked = false;
                 seleccionarTodosClientes.indeterminate = false;
@@ -585,6 +719,22 @@
               var seleccionados = checkboxes.filter(function(el) { return el.checked; }).length;
               seleccionarTodosClientes.checked = seleccionados > 0 && seleccionados === checkboxes.length;
               seleccionarTodosClientes.indeterminate = seleccionados > 0 && seleccionados < checkboxes.length;
+            }
+
+            function abrirModalMasivoClientes() {
+              var ids = obtenerIdsClientesSeleccionados();
+              if (!ids.length) {
+                if (window.showToast) showToast('Selecciona al menos un cliente.', 'warning');
+                return;
+              }
+              document.getElementById('bulkClienteIds').value = ids.join(',');
+              var resumen = document.getElementById('bulkClienteResumen');
+              if (resumen) {
+                resumen.textContent = ids.length === 1
+                  ? 'Vas a editar 1 cliente.'
+                  : ('Vas a editar ' + ids.length + ' clientes.');
+              }
+              bootstrap.Modal.getOrCreateInstance(document.getElementById('modalEditarMasivoClientes')).show();
             }
 
             agregarFilasDuplicadasImportacionATabla();
@@ -701,18 +851,66 @@
 
             if (seleccionarTodosClientes) {
               seleccionarTodosClientes.addEventListener('change', function() {
-                var checkboxes = document.querySelectorAll('.cliente-selector');
-                checkboxes.forEach(function(el) {
+                var set = getSelectedClientesSet();
+                document.querySelectorAll('.cliente-checkbox').forEach(function(el) {
                   el.checked = seleccionarTodosClientes.checked;
+                  if (seleccionarTodosClientes.checked) set.add(String(el.value));
+                  else set.delete(String(el.value));
                 });
+                saveSelectedClientesSet(set);
+                actualizarBandejaClientes();
               });
             }
 
             document.addEventListener('change', function(event) {
-              if (event.target && event.target.classList && event.target.classList.contains('cliente-selector')) {
+              if (event.target && event.target.classList && event.target.classList.contains('cliente-checkbox')) {
+                var set = getSelectedClientesSet();
+                if (event.target.checked) set.add(String(event.target.value));
+                else set.delete(String(event.target.value));
+                saveSelectedClientesSet(set);
                 sincronizarSeleccionTotal();
+                actualizarBandejaClientes();
               }
             });
+
+            restaurarChecksClientes();
+
+            var btnEditarSel = document.getElementById('btnEditarSeleccionadosClientes');
+            var btnEditarBandeja = document.getElementById('btnEditarDesdeBandeja');
+            var btnLimpiarSel = document.getElementById('btnLimpiarSeleccionClientes');
+            if (btnEditarSel) btnEditarSel.addEventListener('click', abrirModalMasivoClientes);
+            if (btnEditarBandeja) btnEditarBandeja.addEventListener('click', abrirModalMasivoClientes);
+            if (btnLimpiarSel) {
+              btnLimpiarSel.addEventListener('click', function() {
+                saveSelectedClientesSet(new Set());
+                document.querySelectorAll('.cliente-checkbox').forEach(function(el) { el.checked = false; });
+                sincronizarSeleccionTotal();
+                actualizarBandejaClientes();
+              });
+            }
+
+            var formMasivoClientes = document.getElementById('formEditarMasivoClientes');
+            if (formMasivoClientes) {
+              formMasivoClientes.addEventListener('submit', function(e) {
+                e.preventDefault();
+                fetch("{% url 'clientes_modificar_masivo' %}", {
+                  method: 'POST',
+                  body: new FormData(formMasivoClientes),
+                  headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                  if (window.showToast) showToast(data.message || (data.success ? 'Cambios aplicados.' : 'No se pudo guardar.'), data.success ? 'success' : 'danger');
+                  if (data.success) {
+                    saveSelectedClientesSet(new Set());
+                    setTimeout(function() { location.reload(); }, 700);
+                  }
+                })
+                .catch(function() {
+                  if (window.showToast) showToast('Error de conexión.', 'danger');
+                });
+              });
+            }
 
             if (btnEliminarSeleccionadosClientes) {
               btnEliminarSeleccionadosClientes.addEventListener('click', async function() {
@@ -747,6 +945,7 @@
                   form.appendChild(input);
                 });
 
+                saveSelectedClientesSet(new Set());
                 document.body.appendChild(form);
                 form.submit();
               });

@@ -80,6 +80,7 @@ from importaciones.utils import (
     exportar_equipos_excel,
     exportar_equipos_excel_completo,
     exportar_clientes_excel,
+    exportar_clientes_excel_completo,
 )
 from importaciones.models import ImportacionExcel, ImportacionExcelError
 from web.services.validators import (
@@ -1956,12 +1957,13 @@ def inventario_exportar_view(request):
     
     tipo = request.GET.get('tipo', 'medidor')
     modo = (request.GET.get('modo') or 'resumen').strip().lower()
-    search = (request.GET.get('search') or '').strip()
-    search_field = (request.GET.get('search_field') or 'all').strip()
+    search = (request.GET.get('search') or request.GET.get('q') or '').strip()
+    search_field = (request.GET.get('search_field') or request.GET.get('campo') or 'all').strip()
     limit_raw = (request.GET.get('limit') or '-1').strip()
     proyecto_filtro = (request.GET.get('proyecto') or '').strip()
     caja_filtro = (request.GET.get('caja') or '').strip()
     tipo_medidor_filtro = (request.GET.get('tipo_medidor') or '').strip()
+    estado_filtro = (request.GET.get('estado') or '').strip()
     
     # Obtener datos base (solo activos: los soft-eliminados no se exportan)
     if tipo == 'medidor':
@@ -1998,9 +2000,49 @@ def inventario_exportar_view(request):
 
     if tipo == 'medidor' and tipo_medidor_filtro:
         equipos = equipos.filter(tipo_medidor=tipo_medidor_filtro)
+
+    if estado_filtro:
+        if estado_filtro.isdigit():
+            equipos = equipos.filter(estado_inventario_id=int(estado_filtro))
+        else:
+            equipos = equipos.filter(estado_inventario__nombre__icontains=estado_filtro)
     
     # Aplicar búsqueda (según filtros visibles en la tabla)
     if search:
+        named_field_map = {
+            'medidor': {
+                'serie': 'serie',
+                'marca': 'marca',
+                'caja': 'caja',
+                'tipo_medidor': 'tipo_medidor',
+                'entregado_a': 'entregado_a__nombre_interno',
+                'proyecto': 'proyecto',
+                'estado': 'estado_inventario__nombre',
+                'cliente': 'cliente__numero_cliente',
+            },
+            'sim': {
+                'imei': 'imei',
+                'operador': 'operador',
+                'abonado': 'abonado',
+                'direccion_ip': 'direccion_ip',
+                'entregado_a': ['en_custodia_de__nombre_interno', 'entregado_a_nombre', 'entregado_a_otro'],
+                'proyecto': 'proyecto',
+                'estado': 'estado_inventario__nombre',
+                'cliente': 'cliente__numero_cliente',
+            },
+            'modem': {
+                'marca': 'marca',
+                'modelo': 'modelo',
+                'imei': 'imei',
+                'serie': 'serie',
+                'caja': 'caja',
+                'tecnico': ['tecnico_responsable', 'entregado_a__nombre_interno', 'entregado_a_otro'],
+                'entregado_a': ['tecnico_responsable', 'entregado_a__nombre_interno', 'entregado_a_otro'],
+                'estado': 'estado_inventario__nombre',
+                'cliente': 'cliente__numero_cliente',
+                'proyecto': 'proyecto',
+            },
+        }
         if search_field == 'all':
             if tipo == 'medidor':
                 equipos = equipos.filter(
@@ -2073,7 +2115,10 @@ def inventario_exportar_view(request):
                     '11': 'proyecto',
                 },
             }
-            if tipo == 'medidor' and search_field == '4':
+            # Aceptar claves numéricas (legacy) y nombres de campo de la lista
+            field_map[tipo].update(named_field_map.get(tipo, {}))
+
+            if tipo == 'medidor' and search_field in ('4', 'modulo'):
                 val = search.lower()
                 if val in ['si', 'sí', 'true', '1', 'yes']:
                     equipos = equipos.filter(modulo=True)
@@ -2810,7 +2855,7 @@ def clientes_list_view(request):
     """Lista de clientes activos con paginación servidor (no carga todo el padrón en HTML)."""
     from django.core.paginator import Paginator
     from django.db.models import Count
-    from django.db.models.functions import Length, Trim
+    from web.services.filtros_export import queryset_clientes_filtrado
 
     q = (request.GET.get('q') or '').strip()
     numero_cliente_filtro = (request.GET.get('numero_cliente') or '').strip()
@@ -2825,52 +2870,19 @@ def clientes_list_view(request):
     if per_page not in (25, 50, 100, 200):
         per_page = 50
 
-    base_activos = Cliente.objects.filter(activo=True).exclude(numero_cliente__in=['', '0'])
+    base_activos = queryset_clientes_filtrado(request, aplicar_filtros=False)
+    clientes_qs = queryset_clientes_filtrado(request, aplicar_filtros=True)
 
-    # Orden natural de Nº cliente (1000 después de 200), no alfabético
-    clientes_qs = (
-        base_activos
-        .annotate(_ord_len=Length('numero_cliente'))
-        .order_by('_ord_len', 'numero_cliente', 'meter_serial_n_1', 'id')
-    )
-
+    # order_by() limpia el ordenamiento: si no, sus campos entran al GROUP BY
+    # y cada grupo cuenta 1 (nunca se detectarían duplicados).
     numeros_duplicados = set(
         base_activos
+        .order_by()
         .values('numero_cliente')
         .annotate(c=Count('id'))
         .filter(c__gt=1)
         .values_list('numero_cliente', flat=True)
     )
-
-    if solo_duplicados and numeros_duplicados:
-        clientes_qs = clientes_qs.filter(numero_cliente__in=numeros_duplicados)
-
-    if numero_cliente_filtro:
-        clientes_qs = clientes_qs.filter(numero_cliente__icontains=numero_cliente_filtro)
-    if comuna_filtro:
-        clientes_qs = clientes_qs.annotate(_comuna_norm=Trim('comuna')).filter(
-            _comuna_norm__iexact=comuna_filtro
-        )
-    if sector_filtro:
-        clientes_qs = clientes_qs.annotate(_sector_norm=Trim('sector')).filter(
-            _sector_norm__iexact=sector_filtro
-        )
-    if tipo_suministro_filtro:
-        clientes_qs = clientes_qs.annotate(_tipo_sum_norm=Trim('tipo_suministro')).filter(
-            _tipo_sum_norm__iexact=tipo_suministro_filtro
-        )
-
-    if q:
-        clientes_qs = clientes_qs.filter(
-            Q(numero_cliente__icontains=q)
-            | Q(customer_name__icontains=q)
-            | Q(comuna__icontains=q)
-            | Q(direccion__icontains=q)
-            | Q(installation_address__icontains=q)
-            | Q(meter_serial_n_1__icontains=q)
-            | Q(sector__icontains=q)
-            | Q(tipo_suministro__icontains=q)
-        )
 
     def _valores_filtro(campo):
         """Valores únicos para combos (sin repetir por espacios/mayúsculas)."""
@@ -2887,7 +2899,6 @@ def clientes_list_view(request):
             if not texto:
                 continue
             clave = texto.casefold()
-            # Conserva la primera forma vista; evita opciones duplicadas en el select.
             if clave not in unicos:
                 unicos[clave] = texto
         return sorted(unicos.values(), key=lambda item: item.casefold())
@@ -2932,14 +2943,33 @@ def clientes_list_view(request):
 
 @login_required
 def clientes_exportar_view(request):
-    """Exportar clientes activos a Excel."""
-    clientes = Cliente.objects.filter(activo=True).order_by('numero_cliente')
+    """Exportar clientes a Excel (respeta filtros activos salvo padrón completo)."""
+    from web.services.filtros_export import queryset_clientes_filtrado
+
+    modo = (request.GET.get('modo') or 'filtrado').strip().lower()
+    if modo in ('completo_padron', 'padron', 'todos', 'full'):
+        clientes = queryset_clientes_filtrado(request, aplicar_filtros=False)
+        filename = 'clientes_padron_completo.xlsx'
+    elif modo in ('completo', 'historial'):
+        from importaciones.utils import exportar_clientes_excel_completo
+        clientes = queryset_clientes_filtrado(request, aplicar_filtros=True)
+        wb = exportar_clientes_excel_completo(clientes)
+        response = HttpResponse(
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="clientes_completo.xlsx"'
+        wb.save(response)
+        return response
+    else:
+        clientes = queryset_clientes_filtrado(request, aplicar_filtros=True)
+        filename = 'clientes_filtrado.xlsx'
+
     wb = exportar_clientes_excel(clientes)
 
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
-    response['Content-Disposition'] = 'attachment; filename="clientes.xlsx"'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     wb.save(response)
     return response
 
@@ -3679,6 +3709,64 @@ def clientes_eliminar_masivo_view(request):
 
 
 @login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
+@require_http_methods(["POST"])
+def clientes_modificar_masivo_view(request):
+    """Edición masiva de campos de ficha (solo campos no vacíos)."""
+    ids_raw = request.POST.get('ids', '') or request.POST.get('cliente_ids', '')
+    if isinstance(ids_raw, list):
+        ids = [int(x) for x in ids_raw if str(x).strip().isdigit()]
+    else:
+        ids = [int(x) for x in str(ids_raw).replace(' ', '').split(',') if x.isdigit()]
+
+    if not ids:
+        return JsonResponse({'success': False, 'message': 'No hay clientes seleccionados.', 'actualizados': 0, 'omitidos': 0})
+
+    sector = (request.POST.get('sector') or '').strip()
+    comuna = (request.POST.get('comuna') or '').strip()
+    tipo_suministro = (request.POST.get('tipo_suministro') or '').strip()
+    proyecto = (request.POST.get('proyecto') or '').strip()
+
+    if not any([sector, comuna, tipo_suministro, proyecto]):
+        return JsonResponse({
+            'success': False,
+            'message': 'Completa al menos un campo para aplicar cambios.',
+            'actualizados': 0,
+            'omitidos': len(ids),
+        })
+
+    actualizados = 0
+    omitidos = 0
+    for cliente in Cliente.objects.filter(pk__in=ids, activo=True):
+        changed = False
+        if sector and (cliente.sector or '') != sector:
+            cliente.sector = sector
+            changed = True
+        if comuna and (cliente.comuna or '') != comuna:
+            cliente.comuna = comuna
+            changed = True
+        if tipo_suministro and (cliente.tipo_suministro or '') != tipo_suministro:
+            cliente.tipo_suministro = tipo_suministro
+            changed = True
+        if proyecto and (cliente.proyecto or '') != proyecto:
+            cliente.proyecto = proyecto
+            changed = True
+        if changed:
+            cliente.save()
+            actualizados += 1
+        else:
+            omitidos += 1
+
+    omitidos += max(0, len(ids) - actualizados - omitidos)
+    return JsonResponse({
+        'success': True,
+        'message': f'Se actualizaron {actualizados} cliente(s). {omitidos} sin cambios.',
+        'actualizados': actualizados,
+        'omitidos': omitidos,
+    })
+
+
+@login_required
 @require_http_methods(["POST"])
 def update_profile_view(request):
     """Actualizar perfil del usuario"""
@@ -3737,9 +3825,22 @@ def movimientos_list_view(request):
     busqueda = request.GET.get('q', '')
     
     # Query base
+    from django.db.models import Prefetch
+    from inventario.models import MovimientoItem
+    from web.services.movimientos_display import enriquecer_movimiento_ubicaciones
+
     movimientos = MovimientoInventario.objects.all().select_related(
         'origen', 'destino', 'responsable'
-    ).prefetch_related('items').order_by('-fecha_hora')
+    ).prefetch_related(
+        Prefetch(
+            'items',
+            queryset=MovimientoItem.objects.select_related(
+                'medidor__cliente',
+                'simcard__cliente',
+                'modem__cliente',
+            ),
+        )
+    ).order_by('-fecha_hora')
     
     # Aplicar filtros
     if tipo_filtro:
@@ -3843,6 +3944,8 @@ def movimientos_list_view(request):
         else:
             mov.item_origen_display = '-'
 
+        enriquecer_movimiento_ubicaciones(mov)
+
         mov.moreapp_submission_id = ''
         mov.moreapp_registro_id = None
         if mov.origen_sistema == 'MOREAPP':
@@ -3914,17 +4017,21 @@ def movimientos_detalle_view(request, movimiento_id):
     Muestra todos los items involucrados y evidencias
     """
     from inventario.models import MovimientoInventario, MovimientoItem
+    from web.services.movimientos_display import enriquecer_movimiento_ubicaciones
     
     movimiento = get_object_or_404(
         MovimientoInventario.objects.select_related(
             'origen', 'destino', 'responsable'
-        ).prefetch_related('items'),
+        ),
         id=movimiento_id
     )
     
     items = movimiento.items.all().select_related(
-        'medidor', 'simcard', 'modem'
+        'medidor__cliente', 'medidor__estado_inventario',
+        'simcard__cliente', 'simcard__estado_inventario',
+        'modem__cliente', 'modem__estado_inventario',
     )
+    enriquecer_movimiento_ubicaciones(movimiento)
 
     items_detalle = []
     resumen_por_tipo = {
@@ -4068,8 +4175,17 @@ def movimientos_historial_equipo_view(request):
     items = items.select_related(
         'movimiento__origen',
         'movimiento__destino',
-        'movimiento__responsable'
+        'movimiento__responsable',
+        'medidor__cliente',
+        'simcard__cliente',
+        'modem__cliente',
     ).order_by('-movimiento__fecha_hora')
+
+    from web.services.movimientos_display import enriquecer_movimiento_ubicaciones
+    items_list = list(items)
+    for item in items_list:
+        enriquecer_movimiento_ubicaciones(item.movimiento)
+    items = items_list
 
     # Evaluar queryset y adjuntar reporte MoreApp a cada item para que el
     # template pueda acceder con item.reporte_moreapp sin templatetags extra.
@@ -4604,7 +4720,7 @@ def _calcular_adv_breakdown(model_class):
 
 @login_required
 def api_buscar_clientes(request):
-    """API para buscar clientes por número, dirección o comuna (autocomplete)."""
+    """API para buscar clientes por número, nombre, dirección o comuna (autocomplete)."""
     query = request.GET.get('q', '').strip()
     if not query or len(query) < 2:
         return JsonResponse({'results': []})
@@ -4615,22 +4731,69 @@ def api_buscar_clientes(request):
             .exclude(numero_cliente='0')
             .filter(
                 Q(numero_cliente__icontains=query)
+                | Q(customer_name__icontains=query)
                 | Q(direccion__icontains=query)
+                | Q(installation_address__icontains=query)
                 | Q(comuna__icontains=query)
             )
             .order_by('numero_cliente')
-            .values('id', 'numero_cliente', 'direccion', 'comuna')[:20]
+            .values('id', 'numero_cliente', 'customer_name', 'direccion', 'installation_address', 'comuna')[:20]
         )
         results = []
         for row in qs:
-            label = f"{row['numero_cliente']} - {row['direccion']}"
+            nombre = (row.get('customer_name') or '').strip()
+            direccion = (row.get('installation_address') or row.get('direccion') or '').strip()
+            partes = [row['numero_cliente']]
+            if nombre:
+                partes.append(nombre)
+            elif direccion:
+                partes.append(direccion)
+            label = ' · '.join(partes)
             if row.get('comuna'):
                 label = f"{label} ({row['comuna']})"
             results.append({
                 'id': row['id'],
                 'numero_cliente': row['numero_cliente'],
-                'direccion': row['direccion'],
+                'customer_name': nombre,
+                'direccion': direccion,
                 'comuna': row.get('comuna') or '',
+                'label': label,
+            })
+        return JsonResponse({'results': results})
+    except Exception as e:
+        return JsonResponse({'results': [], 'error': str(e)}, status=400)
+
+
+@login_required
+def api_buscar_tecnicos(request):
+    """API para buscar técnicos activos por nombre interno o nombre completo."""
+    from usuarios.models import Usuario
+
+    query = request.GET.get('q', '').strip()
+    if not query or len(query) < 2:
+        return JsonResponse({'results': []})
+
+    try:
+        qs = (
+            Usuario.objects.filter(rol='TECNICO', is_active=True)
+            .filter(
+                Q(nombre_interno__icontains=query)
+                | Q(nombre__icontains=query)
+                | Q(apellido__icontains=query)
+                | Q(email__icontains=query)
+            )
+            .order_by('nombre_interno')[:20]
+        )
+        results = []
+        for u in qs:
+            completo = ' '.join(filter(None, [getattr(u, 'nombre', ''), getattr(u, 'apellido', '')])).strip()
+            label = u.nombre_interno or completo or str(u.pk)
+            if completo and completo.casefold() != (u.nombre_interno or '').casefold():
+                label = f'{u.nombre_interno} · {completo}'
+            results.append({
+                'id': u.pk,
+                'nombre_interno': u.nombre_interno or '',
+                'nombre_completo': completo,
                 'label': label,
             })
         return JsonResponse({'results': results})

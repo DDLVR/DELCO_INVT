@@ -224,19 +224,15 @@ def _resolver_tecnico(texto: str) -> Optional[Usuario]:
 
 
 def _obtener_o_crear_cliente(numero_cliente: str, valores, indice) -> Cliente:
+    """Resuelve cliente existente. No crea fichas por tipo en Excel."""
     cliente = Cliente.objects.filter(numero_cliente=numero_cliente, activo=True).first()
     if not cliente:
         cliente = Cliente.objects.filter(numero_cliente__iexact=numero_cliente, activo=True).first()
     if cliente:
         return cliente
-
-    direccion = _valor_fila(valores, indice, 'direccion_cliente') or f'Cliente {numero_cliente}'
-    comuna = _valor_fila(valores, indice, 'comuna') or 'Por definir'
-    return Cliente.objects.create(
-        numero_cliente=numero_cliente,
-        direccion=direccion,
-        comuna=comuna,
-        activo=True,
+    raise ValueError(
+        f'Cliente "{numero_cliente}" no existe en el padrón activo. '
+        f'Revisa el número o créalo antes de importar la OT.'
     )
 
 
@@ -571,7 +567,7 @@ def vincular_informe_cliente_a_orden(
         cliente=cliente,
         eliminado=False,
         estado__in=list(OrdenTrabajo.ESTADOS_ABIERTOS) + ['REALIZADA'],
-    ).order_by('-fecha_creacion').first()
+    ).order_by('-fecha_creacion', '-id').first()
 
     if orden and orden.estado != 'REALIZADA_PENDIENTE_COMPROBACION':
         orden.estado = 'REALIZADA_PENDIENTE_COMPROBACION'

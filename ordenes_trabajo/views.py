@@ -132,6 +132,20 @@ def ordenes_list_view(request):
         pk__in=OrdenTrabajo.objects.exclude(cliente_id=None).values('cliente_id')
     ).order_by('numero_cliente')[:500]
 
+    cliente_filtro_label = ''
+    tecnico_filtro_label = ''
+    if cliente_filtro:
+        if str(cliente_filtro).isdigit():
+            c = Cliente.objects.filter(pk=int(cliente_filtro)).first()
+            if c:
+                cliente_filtro_label = f'{c.numero_cliente}' + (f' · {c.customer_name}' if c.customer_name else '')
+        else:
+            cliente_filtro_label = str(cliente_filtro)
+    if tecnico_filtro and str(tecnico_filtro).isdigit():
+        t = Usuario.objects.filter(pk=int(tecnico_filtro)).first()
+        if t:
+            tecnico_filtro_label = t.nombre_interno or str(t.pk)
+
     query_params = request.GET.copy()
     query_params.pop('page', None)
 
@@ -148,6 +162,8 @@ def ordenes_list_view(request):
         'tipo_filtro': tipo_filtro,
         'tecnico_filtro': tecnico_filtro,
         'cliente_filtro': cliente_filtro,
+        'cliente_filtro_label': cliente_filtro_label,
+        'tecnico_filtro_label': tecnico_filtro_label,
         'buscar': buscar,
         'cola_filtro': cola_filtro,
         'colas_orden': COLAS_ORDEN,
@@ -705,13 +721,17 @@ def ordenes_importar_view(request):
 
 @login_required
 def ordenes_exportar_view(request):
-    """Exporta todas las órdenes visibles para el rol del usuario."""
+    """Exporta órdenes (filtradas por defecto; ?todas=1 exporta sin filtros)."""
     if request.user.rol not in ['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR']:
         messages.error(request, 'Sin permisos para exportar')
         return redirect('ordenes_list')
 
-    # Exportar sin filtros GET: evita Excel vacío por filtros activos en la URL
-    usar_filtros = request.GET.get('filtrar') == '1'
+    filter_keys = ('estado', 'tipo_trabajo', 'tecnico', 'cliente', 'buscar', 'cola')
+    tiene_filtros = any((request.GET.get(k) or '').strip() for k in filter_keys)
+    forzar_filtrar = request.GET.get('filtrar') == '1'
+    exportar_todas = request.GET.get('todas') == '1'
+    usar_filtros = (not exportar_todas) and (forzar_filtrar or tiene_filtros)
+
     qs = _queryset_ordenes_filtrado(request, aplicar_filtros=usar_filtros)
     wb = exportar_ordenes_excel(list(qs))
 
