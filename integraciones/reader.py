@@ -411,19 +411,30 @@ def _registrar_movimiento_equipo(
     equipo, tipo_equipo: str, observacion: str, estado_nombre: str,
     origen_sistema: str = 'MANUAL', tipo_override: str = '',
     responsable_override=None, referencia_ot: str = '',
+    ubicacion_origen=None,
 ):
+    """Registra movimiento con origen = ubicación ANTES del cambio.
+
+    Importante: pasar ubicacion_origen si ya se mutó equipo.ubicacion_actual;
+    si no, se usa la ubicación actual del equipo como origen.
+    """
     from inventario.models import MovimientoInventario, MovimientoItem
 
     responsable = responsable_override or _obtener_responsable_sistema()
     if not responsable:
         return
 
-    ubi_origen = getattr(equipo, 'ubicacion_actual', None)
-    origen = ubi_origen or _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+    origen = (
+        ubicacion_origen
+        or getattr(equipo, 'ubicacion_actual', None)
+        or _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+    )
 
     estado_norm = _normalizar_texto(estado_nombre)
     if 'instal' in estado_norm:
         destino = _obtener_o_crear_ubicacion('CLIENTE', 'Instalado en cliente')
+    elif 'retir' in estado_norm or 'baja' in estado_norm:
+        destino = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
     elif 'repar' in estado_norm:
         destino = _obtener_o_crear_ubicacion('PROVEEDOR', 'Proveedor/Reparación')
     else:
@@ -443,8 +454,9 @@ def _registrar_movimiento_equipo(
 
     # Actualizar ubicacion_actual del equipo al destino (Punto 4)
     if hasattr(equipo, 'ubicacion_actual'):
-        equipo.ubicacion_actual = destino
-        equipo.save(update_fields=['ubicacion_actual'])
+        if getattr(equipo, 'ubicacion_actual_id', None) != destino.id:
+            equipo.ubicacion_actual = destino
+            equipo.save(update_fields=['ubicacion_actual'])
 
     kwargs_item = {
         'movimiento': movimiento,
@@ -458,6 +470,7 @@ def _registrar_movimiento_equipo(
     elif tipo_equipo == 'SIM':
         kwargs_item['simcard'] = equipo
     MovimientoItem.objects.create(**kwargs_item)
+    return movimiento
 
 
 def _validar_conflicto_instalacion(equipo, tipo_equipo: str, cliente_obj) -> Optional[str]:
@@ -798,6 +811,13 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
                                  registrar_pendiente=None, responsable_movimiento=None,
                                  referencia_ot: str = ''):
     cambios = []
+    # Guardar ubicación/estado ANTES de mutar: el movimiento debe mostrar el trayecto real
+    # (p. ej. Bodega → Instalado en cliente), no Instalado → Instalado.
+    ubicacion_previa = getattr(equipo, 'ubicacion_actual', None)
+    estado_previo_nombre = ''
+    estado_previo = getattr(equipo, 'estado_inventario', None)
+    if estado_previo:
+        estado_previo_nombre = _as_text(getattr(estado_previo, 'nombre', '')) or ''
 
     if not _validar_reglas_operativas_previas(
         equipo,
@@ -847,16 +867,11 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
         cambios.append('estado_inventario')
 
     es_retiro = bool(estado_obj) and 'retir' in _normalizar_texto(getattr(estado_obj, 'nombre', ''))
+    es_instalacion = _es_estado_instalado(estado_obj)
 
-    if _es_estado_instalado(estado_obj):
-        destino_cliente = _obtener_o_crear_ubicacion('CLIENTE', 'Instalado en cliente')
-        if hasattr(equipo, 'ubicacion_actual_id') and equipo.ubicacion_actual_id != destino_cliente.id:
-            equipo.ubicacion_actual = destino_cliente
-            cambios.append('ubicacion_actual')
-
+    # La ubicación destino la aplica _registrar_movimiento_equipo (después de
+    # registrar origen=ubicacion_previa). Aquí solo liberamos FKs en retiro.
     if es_retiro:
-        # Un equipo retirado deja de estar asignado: liberar cliente y, si era
-        # el medidor_actual de alguna ficha, soltarlo (el snapshot queda en el movimiento).
         if getattr(equipo, 'cliente_id', None):
             equipo.cliente = None
             cambios.append('cliente')
@@ -917,7 +932,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
     if (
         tipo_equipo == 'MEDIDOR'
         and cliente_obj
-        and _es_estado_instalado(estado_obj)
+        and es_instalacion
         and cliente_obj.medidor_actual_id != equipo.id
     ):
         _asignar_medidor_actual_si_disponible(
@@ -927,29 +942,147 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
             registrar_pendiente=registrar_pendiente,
         )
 
+    # Si no hay cambios de campos pero sí hay cambio de ubicación implícito
+    # (p. ej. ya Instalado en otro sitio → Cliente), igual hay que mover.
+    necesita_movimiento_ubicacion = False
+    if es_instalacion:
+        destino_esperado = _obtener_o_crear_ubicacion('CLIENTE', 'Instalado en cliente')
+        if getattr(ubicacion_previa, 'id', None) != destino_esperado.id:
+            necesita_movimiento_ubicacion = True
+    elif es_retiro:
+        destino_esperado = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+        if getattr(ubicacion_previa, 'id', None) != destino_esperado.id:
+            necesita_movimiento_ubicacion = True
+
+    if not cambios and not necesita_movimiento_ubicacion:
+        return False
+
     if cambios:
+        # Quitar duplicados preservando orden (update_fields no admite repeats)
+        cambios = list(dict.fromkeys(cambios))
         equipo.save(update_fields=cambios)
-        # Puntos 5 y 10: tipo MOREAPP, origen_sistema MOREAPP
-        from inventario.models import MovimientoInventario
-        if MovimientoInventario.objects.filter(
-            origen_sistema='MOREAPP',
-            observacion=observacion,
-        ).exists():
-            registro.actualizo_equipos = True
-            return True
-        _registrar_movimiento_equipo(
-            equipo,
-            tipo_equipo,
-            observacion,
-            estado_obj.nombre if estado_obj else '',
-            origen_sistema='MOREAPP',
-            tipo_override='MOREAPP',
-            responsable_override=responsable_movimiento,
-            referencia_ot=referencia_ot,
-        )
+
+    from inventario.models import MovimientoInventario
+    if MovimientoInventario.objects.filter(
+        origen_sistema='MOREAPP',
+        observacion=observacion,
+    ).exists():
+        # Ya se registró este mismo cambio (reproceso / doble llamada).
+        # Asegurar ubicación destino aunque no se cree otro movimiento.
+        if necesita_movimiento_ubicacion and hasattr(equipo, 'ubicacion_actual'):
+            if es_instalacion:
+                equipo.ubicacion_actual = _obtener_o_crear_ubicacion('CLIENTE', 'Instalado en cliente')
+            elif es_retiro:
+                equipo.ubicacion_actual = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+            equipo.save(update_fields=['ubicacion_actual'])
         registro.actualizo_equipos = True
+        if es_instalacion and cliente_obj:
+            _retirar_otros_instalados_en_cliente(
+                cliente_obj,
+                tipo_equipo,
+                equipo,
+                observacion,
+                registro,
+                registrar_pendiente=registrar_pendiente,
+                responsable_movimiento=responsable_movimiento,
+                medidor_asociado=medidor_asociado,
+            )
         return True
-    return False
+
+    estado_nuevo_nombre = _as_text(getattr(estado_obj, 'nombre', '')) if estado_obj else ''
+    if estado_previo_nombre or estado_nuevo_nombre:
+        observacion_mov = (
+            f'{observacion} | Estado: '
+            f'{estado_previo_nombre or "—"} → {estado_nuevo_nombre or "—"}'
+        )
+    else:
+        observacion_mov = observacion
+
+    # Tipo operativo real (INSTALACION/RETIRO); origen_sistema=MOREAPP para filtrar.
+    _registrar_movimiento_equipo(
+        equipo,
+        tipo_equipo,
+        observacion_mov,
+        estado_obj.nombre if estado_obj else '',
+        origen_sistema='MOREAPP',
+        tipo_override='',
+        responsable_override=responsable_movimiento,
+        referencia_ot=referencia_ot,
+        ubicacion_origen=ubicacion_previa,
+    )
+    registro.actualizo_equipos = True
+
+    # Si se instaló equipo nuevo, el anterior del mismo tipo en ese cliente pasa a Retirado.
+    if es_instalacion and cliente_obj:
+        _retirar_otros_instalados_en_cliente(
+            cliente_obj,
+            tipo_equipo,
+            equipo,
+            observacion,
+            registro,
+            registrar_pendiente=registrar_pendiente,
+            responsable_movimiento=responsable_movimiento,
+            medidor_asociado=medidor_asociado,
+        )
+    return True
+
+
+def _retirar_otros_instalados_en_cliente(
+    cliente_obj,
+    tipo_equipo: str,
+    equipo_nuevo,
+    observacion_base: str,
+    registro,
+    registrar_pendiente=None,
+    responsable_movimiento=None,
+    medidor_asociado=None,
+) -> int:
+    """Al instalar un equipo nuevo, retira otros del mismo tipo ya instalados en el cliente.
+
+    Ejemplo: módem A instalado en cliente → llega módem B por MoreApp →
+    A pasa a Retirado y B a Instalado.
+    """
+    if not cliente_obj or not equipo_nuevo:
+        return 0
+
+    from inventario.models import Medidor, Modem, SimCard
+
+    modelo = {'MEDIDOR': Medidor, 'MODEM': Modem, 'SIM': SimCard}.get(tipo_equipo)
+    if not modelo:
+        return 0
+
+    estado_retirado = _obtener_estado_por_nombre('Retirado')
+    if not estado_retirado:
+        return 0
+
+    qs = modelo.objects.filter(cliente=cliente_obj, eliminado=False).exclude(pk=equipo_nuevo.pk)
+    # Solo retirar los que estén (o parezcan) instalados
+    previos = []
+    for eq in qs.select_related('estado_inventario'):
+        estado = getattr(eq, 'estado_inventario', None)
+        nombre = _normalizar_texto(getattr(estado, 'nombre', '') if estado else '')
+        if 'instal' in nombre or not estado:
+            previos.append(eq)
+
+    movimientos = 0
+    for eq in previos:
+        ok = _actualizar_equipo_operativo(
+            eq,
+            tipo_equipo,
+            estado_retirado,
+            cliente_obj,
+            (
+                f'{observacion_base} - retiro automático: se instaló '
+                f'{_identificador_equipo(equipo_nuevo, tipo_equipo)} en el mismo cliente'
+            ),
+            registro,
+            medidor_asociado=medidor_asociado if tipo_equipo != 'MEDIDOR' else None,
+            registrar_pendiente=registrar_pendiente,
+            responsable_movimiento=responsable_movimiento,
+        )
+        if ok:
+            movimientos += 1
+    return movimientos
 
 
 def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos_norm: Dict[str, Any], nombre_formulario: str):
