@@ -838,8 +838,9 @@
                     <div class="mb-3">
                         <label class="form-label">Entregar a / técnico</label>
                         <input type="hidden" name="entregado_a_id" id="masivoTecnicoId" value="">
+                        {% url 'api_buscar_tecnicos' as api_buscar_tecnicos_url %}
                         <div class="delco-ac mb-2"
-                             data-ac-url="{% url 'api_buscar_tecnicos' %}"
+                             {% if api_buscar_tecnicos_url %}data-ac-url="{{ api_buscar_tecnicos_url }}"{% endif %}
                              data-ac-hidden="#masivoTecnicoId"
                              data-ac-select="#masivoTecnicoSelect"
                              data-ac-min="2">

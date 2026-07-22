@@ -52,8 +52,9 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Técnico Responsable</label>
                                 <input type="hidden" name="tecnico_responsable" id="crearTecnicoId" value="">
+                                {% url 'api_buscar_tecnicos' as api_buscar_tecnicos_url %}
                                 <div class="delco-ac mb-2"
-                                     data-ac-url="{% url 'api_buscar_tecnicos' %}"
+                                     {% if api_buscar_tecnicos_url %}data-ac-url="{{ api_buscar_tecnicos_url }}"{% endif %}
                                      data-ac-hidden="#crearTecnicoId"
                                      data-ac-select="#crearTecnicoSelect"
                                      data-ac-min="2">
