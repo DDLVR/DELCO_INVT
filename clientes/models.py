@@ -258,6 +258,32 @@ class Cliente(models.Model):
         null=True,
         help_text='Estado operativo de la SIM'
     )
+
+    # PDF punto 4: IP bloqueada/fuera de servicio/en revisión y antecedentes de visita
+    ESTADO_RESTRICCION_CHOICES = [
+        ('', 'Sin restricción'),
+        ('IP_BLOQUEADA', 'IP bloqueada'),
+        ('IP_FUERA_SERVICIO', 'IP fuera de servicio'),
+        ('IP_EN_REVISION', 'IP en revisión'),
+        ('CERRADO', 'Cerrado'),
+        ('DESHABITADO', 'Deshabitado'),
+        ('NO_PERMITE', 'No permite acceso'),
+    ]
+    ESTADOS_RESTRICCION_IP = {'IP_BLOQUEADA', 'IP_FUERA_SERVICIO', 'IP_EN_REVISION'}
+    ESTADOS_RESTRICCION_VISITA = {'CERRADO', 'DESHABITADO', 'NO_PERMITE'}
+
+    estado_restriccion = models.CharField(
+        max_length=30,
+        choices=ESTADO_RESTRICCION_CHOICES,
+        blank=True,
+        default='',
+        help_text='Restricción operativa del cliente/IP (PDF punto 4)',
+    )
+    justificacion_restriccion = models.TextField(
+        blank=True,
+        default='',
+        help_text='Motivo obligatorio cuando hay restricción (bloqueada, fuera de servicio, deshabitado, etc.)',
+    )
     
     fecha_registro = models.DateField(
         null=True,

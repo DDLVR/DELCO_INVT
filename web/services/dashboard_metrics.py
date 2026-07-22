@@ -186,7 +186,9 @@ def count_clientes_disciplina_mercado() -> int:
 
 def count_clientes_cerrado_reiterado() -> int:
     """Clientes con antecedentes de cerrado / no permite / deshabitado."""
-    q = Q()
+    q = Q(
+        estado_restriccion__in=('CERRADO', 'DESHABITADO', 'NO_PERMITE')
+    )
     for kw in ('cerrado', 'deshabitado', 'no permite', 'no permite acceso'):
         q |= Q(trabajo__icontains=kw) | Q(note__icontains=kw)
     return _clientes_activos_qs().filter(q).count()

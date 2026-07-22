@@ -212,7 +212,9 @@
                         data-installation-address="{{ cliente.installation_address|default:'' }}"
                         data-proyecto="{{ cliente.proyecto|default:'' }}"
                         data-meter-manufacturer-id="{{ cliente.meter_manufacturer_id|default:'' }}"
-                        data-meter-serial="{{ cliente.meter_serial_n_1|default:'' }}">
+                        data-meter-serial="{{ cliente.meter_serial_n_1|default:'' }}"
+                        data-estado-restriccion="{{ cliente.estado_restriccion|default:'' }}"
+                        data-justificacion-restriccion="{{ cliente.justificacion_restriccion|default:''|escape }}">
                   <i class="bi bi-pencil"></i> Editar
                 </button>
                 <form action="{% url 'cliente_eliminar' cliente.id %}" method="post" style="display:inline;" class="form-eliminar-cliente" data-cliente-numero="{{ cliente.numero_cliente }}">
@@ -443,6 +445,19 @@
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="editarMeterSerial">Serie Medidor</label>
               <input type="text" class="form-control" id="editarMeterSerial" name="meter_serial_n_1">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="editarEstadoRestriccion">Restricción / estado visita-IP</label>
+              <select class="form-select" id="editarEstadoRestriccion" name="estado_restriccion">
+                {% for codigo, nombre in estado_restriccion_choices %}
+                <option value="{{ codigo }}">{{ nombre }}</option>
+                {% endfor %}
+              </select>
+              <small class="text-muted">Bloqueada, fuera de servicio, deshabitado, etc.</small>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="editarJustificacionRestriccion">Justificación</label>
+              <textarea class="form-control" id="editarJustificacionRestriccion" name="justificacion_restriccion" rows="2" placeholder="Obligatoria si hay restricción"></textarea>
             </div>
           </div>
         </div>
@@ -1112,6 +1127,10 @@
                 document.getElementById('editarProyecto').value = button.getAttribute('data-proyecto') || '';
                 document.getElementById('editarMeterManufacturer').value = button.getAttribute('data-meter-manufacturer-id') || '';
                 document.getElementById('editarMeterSerial').value = button.getAttribute('data-meter-serial') || '';
+                var estadoRest = document.getElementById('editarEstadoRestriccion');
+                var justRest = document.getElementById('editarJustificacionRestriccion');
+                if (estadoRest) estadoRest.value = button.getAttribute('data-estado-restriccion') || '';
+                if (justRest) justRest.value = button.getAttribute('data-justificacion-restriccion') || '';
                 var titulo = document.getElementById('modalEditarClienteLabel');
                 if (titulo) {
                   var num = button.getAttribute('data-numero-cliente') || '';
