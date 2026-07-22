@@ -838,9 +838,8 @@
                     <div class="mb-3">
                         <label class="form-label">Entregar a / técnico</label>
                         <input type="hidden" name="entregado_a_id" id="masivoTecnicoId" value="">
-                        {% url 'api_buscar_tecnicos' as api_buscar_tecnicos_url %}
                         <div class="delco-ac mb-2"
-                             {% if api_buscar_tecnicos_url %}data-ac-url="{{ api_buscar_tecnicos_url }}"{% endif %}
+                             data-ac-url="{{ delco_api.buscar_tecnicos }}"
                              data-ac-hidden="#masivoTecnicoId"
                              data-ac-select="#masivoTecnicoSelect"
                              data-ac-min="2">
@@ -864,7 +863,7 @@
                         <input type="hidden" name="cliente_id" id="masivoClienteId" value="">
                         <input type="hidden" name="cliente_texto" id="masivoClienteTexto" value="">
                         <div class="delco-ac mb-2"
-                             data-ac-url="{% url 'api_buscar_clientes' %}"
+                             data-ac-url="{{ delco_api.buscar_clientes }}"
                              data-ac-hidden="#masivoClienteId"
                              data-ac-select="#masivoClienteSelect"
                              data-ac-min="2">
@@ -902,7 +901,7 @@
                     <div class="mb-3">
                         <label class="form-label">Medidor asociado</label>
                         <div class="delco-ac"
-                             data-ac-url="{% url 'api_buscar_medidores' %}"
+                             data-ac-url="{{ delco_api.buscar_medidores }}"
                              data-ac-select="#masivoMedidorSim"
                              data-ac-min="2">
                             <input type="search" class="form-control form-control-sm delco-ac-input"
@@ -926,7 +925,7 @@
                     <div class="mb-3">
                         <label class="form-label">Medidor asociado</label>
                         <div class="delco-ac"
-                             data-ac-url="{% url 'api_buscar_medidores' %}"
+                             data-ac-url="{{ delco_api.buscar_medidores }}"
                              data-ac-select="#masivoMedidorOtro"
                              data-ac-min="2">
                             <input type="search" class="form-control form-control-sm delco-ac-input"
@@ -1071,7 +1070,7 @@
                                 <div class="col-md-6 mb-3">
                                     <label for="clienteMedidor" class="form-label">Cliente</label>
                                     <div class="inventario-ac position-relative mb-1"
-                                         data-ac-url="{% url 'api_buscar_clientes' %}"
+                                         data-ac-url="{{ delco_api.buscar_clientes }}"
                                          data-ac-select="clienteMedidor">
                                         <input type="search" class="form-control form-control-sm inventario-ac-input"
                                                placeholder="Buscar número o dirección..." autocomplete="off">
@@ -1193,7 +1192,7 @@
                                             Cliente
                                         </label>
                                         <div class="inventario-ac position-relative mb-1"
-                                             data-ac-url="{% url 'api_buscar_clientes' %}"
+                                             data-ac-url="{{ delco_api.buscar_clientes }}"
                                              data-ac-select="simCliente">
                                             <input type="search" class="form-control form-control-sm inventario-ac-input"
                                                    placeholder="Buscar número o dirección..." autocomplete="off">
@@ -1215,7 +1214,7 @@
                                             Medidor
                                         </label>
                                         <div class="inventario-ac position-relative mb-1"
-                                             data-ac-url="{% url 'api_buscar_medidores' %}"
+                                             data-ac-url="{{ delco_api.buscar_medidores }}"
                                              data-ac-select="simMedidor">
                                             <input type="search" class="form-control form-control-sm inventario-ac-input"
                                                    placeholder="Buscar serie, caja o marca..." autocomplete="off">
@@ -1356,7 +1355,7 @@
                                             <i class="bi bi-building"></i> Cliente
                                         </label>
                                         <div class="inventario-ac position-relative mb-1"
-                                             data-ac-url="{% url 'api_buscar_clientes' %}"
+                                             data-ac-url="{{ delco_api.buscar_clientes }}"
                                              data-ac-select="modemCliente">
                                             <input type="search" class="form-control form-control-sm inventario-ac-input"
                                                    placeholder="Buscar número o dirección..." autocomplete="off">
@@ -1375,7 +1374,7 @@
                                             <i class="bi bi-speedometer"></i> Medidor
                                         </label>
                                         <div class="inventario-ac position-relative mb-1"
-                                             data-ac-url="{% url 'api_buscar_medidores' %}"
+                                             data-ac-url="{{ delco_api.buscar_medidores }}"
                                              data-ac-select="modemMedidor">
                                             <input type="search" class="form-control form-control-sm inventario-ac-input"
                                                    placeholder="Buscar serie, caja o marca..." autocomplete="off">
