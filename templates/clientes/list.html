@@ -28,9 +28,6 @@
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarClientes">
               <i class="bi bi-upload me-1" aria-hidden="true"></i>Importar clientes
             </button>
-            <button type="button" class="btn btn-outline-dark" id="btnEditarSeleccionadosClientes">
-              <i class="bi bi-check2-square"></i> Editar seleccionados
-            </button>
             <button type="button" class="btn btn-danger" id="btnEliminarSeleccionadosClientes">
               <i class="bi bi-trash"></i> Eliminar seleccionados
             </button>
@@ -257,7 +254,7 @@
         <strong id="clientesSeleccionCount">0</strong> cliente(s) seleccionados
       </div>
       <div class="d-flex gap-2 flex-wrap">
-        <button type="button" class="btn btn-sm btn-outline-dark" id="btnEditarDesdeBandeja">Editar seleccionados</button>
+        <button type="button" class="btn btn-sm btn-outline-dark" id="btnEditarDesdeBandeja">Modificar selección</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiarSeleccionClientes">Limpiar selección</button>
       </div>
     </div>
@@ -869,10 +866,8 @@
 
             restaurarChecksClientes();
 
-            var btnEditarSel = document.getElementById('btnEditarSeleccionadosClientes');
             var btnEditarBandeja = document.getElementById('btnEditarDesdeBandeja');
             var btnLimpiarSel = document.getElementById('btnLimpiarSeleccionClientes');
-            if (btnEditarSel) btnEditarSel.addEventListener('click', abrirModalMasivoClientes);
             if (btnEditarBandeja) btnEditarBandeja.addEventListener('click', abrirModalMasivoClientes);
             if (btnLimpiarSel) {
               btnLimpiarSel.addEventListener('click', function() {

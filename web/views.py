@@ -4603,8 +4603,14 @@ def _categorias_advertencia_registro(registro):
     if 'ALERTA_CRITICA' in desc.upper():
         categorias.add('critica')
 
-    if registro.alerta_doble_trabajo and 'critica' not in categorias:
-        categorias.add('doble')
+    # El flag alerta_doble_trabajo se usó históricamente también para bloqueos de regla.
+    # Solo contar como "doble" si no hay categoría más específica o el texto lo dice.
+    if 'critica' not in categorias:
+        desc_l = desc.lower()
+        if 'doble trabajo' in desc_l or 'ALERTA_ASIGNACION' in desc.upper():
+            categorias.add('doble')
+        elif registro.alerta_doble_trabajo and not categorias:
+            categorias.add('doble')
 
     return categorias
 
@@ -5004,7 +5010,7 @@ def _parsear_marcador_alerta(prefijo: str, cuerpo: str, origen: str) -> dict:
     texto = str(cuerpo or '').strip()
     if ' | CONTEXTO:' in texto:
         texto, contexto = texto.split(' | CONTEXTO:', 1)
-        contexto = contexto.strip()
+        contexto = contexto.strip().strip('|').strip()
 
     motivo = texto
     tipo_equipo = ''
@@ -5132,15 +5138,19 @@ def _extraer_bloqueos_operativos_registro(registro):
     vistos = set()
     resultado = []
     for item in bloqueos:
+        motivo_norm = re.sub(r'\s+', ' ', str(item.get('motivo', '') or '')).strip().strip('|').strip()
+        # Para dedupe, ignorar el "contexto: ..." (submission) que puede variar por un "|"
+        motivo_clave = re.split(r'\s*\(contexto:', motivo_norm, maxsplit=1)[0].strip().lower()
         key = (
             item.get('origen', ''),
             item.get('tipo_equipo', ''),
             item.get('identificador', ''),
-            item.get('motivo', ''),
+            motivo_clave,
         )
-        if not item.get('motivo') or key in vistos:
+        if not motivo_clave or key in vistos:
             continue
         vistos.add(key)
+        item = {**item, 'motivo': motivo_norm}
         resultado.append(_enriquecer_bloqueo_operativo(item))
     return resultado
 
@@ -5210,9 +5220,17 @@ def reportes_moreapp_list(request):
     if formulario:
         qs = qs.filter(nombre_formulario=formulario)
 
-    # Filtros que requieren parseo Python: reducen a IDs sin enriquecer todas las filas en HTML
+    # Filtros que requieren parseo Python: reducen a IDs sin enriquecer todas las filas en HTML.
+    # Los KPI de advertencia (equipo/regla/doble) usan la misma base que _calcular_adv_breakdown:
+    # solo pendientes/con advertencia abiertas (no REVISADO ni cerrados).
     needs_python_filter = bloqueo == '1' or kpi in ('adv_equipo', 'adv_regla', 'adv_doble')
     if needs_python_filter:
+        if kpi in ('adv_equipo', 'adv_regla', 'adv_doble'):
+            qs = qs.filter(
+                estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
+            ).filter(
+                Q(estado_revision='CON_ADVERTENCIA') | Q(alerta_doble_trabajo=True)
+            )
         matched_ids = []
         for reg in qs.only(
             'id', 'datos_procesados', 'descripcion_alerta', 'alerta_doble_trabajo',
@@ -5248,7 +5266,17 @@ def reportes_moreapp_list(request):
             'critica' in categorias_advertencia
             or 'ALERTA_CRITICA' in str(reg.descripcion_alerta or '').upper()
         )
-        reg.alerta_preview = (reg.descripcion_alerta or '')[:180]
+        if bloqueos:
+            primero = bloqueos[0]
+            equipo_txt = ' '.join(
+                filter(None, [primero.get('tipo_equipo'), primero.get('identificador')])
+            ).strip()
+            motivo = (primero.get('motivo') or '').strip()
+            label = (primero.get('origen_label') or 'Advertencia').strip()
+            preview = f'{label}: {equipo_txt + " — " if equipo_txt else ""}{motivo}'.strip()
+            reg.alerta_preview = preview[:180]
+        else:
+            reg.alerta_preview = (reg.descripcion_alerta or '')[:180]
         reg.delete_url = f'/reportes/moreapp/{reg.pk}/eliminar/' if request.user.rol == 'ADMIN' else ''
 
     adv_breakdown = _calcular_adv_breakdown(IntegracionMoreApp)

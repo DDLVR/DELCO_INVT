@@ -23,9 +23,6 @@
                 <button type="button" class="btn btn-outline-primary" id="btnAsignarMasivo">
                     <i class="bi bi-person-check"></i> Asignar responsable
                 </button>
-                <button type="button" class="btn btn-outline-dark" id="btnEditarMasivo">
-                    <i class="bi bi-check2-square"></i> Cambiar varios
-                </button>
                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarOrdenes">
                     <i class="bi bi-upload"></i> Importar Excel
                 </button>
@@ -275,7 +272,10 @@
             <div>
                 <strong id="ordenesSeleccionCount">0</strong> orden(es) seleccionadas
             </div>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiarSeleccionOrdenes">Limpiar selección</button>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-dark" id="btnEditarMasivoBandeja">Modificar selección</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiarSeleccionOrdenes">Limpiar selección</button>
+            </div>
         </div>
     </div>
     {% endif %}
@@ -611,9 +611,9 @@ $(document).ready(function() {
     const btnAsignar = document.getElementById('btnAsignarMasivo');
     if (btnAsignar) btnAsignar.addEventListener('click', () => abrirModalSeleccion('modalAsignarMasivoOrdenes', 'bulkAsignarIds', 'bulkAsignarResumen'));
 
-    const btnEditarMasivo = document.getElementById('btnEditarMasivo');
-    if (btnEditarMasivo) {
-        btnEditarMasivo.addEventListener('click', () =>
+    const btnEditarMasivoBandeja = document.getElementById('btnEditarMasivoBandeja');
+    if (btnEditarMasivoBandeja) {
+        btnEditarMasivoBandeja.addEventListener('click', () =>
             abrirModalSeleccion('modalEditarMasivoOrdenes', 'bulkOrdenIds', 'bulkOrdenResumen')
         );
     }
