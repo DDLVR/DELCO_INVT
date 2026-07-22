@@ -84,6 +84,11 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
         if cola:
             ordenes = aplicar_cola_ordenes(ordenes, cola)
 
+        alarma = (request.GET.get('alarma') or '').strip().lower()
+        if alarma == 'ot_sin_responder':
+            from reportes.services import ESTADOS_PENDIENTES_OT
+            ordenes = ordenes.filter(estado__in=ESTADOS_PENDIENTES_OT)
+
     return ordenes.select_related(
         'tecnico_responsable',
         'cliente',
@@ -113,6 +118,7 @@ def ordenes_list_view(request):
     cliente_filtro = request.GET.get('cliente', '')
     buscar = request.GET.get('buscar', '')
     cola_filtro = request.GET.get('cola', '')
+    alarma_filtro = (request.GET.get('alarma') or '').strip().lower()
 
     try:
         per_page = int(request.GET.get('per_page') or 50)
@@ -166,6 +172,8 @@ def ordenes_list_view(request):
         'tecnico_filtro_label': tecnico_filtro_label,
         'buscar': buscar,
         'cola_filtro': cola_filtro,
+        'alarma': alarma_filtro,
+        'alarma_label': 'OT sin responder' if alarma_filtro == 'ot_sin_responder' else '',
         'colas_orden': COLAS_ORDEN,
         'colas_conteo': contadores_colas_ordenes(base_ordenes),
         'total_alertas_duplicado': total_alertas_duplicado,

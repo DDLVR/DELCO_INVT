@@ -23,6 +23,7 @@ def queryset_clientes_filtrado(request, *, aplicar_filtros: bool = True):
     sector_filtro = (request.GET.get('sector') or '').strip()
     tipo_suministro_filtro = (request.GET.get('tipo_suministro') or '').strip()
     solo_duplicados = (request.GET.get('solo_duplicados') or '') == '1'
+    alarma = (request.GET.get('alarma') or '').strip().lower()
 
     if solo_duplicados:
         # order_by() evita que un ordenamiento futuro del queryset contamine el GROUP BY
@@ -34,6 +35,10 @@ def queryset_clientes_filtrado(request, *, aplicar_filtros: bool = True):
             .values_list('numero_cliente', flat=True)
         )
         qs = qs.filter(numero_cliente__in=numeros_duplicados)
+
+    if alarma:
+        from web.services.dashboard_metrics import aplicar_filtro_alarma_clientes
+        qs = aplicar_filtro_alarma_clientes(qs, alarma)
 
     if numero_cliente_filtro:
         qs = qs.filter(numero_cliente__icontains=numero_cliente_filtro)

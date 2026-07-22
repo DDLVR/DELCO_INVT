@@ -92,13 +92,13 @@
                         Alarmas para analistas
                         <span class="badge bg-dark ms-1">{{ alarmas_analistas_activas|default:0 }} activas</span>
                     </span>
-                    <a href="{% url 'reportes_hub' %}" class="btn btn-sm btn-outline-dark py-0">Ver reportes</a>
+                    <a href="{% url 'clientes_list' %}" class="btn btn-sm btn-outline-dark py-0">Ver clientes</a>
                 </div>
                 <div class="card-body py-2">
                     <div class="row g-2">
                         {% for alarma in alarmas_analistas %}
                         <div class="col-6 col-md-4 col-lg-3 col-xl-2">
-                            <a href="{{ alarma.url }}" class="text-decoration-none text-reset d-block h-100" title="Exportar detalle">
+                            <a href="{{ alarma.url }}" class="text-decoration-none text-reset d-block h-100" title="Ver listado filtrado">
                                 <div class="card delco-panel-card h-100 text-center mb-0 {% if alarma.count %}border-{{ alarma.severity }}{% else %}border-light opacity-75{% endif %}">
                                     <div class="card-body py-2 px-1">
                                         <div class="fs-5 fw-bold {% if alarma.count %}text-{{ alarma.severity }}{% else %}text-muted{% endif %}">{{ alarma.count }}</div>
