@@ -346,7 +346,13 @@
             </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="histEditarProyecto">Proyecto</label>
-              <input type="text" class="form-control" id="histEditarProyecto" name="proyecto" value="{{ cliente.proyecto|default:'' }}">
+              <input type="text" class="form-control" id="histEditarProyecto" name="proyecto" list="listaProyectosHistorial" value="{{ cliente.proyecto|default:'' }}" placeholder="Elige o escribe un proyecto">
+              <datalist id="listaProyectosHistorial">
+                {% for proyecto in proyectos_disponibles %}
+                <option value="{{ proyecto }}"></option>
+                {% endfor %}
+              </datalist>
+              <small class="text-muted">Puedes cambiar a otro proyecto o escribir uno nuevo.</small>
             </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="histEditarMeterSerial">Serie Medidor</label>

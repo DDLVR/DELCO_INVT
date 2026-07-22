@@ -2867,13 +2867,19 @@ def clientes_list_view(request):
     """Lista de clientes activos con paginación servidor (no carga todo el padrón en HTML)."""
     from django.core.paginator import Paginator
     from django.db.models import Count
-    from web.services.filtros_export import queryset_clientes_filtrado
+    from web.services.filtros_export import es_sin_proyecto, queryset_clientes_filtrado
 
     q = (request.GET.get('q') or '').strip()
     numero_cliente_filtro = (request.GET.get('numero_cliente') or '').strip()
     comuna_filtro = (request.GET.get('comuna') or '').strip()
     sector_filtro = (request.GET.get('sector') or '').strip()
     tipo_suministro_filtro = (request.GET.get('tipo_suministro') or '').strip()
+    proyecto_filtro = (request.GET.get('proyecto') or '').strip()
+    marca_filtro = (request.GET.get('marca') or request.GET.get('meter_manufacturer_id') or '').strip()
+    serie_filtro = (request.GET.get('serie') or request.GET.get('meter_serial_n_1') or '').strip()
+    empresa_filtro = (request.GET.get('empresa') or '').strip()
+    ip_filtro = (request.GET.get('ip') or '').strip()
+    nombre_filtro = (request.GET.get('nombre') or request.GET.get('customer_name') or '').strip()
     solo_duplicados = (request.GET.get('solo_duplicados') or '') == '1'
     alarma = (request.GET.get('alarma') or '').strip().lower()
     try:
@@ -2911,6 +2917,12 @@ def clientes_list_view(request):
             texto = str(valor).strip()
             if not texto:
                 continue
+            # Ignorar valores basura frecuentes en imports
+            if texto.casefold() in {'null', 'nulo', 'none', '-'}:
+                continue
+            # Proyecto: no listar variantes de "sin proyecto" (ya hay opción fija en el filtro)
+            if campo == 'proyecto' and es_sin_proyecto(texto):
+                continue
             clave = texto.casefold()
             if clave not in unicos:
                 unicos[clave] = texto
@@ -2919,6 +2931,9 @@ def clientes_list_view(request):
     comunas_disponibles = _valores_filtro('comuna')
     sectores_disponibles = _valores_filtro('sector')
     tipos_suministro_disponibles = _valores_filtro('tipo_suministro')
+    proyectos_disponibles = _valores_filtro('proyecto')
+    marcas_disponibles = _valores_filtro('meter_manufacturer_id')
+    empresas_disponibles = _valores_filtro('empresa')
 
     total_fichas = clientes_qs.count()
     total_clientes = clientes_qs.values('numero_cliente').distinct().count()
@@ -2940,9 +2955,18 @@ def clientes_list_view(request):
         'comuna_seleccionada': comuna_filtro,
         'sector_seleccionado': sector_filtro,
         'tipo_suministro_seleccionado': tipo_suministro_filtro,
+        'proyecto_seleccionado': proyecto_filtro,
+        'marca_seleccionada': marca_filtro,
+        'serie_seleccionada': serie_filtro,
+        'empresa_seleccionada': empresa_filtro,
+        'ip_seleccionada': ip_filtro,
+        'nombre_seleccionado': nombre_filtro,
         'comunas_disponibles': comunas_disponibles,
         'sectores_disponibles': sectores_disponibles,
         'tipos_suministro_disponibles': tipos_suministro_disponibles,
+        'proyectos_disponibles': proyectos_disponibles,
+        'marcas_disponibles': marcas_disponibles,
+        'empresas_disponibles': empresas_disponibles,
         'solo_duplicados': solo_duplicados,
         'alarma': alarma,
         'alarma_label': alarma_label,
@@ -3317,12 +3341,24 @@ def cliente_crear_view(request):
     # La tabla se llena por búsqueda (API); no cargar miles de filas en el HTML.
     medidores_libres = []
 
+    from web.services.filtros_export import es_sin_proyecto
+    proyectos_disponibles = sorted({
+        (p or '').strip()
+        for p in Cliente.objects.filter(activo=True)
+        .exclude(proyecto__isnull=True)
+        .exclude(proyecto='')
+        .values_list('proyecto', flat=True)
+        if (p or '').strip()
+        and not es_sin_proyecto(p)
+    }, key=lambda x: x.casefold())
+
     return render(request, 'clientes/crear.html', {
         'tipo_medidor_choices': Medidor.TIPO_MEDIDOR_CHOICES,
         'estados_disponibles': estados_disponibles,
         'medidores_libres': medidores_libres,
         'medidores_asignados_count': len(asignados_ids),
         'estado_restriccion_choices': Cliente.ESTADO_RESTRICCION_CHOICES,
+        'proyectos_disponibles': proyectos_disponibles,
     })
 
 
@@ -3496,6 +3532,7 @@ def cliente_historial_view(request, pk):
         should_flag_reincidence,
     )
     from web.models import AuditLog
+    from web.services.filtros_export import es_sin_proyecto
 
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
     numero = (cliente.numero_cliente or '').strip()
@@ -3710,6 +3747,14 @@ def cliente_historial_view(request, pk):
         'auditoria': auditoria,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'estado_restriccion_choices': Cliente.ESTADO_RESTRICCION_CHOICES,
+        'proyectos_disponibles': sorted({
+            (p or '').strip()
+            for p in Cliente.objects.filter(activo=True)
+            .exclude(proyecto__isnull=True)
+            .exclude(proyecto='')
+            .values_list('proyecto', flat=True)
+            if (p or '').strip() and not es_sin_proyecto(p)
+        }, key=lambda x: x.casefold()),
     }
     return render(request, 'clientes/historial.html', context)
 
@@ -3824,8 +3869,21 @@ def clientes_modificar_masivo_view(request):
             cliente.tipo_suministro = tipo_suministro
             changed = True
         if proyecto and (cliente.proyecto or '') != proyecto:
+            before_proy = cliente.proyecto
             cliente.proyecto = proyecto
             changed = True
+            register_audit_event(
+                AuditEvent(
+                    actor_id=getattr(request.user, 'id', None),
+                    action='CLIENT_UPDATE',
+                    entity='Cliente',
+                    entity_id=str(cliente.id),
+                    field_name='proyecto',
+                    old_value=before_proy,
+                    new_value=proyecto,
+                    reason='Cambio de proyecto (edición masiva)',
+                )
+            )
         if changed:
             cliente.save()
             actualizados += 1

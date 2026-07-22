@@ -60,7 +60,12 @@
             <div class="row">
               <div class="col-md-4 mb-3">
                 <label class="form-label fw-semibold">Proyecto</label>
-                <input type="text" name="proyecto" class="form-control" placeholder="si queda vacio SIN PROYECTO">
+                <input type="text" name="proyecto" class="form-control" list="listaProyectosCrear" placeholder="Elige uno o escribe uno nuevo (vacío = SIN PROYECTO)">
+                <datalist id="listaProyectosCrear">
+                  {% for proyecto in proyectos_disponibles %}
+                  <option value="{{ proyecto }}"></option>
+                  {% endfor %}
+                </datalist>
               </div>
             </div>
 
