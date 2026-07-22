@@ -207,10 +207,13 @@ def reportes_export_view(request, slug):
 
     meta = REPORT_CATALOG[slug]
     titulo = meta.get('title') or slug
+    # Alarmas de calidad (dashboard punto 7): siempre exportan sobre clientes activos,
+    # aunque el hub de reportes operativos esté vacío.
+    es_alarma_calidad = bool(meta.get('alarm_quality'))
 
     from reportes.operational_scope import hay_actividad_operativa
     try:
-        if not hay_actividad_operativa():
+        if (not es_alarma_calidad) and (not hay_actividad_operativa()):
             headers, rows = run_report(slug, {})
             rows = []
         else:
@@ -231,4 +234,14 @@ def reportes_export_view(request, slug):
             rows,
             title=titulo,
         )
-    return build_excel_response(f'reporte_{slug}.xlsx', headers, rows)
+    return build_excel_response(
+        f'reporte_{slug}.xlsx',
+        headers,
+        rows,
+        title=titulo,
+        sheet_title=(titulo[:31] if titulo else 'Reporte'),
+        group_by_first_column=slug in {
+            'clientes_ip_duplicada',
+            'clientes_medidor_duplicado',
+        },
+    )

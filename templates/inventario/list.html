@@ -838,32 +838,55 @@
                     <div class="mb-3">
                         <label class="form-label">Entregar a / técnico</label>
                         <input type="hidden" name="entregado_a_id" id="masivoTecnicoId" value="">
-                        <div class="delco-ac"
+                        <div class="delco-ac mb-2"
                              data-ac-url="{% url 'api_buscar_tecnicos' %}"
                              data-ac-hidden="#masivoTecnicoId"
+                             data-ac-select="#masivoTecnicoSelect"
                              data-ac-min="2">
-                            <input type="text" class="form-control delco-ac-input" placeholder="Buscar técnico (vacío = sin cambio)..." autocomplete="off">
+                            <input type="text" class="form-control delco-ac-input" id="masivoTecnicoSearch"
+                                   placeholder="Escribe para buscar técnico..." autocomplete="off">
                             <div class="delco-ac-results list-group shadow-sm d-none"></div>
                         </div>
+                        <select class="form-select" id="masivoTecnicoSelect">
+                            <option value="">Sin cambio</option>
+                            {% for tecnico in usuarios %}
+                            <option value="{{ tecnico.id }}">
+                                {{ tecnico.nombre_interno }}{% if tecnico.nombre or tecnico.apellido %} · {{ tecnico.nombre }} {{ tecnico.apellido }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Busca o elige un técnico real de la base de datos.</small>
                     </div>
 
                     <div class="mb-3">
                         <label class="form-label">Cliente</label>
                         <input type="hidden" name="cliente_id" id="masivoClienteId" value="">
-                        <div class="delco-ac"
+                        <input type="hidden" name="cliente_texto" id="masivoClienteTexto" value="">
+                        <div class="delco-ac mb-2"
                              data-ac-url="{% url 'api_buscar_clientes' %}"
                              data-ac-hidden="#masivoClienteId"
+                             data-ac-select="#masivoClienteSelect"
                              data-ac-min="2">
-                            <input type="text" class="form-control delco-ac-input" placeholder="Buscar cliente (vacío = sin cambio)..." autocomplete="off">
+                            <input type="text" class="form-control delco-ac-input" id="masivoClienteSearch"
+                                   placeholder="Buscar por Nº, nombre o comuna..." autocomplete="off">
                             <div class="delco-ac-results list-group shadow-sm d-none"></div>
                         </div>
-                        <input type="hidden" name="cliente_texto" id="masivoClienteTexto" value="">
+                        <select class="form-select" id="masivoClienteSelect">
+                            <option value="">Sin cambio</option>
+                        </select>
+                        <small class="text-muted">Escribe al menos 2 caracteres para buscar clientes reales.</small>
                     </div>
 
                     {% if tipo == 'medidor' %}
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
-                        <input type="text" class="form-control" name="proyecto" placeholder="Dejar vacío = sin cambio">
+                        <select class="form-select" name="proyecto" id="masivoProyectoSelect">
+                            <option value="">Sin cambio</option>
+                            {% for proyecto in proyectos_disponibles %}
+                            <option value="{{ proyecto }}">{{ proyecto }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Proyectos ya usados en inventario.</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Tipo de medidor</label>
@@ -891,7 +914,12 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
-                        <input type="text" class="form-control" name="proyecto" placeholder="Dejar vacío = sin cambio">
+                        <select class="form-select" name="proyecto" id="masivoProyectoSelect">
+                            <option value="">Sin cambio</option>
+                            {% for proyecto in proyectos_disponibles %}
+                            <option value="{{ proyecto }}">{{ proyecto }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     {% else %}
                     <div class="mb-3">
@@ -910,7 +938,12 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Proyecto</label>
-                        <input type="text" class="form-control" name="proyecto" placeholder="Dejar vacío = sin cambio">
+                        <select class="form-select" name="proyecto" id="masivoProyectoSelect">
+                            <option value="">Sin cambio</option>
+                            {% for proyecto in proyectos_disponibles %}
+                            <option value="{{ proyecto }}">{{ proyecto }}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                     {% endif %}
 
@@ -2120,9 +2153,77 @@ function abrirModalMasivoInventario() {
         set.size === 1
             ? '1 equipo seleccionado.'
             : (set.size + ' equipos seleccionados.');
+
+    // Reset de campos de selección (técnico / cliente / proyecto)
+    const tecnicoId = document.getElementById('masivoTecnicoId');
+    const tecnicoSelect = document.getElementById('masivoTecnicoSelect');
+    const tecnicoSearch = document.getElementById('masivoTecnicoSearch');
+    const clienteId = document.getElementById('masivoClienteId');
+    const clienteTexto = document.getElementById('masivoClienteTexto');
+    const clienteSelect = document.getElementById('masivoClienteSelect');
+    const clienteSearch = document.getElementById('masivoClienteSearch');
+    const proyectoSelect = document.getElementById('masivoProyectoSelect');
+    if (tecnicoId) tecnicoId.value = '';
+    if (tecnicoSelect) tecnicoSelect.value = '';
+    if (tecnicoSearch) tecnicoSearch.value = '';
+    if (clienteId) clienteId.value = '';
+    if (clienteTexto) clienteTexto.value = '';
+    if (clienteSelect) {
+        // Dejar solo "Sin cambio" + opciones dinámicas se limpian al reabrir
+        clienteSelect.innerHTML = '<option value="">Sin cambio</option>';
+        clienteSelect.value = '';
+    }
+    if (clienteSearch) clienteSearch.value = '';
+    if (proyectoSelect) proyectoSelect.value = '';
+
     const modalEl = document.getElementById('modalEditarMasivo');
     bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
+
+(function wireMasivoSelectores() {
+    const tecnicoId = document.getElementById('masivoTecnicoId');
+    const tecnicoSelect = document.getElementById('masivoTecnicoSelect');
+    const tecnicoSearch = document.getElementById('masivoTecnicoSearch');
+    const clienteId = document.getElementById('masivoClienteId');
+    const clienteTexto = document.getElementById('masivoClienteTexto');
+    const clienteSelect = document.getElementById('masivoClienteSelect');
+    const clienteSearch = document.getElementById('masivoClienteSearch');
+    const modalEl = document.getElementById('modalEditarMasivo');
+
+    if (tecnicoSelect && tecnicoId) {
+        tecnicoSelect.addEventListener('change', function () {
+            tecnicoId.value = this.value || '';
+            if (tecnicoSearch) {
+                const opt = this.options[this.selectedIndex];
+                tecnicoSearch.value = this.value && opt ? opt.textContent.trim() : '';
+            }
+        });
+    }
+
+    if (clienteSelect && clienteId) {
+        clienteSelect.addEventListener('change', function () {
+            clienteId.value = this.value || '';
+            // Preferir ID real de BD; no crear cliente por texto libre
+            if (clienteTexto) clienteTexto.value = '';
+            if (clienteSearch) {
+                const opt = this.options[this.selectedIndex];
+                clienteSearch.value = this.value && opt ? opt.textContent.trim() : '';
+            }
+        });
+    }
+
+    if (modalEl) {
+        modalEl.addEventListener('delco-ac-pick', function (e) {
+            const item = e.detail || {};
+            const target = e.target;
+            if (!target) return;
+            // Cliente: guardar número solo como respaldo; el ID es la fuente de verdad
+            if (target.id === 'masivoClienteSearch' || target.closest('[data-ac-hidden="#masivoClienteId"]')) {
+                if (clienteTexto) clienteTexto.value = item.numero_cliente || '';
+            }
+        });
+    }
+})();
 
 const selectAllEquipos = document.getElementById('selectAllEquipos');
 if (selectAllEquipos) {

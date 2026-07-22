@@ -401,7 +401,7 @@ def report_clientes_estado_visita(filters: Dict[str, Any]) -> ReportResult:
     for kw in keywords:
         q |= Q(trabajo__icontains=kw) | Q(note__icontains=kw)
     qs = _filter_clientes(
-        filtrar_clientes_operativos(Cliente.objects.filter(activo=True).filter(q)),
+        _clientes_activos_alarma_qs().filter(q),
         filters,
     ).order_by('numero_cliente')
     headers = CLIENTE_HEADERS + ['Trabajo/Nota']
@@ -413,9 +413,28 @@ def report_clientes_estado_visita(filters: Dict[str, Any]) -> ReportResult:
     return headers, rows
 
 
+def _clientes_activos_alarma_qs():
+    """Base para alarmas de calidad (PDF punto 7): todos los clientes activos."""
+    return Cliente.objects.filter(activo=True).exclude(numero_cliente__in=['', '0'])
+
+
 def _clientes_por_valor_duplicado(campo: str, filters: Optional[Dict[str, Any]] = None) -> ReportResult:
-    headers = ['Valor Duplicado', 'Numero Cliente', 'Nombre', 'Comuna']
-    base = _filter_clientes(clientes_operativos_qs(), filters or {})
+    """
+    Excel de calidad: muestra el valor duplicado y cada ficha involucrada.
+    No se limita a clientes 'operativos' (OT/MoreApp), para coincidir con el dashboard.
+    """
+    label_valor = 'IP' if campo == 'ip' else ('Serie medidor' if campo == 'meter_serial_n_1' else 'Valor')
+    headers = [
+        label_valor,
+        'Fichas con este valor',
+        'ID ficha',
+        'Numero Cliente',
+        'Nombre',
+        'Direccion',
+        'Comuna',
+        'Otras fichas (ID / Nº cliente)',
+    ]
+    base = _filter_clientes(_clientes_activos_alarma_qs(), filters or {})
     if not base.exists():
         return headers, []
 
@@ -425,13 +444,41 @@ def _clientes_por_valor_duplicado(campo: str, filters: Optional[Dict[str, Any]] 
         .values(campo)
         .annotate(total=Count('id'))
         .filter(total__gt=1)
-        .values_list(campo, flat=True)
+        .order_by(campo)
     )
-    clientes = base.filter(**{f'{campo}__in': list(duplicados)}).order_by(campo, 'numero_cliente')
-    rows = [
-        [getattr(cliente, campo), cliente.numero_cliente, cliente.customer_name or '', cliente.comuna or '']
-        for cliente in clientes
-    ]
+    valores = list(duplicados)
+    if not valores:
+        return headers, []
+
+    mapa_total = {item[campo]: item['total'] for item in valores}
+    valor_list = list(mapa_total.keys())
+    clientes = list(
+        base.filter(**{f'{campo}__in': valor_list}).order_by(campo, 'numero_cliente', 'id')
+    )
+
+    por_valor = {}
+    for cliente in clientes:
+        valor = getattr(cliente, campo)
+        por_valor.setdefault(valor, []).append(cliente)
+
+    rows = []
+    for valor, grupo in por_valor.items():
+        for cliente in grupo:
+            otros = [
+                f'#{c.id} / {c.numero_cliente}'
+                for c in grupo
+                if c.id != cliente.id
+            ]
+            rows.append([
+                valor,
+                mapa_total.get(valor, len(grupo)),
+                cliente.id,
+                cliente.numero_cliente,
+                cliente.customer_name or '',
+                cliente.direccion or cliente.installation_address or '',
+                cliente.comuna or '',
+                ', '.join(otros),
+            ])
     return headers, rows
 
 
@@ -445,7 +492,7 @@ def report_clientes_medidor_duplicado(filters: Dict[str, Any]) -> ReportResult:
 
 def report_clientes_pendientes_stb(filters: Dict[str, Any]) -> ReportResult:
     qs = _filter_clientes(
-        filtrar_clientes_operativos(Cliente.objects.filter(activo=True, estado_stb='PENDIENTE')),
+        _clientes_activos_alarma_qs().filter(estado_stb='PENDIENTE'),
         filters,
     ).order_by('numero_cliente')
     rows = [_cliente_row(c) for c in qs]
@@ -454,7 +501,7 @@ def report_clientes_pendientes_stb(filters: Dict[str, Any]) -> ReportResult:
 
 def report_clientes_pendientes_sci4(filters: Dict[str, Any]) -> ReportResult:
     qs = _filter_clientes(
-        filtrar_clientes_operativos(Cliente.objects.filter(activo=True, estado_sci4='PENDIENTE')),
+        _clientes_activos_alarma_qs().filter(estado_sci4='PENDIENTE'),
         filters,
     ).order_by('numero_cliente')
     rows = [_cliente_row(c) for c in qs]
@@ -463,10 +510,8 @@ def report_clientes_pendientes_sci4(filters: Dict[str, Any]) -> ReportResult:
 
 def report_clientes_disciplina_mercado(filters: Dict[str, Any]) -> ReportResult:
     qs = _filter_clientes(
-        filtrar_clientes_operativos(
-            Cliente.objects.filter(activo=True).filter(
-                Q(note__icontains='disciplina') | Q(trabajo__icontains='disciplina') | Q(note__icontains='mercado')
-            )
+        _clientes_activos_alarma_qs().filter(
+            Q(note__icontains='disciplina') | Q(trabajo__icontains='disciplina') | Q(note__icontains='mercado')
         ),
         filters,
     ).order_by('numero_cliente')
@@ -476,11 +521,8 @@ def report_clientes_disciplina_mercado(filters: Dict[str, Any]) -> ReportResult:
 
 def report_clientes_sin_comunicacion(filters: Dict[str, Any]) -> ReportResult:
     qs = _filter_clientes(
-        filtrar_clientes_operativos(
-            Cliente.objects.filter(
-                activo=True,
-                estado_telemetria__in={'SIN_COMUNICACION', 'NO_COMUNICA'},
-            )
+        _clientes_activos_alarma_qs().filter(
+            estado_telemetria__in={'SIN_COMUNICACION', 'NO_COMUNICA'},
         ),
         filters,
     ).order_by('numero_cliente')
@@ -490,10 +532,138 @@ def report_clientes_sin_comunicacion(filters: Dict[str, Any]) -> ReportResult:
 
 def report_clientes_sin_suministro(filters: Dict[str, Any]) -> ReportResult:
     qs = _filter_clientes(
-        filtrar_clientes_operativos(
-            Cliente.objects.filter(activo=True).filter(
-                Q(tipo_suministro__isnull=True) | Q(tipo_suministro='') | Q(note__icontains='sin suministro')
-            )
+        _clientes_activos_alarma_qs().filter(
+            Q(tipo_suministro__isnull=True) | Q(tipo_suministro='') | Q(note__icontains='sin suministro')
+        ),
+        filters,
+    ).order_by('numero_cliente')
+    rows = [_cliente_row(c) for c in qs]
+    return CLIENTE_HEADERS, rows
+
+
+def report_clientes_sin_medidor(filters: Dict[str, Any]) -> ReportResult:
+    qs = _filter_clientes(
+        _clientes_activos_alarma_qs().filter(
+            Q(estado_telemetria='SIN_MEDIDOR')
+            | Q(meter_serial_n_1__isnull=True)
+            | Q(meter_serial_n_1='')
+        ),
+        filters,
+    ).order_by('numero_cliente')
+    rows = [_cliente_row(c) for c in qs]
+    return CLIENTE_HEADERS, rows
+
+
+def report_clientes_sim_sin_datos(filters: Dict[str, Any]) -> ReportResult:
+    qs = _filter_clientes(
+        _clientes_activos_alarma_qs().filter(sim_estado='SIN_DATOS'),
+        filters,
+    ).order_by('numero_cliente')
+    rows = [_cliente_row(c) for c in qs]
+    return CLIENTE_HEADERS, rows
+
+
+def report_clientes_modem_sin_respuesta(filters: Dict[str, Any]) -> ReportResult:
+    q = Q()
+    for kw in (
+        'módem sin respuesta',
+        'modem sin respuesta',
+        'módem no responde',
+        'modem no responde',
+        'modem sin resp',
+    ):
+        q |= Q(note__icontains=kw) | Q(trabajo__icontains=kw) | Q(modem__icontains=kw)
+    q |= (
+        Q(estado_telemetria__in=('SIN_COMUNICACION', 'NO_COMUNICA'))
+        & ~Q(modem__isnull=True)
+        & ~Q(modem='')
+    )
+    qs = _filter_clientes(
+        _clientes_activos_alarma_qs().filter(q),
+        filters,
+    ).order_by('numero_cliente')
+    rows = [_cliente_row(c) for c in qs]
+    return CLIENTE_HEADERS, rows
+
+
+def report_clientes_medidor_terreno_distinto(filters: Dict[str, Any]) -> ReportResult:
+    try:
+        from ordenes_trabajo.models import IntegracionMoreApp, OrdenTrabajo
+    except Exception:
+        return CLIENTE_HEADERS, []
+
+    qs_ma = IntegracionMoreApp.objects.filter(
+        eliminado=False,
+        estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
+    ).filter(Q(descripcion_alerta__icontains='distinto'))
+
+    codigos = set()
+    orden_ids = set()
+    for reg in qs_ma.only('datos_procesados', 'orden_id').iterator(chunk_size=300):
+        datos = reg.datos_procesados if isinstance(reg.datos_procesados, dict) else {}
+        codigo = str(datos.get('cliente_codigo') or '').strip()
+        if codigo:
+            codigos.add(codigo)
+        if getattr(reg, 'orden_id', None):
+            orden_ids.add(reg.orden_id)
+
+    ids = set()
+    if codigos:
+        ids.update(
+            Cliente.objects.filter(activo=True, numero_cliente__in=list(codigos)).values_list('id', flat=True)
+        )
+    if orden_ids:
+        ids.update(
+            OrdenTrabajo.objects.filter(id__in=orden_ids)
+            .exclude(cliente_id__isnull=True)
+            .values_list('cliente_id', flat=True)
+        )
+    qs = _filter_clientes(
+        _clientes_activos_alarma_qs().filter(id__in=ids),
+        filters,
+    ).order_by('numero_cliente')
+    rows = [_cliente_row(c) for c in qs]
+    return CLIENTE_HEADERS, rows
+
+
+def report_clientes_ejecutado_no_actualizado(filters: Dict[str, Any]) -> ReportResult:
+    try:
+        from ordenes_trabajo.models import OrdenTrabajo, IntegracionMoreApp
+    except Exception:
+        qs = _filter_clientes(
+            _clientes_activos_alarma_qs().filter(
+                Q(estado_stb='PENDIENTE') | Q(estado_sci4='PENDIENTE')
+            ),
+            filters,
+        ).order_by('numero_cliente')
+        return CLIENTE_HEADERS, [_cliente_row(c) for c in qs]
+
+    estados_ejecutados = {
+        'REALIZADA', 'VALIDADA', 'FINALIZADA', 'REALIZADA_PENDIENTE_COMPROBACION',
+    }
+    ids_ot = set(
+        OrdenTrabajo.objects.filter(eliminado=False, estado__in=estados_ejecutados)
+        .exclude(cliente_id__isnull=True)
+        .values_list('cliente_id', flat=True)
+    )
+    codigos = set()
+    for reg in (
+        IntegracionMoreApp.objects.filter(eliminado=False)
+        .exclude(estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR'))
+        .only('datos_procesados')
+        .iterator(chunk_size=500)
+    ):
+        datos = reg.datos_procesados if isinstance(reg.datos_procesados, dict) else {}
+        codigo = str(datos.get('cliente_codigo') or '').strip()
+        if codigo:
+            codigos.add(codigo)
+    ids_ma = set(
+        Cliente.objects.filter(activo=True, numero_cliente__in=list(codigos)).values_list('id', flat=True)
+    ) if codigos else set()
+    ids = ids_ot | ids_ma
+    qs = _filter_clientes(
+        _clientes_activos_alarma_qs().filter(id__in=ids).filter(
+            Q(estado_stb='PENDIENTE') | Q(estado_sci4='PENDIENTE')
         ),
         filters,
     ).order_by('numero_cliente')
@@ -621,28 +791,31 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'supports_estado': False,
         'supports_tipo': False,
         'supports_comuna': True,
+                'alarm_quality': True,
         'runner': report_clientes_reincidentes,
     },
     'clientes_ip_duplicada': {
         'title': 'Clientes con IP repetida',
-        'description': 'Clientes que comparten la misma dirección IP.',
+        'description': 'Fichas activas que comparten la misma IP (problema de calidad de datos).',
         'supports_date_range': False,
         'supports_tecnico': False,
         'supports_empresa': True,
         'supports_estado': False,
         'supports_tipo': False,
         'supports_comuna': True,
+        'alarm_quality': True,
         'runner': report_clientes_ip_duplicada,
     },
     'clientes_medidor_duplicado': {
         'title': 'Clientes con medidor repetido',
-        'description': 'Clientes que comparten el mismo número de serie de medidor.',
+        'description': 'Fichas activas que comparten la misma serie de medidor.',
         'supports_date_range': False,
         'supports_tecnico': False,
         'supports_empresa': True,
         'supports_estado': False,
         'supports_tipo': False,
         'supports_comuna': True,
+        'alarm_quality': True,
         'runner': report_clientes_medidor_duplicado,
     },
     'clientes_pendientes_stb': {
@@ -654,6 +827,7 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'supports_estado': False,
         'supports_tipo': False,
         'supports_comuna': True,
+                'alarm_quality': True,
         'runner': report_clientes_pendientes_stb,
     },
     'clientes_pendientes_sci4': {
@@ -665,6 +839,7 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'supports_estado': False,
         'supports_tipo': False,
         'supports_comuna': True,
+                'alarm_quality': True,
         'runner': report_clientes_pendientes_sci4,
     },
     'clientes_disciplina_mercado': {
@@ -676,6 +851,7 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'supports_estado': False,
         'supports_tipo': False,
         'supports_comuna': True,
+                'alarm_quality': True,
         'runner': report_clientes_disciplina_mercado,
     },
     'clientes_sin_comunicacion': {
@@ -687,6 +863,7 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'supports_estado': False,
         'supports_tipo': False,
         'supports_comuna': True,
+                'alarm_quality': True,
         'runner': report_clientes_sin_comunicacion,
     },
     'clientes_sin_suministro': {
@@ -698,7 +875,68 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'supports_estado': False,
         'supports_tipo': False,
         'supports_comuna': True,
+                'alarm_quality': True,
         'runner': report_clientes_sin_suministro,
+    },
+    'clientes_sin_medidor': {
+        'title': 'Clientes sin medidor',
+        'description': 'Clientes sin serie de medidor o marcados como sin medidor en telemetría.',
+        'supports_date_range': False,
+        'supports_tecnico': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
+                'alarm_quality': True,
+        'runner': report_clientes_sin_medidor,
+    },
+    'clientes_sim_sin_datos': {
+        'title': 'Clientes con SIM sin datos',
+        'description': 'Clientes cuya SIM está marcada sin plan de datos.',
+        'supports_date_range': False,
+        'supports_tecnico': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
+                'alarm_quality': True,
+        'runner': report_clientes_sim_sin_datos,
+    },
+    'clientes_modem_sin_respuesta': {
+        'title': 'Clientes con módem sin respuesta',
+        'description': 'Clientes con indicios de módem sin respuesta o telemetría caída con módem informado.',
+        'supports_date_range': False,
+        'supports_tecnico': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
+                'alarm_quality': True,
+        'runner': report_clientes_modem_sin_respuesta,
+    },
+    'clientes_medidor_terreno_distinto': {
+        'title': 'Medidor en terreno distinto al sistema',
+        'description': 'Clientes con alerta MoreApp de medidor informado distinto al registrado.',
+        'supports_date_range': False,
+        'supports_tecnico': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
+                'alarm_quality': True,
+        'runner': report_clientes_medidor_terreno_distinto,
+    },
+    'clientes_ejecutado_no_actualizado': {
+        'title': 'Ejecutado en terreno, no actualizado en sistema',
+        'description': 'Clientes con trabajo ejecutado pero STB o SCi4 aún pendiente.',
+        'supports_date_range': False,
+        'supports_tecnico': False,
+        'supports_empresa': True,
+        'supports_estado': False,
+        'supports_tipo': False,
+        'supports_comuna': True,
+                'alarm_quality': True,
+        'runner': report_clientes_ejecutado_no_actualizado,
     },
     'clientes_estado_visita': {
         'title': 'Clientes cerrados, deshabitados o sin acceso',
@@ -709,6 +947,7 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
         'supports_estado': False,
         'supports_tipo': False,
         'supports_comuna': True,
+                'alarm_quality': True,
         'runner': report_clientes_estado_visita,
     },
 }

@@ -497,6 +497,40 @@ class AlarmasIntegracionPunto7y8Tests(TestCase):
 		from web.views import ROLES_REPORTES_LECTURA
 		self.assertIn('ADMIN', ROLES_REPORTES_LECTURA)
 
+	def test_panel_alarmas_analistas_cubre_pdf_punto_7(self):
+		from web.services.dashboard_metrics import build_panel_alarmas_analistas
+
+		Cliente.objects.create(
+			numero_cliente='CLI-P7-002',
+			direccion='Dir P7b',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='NORTE',
+			customer_name='P7 Dup IP',
+			installation_address='Inst P7b',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-P7-002',
+			ip='10.20.30.40',
+			activo=True,
+			estado_telemetria='SIN_COMUNICACION',
+			sim_estado='SIN_DATOS',
+			estado_stb='PENDIENTE',
+		)
+		self.cliente.ip = '10.20.30.40'
+		self.cliente.save(update_fields=['ip'])
+
+		panel = build_panel_alarmas_analistas()
+		self.assertEqual(len(panel), 14)
+		keys = {item['key'] for item in panel}
+		self.assertIn('ip_duplicada', keys)
+		self.assertIn('sin_comunicacion', keys)
+		self.assertIn('sim_sin_datos', keys)
+		self.assertIn('ejecutado_no_actualizado', keys)
+		ip_item = next(item for item in panel if item['key'] == 'ip_duplicada')
+		self.assertGreaterEqual(ip_item['count'], 2)
+		sin_com = next(item for item in panel if item['key'] == 'sin_comunicacion')
+		self.assertGreaterEqual(sin_com['count'], 1)
+
 	def test_webhook_moreapp_responde_sin_error_servidor(self):
 		# El webhook acepta o rechaza — lo que no puede hacer es devolver 500
 		resp = self.client.post(reverse('movimientos_webhook_moreapp'), data='{}',
