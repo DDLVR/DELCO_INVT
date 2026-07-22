@@ -27,7 +27,6 @@
 
   function initOne(root) {
     if (!root || root.dataset.acReady === '1') return;
-    root.dataset.acReady = '1';
 
     var input = root.querySelector('.delco-ac-input');
     var results = root.querySelector('.delco-ac-results');
@@ -47,10 +46,38 @@
     var onPick = root.getAttribute('data-ac-on-pick') || '';
 
     if (!input || !results || !url) return;
+    root.dataset.acReady = '1';
+
+    // Etiqueta/ID vinculados: si el usuario edita el texto sin elegir, se invalidan.
+    var lockedLabel = (input.value || '').trim();
+    var lockedId = '';
+    if (hidden && hidden.value) lockedId = String(hidden.value);
+    else if (selectEl && selectEl.value && selectEl.value !== 'OTRO') lockedId = String(selectEl.value);
 
     function clearResults() {
       results.innerHTML = '';
       results.classList.add('d-none');
+      results.hidden = true;
+    }
+
+    function clearBoundId() {
+      if (hidden) hidden.value = '';
+      if (selectEl && lockedId && String(selectEl.value) === lockedId) {
+        selectEl.value = '';
+        selectEl.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      lockedId = '';
+      lockedLabel = '';
+    }
+
+    function invalidateIfTextDiverged() {
+      var q = (input.value || '').trim();
+      if (!lockedId) {
+        if (hidden && !q) hidden.value = '';
+        return;
+      }
+      if (q === lockedLabel) return;
+      clearBoundId();
     }
 
     function pick(item) {
@@ -58,6 +85,8 @@
       input.value = label;
       if (hidden) hidden.value = item.id;
       if (selectEl) ensureOption(selectEl, item.id, label);
+      lockedLabel = String(label || '').trim();
+      lockedId = String(item.id);
       clearResults();
       if (onPick && typeof window[onPick] === 'function') {
         window[onPick](item, root);
@@ -67,9 +96,10 @@
 
     function render(items) {
       results.innerHTML = '';
+      results.hidden = false;
+      results.classList.remove('d-none');
       if (!items || !items.length) {
         results.innerHTML = '<div class="list-group-item small text-muted">Sin resultados</div>';
-        results.classList.remove('d-none');
         return;
       }
       items.forEach(function (item) {
@@ -80,7 +110,6 @@
         btn.addEventListener('click', function () { pick(item); });
         results.appendChild(btn);
       });
-      results.classList.remove('d-none');
     }
 
     function search(q) {
@@ -99,8 +128,8 @@
     }
 
     input.addEventListener('input', function () {
+      invalidateIfTextDiverged();
       var q = (input.value || '').trim();
-      if (hidden && !q) hidden.value = '';
       if (q.length < minChars) {
         clearResults();
         return;
@@ -113,6 +142,7 @@
       var q = (input.value || '').trim();
       if (q.length >= minChars && results.children.length) {
         results.classList.remove('d-none');
+        results.hidden = false;
       }
     });
 

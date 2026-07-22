@@ -274,7 +274,6 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
                 <strong id="ordenesSeleccionCount">0</strong> orden(es) seleccionadas
-                <span class="text-muted small ms-2" id="ordenesSeleccionIdsPreview"></span>
             </div>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiarSeleccionOrdenes">Limpiar selección</button>
         </div>
@@ -533,12 +532,7 @@ $(document).ready(function() {
         var set = getOtSelectedSet();
         var bandeja = document.getElementById('ordenesSeleccionBandeja');
         var countEl = document.getElementById('ordenesSeleccionCount');
-        var previewEl = document.getElementById('ordenesSeleccionIdsPreview');
         if (countEl) countEl.textContent = String(set.size);
-        if (previewEl) {
-            var ids = Array.from(set).slice(0, 10);
-            previewEl.textContent = set.size ? ('#' + ids.join(', #') + (set.size > 10 ? '…' : '')) : '';
-        }
         if (bandeja) {
             if (set.size) bandeja.classList.remove('d-none');
             else bandeja.classList.add('d-none');

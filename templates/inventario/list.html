@@ -457,7 +457,6 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
                 <strong id="inventarioSeleccionCount">0</strong> equipo(s) seleccionados
-                <span class="text-muted small ms-2" id="inventarioSeleccionIdsPreview"></span>
             </div>
             <div class="d-flex gap-2">
                 <button type="button" class="btn btn-sm btn-outline-dark" id="btnAbrirMasivoBandeja">Cambiar varios</button>
@@ -1557,10 +1556,24 @@ function initInventarioAutocompletes() {
 
         let timer = null;
         let abortCtrl = null;
+        let lockedLabel = (input.value || '').trim();
+        let lockedId = (select.value && select.value !== 'OTRO') ? String(select.value) : '';
 
         const hideResults = () => {
             results.hidden = true;
             results.innerHTML = '';
+        };
+
+        const clearBoundId = () => {
+            if (lockedId && String(select.value) === lockedId) {
+                select.value = '';
+                if (typeof actualizarCampoOtro === 'function') {
+                    actualizarCampoOtro(select);
+                }
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+            lockedId = '';
+            lockedLabel = '';
         };
 
         const pick = (id, label) => {
@@ -1570,11 +1583,16 @@ function initInventarioAutocompletes() {
             }
             select.dispatchEvent(new Event('change', { bubbles: true }));
             input.value = label || '';
+            lockedLabel = String(label || '').trim();
+            lockedId = String(id);
             hideResults();
         };
 
         input.addEventListener('input', () => {
             const q = input.value.trim();
+            if (lockedId && q !== lockedLabel) {
+                clearBoundId();
+            }
             clearTimeout(timer);
             if (q.length < 2) {
                 hideResults();
@@ -2081,12 +2099,7 @@ function actualizarBandejaInventario() {
     const set = getInvSelectedSet();
     const bandeja = document.getElementById('inventarioSeleccionBandeja');
     const countEl = document.getElementById('inventarioSeleccionCount');
-    const previewEl = document.getElementById('inventarioSeleccionIdsPreview');
     if (countEl) countEl.textContent = String(set.size);
-    if (previewEl) {
-        const ids = Array.from(set).slice(0, 10);
-        previewEl.textContent = set.size ? ('IDs: ' + ids.join(', ') + (set.size > 10 ? '…' : '')) : '';
-    }
     if (bandeja) {
         if (set.size) bandeja.classList.remove('d-none');
         else bandeja.classList.add('d-none');

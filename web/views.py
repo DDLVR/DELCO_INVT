@@ -1774,6 +1774,8 @@ def inventario_crear_view(request):
         if tipo == 'medidor':
             payload['serie'] = equipo.serie
             payload['marca'] = equipo.marca or ''
+            payload['tipo_medidor'] = equipo.tipo_medidor or ''
+            payload['tipo_medidor_display'] = equipo.get_tipo_medidor_display() if hasattr(equipo, 'get_tipo_medidor_display') else ''
         return JsonResponse(payload)
 
     except IntegrityError as exc:
@@ -3287,22 +3289,14 @@ def cliente_crear_view(request):
         Cliente.objects.filter(activo=True, medidor_actual_id__isnull=False)
         .values_list('medidor_actual_id', flat=True)
     )
-    series_asignadas = {
-        (serie or '').strip().lower()
-        for serie in Cliente.objects.filter(activo=True)
-        .exclude(Q(meter_serial_n_1__isnull=True) | Q(meter_serial_n_1=''))
-        .values_list('meter_serial_n_1', flat=True)
-    }
-    medidores_libres = [
-        medidor
-        for medidor in Medidor.objects.filter(eliminado=False).order_by('serie')[:2000]
-        if medidor.id not in asignados_ids and (medidor.serie or '').strip().lower() not in series_asignadas
-    ]
+    # La tabla se llena por búsqueda (API); no cargar miles de filas en el HTML.
+    medidores_libres = []
 
     return render(request, 'clientes/crear.html', {
         'tipo_medidor_choices': Medidor.TIPO_MEDIDOR_CHOICES,
         'estados_disponibles': estados_disponibles,
         'medidores_libres': medidores_libres,
+        'medidores_asignados_count': len(asignados_ids),
     })
 
 
@@ -4807,35 +4801,80 @@ def api_buscar_tecnicos(request):
 
 @login_required
 def api_buscar_medidores(request):
-    """API para buscar medidores por serie, caja o marca (autocomplete)"""
+    """API para buscar medidores por serie, caja, marca o tipo (autocomplete).
+
+    Query params:
+      q: texto (mín. 2)
+      libres=1: solo medidores sin cliente asignado (alta de cliente)
+    """
+    from django.db.models.functions import Lower
+
     query = request.GET.get('q', '').strip()
+    solo_libres = str(request.GET.get('libres', '') or '').strip().lower() in {'1', 'true', 'si', 'sí', 'yes'}
 
     if not query or len(query) < 2:
         return JsonResponse({'results': []})
 
     try:
-        medidores = Medidor.objects.filter(
-            eliminado=False,
-        ).filter(
+        q_norm = query.lower()
+        filtro = (
             Q(serie__icontains=query)
             | Q(caja__icontains=query)
             | Q(marca__icontains=query)
-        ).select_related('entregado_a', 'en_custodia_de').order_by('serie')[:20]
+        )
+        # Permitir buscar por tipo: "indirecto", "directo", INDIRECTO, DIRECTO
+        if 'indirect' in q_norm:
+            filtro |= Q(tipo_medidor='INDIRECTO')
+        elif q_norm in {'directo', 'direct'} or query.upper() == 'DIRECTO':
+            filtro |= Q(tipo_medidor='DIRECTO')
+        if query.upper() in {'DIRECTO', 'INDIRECTO'}:
+            filtro |= Q(tipo_medidor=query.upper())
+
+        medidores = Medidor.objects.filter(eliminado=False).filter(filtro)
+
+        if solo_libres:
+            asignados_ids = list(
+                Cliente.objects.filter(activo=True, medidor_actual_id__isnull=False)
+                .values_list('medidor_actual_id', flat=True)
+            )
+            series_norm = [
+                (s or '').strip().lower()
+                for s in Cliente.objects.filter(activo=True)
+                .exclude(Q(meter_serial_n_1__isnull=True) | Q(meter_serial_n_1=''))
+                .values_list('meter_serial_n_1', flat=True)
+                if (s or '').strip()
+            ]
+            medidores = medidores.exclude(id__in=asignados_ids)
+            if series_norm:
+                medidores = medidores.annotate(_serie_l=Lower('serie')).exclude(_serie_l__in=series_norm)
+
+        medidores_list = list(
+            medidores.select_related('entregado_a', 'en_custodia_de').order_by('serie')[:20]
+        )
 
         results = []
-        for med in medidores:
+        for med in medidores_list:
             custodia = (
                 getattr(getattr(med, 'en_custodia_de', None), 'nombre_interno', None)
                 or getattr(getattr(med, 'entregado_a', None), 'nombre_interno', None)
                 or 'Bodega'
             )
+            tipo_codigo = (getattr(med, 'tipo_medidor', '') or '').strip().upper()
+            tipo_txt = med.get_tipo_medidor_display() if hasattr(med, 'get_tipo_medidor_display') else tipo_codigo
+            if not tipo_txt and tipo_codigo:
+                tipo_txt = 'Indirecto' if tipo_codigo == 'INDIRECTO' else ('Directo' if tipo_codigo == 'DIRECTO' else tipo_codigo)
+            label = f"{med.serie} - {med.marca or 'S/M'}"
+            if tipo_txt:
+                label = f"{label} ({tipo_txt})"
             results.append({
                 'id': med.id,
                 'serie': med.serie,
                 'caja': med.caja or '',
                 'marca': med.marca or 'No especificada',
+                'tipo_medidor': tipo_txt or '—',
+                'tipo_medidor_codigo': tipo_codigo,
                 'custodia': custodia,
-                'label': f"{med.serie} - Caja: {med.caja or '-'} ({med.marca or 'S/M'})",
+                'label': label,
             })
 
         return JsonResponse({'results': results})
