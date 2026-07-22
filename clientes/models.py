@@ -325,3 +325,50 @@ class Cliente(models.Model):
             models.Index(fields=['numero_cliente']),
             models.Index(fields=['activo']),
         ]
+
+
+class ClienteProyectoHistorial(models.Model):
+    """
+    Historial de proyectos asociados a un cliente.
+    El proyecto actual queda en Cliente.proyecto; aquí se guarda la secuencia
+    de cambios (cuándo entró y cuándo salió de cada proyecto).
+    """
+
+    cliente = models.ForeignKey(
+        Cliente,
+        on_delete=models.CASCADE,
+        related_name='proyectos_historial',
+    )
+    proyecto = models.CharField(max_length=255)
+    fecha_inicio = models.DateTimeField()
+    fecha_fin = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Fecha límite del período (fin del día). Vacío = sin límite definido',
+    )
+    vigente = models.BooleanField(
+        default=True,
+        help_text='True = proyecto actual del cliente',
+    )
+    cambiado_por = models.ForeignKey(
+        'usuarios.Usuario',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cambios_proyecto_cliente',
+    )
+    motivo = models.CharField(max_length=255, blank=True, default='')
+    fecha_registro = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = 'Historial de proyecto del cliente'
+        verbose_name_plural = 'Historial de proyectos de clientes'
+        ordering = ['-fecha_inicio', '-id']
+        indexes = [
+            models.Index(fields=['cliente', 'vigente']),
+            models.Index(fields=['proyecto']),
+        ]
+
+    def __str__(self):
+        estado = 'vigente' if self.vigente else 'cerrado'
+        return f'{self.cliente_id} · {self.proyecto} ({estado})'

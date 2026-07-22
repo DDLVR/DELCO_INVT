@@ -793,6 +793,132 @@ td.cliente-numero-duplicado strong {
   --bs-table-color-state: var(--bs-body-color);
 }
 
+/* Historial de proyectos: tabla legible; "Actual" visible en claro y oscuro */
+.delco-tabla-proyectos {
+  --bs-table-bg: var(--bs-body-bg);
+  --bs-table-color: var(--bs-body-color);
+  --bs-table-border-color: var(--bs-border-color);
+  color: var(--bs-body-color);
+}
+
+.delco-tabla-proyectos > tbody > tr > * {
+  background-color: var(--bs-body-bg);
+  color: var(--bs-body-color);
+  border-bottom-color: var(--bs-border-color);
+}
+
+/* Modo claro: tinte verde suave; barra solo en la 1ª celda (si va en todas se ve “rayada”) */
+.delco-row-proyecto-vigente > * {
+  background-color: #e8f6ee !important;
+  color: #1a1d21 !important;
+  box-shadow: none;
+}
+
+.delco-row-proyecto-vigente > *:first-child {
+  box-shadow: inset 4px 0 0 #198754;
+}
+
+.delco-tabla-proyectos.table-hover > tbody > tr:hover > * {
+  background-color: #f0f2f4 !important;
+  color: #1a1d21 !important;
+}
+
+.delco-tabla-proyectos.table-hover > tbody > tr.delco-row-proyecto-vigente:hover > * {
+  background-color: #d9f0e3 !important;
+  color: #1a1d21 !important;
+}
+
+[data-bs-theme="dark"] .delco-tabla-proyectos > tbody > tr > * {
+  background-color: transparent;
+  color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .delco-row-proyecto-vigente > * {
+  background-color: rgba(25, 135, 84, 0.16) !important;
+  color: var(--bs-body-color) !important;
+  box-shadow: none;
+}
+
+[data-bs-theme="dark"] .delco-row-proyecto-vigente > *:first-child {
+  box-shadow: inset 3px 0 0 rgba(25, 135, 84, 0.85);
+}
+
+[data-bs-theme="dark"] .delco-tabla-proyectos.table-hover > tbody > tr:hover > * {
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  color: var(--bs-body-color) !important;
+}
+
+[data-bs-theme="dark"] .delco-tabla-proyectos.table-hover > tbody > tr.delco-row-proyecto-vigente:hover > * {
+  background-color: rgba(25, 135, 84, 0.24) !important;
+  color: var(--bs-body-color) !important;
+}
+
+.delco-badge-proyecto-actual,
+.badge.delco-badge-proyecto-actual {
+  display: inline-block !important;
+  background-color: #198754 !important;
+  color: #ffffff !important;
+  border: 1px solid #146c43;
+  font-weight: 600;
+  padding: 0.35em 0.65em;
+}
+
+[data-bs-theme="dark"] .delco-badge-proyecto-actual,
+[data-bs-theme="dark"] .badge.delco-badge-proyecto-actual {
+  background-color: #198754 !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.delco-badge-proyecto-finalizado,
+.badge.delco-badge-proyecto-finalizado {
+  display: inline-block !important;
+  background-color: #6c757d !important;
+  color: #ffffff !important;
+  border: 1px solid #565e64;
+  font-weight: 600;
+  padding: 0.35em 0.65em;
+}
+
+[data-bs-theme="dark"] .delco-badge-proyecto-finalizado,
+[data-bs-theme="dark"] .badge.delco-badge-proyecto-finalizado {
+  background-color: #868e96 !important;
+  color: #212529 !important;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.delco-row-proyecto-finalizado > *:first-child {
+  box-shadow: inset 3px 0 0 #6c757d;
+}
+
+[data-bs-theme="dark"] .delco-row-proyecto-finalizado > *:first-child {
+  box-shadow: inset 3px 0 0 #adb5bd;
+}
+
+.delco-badge-proyecto-ficha,
+.badge.delco-badge-proyecto-ficha {
+  display: inline-block !important;
+  background-color: #0d6efd !important;
+  color: #ffffff !important;
+  font-weight: 600;
+  padding: 0.35em 0.65em;
+  white-space: normal;
+  text-align: left;
+}
+
+[data-bs-theme="dark"] .delco-badge-proyecto-ficha,
+[data-bs-theme="dark"] .badge.delco-badge-proyecto-ficha {
+  background-color: #3d8bfd !important;
+  color: #ffffff !important;
+}
+
+[data-bs-theme="dark"] .table-success {
+  --bs-table-bg: rgba(40, 167, 69, 0.18);
+  --bs-table-color: var(--bs-body-color);
+  --bs-table-border-color: var(--bs-border-color);
+  color: var(--bs-body-color);
+}
+
 [data-bs-theme="dark"] .ring-active {
   outline-color: #6ea8fe;
 }
