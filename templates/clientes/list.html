@@ -894,11 +894,10 @@
             }
 
             var formMasivoClientes = document.getElementById('formEditarMasivoClientes');
-            {% url 'clientes_modificar_masivo' as clientes_modificar_masivo_url %}
             if (formMasivoClientes) {
               formMasivoClientes.addEventListener('submit', function(e) {
                 e.preventDefault();
-                var masivoUrl = "{{ clientes_modificar_masivo_url|default:''|escapejs }}";
+                var masivoUrl = "{{ delco_api.clientes_modificar_masivo|escapejs }}";
                 if (!masivoUrl) {
                   if (window.showToast) showToast('Acción no disponible en este entorno (ruta faltante).', 'warning');
                   return;
