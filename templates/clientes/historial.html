@@ -105,6 +105,16 @@
             <dt class="col-sm-4">SIM ICCID</dt><dd class="col-sm-8">{{ cliente.sim_iccid|default:"—" }}</dd>
             <dt class="col-sm-4">SIM abonado</dt><dd class="col-sm-8">{{ cliente.sim_abonado|default:"—" }}</dd>
             <dt class="col-sm-4">Estado SIM</dt><dd class="col-sm-8">{% if cliente.sim_estado %}{{ cliente.get_sim_estado_display }}{% else %}—{% endif %}</dd>
+            <dt class="col-sm-4">Restricción</dt>
+            <dd class="col-sm-8">
+              {% if cliente.estado_restriccion %}
+                <span class="badge text-bg-warning">{{ cliente.get_estado_restriccion_display }}</span>
+              {% else %}
+                —
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Justificación</dt>
+            <dd class="col-sm-8">{{ cliente.justificacion_restriccion|default:"—" }}</dd>
             <dt class="col-sm-4">Último acceso</dt><dd class="col-sm-8">{{ cliente.ultimo_acceso|default:"—" }}</dd>
             <dt class="col-sm-4">Último perfil carga</dt><dd class="col-sm-8">{{ cliente.ultimo_perfil_carga|default:"—" }}</dd>
             <dt class="col-sm-4">Último perfil instr.</dt><dd class="col-sm-8">{{ cliente.ultimo_perfil_instrumentacion|default:"—" }}</dd>
@@ -341,6 +351,18 @@
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="histEditarMeterSerial">Serie Medidor</label>
               <input type="text" class="form-control" id="histEditarMeterSerial" name="meter_serial_n_1" value="{{ cliente.meter_serial_n_1|default:'' }}">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="histEditarEstadoRestriccion">Restricción / estado visita-IP</label>
+              <select class="form-select" id="histEditarEstadoRestriccion" name="estado_restriccion">
+                {% for codigo, nombre in estado_restriccion_choices %}
+                <option value="{{ codigo }}" {% if cliente.estado_restriccion == codigo %}selected{% endif %}>{{ nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold" for="histEditarJustificacionRestriccion">Justificación</label>
+              <textarea class="form-control" id="histEditarJustificacionRestriccion" name="justificacion_restriccion" rows="2" placeholder="Obligatoria si hay restricción">{{ cliente.justificacion_restriccion|default:'' }}</textarea>
             </div>
           </div>
         </div>

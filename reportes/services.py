@@ -397,17 +397,19 @@ def report_clientes_reincidentes(filters: Dict[str, Any]) -> ReportResult:
 
 def report_clientes_estado_visita(filters: Dict[str, Any]) -> ReportResult:
     keywords = ['cerrado', 'deshabitado', 'no permite', 'no permite acceso']
-    q = Q()
+    q = Q(estado_restriccion__in=('CERRADO', 'DESHABITADO', 'NO_PERMITE', 'IP_BLOQUEADA', 'IP_FUERA_SERVICIO', 'IP_EN_REVISION'))
     for kw in keywords:
         q |= Q(trabajo__icontains=kw) | Q(note__icontains=kw)
     qs = _filter_clientes(
         _clientes_activos_alarma_qs().filter(q),
         filters,
     ).order_by('numero_cliente')
-    headers = CLIENTE_HEADERS + ['Trabajo/Nota']
+    headers = CLIENTE_HEADERS + ['Restricción', 'Justificación', 'Trabajo/Nota']
     rows = []
     for cliente in qs:
         row = _cliente_row(cliente)
+        row.append(cliente.get_estado_restriccion_display() if cliente.estado_restriccion else '')
+        row.append(cliente.justificacion_restriccion or '')
         row.append((cliente.trabajo or '') + ' | ' + (cliente.note or ''))
         rows.append(row)
     return headers, rows

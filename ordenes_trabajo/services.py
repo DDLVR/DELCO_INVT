@@ -126,4 +126,25 @@ def validate_ot_for_creation(
     if closed_without_execution.exists():
         result.warnings.append('El cliente tiene OT cerradas/anuladas sin ejecución efectiva registrada.')
 
+    # Antecedentes de visita / IP restringida (PDF punto 4) con justificación
+    from web.services.validators import (
+        validate_cliente_antecedentes_visita,
+        validate_ip_restricted_status,
+    )
+
+    for issue in validate_cliente_antecedentes_visita(
+        getattr(cliente, 'estado_restriccion', None),
+        getattr(cliente, 'justificacion_restriccion', None),
+        getattr(cliente, 'trabajo', None),
+        getattr(cliente, 'note', None),
+    ):
+        result.warnings.append(issue.message)
+
+    for issue in validate_ip_restricted_status(
+        getattr(cliente, 'estado_restriccion', None),
+        getattr(cliente, 'justificacion_restriccion', None),
+        getattr(cliente, 'ip', None),
+    ):
+        result.warnings.append(issue.message)
+
     return result

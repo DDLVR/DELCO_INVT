@@ -829,3 +829,37 @@ class MoreAppOpsStatusTests(TestCase):
 		self.assertEqual(ops['ultimo_sync'].get('nuevos'), 2)
 		self.assertEqual(ops['ultimo_sync_origen_texto'], 'desde el servidor')
 		self.assertTrue(ops['ultimo_sync_fecha_texto'])
+
+
+class RestriccionJustificacionPunto4Tests(TestCase):
+	"""PDF punto 4: justificación obligatoria en bloqueada / fuera de servicio / deshabitada."""
+
+	def test_restriccion_exige_justificacion(self):
+		from web.services.validators import validate_restriccion_con_justificacion
+
+		issues = validate_restriccion_con_justificacion('DESHABITADO', '')
+		self.assertEqual(len(issues), 1)
+		self.assertEqual(issues[0].severity, 'error')
+		self.assertIn('justificación', issues[0].message.lower())
+
+		self.assertEqual(
+			validate_restriccion_con_justificacion('DESHABITADO', 'Sin residentes desde marzo'),
+			[],
+		)
+
+	def test_ot_creation_advierte_antecedente_con_motivo(self):
+		from ordenes_trabajo.services import validate_ot_for_creation
+
+		cliente = Cliente.objects.create(
+			numero_cliente='P4-100',
+			direccion='Calle Test 1',
+			comuna='Santiago',
+			activo=True,
+			estado_restriccion='IP_FUERA_SERVICIO',
+			justificacion_restriccion='Puerto dañado en gabinete',
+		)
+		result = validate_ot_for_creation(cliente, 'MANTENCION')
+		self.assertFalse(result.has_blocking_error)
+		joined = ' '.join(result.warnings)
+		self.assertIn('fuera de servicio', joined.lower())
+		self.assertIn('Puerto dañado', joined)

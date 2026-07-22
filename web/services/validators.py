@@ -209,6 +209,141 @@ def validate_meter_required_fields(
     return issues
 
 
+# Códigos alineados a Cliente.ESTADO_RESTRICCION_CHOICES
+ESTADOS_IP_RESTRINGIDA = {
+    'IP_BLOQUEADA': 'bloqueada',
+    'IP_FUERA_SERVICIO': 'fuera de servicio',
+    'IP_EN_REVISION': 'en revisión',
+}
+ESTADOS_VISITA_RESTRINGIDA = {
+    'CERRADO': 'cerrado',
+    'DESHABITADO': 'deshabitado',
+    'NO_PERMITE': 'no permite acceso',
+}
+ESTADOS_RESTRICCION_CON_JUSTIFICACION = set(ESTADOS_IP_RESTRINGIDA) | set(ESTADOS_VISITA_RESTRINGIDA)
+
+
+def validate_restriccion_con_justificacion(
+    estado_restriccion: str | None,
+    justificacion: str | None,
+) -> List[ValidationIssue]:
+    """
+    PDF punto 4: si IP/visita está bloqueada, fuera de servicio, en revisión,
+    cerrado, deshabitado o no permite, exige justificación del motivo.
+    """
+    issues: List[ValidationIssue] = []
+    estado = (estado_restriccion or '').strip().upper()
+    motivo = (justificacion or '').strip()
+    if not estado:
+        return issues
+
+    if estado not in ESTADOS_RESTRICCION_CON_JUSTIFICACION:
+        return issues
+
+    if not motivo:
+        label = (
+            ESTADOS_IP_RESTRINGIDA.get(estado)
+            or ESTADOS_VISITA_RESTRINGIDA.get(estado)
+            or estado.lower()
+        )
+        issues.append(
+            ValidationIssue(
+                code='RESTRICCION_SIN_JUSTIFICACION',
+                message=(
+                    f'Debe indicar la justificación/motivo de por qué está {label}.'
+                ),
+                severity='error',
+            )
+        )
+    return issues
+
+
+def validate_ip_restricted_status(
+    estado_restriccion: str | None,
+    justificacion: str | None = None,
+    ip_value: str | None = None,
+) -> List[ValidationIssue]:
+    """Alert when IP is registered as blocked / out of service / in review."""
+    issues: List[ValidationIssue] = []
+    estado = (estado_restriccion or '').strip().upper()
+    if estado not in ESTADOS_IP_RESTRINGIDA:
+        return issues
+
+    label = ESTADOS_IP_RESTRINGIDA[estado]
+    ip_txt = f' {ip_value}' if (ip_value or '').strip() else ''
+    motivo = (justificacion or '').strip()
+    msg = f'IP{ip_txt} registrada como {label}.'
+    if motivo:
+        msg = f'{msg} Motivo: {motivo}'
+    else:
+        msg = f'{msg} Sin justificación registrada.'
+    issues.append(
+        ValidationIssue(
+            code='IP_RESTRICTED_STATUS',
+            message=msg,
+            severity='warning',
+        )
+    )
+    return issues
+
+
+def detect_antecedentes_visita_texto(*textos: str | None) -> List[str]:
+    """Detecta antecedentes de visita en texto libre (trabajo/note legacy)."""
+    hallados: List[str] = []
+    blob = ' '.join((t or '') for t in textos).lower()
+    if not blob.strip():
+        return hallados
+    reglas = (
+        ('cerrado', 'cerrado'),
+        ('deshabitad', 'deshabitado'),
+        ('no permite', 'no permite acceso'),
+        ('sin acceso', 'no permite acceso'),
+    )
+    for needle, label in reglas:
+        if needle in blob and label not in hallados:
+            hallados.append(label)
+    return hallados
+
+
+def validate_cliente_antecedentes_visita(
+    estado_restriccion: str | None,
+    justificacion: str | None = None,
+    trabajo: str | None = None,
+    note: str | None = None,
+) -> List[ValidationIssue]:
+    """Warn when client has visit antecedents (cerrado / no permite / deshabitado)."""
+    issues: List[ValidationIssue] = []
+    estado = (estado_restriccion or '').strip().upper()
+    motivo = (justificacion or '').strip()
+
+    if estado in ESTADOS_VISITA_RESTRINGIDA:
+        label = ESTADOS_VISITA_RESTRINGIDA[estado]
+        msg = f'Cliente con antecedente de visita: {label}.'
+        if motivo:
+            msg = f'{msg} Justificación: {motivo}'
+        else:
+            msg = f'{msg} Sin justificación registrada.'
+        issues.append(
+            ValidationIssue(
+                code='VISITA_ANTECEDENTE',
+                message=msg,
+                severity='warning',
+            )
+        )
+        return issues
+
+    # Fallback legacy: palabras en trabajo/note
+    for label in detect_antecedentes_visita_texto(trabajo, note):
+        issues.append(
+            ValidationIssue(
+                code='VISITA_ANTECEDENTE_TEXTO',
+                message=f'Cliente con antecedente de visita detectado en notas: {label}.',
+                severity='warning',
+            )
+        )
+    return issues
+
+
 def merge_issues(*issues_groups: List[ValidationIssue]) -> List[ValidationIssue]:
     """Flatten groups preserving order."""
     merged: List[ValidationIssue] = []

@@ -89,10 +89,12 @@ from web.services.validators import (
     validate_ip_duplicate_on_active_clients,
     validate_ip_format,
     validate_ip_port_coherence,
+    validate_ip_restricted_status,
     validate_meter_required_fields,
     validate_meter_uniqueness,
     validate_modem_assignment,
     validate_modem_inventory_status,
+    validate_restriccion_con_justificacion,
 )
 from web.services.dashboard_metrics import (
     build_panel_alarmas_analistas,
@@ -2947,6 +2949,7 @@ def clientes_list_view(request):
         'ultima_importacion_total_filas': ultima_importacion_clientes.total_filas if ultima_importacion_clientes else None,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'paginacion_servidor': True,
+        'estado_restriccion_choices': Cliente.ESTADO_RESTRICCION_CHOICES,
     }
     return render(request, 'clientes/list.html', context)
 
@@ -3082,6 +3085,11 @@ def cliente_crear_view(request):
         puerto = request.POST.get('puerto', '').strip()
         modem = request.POST.get('modem', '').strip()
         fecha_registro = request.POST.get('fecha_registro', '').strip()
+        estado_restriccion = (request.POST.get('estado_restriccion') or '').strip().upper()
+        justificacion_restriccion = (request.POST.get('justificacion_restriccion') or '').strip()
+        codigos_ok = {c for c, _ in Cliente.ESTADO_RESTRICCION_CHOICES}
+        if estado_restriccion and estado_restriccion not in codigos_ok:
+            estado_restriccion = ''
 
         proyecto_final = proyecto or 'SIN PROYECTO'
         ultimo_perfil_carga_final = ultimo_perfil_carga or 'SIN PERFIL'
@@ -3107,6 +3115,8 @@ def cliente_crear_view(request):
             validate_ip_format(ip),
             validate_ip_port_coherence(ip, puerto),
             validate_ip_duplicate_on_active_clients(ip, ip_assigned_other_active),
+            validate_ip_restricted_status(estado_restriccion, justificacion_restriccion, ip),
+            validate_restriccion_con_justificacion(estado_restriccion, justificacion_restriccion),
             validate_meter_uniqueness(meter_serial_n_1, meter_exists_other_active),
             validate_meter_required_fields(meter_serial_n_1, meter_manufacturer_id),
             validate_modem_assignment(modem, modem_assigned_other_active),
@@ -3241,6 +3251,8 @@ def cliente_crear_view(request):
             fecha_registro=fecha_registro or None,
             medidor_actual=medidor_obj,
             estado_telemetria='SIN_MEDIDOR' if sin_medidor else 'OPERATIVO',
+            estado_restriccion=estado_restriccion,
+            justificacion_restriccion=justificacion_restriccion if estado_restriccion else '',
             activo=True,
         )
         register_audit_event(
@@ -3304,6 +3316,7 @@ def cliente_crear_view(request):
         'estados_disponibles': estados_disponibles,
         'medidores_libres': medidores_libres,
         'medidores_asignados_count': len(asignados_ids),
+        'estado_restriccion_choices': Cliente.ESTADO_RESTRICCION_CHOICES,
     })
 
 
@@ -3335,6 +3348,8 @@ def cliente_editar_view(request, pk):
                 'proyecto': cliente.proyecto or '',
                 'meter_manufacturer_id': cliente.meter_manufacturer_id or '',
                 'meter_serial_n_1': cliente.meter_serial_n_1 or '',
+                'estado_restriccion': cliente.estado_restriccion or '',
+                'justificacion_restriccion': cliente.justificacion_restriccion or '',
             },
         })
 
@@ -3348,7 +3363,13 @@ def cliente_editar_view(request, pk):
         proyecto = request.POST.get('proyecto', '').strip()
         meter_manufacturer_id = request.POST.get('meter_manufacturer_id', '').strip()
         meter_serial_n_1 = request.POST.get('meter_serial_n_1', '').strip()
+        estado_restriccion = (request.POST.get('estado_restriccion') or '').strip().upper()
+        justificacion_restriccion = (request.POST.get('justificacion_restriccion') or '').strip()
         next_url = (request.POST.get('next') or '').strip()
+
+        codigos_ok = {c for c, _ in Cliente.ESTADO_RESTRICCION_CHOICES}
+        if estado_restriccion and estado_restriccion not in codigos_ok:
+            estado_restriccion = ''
 
         before_values = {
             'numero_cliente': cliente.numero_cliente,
@@ -3360,6 +3381,8 @@ def cliente_editar_view(request, pk):
             'meter_manufacturer_id': cliente.meter_manufacturer_id,
             'proyecto': cliente.proyecto,
             'meter_serial_n_1': cliente.meter_serial_n_1,
+            'estado_restriccion': cliente.estado_restriccion or '',
+            'justificacion_restriccion': cliente.justificacion_restriccion or '',
         }
 
         # Si no envían número de cliente en edición, se conserva el actual.
@@ -3372,6 +3395,13 @@ def cliente_editar_view(request, pk):
             if next_url and next_url.startswith('/'):
                 return redirect(next_url)
             return redirect('clientes_list')
+
+        restriccion_issues = validate_restriccion_con_justificacion(
+            estado_restriccion,
+            justificacion_restriccion,
+        )
+        if restriccion_issues:
+            return _responder_error(restriccion_issues[0].message)
 
         if Cliente.objects.filter(
             numero_cliente=numero_cliente_final,
@@ -3399,6 +3429,8 @@ def cliente_editar_view(request, pk):
         cliente.meter_manufacturer_id = meter_manufacturer_id or None
         cliente.proyecto = proyecto or None
         cliente.meter_serial_n_1 = meter_serial_n_1 or None
+        cliente.estado_restriccion = estado_restriccion
+        cliente.justificacion_restriccion = justificacion_restriccion if estado_restriccion else ''
         cliente.save()
 
         after_values = {
@@ -3411,6 +3443,8 @@ def cliente_editar_view(request, pk):
             'meter_manufacturer_id': cliente.meter_manufacturer_id,
             'proyecto': cliente.proyecto,
             'meter_serial_n_1': cliente.meter_serial_n_1,
+            'estado_restriccion': cliente.estado_restriccion or '',
+            'justificacion_restriccion': cliente.justificacion_restriccion or '',
         }
         for field_name, old_value in before_values.items():
             new_value = after_values.get(field_name)
@@ -3578,6 +3612,35 @@ def cliente_historial_view(request, pk):
             'detalle': f'SIM: {cliente.get_sim_estado_display()}.',
         })
 
+    if (cliente.estado_restriccion or '').strip():
+        from web.services.validators import (
+            ESTADOS_IP_RESTRINGIDA,
+            ESTADOS_VISITA_RESTRINGIDA,
+        )
+        estado_r = cliente.estado_restriccion
+        es_ip = estado_r in ESTADOS_IP_RESTRINGIDA
+        titulo = 'IP restringida' if es_ip else 'Antecedente de visita'
+        detalle = cliente.get_estado_restriccion_display()
+        motivo = (cliente.justificacion_restriccion or '').strip()
+        if motivo:
+            detalle = f'{detalle}. Justificación: {motivo}'
+        else:
+            detalle = f'{detalle}. Sin justificación registrada.'
+        alertas.append({
+            'nivel': 'danger' if es_ip else 'warning',
+            'titulo': titulo,
+            'detalle': detalle,
+        })
+    else:
+        from web.services.validators import detect_antecedentes_visita_texto
+        legacy = detect_antecedentes_visita_texto(cliente.trabajo, cliente.note)
+        if legacy:
+            alertas.append({
+                'nivel': 'warning',
+                'titulo': 'Antecedente de visita (notas)',
+                'detalle': 'Detectado en trabajo/nota: ' + ', '.join(legacy),
+            })
+
     if not alertas:
         alertas.append({
             'nivel': 'success',
@@ -3640,6 +3703,7 @@ def cliente_historial_view(request, pk):
         'moreapp_regs': moreapp_regs,
         'auditoria': auditoria,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
+        'estado_restriccion_choices': Cliente.ESTADO_RESTRICCION_CHOICES,
     }
     return render(request, 'clientes/historial.html', context)
 
