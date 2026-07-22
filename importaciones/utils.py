@@ -42,6 +42,7 @@ def aplicar_estilo_hoja_exportacion(
     min_width: int = 10,
     max_width: int = 40,
     header_height: int = 30,
+    header_row: int = 1,
 ):
     """Aplica formato visual uniforme a una hoja de exportación Excel.
 
@@ -50,11 +51,16 @@ def aplicar_estilo_hoja_exportacion(
     auto_filter: por defecto False (muchas columnas no aportan filtro útil).
     filter_from_col / filter_to_col: rango 1-based de columnas con filtro
     (p. ej. saltar '#' o textos largos / IDs).
+    header_row: fila 1-based donde están los encabezados (útil si hay título arriba).
     """
     from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
     from openpyxl.utils import get_column_letter
 
     if ws.max_row < 1 or ws.max_column < 1:
+        return ws
+
+    header_row = max(1, int(header_row or 1))
+    if header_row > ws.max_row:
         return ws
 
     header_fill = PatternFill(start_color=header_fill_hex, end_color=header_fill_hex, fill_type='solid')
@@ -70,26 +76,28 @@ def aplicar_estilo_hoja_exportacion(
         bottom=Side(style='thin', color='D0D7DE'),
     )
 
-    ws.row_dimensions[1].height = header_height
-    for cell in ws[1]:
+    ws.row_dimensions[header_row].height = header_height
+    for cell in ws[header_row]:
         cell.fill = header_fill
         cell.font = header_font
         cell.alignment = header_align
         cell.border = thin
 
-    for row in ws.iter_rows(min_row=2, max_row=ws.max_row, max_col=ws.max_column):
+    for row in ws.iter_rows(min_row=header_row + 1, max_row=ws.max_row, max_col=ws.max_column):
         ws.row_dimensions[row[0].row].height = 18
         for cell in row:
             cell.font = body_font
             cell.alignment = body_align
             cell.border = thin
-            if zebra and (cell.row % 2 == 0):
+            if zebra and ((cell.row - header_row) % 2 == 0):
                 cell.fill = zebra_fill
 
     for col_idx in range(1, ws.max_column + 1):
         letter = get_column_letter(col_idx)
         max_len = 0
         for cell in ws[letter]:
+            if cell.row < header_row:
+                continue
             if cell.value is None:
                 continue
             texto = str(cell.value).split('\n', 1)[0].strip()
@@ -98,13 +106,16 @@ def aplicar_estilo_hoja_exportacion(
         ws.column_dimensions[letter].width = min(max(max_len + 3, min_width), max_width)
 
     if freeze:
+        # Si el freeze por defecto era A2 y movimos el encabezado, ajustar.
+        if freeze == 'A2' and header_row != 1:
+            freeze = f'A{header_row + 1}'
         ws.freeze_panes = freeze
-    if auto_filter and ws.max_row >= 1:
+    if auto_filter and ws.max_row >= header_row:
         inicio = max(1, min(int(filter_from_col or 1), ws.max_column))
         fin = ws.max_column if filter_to_col is None else int(filter_to_col)
         fin = max(inicio, min(fin, ws.max_column))
         ws.auto_filter.ref = (
-            f'{get_column_letter(inicio)}1:'
+            f'{get_column_letter(inicio)}{header_row}:'
             f'{get_column_letter(fin)}{ws.max_row}'
         )
 

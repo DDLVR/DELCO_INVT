@@ -1185,6 +1185,25 @@ td.cliente-numero-duplicado strong {
   border-radius: var(--bs-border-radius);
 }
 
+/* Dentro de modales Bootstrap (z-index ~1055): las sugerencias deben quedar por encima */
+.modal .delco-ac-results {
+  z-index: 2000;
+}
+
+.modal .delco-ac {
+  position: relative;
+  z-index: 1;
+}
+
+/* Evitar que el body del modal recorte el desplegable de autocomplete */
+#modalEditarMasivo .modal-body {
+  overflow: visible;
+}
+
+#modalEditarMasivo .modal-content {
+  overflow: visible;
+}
+
 /* Fondo sólido: la regla global de dark deja los list-group-item
    transparentes y los resultados se mezclaban con la tabla de atrás. */
 .delco-ac-results .list-group-item,

@@ -8,7 +8,10 @@ from typing import Iterable, List, Optional, Sequence
 import openpyxl
 from django.http import HttpResponse
 from django.utils import timezone
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
+from importaciones.utils import aplicar_estilo_hoja_exportacion
 from web.services.export_filenames import nombre_exportacion_con_fecha
 
 
@@ -18,13 +21,83 @@ def _as_cell_text(value) -> str:
     return str(value)
 
 
-def build_excel_response(filename: str, headers: Sequence[str], rows: Iterable[Sequence]) -> HttpResponse:
+def build_excel_response(
+    filename: str,
+    headers: Sequence[str],
+    rows: Iterable[Sequence],
+    title: Optional[str] = None,
+    sheet_title: str = 'Reporte',
+    group_by_first_column: bool = False,
+) -> HttpResponse:
+    """
+    Excel de reportes con el mismo look & feel que exportaciones de clientes/OT:
+    título Delco, encabezado azul, zebra, bordes y auto-filtro.
+    """
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = 'Reporte'
-    ws.append(list(headers))
-    for row in rows:
-        ws.append(list(row))
+    ws.title = (sheet_title or 'Reporte')[:31]
+
+    row_list = [list(r) for r in rows]
+    generado = timezone.localtime(timezone.now()).strftime('%d/%m/%Y %H:%M')
+    titulo = (title or 'Reporte operativo').strip() or 'Reporte operativo'
+
+    # Bloque de portada (misma idea visual que el PDF de reportes)
+    ws['A1'] = titulo
+    ws['A1'].font = Font(bold=True, size=14, color='1F4E79', name='Calibri')
+    ws['A1'].alignment = Alignment(vertical='center')
+    ws['A2'] = f'DelcoChile · Generado {generado} · {len(row_list)} registro(s)'
+    ws['A2'].font = Font(size=10, color='666666', name='Calibri')
+    ws['A2'].alignment = Alignment(vertical='center')
+    ws.row_dimensions[1].height = 22
+    ws.row_dimensions[2].height = 18
+
+    header_row = 4
+    for col_idx, header in enumerate(headers, start=1):
+        ws.cell(row=header_row, column=col_idx, value=header)
+
+    for offset, row in enumerate(row_list):
+        excel_row = header_row + 1 + offset
+        for col_idx, value in enumerate(row, start=1):
+            ws.cell(row=excel_row, column=col_idx, value=value if value is not None else '')
+
+    # Merge título/meta al ancho de columnas
+    last_col = max(len(headers), 1)
+    last_letter = get_column_letter(last_col)
+    ws.merge_cells(f'A1:{last_letter}1')
+    ws.merge_cells(f'A2:{last_letter}2')
+
+    aplicar_estilo_hoja_exportacion(
+        ws,
+        header_row=header_row,
+        freeze=f'A{header_row + 1}',
+        auto_filter=True,
+        filter_from_col=1,
+        filter_to_col=min(4, last_col),
+        max_width=42,
+    )
+
+    # Resaltar grupos del primer valor (p. ej. misma IP / mismo medidor)
+    if group_by_first_column and row_list and last_col >= 1:
+        fills = (
+            PatternFill(start_color='FFF4E5', end_color='FFF4E5', fill_type='solid'),
+            PatternFill(start_color='E8F4FD', end_color='E8F4FD', fill_type='solid'),
+        )
+        grupo = -1
+        valor_prev = object()
+        for offset, row in enumerate(row_list):
+            valor = row[0] if row else None
+            if valor != valor_prev:
+                grupo += 1
+                valor_prev = valor
+            fill = fills[grupo % 2]
+            excel_row = header_row + 1 + offset
+            # Solo columna clave + contador (si existe)
+            for col_idx in range(1, min(3, last_col) + 1):
+                cell = ws.cell(row=excel_row, column=col_idx)
+                # No pisa el zebra completo: marca la clave del problema
+                cell.fill = fill
+                if col_idx == 1:
+                    cell.font = Font(bold=True, size=10, name='Calibri', color='212121')
 
     buffer = BytesIO()
     wb.save(buffer)

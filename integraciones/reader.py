@@ -51,6 +51,40 @@ def _append_descripcion_alerta(registro, detalle: str) -> None:
     registro.descripcion_alerta = f'{actual} | {nuevo}'
 
 
+def _finalizar_datos_procesados(
+    datos_norm: Dict[str, Any],
+    payload: Dict[str, Any],
+    registro=None,
+    resumen_operativo: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Une datos normalizados + resultado operativo + GPS/fotos MoreApp."""
+    from integraciones.moreapp_media import enriquecer_datos_media, crear_adjuntos_orden_desde_fotos
+
+    ruta = ''
+    submission_id = ''
+    if registro is not None:
+        ruta = getattr(registro, 'ruta_carpeta', '') or ''
+        submission_id = getattr(registro, 'moreapp_submission_id', '') or ''
+    enriquecidos = enriquecer_datos_media(
+        datos_norm or {},
+        payload or {},
+        ruta_carpeta=ruta,
+        submission_id=submission_id,
+    )
+    if resumen_operativo is not None:
+        enriquecidos = {**enriquecidos, 'resultado_operativo': resumen_operativo}
+
+    if registro is not None and getattr(registro, 'orden_id', None):
+        try:
+            crear_adjuntos_orden_desde_fotos(registro.orden, registro)
+        except Exception:
+            logger.exception(
+                'No se pudieron crear adjuntos fotográficos para MoreApp %s',
+                submission_id,
+            )
+    return enriquecidos
+
+
 # Ruta base donde MoreApp deposita los registros (configurable desde settings)
 DEFAULT_REGISTROS_BASE = os.path.join(
     str(Path(__file__).resolve().parent.parent),
@@ -2233,7 +2267,7 @@ def _procesar_json(
                 nombre_formulario=nombre_formulario,
             )
             existente.datos_recibidos = data
-            existente.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
+            existente.datos_procesados = _finalizar_datos_procesados(datos_norm, data, existente, resumen_operativo)
             existente.nombre_formulario = nombre_formulario
             existente.numero_correlativo = numero_correlativo
             existente.ruta_carpeta = ruta_carpeta
@@ -2313,7 +2347,7 @@ def _procesar_json(
             datos_norm=datos_norm,
             nombre_formulario=nombre_formulario,
         )
-        registro.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
+        registro.datos_procesados = _finalizar_datos_procesados(datos_norm, data, registro, resumen_operativo)
         registro.save(
             update_fields=[
                 'datos_procesados',
@@ -2330,7 +2364,7 @@ def _procesar_json(
         _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
         detalle = f'ERROR_SYNC | {exc}'
         _append_descripcion_alerta(registro, detalle)
-        registro.datos_procesados = {**datos_norm, 'resultado_operativo': {'error': str(exc)}}
+        registro.datos_procesados = _finalizar_datos_procesados(datos_norm, data, registro, {'error': str(exc)})
         try:
             registro.save(
                 update_fields=[
@@ -2406,7 +2440,7 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
                 nombre_formulario=nombre_formulario,
             )
             existente.datos_recibidos = data
-            existente.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
+            existente.datos_procesados = _finalizar_datos_procesados(datos_norm, data, existente, resumen_operativo)
             existente.nombre_formulario = nombre_formulario
             existente.ruta_carpeta = ruta_context
             existente.fecha_procesamiento = timezone.now()
@@ -2462,7 +2496,7 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
             datos_norm=datos_norm,
             nombre_formulario=nombre_formulario,
         )
-        registro.datos_procesados = {**datos_norm, 'resultado_operativo': resumen_operativo}
+        registro.datos_procesados = _finalizar_datos_procesados(datos_norm, data, registro, resumen_operativo)
         registro.save(
             update_fields=[
                 'datos_procesados',
@@ -2531,7 +2565,7 @@ def reprocesar_registro_moreapp(registro) -> Dict[str, Any]:
         datos_norm=datos_norm,
         nombre_formulario=nombre_formulario,
     )
-    registro.datos_procesados = {**datos_norm, 'resultado_operativo': resumen}
+    registro.datos_procesados = _finalizar_datos_procesados(datos_norm, data, registro, resumen)
     registro.fecha_procesamiento = timezone.now()
     if resumen.get('movimientos_generados', 0) > 0 or registro.actualizo_equipos:
         registro.estado_sincronizacion = 'PROCESADO'

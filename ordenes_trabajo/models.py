@@ -523,7 +523,9 @@ class AdjuntoOrden(models.Model):
     archivo = models.FileField(
         upload_to=evidencia_upload_to,
         storage=evidencias_storage,
-        help_text='Archivo subido en Registros/Evidencias',
+        blank=True,
+        null=True,
+        help_text='Archivo subido en Registros/Evidencias (opcional si hay URL externa)',
     )
     
     url_externa = models.URLField(

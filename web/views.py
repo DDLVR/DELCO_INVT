@@ -95,6 +95,7 @@ from web.services.validators import (
     validate_modem_inventory_status,
 )
 from web.services.dashboard_metrics import (
+    build_panel_alarmas_analistas,
     count_clientes_con_ip_duplicada,
     count_clientes_con_medidor_duplicado,
     count_clientes_sin_actualizacion_sci4,
@@ -299,14 +300,20 @@ def dashboard_view(request):
             context['moreapp_sin_ot'] = 0
             context['clientes_reincidentes'] = 0
 
-        context['clientes_ip_duplicada'] = count_clientes_con_ip_duplicada()
-        context['clientes_medidor_duplicado'] = count_clientes_con_medidor_duplicado()
-        context['clientes_pendientes_stb'] = count_clientes_sin_actualizacion_stb()
-        context['clientes_pendientes_sci4'] = count_clientes_sin_actualizacion_sci4()
-        
-        # Usuarios
         from web.perf_cache import cache_get_or_set, TTL_CORTO
 
+        def _alarmas_panel():
+            return build_panel_alarmas_analistas()
+
+        alarmas = cache_get_or_set('dashboard:alarmas_analistas', _alarmas_panel, TTL_CORTO)
+        context['alarmas_analistas'] = alarmas
+        context['alarmas_analistas_activas'] = sum(1 for a in alarmas if int(a.get('count') or 0) > 0)
+        context['clientes_ip_duplicada'] = next((a['count'] for a in alarmas if a['key'] == 'ip_duplicada'), 0)
+        context['clientes_medidor_duplicado'] = next((a['count'] for a in alarmas if a['key'] == 'medidor_duplicado'), 0)
+        context['clientes_pendientes_stb'] = next((a['count'] for a in alarmas if a['key'] == 'pendiente_stb'), 0)
+        context['clientes_pendientes_sci4'] = next((a['count'] for a in alarmas if a['key'] == 'pendiente_sci4'), 0)
+        
+        # Usuarios
         def _kpis_inventario_dashboard():
             return {
                 'usuarios_activos': request.user.__class__.objects.filter(is_active=True).count(),
@@ -5399,6 +5406,35 @@ def reportes_moreapp_detalle(request, pk):
     else:
         registro_delete_url = ''
 
+    # GPS + fotos (punto 6): enriquecer al vuelo si el registro aún no los tiene materializados
+    from integraciones.moreapp_media import enriquecer_datos_media
+    moreapp_geo = datos_procesados.get('geo') if isinstance(datos_procesados.get('geo'), dict) else {}
+    moreapp_fotos = datos_procesados.get('fotos') if isinstance(datos_procesados.get('fotos'), list) else []
+    if not moreapp_geo or not moreapp_fotos:
+        payload = registro.datos_recibidos if isinstance(registro.datos_recibidos, dict) else {}
+        enriquecidos = enriquecer_datos_media(
+            datos_procesados,
+            payload,
+            ruta_carpeta=registro.ruta_carpeta or '',
+            submission_id=registro.moreapp_submission_id or '',
+        )
+        moreapp_geo = enriquecidos.get('geo') or moreapp_geo or {}
+        moreapp_fotos = enriquecidos.get('fotos') or moreapp_fotos or []
+        # Persistir para no recalcular siempre
+        if enriquecidos.get('geo') or enriquecidos.get('fotos'):
+            registro.datos_procesados = {
+                **datos_procesados,
+                'geo': enriquecidos.get('geo') or datos_procesados.get('geo'),
+                'fotos': enriquecidos.get('fotos') or [],
+                'fotos_disponibles': enriquecidos.get('fotos_disponibles', 0),
+                'fotos_total': enriquecidos.get('fotos_total', 0),
+                'location': enriquecidos.get('location') or datos_procesados.get('location'),
+            }
+            try:
+                registro.save(update_fields=['datos_procesados'])
+            except Exception:
+                pass
+
     return render(request, 'reportes/integracion_detalle.html', {
         'registro': registro,
         'registro_delete_url': registro_delete_url,
@@ -5411,6 +5447,9 @@ def reportes_moreapp_detalle(request, pk):
             'ALERTA_CRITICA' in str(registro.descripcion_alerta or '').upper()
             or any(b.get('es_critica') for b in bloqueos_operativos)
         ),
+        'moreapp_geo': moreapp_geo,
+        'moreapp_fotos': moreapp_fotos,
+        'moreapp_fotos_disponibles': sum(1 for f in moreapp_fotos if f.get('disponible')),
     })
 
 

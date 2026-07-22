@@ -85,77 +85,42 @@
                 {% endif %}
             </div>
 
-            {% if clientes_ip_duplicada or clientes_medidor_duplicado or clientes_pendientes_stb or clientes_pendientes_sci4 or clientes_reincidentes or ordenes_cerradas_sin_ejecutar %}
             <div class="delco-dash-alerts-panel delco-panel-card rounded mt-3 overflow-hidden">
-                <div class="card-header delco-card-header-warn py-2">
-                    <i class="bi bi-shield-exclamation me-1"></i> Alertas de calidad de datos
+                <div class="card-header delco-card-header-warn py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <span>
+                        <i class="bi bi-shield-exclamation me-1"></i>
+                        Alarmas para analistas
+                        <span class="badge bg-dark ms-1">{{ alarmas_analistas_activas|default:0 }} activas</span>
+                    </span>
+                    <a href="{% url 'reportes_hub' %}" class="btn btn-sm btn-outline-dark py-0">Ver reportes</a>
                 </div>
                 <div class="card-body py-2">
                     <div class="row g-2">
-                        {% if clientes_ip_duplicada %}
-                        <div class="col-6 col-md-4 col-lg-2">
-                            <div class="card border-danger delco-panel-card h-100 text-center mb-0">
-                                <div class="card-body py-2 px-1">
-                                    <div class="fs-5 fw-bold text-danger">{{ clientes_ip_duplicada }}</div>
-                                    <small class="text-muted">IP repetida</small>
+                        {% for alarma in alarmas_analistas %}
+                        <div class="col-6 col-md-4 col-lg-3 col-xl-2">
+                            <a href="{{ alarma.url }}" class="text-decoration-none text-reset d-block h-100" title="Exportar detalle">
+                                <div class="card delco-panel-card h-100 text-center mb-0 {% if alarma.count %}border-{{ alarma.severity }}{% else %}border-light opacity-75{% endif %}">
+                                    <div class="card-body py-2 px-1">
+                                        <div class="fs-5 fw-bold {% if alarma.count %}text-{{ alarma.severity }}{% else %}text-muted{% endif %}">{{ alarma.count }}</div>
+                                        <small class="{% if alarma.count %}text-body{% else %}text-muted{% endif %}">{{ alarma.label }}</small>
+                                    </div>
                                 </div>
-                            </div>
+                            </a>
                         </div>
-                        {% endif %}
-                        {% if clientes_medidor_duplicado %}
-                        <div class="col-6 col-md-4 col-lg-2">
-                            <div class="card border-danger delco-panel-card h-100 text-center mb-0">
-                                <div class="card-body py-2 px-1">
-                                    <div class="fs-5 fw-bold text-danger">{{ clientes_medidor_duplicado }}</div>
-                                    <small class="text-muted">Medidor repetido</small>
-                                </div>
-                            </div>
+                        {% empty %}
+                        <div class="col-12">
+                            <p class="text-muted small mb-0">No hay alarmas configuradas.</p>
                         </div>
-                        {% endif %}
-                        {% if clientes_pendientes_stb %}
-                        <div class="col-6 col-md-4 col-lg-2">
-                            <div class="card border-warning delco-panel-card h-100 text-center mb-0">
-                                <div class="card-body py-2 px-1">
-                                    <div class="fs-5 fw-bold text-warning">{{ clientes_pendientes_stb }}</div>
-                                    <small class="text-muted">Pend. STB</small>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        {% if clientes_pendientes_sci4 %}
-                        <div class="col-6 col-md-4 col-lg-2">
-                            <div class="card border-warning delco-panel-card h-100 text-center mb-0">
-                                <div class="card-body py-2 px-1">
-                                    <div class="fs-5 fw-bold text-warning">{{ clientes_pendientes_sci4 }}</div>
-                                    <small class="text-muted">Pend. SCi4</small>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        {% if clientes_reincidentes %}
-                        <div class="col-6 col-md-4 col-lg-2">
-                            <div class="card border-warning delco-panel-card h-100 text-center mb-0">
-                                <div class="card-body py-2 px-1">
-                                    <div class="fs-5 fw-bold text-warning">{{ clientes_reincidentes }}</div>
-                                    <small class="text-muted">Reincidentes</small>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        {% if ordenes_cerradas_sin_ejecutar %}
-                        <div class="col-6 col-md-4 col-lg-2">
-                            <div class="card border-secondary delco-panel-card h-100 text-center mb-0">
-                                <div class="card-body py-2 px-1">
-                                    <div class="fs-5 fw-bold text-secondary">{{ ordenes_cerradas_sin_ejecutar }}</div>
-                                    <small class="text-muted">OT sin ejecutar</small>
-                                </div>
-                            </div>
-                        </div>
-                        {% endif %}
+                        {% endfor %}
                     </div>
+                    {% if ordenes_cerradas_sin_ejecutar %}
+                    <div class="small text-muted mt-2">
+                        Además: <strong>{{ ordenes_cerradas_sin_ejecutar }}</strong> OT cerradas sin ejecutar
+                        (ver reportes operativos).
+                    </div>
+                    {% endif %}
                 </div>
             </div>
-            {% endif %}
         </div>
     </div>
 
