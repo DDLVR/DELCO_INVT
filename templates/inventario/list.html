@@ -55,9 +55,6 @@
                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarEquipo">
                     <i class="bi bi-plus-circle"></i> Agregar equipo
                 </button>
-                <button type="button" class="btn btn-outline-dark" id="btnAbrirMasivo">
-                    <i class="bi bi-check2-square"></i> Cambiar varios
-                </button>
                 {% endif %}
                 {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
                 <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportar">
@@ -459,7 +456,7 @@
                 <strong id="inventarioSeleccionCount">0</strong> equipo(s) seleccionados
             </div>
             <div class="d-flex gap-2">
-                <button type="button" class="btn btn-sm btn-outline-dark" id="btnAbrirMasivoBandeja">Cambiar varios</button>
+                <button type="button" class="btn btn-sm btn-outline-dark" id="btnAbrirMasivoBandeja">Modificar selección</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiarSeleccionInventario">Limpiar selección</button>
             </div>
         </div>
@@ -2153,8 +2150,6 @@ document.addEventListener('change', function(ev) {
 
 restaurarChecksInventario();
 
-const btnAbrirMasivo = document.getElementById('btnAbrirMasivo');
-if (btnAbrirMasivo) btnAbrirMasivo.addEventListener('click', abrirModalMasivoInventario);
 const btnAbrirMasivoBandeja = document.getElementById('btnAbrirMasivoBandeja');
 if (btnAbrirMasivoBandeja) btnAbrirMasivoBandeja.addEventListener('click', abrirModalMasivoInventario);
 const btnLimpiarInv = document.getElementById('btnLimpiarSeleccionInventario');

@@ -36,6 +36,21 @@ def _asignar_estado_revision(registro, nuevo_estado: str) -> None:
     registro.estado_revision = nuevo_estado
 
 
+def _append_descripcion_alerta(registro, detalle: str) -> None:
+    """Agrega un tramo a descripcion_alerta sin duplicar el mismo texto."""
+    nuevo = str(detalle or '').strip()
+    if not nuevo:
+        return
+    actual = str(getattr(registro, 'descripcion_alerta', None) or '').strip()
+    if not actual:
+        registro.descripcion_alerta = nuevo
+        return
+    if nuevo in actual:
+        return
+    # Evitar concatenar el mismo bloque operativo dos veces (reproceso / doble llamada)
+    registro.descripcion_alerta = f'{actual} | {nuevo}'
+
+
 # Ruta base donde MoreApp deposita los registros (configurable desde settings)
 DEFAULT_REGISTROS_BASE = os.path.join(
     str(Path(__file__).resolve().parent.parent),
@@ -579,12 +594,10 @@ def _registrar_alerta_critica_asignacion(
     if contexto:
         detalle += f' | CONTEXTO: {contexto}'
     logger.error('[MoreApp] %s', detalle)
+    # Flag histórico de “alerta”; la UI distingue crítica vs doble trabajo por el texto.
     registro.alerta_doble_trabajo = True
     _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
-    if registro.descripcion_alerta:
-        registro.descripcion_alerta += f' | {detalle}'
-    else:
-        registro.descripcion_alerta = detalle
+    _append_descripcion_alerta(registro, detalle)
     if callable(registrar_pendiente):
         registrar_pendiente(tipo_equipo, identificador, f'CRITICO: {motivo}')
 
@@ -730,11 +743,9 @@ def _registrar_bloqueo_operativo(
     if contexto:
         detalle += f' | CONTEXTO: {contexto}'
     logger.warning('[MoreApp] Bloqueo operativo: %s', detalle)
-    registro.alerta_doble_trabajo = True
-    if registro.descripcion_alerta:
-        registro.descripcion_alerta += f' | {detalle}'
-    else:
-        registro.descripcion_alerta = detalle
+    # No es doble trabajo: es regla operativa (p. ej. módem sin medidor).
+    _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
+    _append_descripcion_alerta(registro, detalle)
     if callable(registrar_pendiente):
         registrar_pendiente(tipo_equipo, identificador, motivo)
 
@@ -1337,11 +1348,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         from web.services.validators import validate_meter_terreno_vs_sistema
         for issue in validate_meter_terreno_vs_sistema(medidor_serie, cliente_obj.meter_serial_n_1):
             _agregar_pendiente('MEDIDOR', medidor_serie, issue.message)
-            registro.alerta_doble_trabajo = True
-            if registro.descripcion_alerta:
-                registro.descripcion_alerta += f' | {issue.message}'
-            else:
-                registro.descripcion_alerta = issue.message
+            _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
+            _append_descripcion_alerta(registro, issue.message)
 
     if formulario_canonico == 'REGISTRO_MEDIDORES_TELEMETRIA_V3':
         medidor_retirado = _buscar_medidor(medidor_activo_serie)
@@ -2260,10 +2268,7 @@ def _procesar_json(
             try:
                 existente.alerta_doble_trabajo = True
                 detalle = f'ERROR_SYNC | {exc}'
-                if existente.descripcion_alerta:
-                    existente.descripcion_alerta += f' | {detalle}'
-                else:
-                    existente.descripcion_alerta = detalle
+                _append_descripcion_alerta(existente, detalle)
                 _asignar_estado_revision(existente, 'CON_ADVERTENCIA')
                 existente.fecha_procesamiento = timezone.now()
                 existente.save(
@@ -2324,10 +2329,7 @@ def _procesar_json(
         registro.alerta_doble_trabajo = True
         _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
         detalle = f'ERROR_SYNC | {exc}'
-        if registro.descripcion_alerta:
-            registro.descripcion_alerta += f' | {detalle}'
-        else:
-            registro.descripcion_alerta = detalle
+        _append_descripcion_alerta(registro, detalle)
         registro.datos_procesados = {**datos_norm, 'resultado_operativo': {'error': str(exc)}}
         try:
             registro.save(
@@ -2476,10 +2478,7 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
         registro.alerta_doble_trabajo = True
         _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
         detalle = f'ERROR_SYNC | {exc}'
-        if registro.descripcion_alerta:
-            registro.descripcion_alerta += f' | {detalle}'
-        else:
-            registro.descripcion_alerta = detalle
+        _append_descripcion_alerta(registro, detalle)
         try:
             registro.save(
                 update_fields=[

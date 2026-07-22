@@ -85,14 +85,35 @@
     </div>
   </div>
 
-  <!-- Alerta si aplica -->
-  {% if es_alerta_critica and registro.descripcion_alerta %}
+  <!-- Alerta si aplica (texto legible; el detalle técnico queda abajo en Alertas y pendientes) -->
+  {% if es_alerta_critica %}
   <div class="alert alert-danger d-flex align-items-start gap-2 mb-4">
     <i class="bi bi-exclamation-octagon-fill fs-5 flex-shrink-0 mt-1"></i>
     <div>
-      <strong>Alerta crítica — equipo en otro cliente (sin reasignación automática):</strong>
-      <div class="mt-1">{{ registro.descripcion_alerta }}</div>
+      <strong>Alerta crítica — equipo en otro cliente (sin reasignación automática)</strong>
+      {% if bloqueos_operativos %}
+        {% with b=bloqueos_operativos.0 %}
+        <div class="mt-1">
+          {% if b.tipo_equipo %}{{ b.tipo_equipo }}{% if b.identificador %} {{ b.identificador }}{% endif %}: {% endif %}{{ b.motivo }}
+        </div>
+        {% endwith %}
+      {% elif registro.descripcion_alerta %}
+        <div class="mt-1">{{ registro.descripcion_alerta }}</div>
+      {% endif %}
       <div class="small mt-2">Revisa inventario/cliente, corrige la asignación manualmente y luego marca como revisado.</div>
+    </div>
+  </div>
+  {% elif bloqueos_operativos %}
+  <div class="alert {% if bloqueos_operativos.0.origen == 'regla_operativa' %}alert-danger{% else %}alert-warning{% endif %} d-flex align-items-start gap-2 mb-4">
+    <i class="bi bi-exclamation-triangle-fill fs-5 flex-shrink-0 mt-1"></i>
+    <div>
+      {% with b=bloqueos_operativos.0 %}
+      <strong>{{ b.origen_label }}:</strong>
+      {% if b.tipo_equipo %}{{ b.tipo_equipo }}{% if b.identificador %} {{ b.identificador }}{% endif %} — {% endif %}{{ b.motivo }}
+      {% endwith %}
+      {% if bloqueos_operativos|length > 1 %}
+      <div class="small mt-1 text-muted">Hay {{ bloqueos_operativos|length }} alertas; el detalle completo está más abajo.</div>
+      {% endif %}
     </div>
   </div>
   {% elif registro.alerta_doble_trabajo and registro.descripcion_alerta %}
