@@ -254,7 +254,7 @@
   const buscarInput = document.getElementById('medidorBuscar');
   const tbody = document.getElementById('tablaMedidoresLibresBody');
   const hint = document.getElementById('medidorFiltroHint');
-  const urlBuscar = "{% url 'api_buscar_medidores' %}";
+  const urlBuscar = "{{ delco_api.buscar_medidores }}";
   let timer = null;
   let abortCtrl = null;
   let seleccionHecha = false;

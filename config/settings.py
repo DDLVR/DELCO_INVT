@@ -95,6 +95,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'web.context_processors.moreapp_aviso',
+                'web.context_processors.delco_api_urls',
             ],
         },
     },
