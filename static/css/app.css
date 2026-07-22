@@ -72,6 +72,23 @@ code {
   font-size: 0.92rem;
 }
 
+/* Navegación: primer click gana (evita ráfagas de GET al hacer click rápido) */
+body.delco-navigating {
+  cursor: progress;
+}
+
+body.delco-navigating main {
+  opacity: 0.72;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.delco-sidebar .app-nav-link.delco-nav-pending {
+  outline: 2px solid var(--bs-primary);
+  outline-offset: -2px;
+  background-color: var(--bs-tertiary-bg);
+}
+
 .delco-sidebar .app-nav-link i {
   width: 1.15rem;
   text-align: center;

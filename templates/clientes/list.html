@@ -879,10 +879,16 @@
             }
 
             var formMasivoClientes = document.getElementById('formEditarMasivoClientes');
+            {% url 'clientes_modificar_masivo' as clientes_modificar_masivo_url %}
             if (formMasivoClientes) {
               formMasivoClientes.addEventListener('submit', function(e) {
                 e.preventDefault();
-                fetch("{% url 'clientes_modificar_masivo' %}", {
+                var masivoUrl = "{{ clientes_modificar_masivo_url|default:''|escapejs }}";
+                if (!masivoUrl) {
+                  if (window.showToast) showToast('Acción no disponible en este entorno (ruta faltante).', 'warning');
+                  return;
+                }
+                fetch(masivoUrl, {
                   method: 'POST',
                   body: new FormData(formMasivoClientes),
                   headers: { 'X-Requested-With': 'XMLHttpRequest' }
