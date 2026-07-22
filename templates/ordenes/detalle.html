@@ -451,7 +451,7 @@
                             if (query.length < 2) return;
                              
                             debounceTimer = setTimeout(() => {
-                                fetch(`{% url 'api_buscar_medidores' %}?q=` + encodeURIComponent(query))
+                                fetch(`{{ delco_api.buscar_medidores }}?q=` + encodeURIComponent(query))
                                     .then(response => response.json())
                                     .then(data => {
                                         if (data.results.length === 0) {

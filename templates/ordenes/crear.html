@@ -52,9 +52,8 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">Técnico Responsable</label>
                                 <input type="hidden" name="tecnico_responsable" id="crearTecnicoId" value="">
-                                {% url 'api_buscar_tecnicos' as api_buscar_tecnicos_url %}
                                 <div class="delco-ac mb-2"
-                                     {% if api_buscar_tecnicos_url %}data-ac-url="{{ api_buscar_tecnicos_url }}"{% endif %}
+                                     data-ac-url="{{ delco_api.buscar_tecnicos }}"
                                      data-ac-hidden="#crearTecnicoId"
                                      data-ac-select="#crearTecnicoSelect"
                                      data-ac-min="2">
@@ -75,7 +74,7 @@
                             <label class="form-label">Cliente</label>
                             <input type="hidden" name="cliente" id="crearClienteId" value="">
                             <div class="delco-ac mb-2"
-                                 data-ac-url="{% url 'api_buscar_clientes' %}"
+                                 data-ac-url="{{ delco_api.buscar_clientes }}"
                                  data-ac-hidden="#crearClienteId"
                                  data-ac-select="#crearClienteSelect"
                                  data-ac-min="2">
