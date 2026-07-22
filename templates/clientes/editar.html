@@ -61,7 +61,15 @@
               </div>
               <div class="col-md-4 mb-3">
                 <label class="form-label fw-semibold">Proyecto</label>
-                <input type="text" name="proyecto" class="form-control" value="{{ cliente.proyecto|default:'' }}">
+                <select name="proyecto" class="form-select">
+                  <option value="" {% if not cliente.proyecto %}selected{% endif %}>Sin proyecto</option>
+                  {% for proyecto in proyectos_disponibles %}
+                  <option value="{{ proyecto }}" {% if cliente.proyecto == proyecto %}selected{% endif %}>{{ proyecto }}</option>
+                  {% endfor %}
+                  {% if cliente.proyecto and cliente.proyecto not in proyectos_disponibles %}
+                  <option value="{{ cliente.proyecto }}" selected>{{ cliente.proyecto }}</option>
+                  {% endif %}
+                </select>
               </div>
               <div class="col-md-4 mb-3">
                 <label class="form-label fw-semibold">Serie Medidor</label>

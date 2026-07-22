@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Cliente
+from .models import Cliente, ClienteProyectoHistorial
 
 
 @admin.register(Cliente)
@@ -8,7 +8,7 @@ class ClienteAdmin(admin.ModelAdmin):
     list_filter = ('activo', 'comuna', 'sector', 'fecha_creacion')
     search_fields = ('numero_cliente', 'direccion', 'customer_name', 'ip', 'modem')
     readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
-    
+
     fieldsets = (
         ('Información Básica (VERDES)', {
             'fields': ('numero_cliente', 'customer_name', 'tipo_suministro', 'pod', 'sector', 'city', 'installation_address', 'proyecto', 'comuna', 'referencia'),
@@ -31,3 +31,11 @@ class ClienteAdmin(admin.ModelAdmin):
             'fields': ('activo', 'fecha_creacion', 'fecha_actualizacion')
         }),
     )
+
+
+@admin.register(ClienteProyectoHistorial)
+class ClienteProyectoHistorialAdmin(admin.ModelAdmin):
+    list_display = ('cliente', 'proyecto', 'fecha_inicio', 'fecha_fin', 'vigente', 'cambiado_por')
+    list_filter = ('vigente',)
+    search_fields = ('proyecto', 'cliente__numero_cliente', 'motivo')
+    raw_id_fields = ('cliente', 'cambiado_por')

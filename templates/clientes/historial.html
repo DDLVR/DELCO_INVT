@@ -79,7 +79,14 @@
             <dt class="col-sm-4">Dirección instalación</dt><dd class="col-sm-8">{% firstof cliente.installation_address "—" %}</dd>
             <dt class="col-sm-4">Dirección base</dt><dd class="col-sm-8">{{ cliente.direccion|default:"—" }}</dd>
             <dt class="col-sm-4">Ciudad</dt><dd class="col-sm-8">{{ cliente.city|default:"—" }}</dd>
-            <dt class="col-sm-4">Proyecto</dt><dd class="col-sm-8">{{ cliente.proyecto|default:"—" }}</dd>
+            <dt class="col-sm-4">Proyecto actual</dt>
+            <dd class="col-sm-8">
+              {% if cliente.proyecto %}
+                <span class="badge bg-primary delco-badge-proyecto-ficha">{{ cliente.proyecto }}</span>
+              {% else %}
+                <span class="text-muted">Sin proyecto</span>
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Marca medidor</dt><dd class="col-sm-8">{{ cliente.meter_manufacturer_id|default:"—" }}</dd>
             <dt class="col-sm-4">Serie medidor</dt><dd class="col-sm-8">{{ cliente.meter_serial_n_1|default:"—" }}</dd>
             <dt class="col-sm-4">Empresa</dt><dd class="col-sm-8">{{ cliente.empresa|default:"—" }}</dd>
@@ -127,6 +134,50 @@
             <dd class="col-sm-8">{{ cliente.fecha_creacion|date:"d/m/Y H:i" }} · {{ cliente.fecha_actualizacion|date:"d/m/Y H:i" }}</dd>
           </dl>
         </div>
+      </div>
+    </div>
+  </div>
+
+  {# ── Historial de proyectos asociados ── #}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <strong><i class="bi bi-folder2-open me-1"></i> Proyectos asociados (historial)</strong>
+      <span class="text-muted small">El proyecto Actual es el vigente. Al asignar otro, el anterior queda como Reemplazado.</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-sm table-hover mb-0 align-middle delco-tabla-proyectos">
+          <thead class="table-delco">
+            <tr>
+              <th>Proyecto</th>
+              <th>Desde</th>
+              <th>Estado</th>
+              <th>Motivo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in proyectos_historial %}
+            <tr class="{% if item.estado_codigo == 'actual' %}delco-row-proyecto-vigente{% endif %}">
+              <td><strong>{{ item.proyecto }}</strong></td>
+              <td>{{ item.fecha_inicio|date:"d/m/Y" }}</td>
+              <td>
+                {% if item.estado_codigo == 'actual' %}
+                <span class="badge bg-success delco-badge-proyecto-actual">Actual</span>
+                {% else %}
+                <span class="badge bg-secondary">Reemplazado</span>
+                {% endif %}
+              </td>
+              <td class="small text-muted">{{ item.motivo|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="4" class="text-center text-muted py-3">
+                Sin historial de proyectos aún. Al cambiar el proyecto desde Editar quedará registrado aquí.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -346,13 +397,16 @@
             </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="histEditarProyecto">Proyecto</label>
-              <input type="text" class="form-control" id="histEditarProyecto" name="proyecto" list="listaProyectosHistorial" value="{{ cliente.proyecto|default:'' }}" placeholder="Elige o escribe un proyecto">
-              <datalist id="listaProyectosHistorial">
+              <select class="form-select" id="histEditarProyecto" name="proyecto">
+                <option value="" {% if not cliente.proyecto %}selected{% endif %}>Sin proyecto</option>
                 {% for proyecto in proyectos_disponibles %}
-                <option value="{{ proyecto }}"></option>
+                <option value="{{ proyecto }}" {% if cliente.proyecto == proyecto %}selected{% endif %}>{{ proyecto }}</option>
                 {% endfor %}
-              </datalist>
-              <small class="text-muted">Puedes cambiar a otro proyecto o escribir uno nuevo.</small>
+                {% if cliente.proyecto and cliente.proyecto not in proyectos_disponibles %}
+                <option value="{{ cliente.proyecto }}" selected>{{ cliente.proyecto }}</option>
+                {% endif %}
+              </select>
+              <small class="text-muted">Solo proyectos ya registrados en el sistema.</small>
             </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="histEditarMeterSerial">Serie Medidor</label>

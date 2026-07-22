@@ -3285,6 +3285,14 @@ def cliente_crear_view(request):
             justificacion_restriccion=justificacion_restriccion if estado_restriccion else '',
             activo=True,
         )
+        from clientes.proyecto_historial import registrar_cambio_proyecto
+        registrar_cambio_proyecto(
+            nuevo_cliente,
+            proyecto_final,
+            usuario=request.user,
+            motivo='Alta de cliente',
+            actualizar_campo=True,
+        )
         register_audit_event(
             AuditEvent(
                 actor_id=getattr(request.user, 'id', None),
@@ -3469,11 +3477,20 @@ def cliente_editar_view(request, pk):
         cliente.customer_name = customer_name or None
         cliente.installation_address = installation_address or None
         cliente.meter_manufacturer_id = meter_manufacturer_id or None
-        cliente.proyecto = proyecto or None
+        # proyecto se actualiza vía historial (no sobrescribir aquí)
         cliente.meter_serial_n_1 = meter_serial_n_1 or None
         cliente.estado_restriccion = estado_restriccion
         cliente.justificacion_restriccion = justificacion_restriccion if estado_restriccion else ''
         cliente.save()
+
+        from clientes.proyecto_historial import registrar_cambio_proyecto
+        registrar_cambio_proyecto(
+            cliente,
+            proyecto,
+            usuario=request.user,
+            motivo='Edición desde gestión de clientes',
+            actualizar_campo=True,
+        )
 
         after_values = {
             'numero_cliente': cliente.numero_cliente,
@@ -3533,8 +3550,23 @@ def cliente_historial_view(request, pk):
     )
     from web.models import AuditLog
     from web.services.filtros_export import es_sin_proyecto
+    from clientes.models import ClienteProyectoHistorial
+    from clientes.proyecto_historial import (
+        asegurar_historial_inicial,
+        estado_proyecto_ui,
+    )
 
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
+    asegurar_historial_inicial(cliente)
+    proyectos_historial = list(
+        ClienteProyectoHistorial.objects.filter(cliente=cliente)
+        .select_related('cambiado_por')
+        .order_by('-vigente', '-fecha_inicio', '-id')
+    )
+    for item in proyectos_historial:
+        codigo, etiqueta = estado_proyecto_ui(item)
+        item.estado_codigo = codigo
+        item.estado_etiqueta = etiqueta
     numero = (cliente.numero_cliente or '').strip()
 
     ordenes = (
@@ -3745,6 +3777,7 @@ def cliente_historial_view(request, pk):
         'fichas_mismo_numero': fichas_mismo_numero,
         'moreapp_regs': moreapp_regs,
         'auditoria': auditoria,
+        'proyectos_historial': proyectos_historial,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'estado_restriccion_choices': Cliente.ESTADO_RESTRICCION_CHOICES,
         'proyectos_disponibles': sorted({
@@ -3857,6 +3890,8 @@ def clientes_modificar_masivo_view(request):
 
     actualizados = 0
     omitidos = 0
+    from clientes.proyecto_historial import registrar_cambio_proyecto
+
     for cliente in Cliente.objects.filter(pk__in=ids, activo=True):
         changed = False
         if sector and (cliente.sector or '') != sector:
@@ -3868,24 +3903,44 @@ def clientes_modificar_masivo_view(request):
         if tipo_suministro and (cliente.tipo_suministro or '') != tipo_suministro:
             cliente.tipo_suministro = tipo_suministro
             changed = True
+
+        proyecto_cambio = False
         if proyecto and (cliente.proyecto or '') != proyecto:
             before_proy = cliente.proyecto
-            cliente.proyecto = proyecto
-            changed = True
-            register_audit_event(
-                AuditEvent(
-                    actor_id=getattr(request.user, 'id', None),
-                    action='CLIENT_UPDATE',
-                    entity='Cliente',
-                    entity_id=str(cliente.id),
-                    field_name='proyecto',
-                    old_value=before_proy,
-                    new_value=proyecto,
-                    reason='Cambio de proyecto (edición masiva)',
-                )
+            proyecto_cambio = registrar_cambio_proyecto(
+                cliente,
+                proyecto,
+                usuario=request.user,
+                motivo='Cambio de proyecto (edición masiva)',
+                actualizar_campo=True,
             )
+            if proyecto_cambio:
+                changed = True
+                register_audit_event(
+                    AuditEvent(
+                        actor_id=getattr(request.user, 'id', None),
+                        action='CLIENT_UPDATE',
+                        entity='Cliente',
+                        entity_id=str(cliente.id),
+                        field_name='proyecto',
+                        old_value=before_proy,
+                        new_value=cliente.proyecto,
+                        reason='Cambio de proyecto (edición masiva)',
+                    )
+                )
+
         if changed:
-            cliente.save()
+            # Si solo cambió proyecto, registrar_cambio_proyecto ya guardó.
+            # Si también hay sector/comuna/tipo, persistir esos campos.
+            if sector or comuna or tipo_suministro:
+                update_fields = ['fecha_actualizacion']
+                if sector:
+                    update_fields.append('sector')
+                if comuna:
+                    update_fields.append('comuna')
+                if tipo_suministro:
+                    update_fields.append('tipo_suministro')
+                cliente.save(update_fields=update_fields)
             actualizados += 1
         else:
             omitidos += 1

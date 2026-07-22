@@ -491,13 +491,13 @@
             </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="editarProyecto">Proyecto</label>
-              <input type="text" class="form-control" id="editarProyecto" name="proyecto" list="listaProyectosCliente" placeholder="Elige o escribe un proyecto">
-              <datalist id="listaProyectosCliente">
+              <select class="form-select" id="editarProyecto" name="proyecto">
+                <option value="">Sin proyecto</option>
                 {% for proyecto in proyectos_disponibles %}
-                <option value="{{ proyecto }}"></option>
+                <option value="{{ proyecto }}">{{ proyecto }}</option>
                 {% endfor %}
-              </datalist>
-              <small class="text-muted">Puedes cambiar a otro proyecto existente o crear uno nuevo escribiéndolo.</small>
+              </select>
+              <small class="text-muted">Solo proyectos ya registrados en el sistema.</small>
             </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="editarMeterSerial">Serie Medidor</label>
@@ -554,13 +554,14 @@
           </div>
           <div class="mb-0">
             <label class="form-label" for="bulkClienteProyecto">Proyecto</label>
-            <input type="text" class="form-control" name="proyecto" id="bulkClienteProyecto" list="listaProyectosMasivo" placeholder="Sin cambio — elige o escribe uno nuevo">
-            <datalist id="listaProyectosMasivo">
+            <select class="form-select" name="proyecto" id="bulkClienteProyecto">
+              <option value="">Sin cambio</option>
+              <option value="SIN PROYECTO">Sin proyecto</option>
               {% for proyecto in proyectos_disponibles %}
-              <option value="{{ proyecto }}"></option>
+              <option value="{{ proyecto }}">{{ proyecto }}</option>
               {% endfor %}
-            </datalist>
-            <small class="text-muted">Asigna o cambia el proyecto de todos los seleccionados. Deja vacío para no modificarlo.</small>
+            </select>
+            <small class="text-muted">Asigna o cambia el proyecto de todos los seleccionados. Deja “Sin cambio” para no modificarlo.</small>
           </div>
         </div>
         <div class="modal-footer">
@@ -1186,7 +1187,18 @@
                 document.getElementById('editarComuna').value = button.getAttribute('data-comuna') || '';
                 document.getElementById('editarCustomerName').value = button.getAttribute('data-customer-name') || '';
                 document.getElementById('editarInstallationAddress').value = button.getAttribute('data-installation-address') || '';
-                document.getElementById('editarProyecto').value = button.getAttribute('data-proyecto') || '';
+                var selProyecto = document.getElementById('editarProyecto');
+                var proyectoVal = button.getAttribute('data-proyecto') || '';
+                if (selProyecto) {
+                  selProyecto.value = proyectoVal;
+                  if (proyectoVal && selProyecto.value !== proyectoVal) {
+                    var optExtra = document.createElement('option');
+                    optExtra.value = proyectoVal;
+                    optExtra.textContent = proyectoVal;
+                    optExtra.selected = true;
+                    selProyecto.appendChild(optExtra);
+                  }
+                }
                 document.getElementById('editarMeterManufacturer').value = button.getAttribute('data-meter-manufacturer-id') || '';
                 document.getElementById('editarMeterSerial').value = button.getAttribute('data-meter-serial') || '';
                 var estadoRest = document.getElementById('editarEstadoRestriccion');
@@ -1275,7 +1287,18 @@
                   document.getElementById('editarComuna').value = btnTarget.getAttribute('data-comuna') || '';
                   document.getElementById('editarCustomerName').value = btnTarget.getAttribute('data-customer-name') || '';
                   document.getElementById('editarInstallationAddress').value = btnTarget.getAttribute('data-installation-address') || '';
-                  document.getElementById('editarProyecto').value = btnTarget.getAttribute('data-proyecto') || '';
+                  var selProyectoAuto = document.getElementById('editarProyecto');
+                  var proyectoAuto = btnTarget.getAttribute('data-proyecto') || '';
+                  if (selProyectoAuto) {
+                    selProyectoAuto.value = proyectoAuto;
+                    if (proyectoAuto && selProyectoAuto.value !== proyectoAuto) {
+                      var optAuto = document.createElement('option');
+                      optAuto.value = proyectoAuto;
+                      optAuto.textContent = proyectoAuto;
+                      optAuto.selected = true;
+                      selProyectoAuto.appendChild(optAuto);
+                    }
+                  }
                   document.getElementById('editarMeterManufacturer').value = btnTarget.getAttribute('data-meter-manufacturer-id') || '';
                   document.getElementById('editarMeterSerial').value = btnTarget.getAttribute('data-meter-serial') || '';
                   var tituloAuto = document.getElementById('modalEditarClienteLabel');
