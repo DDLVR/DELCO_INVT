@@ -2875,6 +2875,7 @@ def clientes_list_view(request):
     sector_filtro = (request.GET.get('sector') or '').strip()
     tipo_suministro_filtro = (request.GET.get('tipo_suministro') or '').strip()
     solo_duplicados = (request.GET.get('solo_duplicados') or '') == '1'
+    alarma = (request.GET.get('alarma') or '').strip().lower()
     try:
         per_page = int(request.GET.get('per_page') or 50)
     except (TypeError, ValueError):
@@ -2927,6 +2928,9 @@ def clientes_list_view(request):
     query_params = request.GET.copy()
     query_params.pop('page', None)
 
+    from web.services.dashboard_metrics import ALARMAS_CLIENTES_LABELS
+    alarma_label = ALARMAS_CLIENTES_LABELS.get(alarma, '')
+
     context = {
         'clientes': page_obj.object_list,
         'page_obj': page_obj,
@@ -2940,6 +2944,8 @@ def clientes_list_view(request):
         'sectores_disponibles': sectores_disponibles,
         'tipos_suministro_disponibles': tipos_suministro_disponibles,
         'solo_duplicados': solo_duplicados,
+        'alarma': alarma,
+        'alarma_label': alarma_label,
         'per_page': per_page,
         'total_clientes': total_clientes,
         'total_fichas': total_fichas,

@@ -14,8 +14,7 @@ def _clientes_activos_qs():
     return Cliente.objects.filter(activo=True).exclude(numero_cliente__in=['', '0'])
 
 
-def count_clientes_con_ip_duplicada() -> int:
-    """Count active clients sharing an IP with at least one other active client."""
+def _ids_clientes_ip_duplicada():
     ips_duplicadas = (
         _clientes_activos_qs()
         .exclude(Q(ip__isnull=True) | Q(ip=''))
@@ -24,11 +23,12 @@ def count_clientes_con_ip_duplicada() -> int:
         .filter(total__gt=1)
         .values_list('ip', flat=True)
     )
-    return _clientes_activos_qs().filter(ip__in=list(ips_duplicadas)).count()
+    return list(
+        _clientes_activos_qs().filter(ip__in=list(ips_duplicadas)).values_list('id', flat=True)
+    )
 
 
-def count_clientes_con_medidor_duplicado() -> int:
-    """Count active clients sharing a meter serial with at least one other active client."""
+def _ids_clientes_medidor_duplicado():
     series_duplicadas = (
         _clientes_activos_qs()
         .exclude(Q(meter_serial_n_1__isnull=True) | Q(meter_serial_n_1=''))
@@ -37,7 +37,115 @@ def count_clientes_con_medidor_duplicado() -> int:
         .filter(total__gt=1)
         .values_list('meter_serial_n_1', flat=True)
     )
-    return _clientes_activos_qs().filter(meter_serial_n_1__in=list(series_duplicadas)).count()
+    return list(
+        _clientes_activos_qs()
+        .filter(meter_serial_n_1__in=list(series_duplicadas))
+        .values_list('id', flat=True)
+    )
+
+
+def _ids_clientes_posibles_duplicados():
+    """Más de 2 visitas OT en 6 meses → posibles duplicados."""
+    try:
+        from ordenes_trabajo.models import OrdenTrabajo
+        from ordenes_trabajo.services import six_month_window_start
+    except Exception:
+        return []
+
+    return list(
+        OrdenTrabajo.objects.filter(
+            eliminado=False,
+            fecha_creacion__date__gte=six_month_window_start(),
+        )
+        .exclude(estado='CANCELADA')
+        .exclude(cliente_id__isnull=True)
+        .values('cliente_id')
+        .annotate(visitas=Count('id'))
+        .filter(visitas__gt=2)
+        .values_list('cliente_id', flat=True)
+    )
+
+
+def _ids_clientes_ejecutado_no_actualizado():
+    try:
+        from ordenes_trabajo.models import OrdenTrabajo, IntegracionMoreApp
+    except Exception:
+        return list(
+            _clientes_activos_qs()
+            .filter(Q(estado_stb='PENDIENTE') | Q(estado_sci4='PENDIENTE'))
+            .values_list('id', flat=True)
+        )
+
+    estados_ejecutados = {
+        'REALIZADA',
+        'VALIDADA',
+        'FINALIZADA',
+        'REALIZADA_PENDIENTE_COMPROBACION',
+    }
+    ids_ot = set(
+        OrdenTrabajo.objects.filter(eliminado=False, estado__in=estados_ejecutados)
+        .exclude(cliente_id__isnull=True)
+        .values_list('cliente_id', flat=True)
+    )
+    codigos_moreapp = set()
+    for reg in (
+        IntegracionMoreApp.objects.filter(eliminado=False)
+        .exclude(estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR'))
+        .only('datos_procesados')
+        .iterator(chunk_size=500)
+    ):
+        datos = reg.datos_procesados if isinstance(reg.datos_procesados, dict) else {}
+        codigo = str(datos.get('cliente_codigo') or '').strip()
+        if codigo:
+            codigos_moreapp.add(codigo)
+
+    ids_moreapp = set(
+        _clientes_activos_qs().filter(numero_cliente__in=list(codigos_moreapp)).values_list('id', flat=True)
+    ) if codigos_moreapp else set()
+
+    ids = ids_ot | ids_moreapp
+    if not ids:
+        return []
+    return list(
+        _clientes_activos_qs()
+        .filter(id__in=ids)
+        .filter(Q(estado_stb='PENDIENTE') | Q(estado_sci4='PENDIENTE'))
+        .values_list('id', flat=True)
+    )
+
+
+ALARMAS_CLIENTES_LABELS = {
+    'ip_duplicada': 'IP repetida',
+    'medidor_duplicado': 'Medidor repetido',
+    'posibles_duplicados': 'Posibles duplicados',
+    'ejecutado_no_actualizado': 'Ejecutado, no actualizado en sistema',
+}
+
+
+def aplicar_filtro_alarma_clientes(qs, alarma: str):
+    """Aplica filtro de alarma de analistas sobre un queryset de clientes."""
+    key = (alarma or '').strip().lower()
+    if not key:
+        return qs
+    if key == 'ip_duplicada':
+        return qs.filter(id__in=_ids_clientes_ip_duplicada())
+    if key == 'medidor_duplicado':
+        return qs.filter(id__in=_ids_clientes_medidor_duplicado())
+    if key in ('posibles_duplicados', 'reincidentes'):
+        return qs.filter(id__in=_ids_clientes_posibles_duplicados())
+    if key == 'ejecutado_no_actualizado':
+        return qs.filter(id__in=_ids_clientes_ejecutado_no_actualizado())
+    return qs
+
+
+def count_clientes_con_ip_duplicada() -> int:
+    """Count active clients sharing an IP with at least one other active client."""
+    return len(_ids_clientes_ip_duplicada())
+
+
+def count_clientes_con_medidor_duplicado() -> int:
+    """Count active clients sharing a meter serial with at least one other active client."""
+    return len(_ids_clientes_medidor_duplicado())
 
 
 def count_clientes_sin_actualizacion_stb() -> int:
@@ -49,42 +157,22 @@ def count_clientes_sin_actualizacion_sci4() -> int:
 
 
 def count_clientes_ot_sin_responder() -> int:
-    """Clientes con al menos una OT abierta / pendiente de respuesta."""
+    """Cantidad de OT abiertas / pendientes de respuesta."""
     try:
         from ordenes_trabajo.models import OrdenTrabajo
         from reportes.services import ESTADOS_PENDIENTES_OT
     except Exception:
         return 0
 
-    cliente_ids = (
-        OrdenTrabajo.objects.filter(eliminado=False, estado__in=ESTADOS_PENDIENTES_OT)
-        .exclude(cliente_id__isnull=True)
-        .values_list('cliente_id', flat=True)
-        .distinct()
-    )
-    return _clientes_activos_qs().filter(id__in=cliente_ids).count()
+    return OrdenTrabajo.objects.filter(
+        eliminado=False,
+        estado__in=ESTADOS_PENDIENTES_OT,
+    ).count()
 
 
 def count_clientes_reincidentes() -> int:
-    """Más de dos visitas (OT) en los últimos 6 meses."""
-    try:
-        from ordenes_trabajo.models import OrdenTrabajo
-        from ordenes_trabajo.services import six_month_window_start
-    except Exception:
-        return 0
-
-    return (
-        OrdenTrabajo.objects.filter(
-            eliminado=False,
-            fecha_creacion__date__gte=six_month_window_start(),
-        )
-        .exclude(estado='CANCELADA')
-        .exclude(cliente_id__isnull=True)
-        .values('cliente_id')
-        .annotate(visitas=Count('id'))
-        .filter(visitas__gt=2)
-        .count()
-    )
+    """Más de dos visitas (OT) en los últimos 6 meses (posibles duplicados)."""
+    return len(_ids_clientes_posibles_duplicados())
 
 
 def count_clientes_medidor_terreno_distinto() -> int:
@@ -198,160 +286,63 @@ def count_clientes_ejecutado_no_actualizado() -> int:
     """
     Trabajo ejecutado en terreno (OT realizada/validada o MoreApp) pero STB/SCi4 pendiente.
     """
+    return len(_ids_clientes_ejecutado_no_actualizado())
+
+
+def _url_listado_clientes(alarma: str) -> str:
     try:
-        from ordenes_trabajo.models import OrdenTrabajo, IntegracionMoreApp
+        return f"{reverse('clientes_list')}?alarma={alarma}"
     except Exception:
-        return _clientes_activos_qs().filter(
-            Q(estado_stb='PENDIENTE') | Q(estado_sci4='PENDIENTE')
-        ).count()
-
-    estados_ejecutados = {
-        'REALIZADA',
-        'VALIDADA',
-        'FINALIZADA',
-        'REALIZADA_PENDIENTE_COMPROBACION',
-    }
-    ids_ot = set(
-        OrdenTrabajo.objects.filter(eliminado=False, estado__in=estados_ejecutados)
-        .exclude(cliente_id__isnull=True)
-        .values_list('cliente_id', flat=True)
-    )
-    codigos_moreapp = set()
-    for reg in (
-        IntegracionMoreApp.objects.filter(eliminado=False)
-        .exclude(estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR'))
-        .only('datos_procesados')
-        .iterator(chunk_size=500)
-    ):
-        datos = reg.datos_procesados if isinstance(reg.datos_procesados, dict) else {}
-        codigo = str(datos.get('cliente_codigo') or '').strip()
-        if codigo:
-            codigos_moreapp.add(codigo)
-
-    ids_moreapp = set(
-        _clientes_activos_qs().filter(numero_cliente__in=list(codigos_moreapp)).values_list('id', flat=True)
-    ) if codigos_moreapp else set()
-
-    ids = ids_ot | ids_moreapp
-    if not ids:
-        return 0
-    return _clientes_activos_qs().filter(
-        id__in=ids
-    ).filter(
-        Q(estado_stb='PENDIENTE') | Q(estado_sci4='PENDIENTE')
-    ).count()
+        return '/clientes/'
 
 
-def _url_reporte(slug: str) -> str:
+def _url_listado_ordenes(alarma: str) -> str:
     try:
-        return reverse('reportes_export', kwargs={'slug': slug})
+        return f"{reverse('ordenes_list')}?alarma={alarma}"
     except Exception:
-        return reverse('reportes_hub')
+        return '/ordenes/'
 
 
 def build_panel_alarmas_analistas() -> List[Dict[str, Any]]:
     """
-    Catálogo completo del PDF punto 7 (14 alarmas).
-    Siempre retorna las 14 entradas para el panel del dashboard.
+    Panel reducido de alarmas para analistas:
+    IP / medidor repetido, OT sin responder, posibles duplicados, ejecutado sin actualizar.
+    Cada ítem lleva al listado filtrado (no a descarga Excel).
     """
-    items = [
+    return [
         {
             'key': 'ip_duplicada',
             'label': 'IP repetida',
             'count': count_clientes_con_ip_duplicada(),
             'severity': 'danger',
-            'url': _url_reporte('clientes_ip_duplicada'),
+            'url': _url_listado_clientes('ip_duplicada'),
         },
         {
             'key': 'medidor_duplicado',
             'label': 'Medidor repetido',
             'count': count_clientes_con_medidor_duplicado(),
             'severity': 'danger',
-            'url': _url_reporte('clientes_medidor_duplicado'),
-        },
-        {
-            'key': 'pendiente_stb',
-            'label': 'Sin actualización STB',
-            'count': count_clientes_sin_actualizacion_stb(),
-            'severity': 'warning',
-            'url': _url_reporte('clientes_pendientes_stb'),
-        },
-        {
-            'key': 'pendiente_sci4',
-            'label': 'Sin actualización SCi4',
-            'count': count_clientes_sin_actualizacion_sci4(),
-            'severity': 'warning',
-            'url': _url_reporte('clientes_pendientes_sci4'),
+            'url': _url_listado_clientes('medidor_duplicado'),
         },
         {
             'key': 'ot_sin_responder',
             'label': 'OT sin responder',
             'count': count_clientes_ot_sin_responder(),
             'severity': 'warning',
-            'url': _url_reporte('clientes_pendientes'),
+            'url': _url_listado_ordenes('ot_sin_responder'),
         },
         {
-            'key': 'reincidentes',
-            'label': 'Más de 2 visitas (6 meses)',
+            'key': 'posibles_duplicados',
+            'label': 'Posibles duplicados',
             'count': count_clientes_reincidentes(),
             'severity': 'warning',
-            'url': _url_reporte('clientes_reincidentes'),
-        },
-        {
-            'key': 'medidor_terreno_distinto',
-            'label': 'Medidor terreno distinto al sistema',
-            'count': count_clientes_medidor_terreno_distinto(),
-            'severity': 'danger',
-            'url': _url_reporte('clientes_medidor_terreno_distinto'),
-        },
-        {
-            'key': 'sin_comunicacion',
-            'label': 'Sin comunicación',
-            'count': count_clientes_sin_comunicacion(),
-            'severity': 'warning',
-            'url': _url_reporte('clientes_sin_comunicacion'),
-        },
-        {
-            'key': 'sin_medidor',
-            'label': 'Sin medidor',
-            'count': count_clientes_sin_medidor(),
-            'severity': 'warning',
-            'url': _url_reporte('clientes_sin_medidor'),
-        },
-        {
-            'key': 'sim_sin_datos',
-            'label': 'SIM sin datos',
-            'count': count_clientes_sim_sin_datos(),
-            'severity': 'warning',
-            'url': _url_reporte('clientes_sim_sin_datos'),
-        },
-        {
-            'key': 'modem_sin_respuesta',
-            'label': 'Módem sin respuesta',
-            'count': count_clientes_modem_sin_respuesta(),
-            'severity': 'warning',
-            'url': _url_reporte('clientes_modem_sin_respuesta'),
-        },
-        {
-            'key': 'disciplina_mercado',
-            'label': 'Disciplina de Mercado',
-            'count': count_clientes_disciplina_mercado(),
-            'severity': 'info',
-            'url': _url_reporte('clientes_disciplina_mercado'),
-        },
-        {
-            'key': 'cerrado_reiterado',
-            'label': 'Cerrado / no permite / deshabitado',
-            'count': count_clientes_cerrado_reiterado(),
-            'severity': 'secondary',
-            'url': _url_reporte('clientes_estado_visita'),
+            'url': _url_listado_clientes('posibles_duplicados'),
         },
         {
             'key': 'ejecutado_no_actualizado',
             'label': 'Ejecutado, no actualizado en sistema',
             'count': count_clientes_ejecutado_no_actualizado(),
             'severity': 'danger',
-            'url': _url_reporte('clientes_ejecutado_no_actualizado'),
+            'url': _url_listado_clientes('ejecutado_no_actualizado'),
         },
     ]
-    return items
