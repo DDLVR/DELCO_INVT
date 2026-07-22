@@ -255,7 +255,6 @@
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
       <div>
         <strong id="clientesSeleccionCount">0</strong> cliente(s) seleccionados
-        <span class="text-muted small ms-2" id="clientesSeleccionIdsPreview"></span>
       </div>
       <div class="d-flex gap-2 flex-wrap">
         <button type="button" class="btn btn-sm btn-outline-dark" id="btnEditarDesdeBandeja">Editar seleccionados</button>
@@ -687,12 +686,7 @@
               var set = getSelectedClientesSet();
               var bandeja = document.getElementById('clientesSeleccionBandeja');
               var countEl = document.getElementById('clientesSeleccionCount');
-              var previewEl = document.getElementById('clientesSeleccionIdsPreview');
               if (countEl) countEl.textContent = String(set.size);
-              if (previewEl) {
-                var ids = Array.from(set).slice(0, 8);
-                previewEl.textContent = set.size ? ('IDs: ' + ids.join(', ') + (set.size > 8 ? '…' : '')) : '';
-              }
               if (bandeja) {
                 if (set.size) bandeja.classList.remove('d-none');
                 else bandeja.classList.add('d-none');
