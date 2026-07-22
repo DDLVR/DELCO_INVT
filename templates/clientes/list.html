@@ -79,7 +79,7 @@
         <div class="card-body">
           <form method="get" id="formFiltrosClientes" class="row g-2 align-items-end">
             {% if alarma %}<input type="hidden" name="alarma" value="{{ alarma }}">{% endif %}
-            <div class="col-md-2">
+            <div class="col-md-1">
               <label for="tablaLength" class="form-label mb-1">Mostrar</label>
               <select name="per_page" id="tablaLength" class="form-select form-select-sm" onchange="this.form.submit()">
                 <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
@@ -90,11 +90,25 @@
             </div>
             <div class="col-md-3">
               <label for="filtroQClientes" class="form-label mb-1">Buscar</label>
-              <input type="text" id="filtroQClientes" name="q" class="form-control form-control-sm" placeholder="Nº, nombre, comuna, serie..." value="{{ q|default:'' }}">
+              <input type="text" id="filtroQClientes" name="q" class="form-control form-control-sm" placeholder="Nº, nombre, proyecto, marca, serie, IP..." value="{{ q|default:'' }}">
             </div>
             <div class="col-md-2">
               <label for="filtroNumeroCliente" class="form-label mb-1">Nº Cliente</label>
               <input type="text" id="filtroNumeroCliente" name="numero_cliente" class="form-control form-control-sm" placeholder="Ej: 2930789" value="{{ numero_cliente_seleccionado|default:'' }}">
+            </div>
+            <div class="col-md-2">
+              <label for="filtroNombreCliente" class="form-label mb-1">Nombre</label>
+              <input type="text" id="filtroNombreCliente" name="nombre" class="form-control form-control-sm" placeholder="Nombre o razón social" value="{{ nombre_seleccionado|default:'' }}">
+            </div>
+            <div class="col-md-2">
+              <label for="filtroProyecto" class="form-label mb-1">Proyecto</label>
+              <select id="filtroProyecto" name="proyecto" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todos</option>
+                <option value="SIN PROYECTO" {% if proyecto_seleccionado|upper == 'SIN PROYECTO' %}selected{% endif %}>Sin proyecto</option>
+                {% for proyecto in proyectos_disponibles %}
+                <option value="{{ proyecto }}" {% if proyecto == proyecto_seleccionado %}selected{% endif %}>{{ proyecto }}</option>
+                {% endfor %}
+              </select>
             </div>
             <div class="col-md-2">
               <label for="filtroComuna" class="form-label mb-1">Comuna</label>
@@ -122,6 +136,32 @@
                 <option value="{{ tipo }}" {% if tipo == tipo_suministro_seleccionado %}selected{% endif %}>{{ tipo }}</option>
                 {% endfor %}
               </select>
+            </div>
+            <div class="col-md-2">
+              <label for="filtroMarcaMedidor" class="form-label mb-1">Marca medidor</label>
+              <select id="filtroMarcaMedidor" name="marca" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todas</option>
+                {% for marca in marcas_disponibles %}
+                <option value="{{ marca }}" {% if marca == marca_seleccionada %}selected{% endif %}>{{ marca }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label for="filtroSerieMedidor" class="form-label mb-1">Serie medidor</label>
+              <input type="text" id="filtroSerieMedidor" name="serie" class="form-control form-control-sm" placeholder="Buscar serie..." value="{{ serie_seleccionada|default:'' }}">
+            </div>
+            <div class="col-md-2">
+              <label for="filtroEmpresa" class="form-label mb-1">Empresa</label>
+              <select id="filtroEmpresa" name="empresa" class="form-select form-select-sm" onchange="this.form.submit()">
+                <option value="">Todas</option>
+                {% for empresa in empresas_disponibles %}
+                <option value="{{ empresa }}" {% if empresa == empresa_seleccionada %}selected{% endif %}>{{ empresa }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-2">
+              <label for="filtroIpCliente" class="form-label mb-1">IP</label>
+              <input type="text" id="filtroIpCliente" name="ip" class="form-control form-control-sm" placeholder="Ej: 10.1.1.1" value="{{ ip_seleccionada|default:'' }}">
             </div>
             <div class="col-md-2 d-flex gap-2">
               <button type="submit" class="btn btn-primary btn-sm flex-grow-1" id="btnAplicarFiltroTabla">
@@ -451,7 +491,13 @@
             </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="editarProyecto">Proyecto</label>
-              <input type="text" class="form-control" id="editarProyecto" name="proyecto">
+              <input type="text" class="form-control" id="editarProyecto" name="proyecto" list="listaProyectosCliente" placeholder="Elige o escribe un proyecto">
+              <datalist id="listaProyectosCliente">
+                {% for proyecto in proyectos_disponibles %}
+                <option value="{{ proyecto }}"></option>
+                {% endfor %}
+              </datalist>
+              <small class="text-muted">Puedes cambiar a otro proyecto existente o crear uno nuevo escribiéndolo.</small>
             </div>
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="editarMeterSerial">Serie Medidor</label>
@@ -508,7 +554,13 @@
           </div>
           <div class="mb-0">
             <label class="form-label" for="bulkClienteProyecto">Proyecto</label>
-            <input type="text" class="form-control" name="proyecto" id="bulkClienteProyecto" placeholder="Sin cambio">
+            <input type="text" class="form-control" name="proyecto" id="bulkClienteProyecto" list="listaProyectosMasivo" placeholder="Sin cambio — elige o escribe uno nuevo">
+            <datalist id="listaProyectosMasivo">
+              {% for proyecto in proyectos_disponibles %}
+              <option value="{{ proyecto }}"></option>
+              {% endfor %}
+            </datalist>
+            <small class="text-muted">Asigna o cambia el proyecto de todos los seleccionados. Deja vacío para no modificarlo.</small>
           </div>
         </div>
         <div class="modal-footer">
