@@ -20,6 +20,7 @@ logs/
 test_output.txt
 test_exit.txt
 _tmp_test_out.txt
+docs/_diagramas_tmp/
 # Archivos generados en runtime por la app
 Registros/
 
