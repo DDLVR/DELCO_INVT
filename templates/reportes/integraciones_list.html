@@ -92,6 +92,25 @@
   </div>
   {% endif %}
 
+  {% if sync_alertas_legibles %}
+  <div class="alert {% if sync_alertas_legibles.tipo == 'error' %}alert-danger{% else %}alert-warning{% endif %} border shadow-sm mb-3" role="alert">
+    <div class="d-flex align-items-start gap-2">
+      <i class="bi {% if sync_alertas_legibles.tipo == 'error' %}bi-x-circle-fill{% else %}bi-exclamation-triangle-fill{% endif %} fs-5 mt-1"></i>
+      <div class="flex-grow-1">
+        <div class="fw-semibold mb-2">{{ sync_alertas_legibles.titulo }}</div>
+        <ul class="mb-0 ps-3">
+          {% for item in sync_alertas_legibles.items %}
+          <li class="mb-1">{{ item }}</li>
+          {% endfor %}
+        </ul>
+        <div class="small mt-2 mb-0 opacity-75">
+          Tip: filtra por “Con advertencia” o abre el informe para ver el detalle completo.
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <!-- Gráficos (colapsable) -->
   {{ sinc_breakdown|json_script:"datos-sinc" }}
   {{ formula_breakdown|json_script:"datos-formula" }}

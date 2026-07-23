@@ -268,7 +268,7 @@
     if (!type) type = 'success';
     if (type === 'error') type = 'danger';
     if (duration === undefined) {
-      duration = (type === 'danger') ? 0 : (type === 'warning' ? 7000 : 4000);
+      duration = (type === 'danger') ? 0 : (type === 'warning' ? 8000 : 4000);
     }
     var icons = {
       success:   'bi-check-circle-fill',
@@ -277,7 +277,7 @@
       info:      'bi-info-circle-fill',
       secondary: 'bi-bell-fill'
     };
-    var light   = (type === 'warning' || type === 'info');
+    var light   = (type === 'warning' || type === 'info' || type === 'danger');
     var icon    = icons[type] || 'bi-bell-fill';
     var textCls = light ? 'text-dark' : 'text-white';
     var closeCls= light ? 'btn-close' : 'btn-close btn-close-white';
@@ -286,14 +286,21 @@
     if (!container) return;
 
     var el = document.createElement('div');
-    el.className = 'toast align-items-center bg-' + type + ' ' + textCls + ' border-0 shadow-sm mb-2';
+    el.className = 'toast align-items-center delco-toast delco-toast-' + type + ' bg-' + type + ' ' + textCls + ' border-0 shadow-sm mb-2';
     el.setAttribute('role', 'alert');
     el.setAttribute('aria-live', 'assertive');
     el.setAttribute('aria-atomic', 'true');
+    el.style.maxWidth = '420px';
     el.style.minWidth = '280px';
+    var safeMsg = String(message || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/\n/g, '<br>');
     el.innerHTML =
       '<div class="d-flex">'
-      + '<div class="toast-body fw-semibold"><i class="bi ' + icon + ' me-2"></i>' + message + '</div>'
+      + '<div class="toast-body"><i class="bi ' + icon + ' me-2"></i><span class="delco-toast-msg">' + safeMsg + '</span></div>'
       + '<button type="button" class="' + closeCls + ' me-2 m-auto" data-bs-dismiss="toast" aria-label="Cerrar"></button>'
       + '</div>';
 
