@@ -15,6 +15,10 @@ from importaciones.utils import aplicar_estilo_hoja_exportacion
 from web.services.export_filenames import nombre_exportacion_con_fecha
 
 
+class PdfExportUnavailable(Exception):
+    """Se lanza cuando falta reportlab u otra dependencia de PDF."""
+
+
 def _as_cell_text(value) -> str:
     if value is None:
         return ''
@@ -118,12 +122,18 @@ def build_pdf_response(
     title: Optional[str] = None,
 ) -> HttpResponse:
     """PDF tabular en landscape A4; celdas largas se truncan para legibilidad."""
-    from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.lib.units import mm
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    try:
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        from reportlab.lib.pagesizes import A4, landscape
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import mm
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    except ImportError as exc:
+        raise PdfExportUnavailable(
+            'No está instalado el paquete reportlab en el servidor. '
+            'Ejecuta: pip install "reportlab>=3.6.0,<4.0"'
+        ) from exc
 
     buffer = BytesIO()
     page_size = landscape(A4)

@@ -11,7 +11,7 @@ from usuarios.models import Usuario
 from web.decorators import role_required
 from web.perf_cache import cache_get_or_set, TTL_CORTO
 
-from .exports import build_excel_response, build_pdf_response
+from .exports import PdfExportUnavailable, build_excel_response, build_pdf_response
 from .services import REPORT_CATALOG, parse_report_filters, run_report
 
 logger = logging.getLogger(__name__)
@@ -228,12 +228,30 @@ def reportes_export_view(request, slug):
         return redirect('reportes_hub')
 
     if formato == 'pdf':
-        return build_pdf_response(
-            f'reporte_{slug}.pdf',
-            headers,
-            rows,
-            title=titulo,
-        )
+        try:
+            return build_pdf_response(
+                f'reporte_{slug}.pdf',
+                headers,
+                rows,
+                title=titulo,
+            )
+        except PdfExportUnavailable as exc:
+            logger.warning('Export PDF no disponible (%s); se entrega Excel.', exc)
+            messages.warning(
+                request,
+                f'{exc} Mientras tanto se descarga el reporte en Excel.',
+            )
+            return build_excel_response(
+                f'reporte_{slug}.xlsx',
+                headers,
+                rows,
+                title=titulo,
+                sheet_title=(titulo[:31] if titulo else 'Reporte'),
+                group_by_first_column=slug in {
+                    'clientes_ip_duplicada',
+                    'clientes_medidor_duplicado',
+                },
+            )
     return build_excel_response(
         f'reporte_{slug}.xlsx',
         headers,
