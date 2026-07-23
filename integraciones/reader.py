@@ -1038,7 +1038,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
     if estado_previo_nombre or estado_nuevo_nombre:
         observacion_mov = (
             f'{observacion} | Estado: '
-            f'{estado_previo_nombre or "—"} → {estado_nuevo_nombre or "—"}'
+            f'{estado_previo_nombre or "-"} -> {estado_nuevo_nombre or "-"}'
         )
     else:
         observacion_mov = observacion

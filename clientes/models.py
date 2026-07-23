@@ -1,6 +1,20 @@
 from django.db import models
 
 
+# PDF punto 4 — disponible como constante de módulo (views/validators)
+ESTADO_RESTRICCION_CHOICES = [
+    ('', 'Sin restricción'),
+    ('IP_BLOQUEADA', 'IP bloqueada'),
+    ('IP_FUERA_SERVICIO', 'IP fuera de servicio'),
+    ('IP_EN_REVISION', 'IP en revisión'),
+    ('CERRADO', 'Cerrado'),
+    ('DESHABITADO', 'Deshabitado'),
+    ('NO_PERMITE', 'No permite acceso'),
+]
+ESTADOS_RESTRICCION_IP = {'IP_BLOQUEADA', 'IP_FUERA_SERVICIO', 'IP_EN_REVISION'}
+ESTADOS_RESTRICCION_VISITA = {'CERRADO', 'DESHABITADO', 'NO_PERMITE'}
+
+
 class Cliente(models.Model):
     """
     Representa un cliente (domicilio/punto de instalación).
@@ -260,17 +274,9 @@ class Cliente(models.Model):
     )
 
     # PDF punto 4: IP bloqueada/fuera de servicio/en revisión y antecedentes de visita
-    ESTADO_RESTRICCION_CHOICES = [
-        ('', 'Sin restricción'),
-        ('IP_BLOQUEADA', 'IP bloqueada'),
-        ('IP_FUERA_SERVICIO', 'IP fuera de servicio'),
-        ('IP_EN_REVISION', 'IP en revisión'),
-        ('CERRADO', 'Cerrado'),
-        ('DESHABITADO', 'Deshabitado'),
-        ('NO_PERMITE', 'No permite acceso'),
-    ]
-    ESTADOS_RESTRICCION_IP = {'IP_BLOQUEADA', 'IP_FUERA_SERVICIO', 'IP_EN_REVISION'}
-    ESTADOS_RESTRICCION_VISITA = {'CERRADO', 'DESHABITADO', 'NO_PERMITE'}
+    ESTADO_RESTRICCION_CHOICES = ESTADO_RESTRICCION_CHOICES
+    ESTADOS_RESTRICCION_IP = ESTADOS_RESTRICCION_IP
+    ESTADOS_RESTRICCION_VISITA = ESTADOS_RESTRICCION_VISITA
 
     estado_restriccion = models.CharField(
         max_length=30,

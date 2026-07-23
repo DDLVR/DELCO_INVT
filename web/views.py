@@ -74,6 +74,10 @@ from urllib.parse import quote_plus
 from .decorators import role_required, admin_or_administrativo
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion
 from clientes.models import Cliente
+try:
+    from clientes.models import ESTADO_RESTRICCION_CHOICES as _ESTADO_RESTRICCION_CHOICES_MODULO
+except ImportError:  # pragma: no cover - compat deploy parcial
+    _ESTADO_RESTRICCION_CHOICES_MODULO = None
 from importaciones.utils import (
     importar_equipos_excel,
     importar_clientes_excel,
@@ -106,6 +110,32 @@ from web.services.dashboard_metrics import (
 from web.services.audit import AuditEvent, audit_field_changes, register_audit_event
 
 logger = logging.getLogger(__name__)
+
+_ESTADO_RESTRICCION_CHOICES_FALLBACK = [
+    ('', 'Sin restricción'),
+    ('IP_BLOQUEADA', 'IP bloqueada'),
+    ('IP_FUERA_SERVICIO', 'IP fuera de servicio'),
+    ('IP_EN_REVISION', 'IP en revisión'),
+    ('CERRADO', 'Cerrado'),
+    ('DESHABITADO', 'Deshabitado'),
+    ('NO_PERMITE', 'No permite acceso'),
+]
+
+
+def _cliente_estado_restriccion_choices():
+    """Choices de restricción cliente (compatible con deploys parciales)."""
+    choices = getattr(Cliente, 'ESTADO_RESTRICCION_CHOICES', None)
+    if choices:
+        return choices
+    if _ESTADO_RESTRICCION_CHOICES_MODULO:
+        return _ESTADO_RESTRICCION_CHOICES_MODULO
+    try:
+        field = Cliente._meta.get_field('estado_restriccion')
+        if getattr(field, 'choices', None):
+            return list(field.choices)
+    except Exception:
+        pass
+    return list(_ESTADO_RESTRICCION_CHOICES_FALLBACK)
 
 
 def _ordenes_trabajo_habilitadas():
@@ -2979,7 +3009,7 @@ def clientes_list_view(request):
         'ultima_importacion_total_filas': ultima_importacion_clientes.total_filas if ultima_importacion_clientes else None,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'paginacion_servidor': True,
-        'estado_restriccion_choices': Cliente.ESTADO_RESTRICCION_CHOICES,
+        'estado_restriccion_choices': _cliente_estado_restriccion_choices(),
     }
     return render(request, 'clientes/list.html', context)
 
@@ -3117,7 +3147,7 @@ def cliente_crear_view(request):
         fecha_registro = request.POST.get('fecha_registro', '').strip()
         estado_restriccion = (request.POST.get('estado_restriccion') or '').strip().upper()
         justificacion_restriccion = (request.POST.get('justificacion_restriccion') or '').strip()
-        codigos_ok = {c for c, _ in Cliente.ESTADO_RESTRICCION_CHOICES}
+        codigos_ok = {c for c, _ in _cliente_estado_restriccion_choices()}
         if estado_restriccion and estado_restriccion not in codigos_ok:
             estado_restriccion = ''
 
@@ -3365,7 +3395,7 @@ def cliente_crear_view(request):
         'estados_disponibles': estados_disponibles,
         'medidores_libres': medidores_libres,
         'medidores_asignados_count': len(asignados_ids),
-        'estado_restriccion_choices': Cliente.ESTADO_RESTRICCION_CHOICES,
+        'estado_restriccion_choices': _cliente_estado_restriccion_choices(),
         'proyectos_disponibles': proyectos_disponibles,
     })
 
@@ -3417,7 +3447,7 @@ def cliente_editar_view(request, pk):
         justificacion_restriccion = (request.POST.get('justificacion_restriccion') or '').strip()
         next_url = (request.POST.get('next') or '').strip()
 
-        codigos_ok = {c for c, _ in Cliente.ESTADO_RESTRICCION_CHOICES}
+        codigos_ok = {c for c, _ in _cliente_estado_restriccion_choices()}
         if estado_restriccion and estado_restriccion not in codigos_ok:
             estado_restriccion = ''
 
@@ -3779,7 +3809,7 @@ def cliente_historial_view(request, pk):
         'auditoria': auditoria,
         'proyectos_historial': proyectos_historial,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
-        'estado_restriccion_choices': Cliente.ESTADO_RESTRICCION_CHOICES,
+        'estado_restriccion_choices': _cliente_estado_restriccion_choices(),
         'proyectos_disponibles': sorted({
             (p or '').strip()
             for p in Cliente.objects.filter(activo=True)
@@ -5243,6 +5273,25 @@ def _parsear_parte_descripcion_alerta(parte: str) -> dict:
         cuerpo = texto.split('|', 1)[1].strip() if '|' in texto else texto
         return _parsear_marcador_alerta('ALERTA_ASIGNACION', cuerpo, 'doble_trabajo')
 
+    if upper.startswith('ERROR_SYNC'):
+        cuerpo = texto.split('|', 1)[1].strip() if '|' in texto else texto
+        if '1366' in cuerpo or 'incorrect string value' in cuerpo.lower():
+            return {
+                'origen': 'alerta_operativa',
+                'tipo_equipo': '',
+                'identificador': '',
+                'motivo': (
+                    'Error al guardar movimiento: la base no aceptaba un carácter especial '
+                    'en la observación. Corregido en el sistema; puedes volver a sincronizar.'
+                ),
+            }
+        return {
+            'origen': 'alerta_operativa',
+            'tipo_equipo': '',
+            'identificador': '',
+            'motivo': f'Error de sincronización: {cuerpo[:200]}',
+        }
+
     origen = _clasificar_origen_alerta(texto)
     return {
         'origen': origen,
@@ -5342,6 +5391,58 @@ def _extraer_bloqueos_operativos_registro(registro):
         vistos.add(key)
         item = {**item, 'motivo': motivo_norm}
         resultado.append(_enriquecer_bloqueo_operativo(item))
+    return resultado
+
+
+def _humanizar_mensaje_sync_moreapp(mensaje: str) -> list:
+    """Convierte BLOQUEO_OPERATIVO/ERROR_SYNC crudos en líneas legibles para UI."""
+    texto = str(mensaje or '').strip()
+    if not texto:
+        return []
+
+    lineas = []
+    for parte in _segmentar_descripcion_alerta(texto):
+        upper = parte.upper()
+        if upper.startswith('ERROR_SYNC'):
+            cuerpo = parte.split('|', 1)[1].strip() if '|' in parte else parte
+            if '1366' in cuerpo or 'incorrect string value' in cuerpo.lower():
+                lineas.append(
+                    'Error al guardar el movimiento: la base no aceptaba un carácter especial '
+                    'en la observación. Ya se corrigió; vuelve a sincronizar si el equipo sigue pendiente.'
+                )
+            else:
+                corto = re.sub(r'\s+', ' ', cuerpo)[:140]
+                lineas.append(f'Error técnico al sincronizar: {corto}')
+            continue
+
+        if upper.startswith(('BLOQUEO_OPERATIVO', 'ALERTA_CRITICA', 'ALERTA_ASIGNACION')):
+            parsed = _parsear_parte_descripcion_alerta(parte)
+            equipo = ' '.join(
+                x for x in (parsed.get('tipo_equipo', ''), parsed.get('identificador', '')) if x
+            ).strip()
+            motivo = str(parsed.get('motivo', '') or '').strip()
+            motivo = re.split(r'\s*\(contexto:', motivo, maxsplit=1)[0].strip()
+            if equipo and motivo:
+                lineas.append(f'{equipo}: {motivo}')
+            elif motivo:
+                lineas.append(motivo)
+            elif equipo:
+                lineas.append(f'{equipo}: revisión operativa requerida')
+            continue
+
+        corto = re.sub(r'\s+', ' ', parte).strip()
+        if corto:
+            lineas.append(corto[:180])
+
+    # dedupe preservando orden
+    vistos = set()
+    resultado = []
+    for linea in lineas:
+        clave = linea.casefold()
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        resultado.append(linea)
     return resultado
 
 
@@ -5537,6 +5638,7 @@ def reportes_moreapp_list(request):
         'formula_breakdown': kpis['formula_breakdown'],
         'adv_breakdown': adv_breakdown,
         'moreapp_ops': moreapp_ops,
+        'sync_alertas_legibles': request.session.pop('moreapp_sync_alertas_legibles', None),
     }
     return render(request, 'reportes/integraciones_list.html', context)
 
@@ -5698,19 +5800,52 @@ def reportes_moreapp_sincronizar(request):
             + '. Vuelve a pulsar Sincronizar para continuar con el resto.',
         )
 
+    sync_detalle = None
+
     if errores_detalle:
-        mensajes_error = '; '.join(str(e.get('mensaje', 'Error sin detalle')) for e in errores_detalle[:3])
+        lineas_error = []
+        for e in errores_detalle[:8]:
+            lineas_error.extend(_humanizar_mensaje_sync_moreapp(str(e.get('mensaje', '') or 'Error sin detalle')))
+        if not lineas_error:
+            lineas_error = [str(e.get('mensaje', 'Error sin detalle'))[:160] for e in errores_detalle[:5]]
+        sync_detalle = {
+            'tipo': 'error',
+            'titulo': f'Se detectaron {len(errores_detalle)} error(es) al sincronizar',
+            'items': lineas_error[:12],
+        }
         messages.error(
             request,
-            f'Se detectaron errores en sincronización MoreApp ({len(errores_detalle)}). {mensajes_error}'
+            f'Se detectaron {len(errores_detalle)} error(es) en la sincronización. Revisa el detalle en esta página.',
         )
 
     if bloqueos_detalle:
-        mensajes_bloqueo = '; '.join(str(b.get('mensaje', 'Bloqueo operativo')) for b in bloqueos_detalle[:3])
+        lineas_bloqueo = []
+        for b in bloqueos_detalle[:10]:
+            lineas_bloqueo.extend(_humanizar_mensaje_sync_moreapp(str(b.get('mensaje', '') or '')))
+        if not lineas_bloqueo:
+            lineas_bloqueo = ['Revisión operativa requerida en uno o más informes MoreApp.']
+        if sync_detalle:
+            sync_detalle['items'] = (sync_detalle.get('items') or []) + lineas_bloqueo
+            sync_detalle['items'] = sync_detalle['items'][:18]
+            sync_detalle['titulo'] = (
+                f'Se detectaron problemas al sincronizar '
+                f'({len(errores_detalle)} error(es), {len(bloqueos_detalle)} alerta(s))'
+            )
+            if sync_detalle['tipo'] != 'error':
+                sync_detalle['tipo'] = 'warning'
+        else:
+            sync_detalle = {
+                'tipo': 'warning',
+                'titulo': f'Se detectaron {len(bloqueos_detalle)} alerta(s)/bloqueo(s)',
+                'items': lineas_bloqueo[:15],
+            }
         messages.warning(
             request,
-            f'Se detectaron alertas/bloqueos ({len(bloqueos_detalle)}). {mensajes_bloqueo}'
+            f'Se detectaron {len(bloqueos_detalle)} alerta(s)/bloqueo(s). Revisa el detalle en esta página.',
         )
+
+    if sync_detalle:
+        request.session['moreapp_sync_alertas_legibles'] = sync_detalle
 
     return redirect('reportes_moreapp_list')
 

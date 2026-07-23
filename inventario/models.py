@@ -609,6 +609,35 @@ class Modem(models.Model):
 
 class MovimientoInventario(models.Model):
     """Registro de cambios de estado/custodia de equipos (trazabilidad)"""
+
+    @staticmethod
+    def sanear_observacion(valor) -> str:
+        """
+        Normaliza texto para columnas MySQL que aún no aceptan utf8mb4
+        (evita error 1366 por flechas/guiones tipográficos).
+        """
+        if valor is None:
+            return ''
+        texto = str(valor)
+        for origen, destino in (
+            ('\u2192', '->'),  # →
+            ('\u2190', '<-'),  # ←
+            ('\u2014', '-'),   # —
+            ('\u2013', '-'),   # –
+            ('\u2026', '...'),
+            ('\u00a0', ' '),
+            ('\u201c', '"'),
+            ('\u201d', '"'),
+            ('\u2018', "'"),
+            ('\u2019', "'"),
+        ):
+            texto = texto.replace(origen, destino)
+        try:
+            texto.encode('latin-1')
+            return texto
+        except UnicodeEncodeError:
+            return texto.encode('latin-1', errors='replace').decode('latin-1')
+
     TIPO_CHOICES = [
         ('IMPORTACION', 'Importación masiva'),
         ('ENTREGA', 'Entrega a técnico'),
@@ -702,7 +731,12 @@ class MovimientoInventario(models.Model):
         blank=True,
         help_text='Snapshot inmutable de la ficha eliminada (sin archivos binarios)',
     )
-    
+
+    def save(self, *args, **kwargs):
+        if self.observacion:
+            self.observacion = self.sanear_observacion(self.observacion)
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f'{self.get_tipo_display()} - {self.fecha_hora}'
 

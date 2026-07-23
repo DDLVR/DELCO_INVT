@@ -26,6 +26,39 @@ code {
   border-radius: 0.25rem;
 }
 
+/* Toasts legibles (alertas largas de sync / operaciones) */
+.delco-toast .toast-body {
+  font-weight: 500;
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+.delco-toast .delco-toast-msg {
+  display: inline;
+  white-space: pre-line;
+  word-break: break-word;
+}
+.delco-toast.delco-toast-warning {
+  background-color: #fff3cd !important;
+  color: #5c4400 !important;
+  border: 1px solid #e0c36a !important;
+}
+.delco-toast.delco-toast-warning .toast-body,
+.delco-toast.delco-toast-warning .delco-toast-msg {
+  color: #5c4400 !important;
+}
+.delco-toast.delco-toast-danger {
+  background-color: #f8d7da !important;
+  color: #842029 !important;
+  border: 1px solid #f1aeb5 !important;
+}
+.delco-toast.delco-toast-danger .toast-body,
+.delco-toast.delco-toast-danger .delco-toast-msg {
+  color: #842029 !important;
+}
+.delco-toast.delco-toast-danger .btn-close {
+  filter: none;
+}
+
 .delco-app .container-fluid {
   max-width: 100%;
   padding-left: 0.75rem;
