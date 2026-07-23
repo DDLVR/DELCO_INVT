@@ -15,6 +15,11 @@ venv38/
 # Archivos locales y temporales
 db.sqlite3
 delete
+tmp/
+logs/
+test_output.txt
+test_exit.txt
+_tmp_test_out.txt
 # Archivos generados en runtime por la app
 Registros/
 
