@@ -261,6 +261,7 @@ def _sanitizar_cliente_para_mysql(cliente_obj) -> None:
         'proyecto', 'meter_manufacturer_id', 'meter_serial_n_1', 'empresa',
         'ip', 'puerto', 'modem', 'estado_telemetria', 'note', 'trabajo',
         'sim_operador', 'sim_iccid', 'sim_abonado',
+        'estado_restriccion', 'justificacion_restriccion',
     )
     for campo in campos_texto:
         if not hasattr(cliente_obj, campo):
@@ -1008,10 +1009,29 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
         equipo.save(update_fields=cambios)
 
     from inventario.models import MovimientoInventario
-    if MovimientoInventario.objects.filter(
+
+    estado_nuevo_nombre = _as_text(getattr(estado_obj, 'nombre', '')) if estado_obj else ''
+    if estado_previo_nombre or estado_nuevo_nombre:
+        observacion_mov = (
+            f'{observacion} | Estado: '
+            f'{estado_previo_nombre or "-"} -> {estado_nuevo_nombre or "-"}'
+        )
+    else:
+        observacion_mov = observacion
+
+    # Dedupe contra el texto que realmente se persiste (y el legacy sin "| Estado:").
+    mov_existente = MovimientoInventario.objects.filter(
         origen_sistema='MOREAPP',
-        observacion=observacion,
-    ).exists():
+        observacion__in=[observacion_mov, observacion],
+    )
+    if tipo_equipo == 'MEDIDOR':
+        mov_existente = mov_existente.filter(items__medidor=equipo)
+    elif tipo_equipo == 'MODEM':
+        mov_existente = mov_existente.filter(items__modem=equipo)
+    elif tipo_equipo == 'SIM':
+        mov_existente = mov_existente.filter(items__simcard=equipo)
+
+    if mov_existente.exists():
         # Ya se registró este mismo cambio (reproceso / doble llamada).
         # Asegurar ubicación destino aunque no se cree otro movimiento.
         if necesita_movimiento_ubicacion and hasattr(equipo, 'ubicacion_actual'):
@@ -1033,15 +1053,6 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
                 medidor_asociado=medidor_asociado,
             )
         return True
-
-    estado_nuevo_nombre = _as_text(getattr(estado_obj, 'nombre', '')) if estado_obj else ''
-    if estado_previo_nombre or estado_nuevo_nombre:
-        observacion_mov = (
-            f'{observacion} | Estado: '
-            f'{estado_previo_nombre or "-"} -> {estado_nuevo_nombre or "-"}'
-        )
-    else:
-        observacion_mov = observacion
 
     # Tipo operativo real (INSTALACION/RETIRO); origen_sistema=MOREAPP para filtrar.
     _registrar_movimiento_equipo(
@@ -1179,9 +1190,11 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
 
     cliente_obj = None
     if cliente_codigo:
-        cliente_obj = Cliente.objects.filter(numero_cliente__iexact=cliente_codigo).first()
-        if not cliente_obj:
-            cliente_obj = Cliente.objects.filter(numero_cliente__icontains=cliente_codigo).first()
+        # Solo clientes activos y match exacto (evita soft-deleted e icontains falsos).
+        cliente_obj = Cliente.objects.filter(
+            activo=True,
+            numero_cliente__iexact=cliente_codigo,
+        ).first()
 
     resumen = {
         'formulario_canonico': formulario_canonico,
@@ -1238,9 +1251,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         if empresa and _as_text_mysql_strict(getattr(cliente_obj, 'empresa', '') or '') != empresa:
             cliente_obj.empresa = empresa
             cambios_cliente.append('empresa')
-        if not cliente_obj.activo:
-            cliente_obj.activo = True
-            cambios_cliente.append('activo')
+        # No reactivar clientes soft-deleted desde MoreApp.
         if cambios_cliente:
             _sanitizar_cliente_para_mysql(cliente_obj)
             if 'direccion' in cambios_cliente:
@@ -1953,7 +1964,10 @@ def _detectar_alerta_doble_trabajo(submission_id: str, datos: Dict[str, Any]) ->
     cliente_obj = None
     if cliente:
         from clientes.models import Cliente
-        cliente_obj = Cliente.objects.filter(numero_cliente__iexact=cliente).first()
+        cliente_obj = Cliente.objects.filter(
+            activo=True,
+            numero_cliente__iexact=cliente,
+        ).first()
 
     if cliente_obj:
         tiene_dup_orden, desc_orden = detectar_duplicado_orden(cliente_obj)

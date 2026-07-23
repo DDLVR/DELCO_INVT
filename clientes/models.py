@@ -350,7 +350,7 @@ class ClienteProyectoHistorial(models.Model):
     fecha_fin = models.DateTimeField(
         null=True,
         blank=True,
-        help_text='Fecha límite del período (fin del día). Vacío = sin límite definido',
+        help_text='Cuándo dejó de ser el proyecto actual (cambio a otro / cierre). Vacío = aún vigente o sin cierre registrado',
     )
     vigente = models.BooleanField(
         default=True,

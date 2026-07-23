@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Editar Cliente{% endblock %}
 
@@ -62,11 +63,11 @@
               <div class="col-md-4 mb-3">
                 <label class="form-label fw-semibold">Proyecto</label>
                 <select name="proyecto" class="form-select">
-                  <option value="" {% if not cliente.proyecto %}selected{% endif %}>Sin proyecto</option>
+                  <option value="" {% if not cliente.proyecto or cliente.proyecto|es_sin_proyecto %}selected{% endif %}>Sin proyecto</option>
                   {% for proyecto in proyectos_disponibles %}
                   <option value="{{ proyecto }}" {% if cliente.proyecto == proyecto %}selected{% endif %}>{{ proyecto }}</option>
                   {% endfor %}
-                  {% if cliente.proyecto and cliente.proyecto not in proyectos_disponibles %}
+                  {% if cliente.proyecto and not cliente.proyecto|es_sin_proyecto and cliente.proyecto not in proyectos_disponibles %}
                   <option value="{{ cliente.proyecto }}" selected>{{ cliente.proyecto }}</option>
                   {% endif %}
                 </select>

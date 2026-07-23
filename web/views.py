@@ -218,6 +218,13 @@ def _registrar_movimiento_inventario(
     MovimientoItem.objects.create(**item_kwargs)
 
 
+def _consumir_aviso_export_reportes(request):
+    """Muestra aviso pendiente de export PDF→Excel (la descarga no renderiza HTML)."""
+    aviso = request.session.pop('reportes_aviso_export', None)
+    if aviso:
+        messages.warning(request, aviso)
+
+
 @csrf_exempt
 def login_view(request):
     """Autenticación de usuarios con RUT"""
@@ -265,7 +272,8 @@ def logout_view(request):
 @login_required
 def dashboard_view(request):
     """Dashboard principal - redirige según rol"""
-    
+    _consumir_aviso_export_reportes(request)
+
     rol = request.user.rol
     context = {
         'rol': rol,
@@ -3151,7 +3159,7 @@ def cliente_crear_view(request):
         if estado_restriccion and estado_restriccion not in codigos_ok:
             estado_restriccion = ''
 
-        proyecto_final = proyecto or 'SIN PROYECTO'
+        proyecto_final = proyecto or None
         ultimo_perfil_carga_final = ultimo_perfil_carga or 'SIN PERFIL'
         meter_exists_other_active = bool(
             meter_serial_n_1
@@ -3404,6 +3412,8 @@ def cliente_crear_view(request):
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
 def cliente_editar_view(request, pk):
     """Editar cliente (roles ADMIN y ADMINISTRATIVO). Soporta modal AJAX sin salir del listado."""
+    from web.services.filtros_export import es_sin_proyecto
+
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
 
     def _quiere_json():
@@ -3425,7 +3435,7 @@ def cliente_editar_view(request, pk):
                 'comuna': cliente.comuna or '',
                 'customer_name': cliente.customer_name or '',
                 'installation_address': cliente.installation_address or '',
-                'proyecto': cliente.proyecto or '',
+                'proyecto': '' if es_sin_proyecto(cliente.proyecto) else (cliente.proyecto or ''),
                 'meter_manufacturer_id': cliente.meter_manufacturer_id or '',
                 'meter_serial_n_1': cliente.meter_serial_n_1 or '',
                 'estado_restriccion': cliente.estado_restriccion or '',
@@ -3500,6 +3510,26 @@ def cliente_editar_view(request, pk):
                 f'El número de serie {meter_serial_n_1} ya está asignado a otro cliente activo.'
             )
 
+        medidor_obj = None
+        if meter_serial_n_1:
+            medidor_obj = Medidor.objects.filter(
+                serie__iexact=meter_serial_n_1,
+                eliminado=False,
+            ).first()
+            if not medidor_obj:
+                return _responder_error(
+                    f'No existe un medidor con serie {meter_serial_n_1} en inventario.'
+                )
+            if Cliente.objects.filter(
+                medidor_actual=medidor_obj,
+                activo=True,
+            ).exclude(pk=pk).exists():
+                return _responder_error(
+                    f'El medidor {meter_serial_n_1} ya está asignado a otro cliente activo.'
+                )
+            if not meter_manufacturer_id and medidor_obj.marca:
+                meter_manufacturer_id = medidor_obj.marca
+
         cliente.numero_cliente = numero_cliente_final
         cliente.sector = sector or None
         cliente.tipo_suministro = tipo_suministro or None
@@ -3509,6 +3539,7 @@ def cliente_editar_view(request, pk):
         cliente.meter_manufacturer_id = meter_manufacturer_id or None
         # proyecto se actualiza vía historial (no sobrescribir aquí)
         cliente.meter_serial_n_1 = meter_serial_n_1 or None
+        cliente.medidor_actual = medidor_obj
         cliente.estado_restriccion = estado_restriccion
         cliente.justificacion_restriccion = justificacion_restriccion if estado_restriccion else ''
         cliente.save()
@@ -3901,6 +3932,7 @@ def clientes_modificar_masivo_view(request):
         ids = [int(x) for x in ids_raw if str(x).strip().isdigit()]
     else:
         ids = [int(x) for x in str(ids_raw).replace(' ', '').split(',') if x.isdigit()]
+    ids = list(dict.fromkeys(ids))
 
     if not ids:
         return JsonResponse({'success': False, 'message': 'No hay clientes seleccionados.', 'actualizados': 0, 'omitidos': 0})
@@ -5452,6 +5484,8 @@ def reportes_moreapp_list(request):
     from django.core.paginator import Paginator
     from ordenes_trabajo.models import IntegracionMoreApp
 
+    _consumir_aviso_export_reportes(request)
+
     if request.user.rol not in ROLES_REPORTES_LECTURA:
         messages.error(request, 'No tienes permiso para acceder a Reportes.')
         return redirect('dashboard')
@@ -5718,7 +5752,10 @@ def reportes_moreapp_detalle(request, pk):
             try:
                 registro.save(update_fields=['datos_procesados'])
             except Exception:
-                pass
+                logger.exception(
+                    'No se pudo persistir geo/fotos MoreApp en registro id=%s',
+                    getattr(registro, 'pk', None),
+                )
 
     return render(request, 'reportes/integracion_detalle.html', {
         'registro': registro,

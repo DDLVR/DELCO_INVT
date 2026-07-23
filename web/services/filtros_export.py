@@ -32,6 +32,14 @@ def q_sin_proyecto(campo: str = 'proyecto') -> Q:
         | Q(**{f'{campo}__iexact': 'sin proyecto'})
         | Q(**{f'{campo}__iexact': 'Sin Proyecto'})
         | Q(**{f'{campo}__iexact': 'SIN_PROYECTO'})
+        | Q(**{f'{campo}__iexact': 'sin proyectos'})
+        | Q(**{f'{campo}__iexact': 'SIN PROYECTOS'})
+        | Q(**{f'{campo}__iexact': 'sinproyectos'})
+        | Q(**{f'{campo}__iexact': '__vacio__'})
+        | Q(**{f'{campo}__iexact': 'null'})
+        | Q(**{f'{campo}__iexact': 'nulo'})
+        | Q(**{f'{campo}__iexact': 'none'})
+        | Q(**{campo: '-'})
     )
 
 

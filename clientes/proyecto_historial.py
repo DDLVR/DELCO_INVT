@@ -44,11 +44,17 @@ def registrar_cambio_proyecto(
 
     Retorna True si hubo cambio efectivo respecto al valor anterior.
     """
+    # Bloqueo de fila para evitar dos períodos vigentes concurrentes
+    cliente = Cliente.objects.select_for_update().get(pk=cliente.pk)
+
     nuevo = _normalizar_proyecto(nuevo_proyecto)
     actual = _normalizar_proyecto(getattr(cliente, 'proyecto', None))
-    vigente_existe = ClienteProyectoHistorial.objects.filter(
-        cliente=cliente, vigente=True
-    ).exists()
+    vigentes = list(
+        ClienteProyectoHistorial.objects.select_for_update()
+        .filter(cliente=cliente, vigente=True)
+        .order_by('-fecha_inicio', '-id')
+    )
+    vigente_existe = bool(vigentes)
 
     # Mismo proyecto: solo asegurar fila de historial si falta (datos legacy / alta)
     if nuevo == actual:
@@ -64,11 +70,15 @@ def registrar_cambio_proyecto(
         return False
 
     ahora = timezone.now()
-    for item in ClienteProyectoHistorial.objects.filter(cliente=cliente, vigente=True):
+    for item in vigentes:
         item.vigente = False
         item.fecha_fin = ahora
-        item.motivo = (motivo or MOTIVO_REEMPLAZADO).strip() or MOTIVO_REEMPLAZADO
-        item.save(update_fields=['vigente', 'fecha_fin', 'motivo'])
+        # Conservar motivo original; solo completar si estaba vacío
+        if not (item.motivo or '').strip():
+            item.motivo = (motivo or MOTIVO_REEMPLAZADO).strip() or MOTIVO_REEMPLAZADO
+            item.save(update_fields=['vigente', 'fecha_fin', 'motivo'])
+        else:
+            item.save(update_fields=['vigente', 'fecha_fin'])
 
     if nuevo:
         ClienteProyectoHistorial.objects.create(
@@ -81,7 +91,7 @@ def registrar_cambio_proyecto(
         )
 
     if actualizar_campo:
-        # Mantener convención histórica: vacío -> None; alta suele usar "SIN PROYECTO"
+        # Mantener convención histórica: vacío -> None
         cliente.proyecto = nuevo or None
         cliente.save(update_fields=['proyecto', 'fecha_actualizacion'])
 
