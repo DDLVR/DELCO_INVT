@@ -41,3 +41,10 @@ def audit_field_label(codigo):
 def audit_value_label(codigo):
     """Valor anterior/nuevo de auditoría en texto legible."""
     return label_valor(codigo)
+
+
+@register.filter
+def es_sin_proyecto(valor):
+    """True si el valor representa ausencia de proyecto."""
+    from web.services.filtros_export import es_sin_proyecto as _es_sin_proyecto
+    return _es_sin_proyecto(valor)

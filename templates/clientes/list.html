@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Gestion de Clientes{% endblock %}
 
@@ -243,7 +244,7 @@
                 {{ cliente.meter_serial_n_1 }}
               {% endif %}
             </td>
-            <td>{{ cliente.proyecto|default_if_none:'' }}</td>
+            <td>{% if cliente.proyecto and not cliente.proyecto|es_sin_proyecto %}{{ cliente.proyecto }}{% endif %}</td>
             <td>
               <div class="d-flex flex-wrap gap-1">
                 <a href="{% url 'cliente_historial' cliente.id %}" class="btn btn-sm btn-success" title="Ver historial y alertas">
@@ -255,16 +256,16 @@
                         data-bs-toggle="modal"
                         data-bs-target="#modalEditarCliente"
                         data-cliente-id="{{ cliente.id }}"
-                        data-numero-cliente="{{ cliente.numero_cliente|default:'' }}"
-                        data-sector="{{ cliente.sector|default:'' }}"
-                        data-tipo-suministro="{{ cliente.tipo_suministro|default:'' }}"
-                        data-comuna="{{ cliente.comuna|default:'' }}"
-                        data-customer-name="{{ cliente.customer_name|default:'' }}"
-                        data-installation-address="{{ cliente.installation_address|default:'' }}"
-                        data-proyecto="{{ cliente.proyecto|default:'' }}"
-                        data-meter-manufacturer-id="{{ cliente.meter_manufacturer_id|default:'' }}"
-                        data-meter-serial="{{ cliente.meter_serial_n_1|default:'' }}"
-                        data-estado-restriccion="{{ cliente.estado_restriccion|default:'' }}"
+                        data-numero-cliente="{{ cliente.numero_cliente|default:''|escape }}"
+                        data-sector="{{ cliente.sector|default:''|escape }}"
+                        data-tipo-suministro="{{ cliente.tipo_suministro|default:''|escape }}"
+                        data-comuna="{{ cliente.comuna|default:''|escape }}"
+                        data-customer-name="{{ cliente.customer_name|default:''|escape }}"
+                        data-installation-address="{{ cliente.installation_address|default:''|escape }}"
+                        data-proyecto="{% if cliente.proyecto and not cliente.proyecto|es_sin_proyecto %}{{ cliente.proyecto|escape }}{% endif %}"
+                        data-meter-manufacturer-id="{{ cliente.meter_manufacturer_id|default:''|escape }}"
+                        data-meter-serial="{{ cliente.meter_serial_n_1|default:''|escape }}"
+                        data-estado-restriccion="{{ cliente.estado_restriccion|default:''|escape }}"
                         data-justificacion-restriccion="{{ cliente.justificacion_restriccion|default:''|escape }}">
                   <i class="bi bi-pencil"></i> Editar
                 </button>

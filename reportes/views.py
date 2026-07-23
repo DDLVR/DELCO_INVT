@@ -85,6 +85,10 @@ def _opciones_filtro_reportes():
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR'])
 def reportes_hub_view(request):
     """Hub de reportes con filtros y conteos por informe."""
+    aviso_export = request.session.pop('reportes_aviso_export', None)
+    if aviso_export:
+        messages.warning(request, aviso_export)
+
     filters_raw = request.GET
     query = urlencode({
         k: v for k, v in {
@@ -237,10 +241,13 @@ def reportes_export_view(request, slug):
             )
         except PdfExportUnavailable as exc:
             logger.warning('Export PDF no disponible (%s); se entrega Excel.', exc)
-            messages.warning(
-                request,
-                f'{exc} Mientras tanto se descarga el reporte en Excel.',
+            aviso = (
+                f'{exc} Se descargó el reporte en Excel. '
+                'Instala reportlab en el servidor para exportar PDF.'
             )
+            # La descarga no renderiza HTML: dejar aviso para la próxima pantalla (hub u otra).
+            request.session['reportes_aviso_export'] = aviso
+            messages.warning(request, aviso)
             return build_excel_response(
                 f'reporte_{slug}.xlsx',
                 headers,
