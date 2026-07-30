@@ -4,6 +4,7 @@ from .views import (
     inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, inventario_eliminar_view, inventario_crear_view, inventario_modificar_masivo_view, profile_view, update_profile_view,
     usuarios_list_view, usuario_crear_view, usuario_editar_view, usuario_reset_password_view, usuario_eliminar_view,
     clientes_list_view, clientes_exportar_view, clientes_importar_view, cliente_crear_view, cliente_editar_view, cliente_historial_view, cliente_eliminar_view,
+    cliente_marcar_sci4_actualizado_view,
     clientes_eliminar_masivo_view, clientes_modificar_masivo_view,
     registro_errores_view, importacion_errores_view, importacion_corregir_fila_view,
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
@@ -17,6 +18,7 @@ from reportes.views import reportes_hub_view, reportes_export_view
 from catalogos.views import catalogo_diagnostico_list_view
 from ordenes_trabajo.views import (
     ordenes_list_view as ordenes_trabajo_list,
+    ordenes_terminadas_view,
     orden_crear_view,
     orden_detalle_view,
     cambiar_estado_orden_view,
@@ -30,6 +32,8 @@ from ordenes_trabajo.views import (
     ordenes_modificar_masivo_view,
     orden_subir_informe_view,
     orden_eliminar_view,
+    orden_solicitar_validacion_comunicacion_view,
+    orden_registrar_validacion_comunicacion_view,
 )
 
 # Soporte es opcional en deploys parciales: si falta el paquete, el sitio no debe caer.
@@ -94,12 +98,14 @@ urlpatterns = [
     path('clientes/crear/', cliente_crear_view, name='cliente_crear'),
     path('clientes/<int:pk>/historial/', cliente_historial_view, name='cliente_historial'),
     path('clientes/<int:pk>/editar/', cliente_editar_view, name='cliente_editar'),
+    path('clientes/<int:pk>/sci4-actualizado/', cliente_marcar_sci4_actualizado_view, name='cliente_marcar_sci4_actualizado'),
     path('clientes/<int:pk>/eliminar/', cliente_eliminar_view, name='cliente_eliminar'),
     path('clientes/eliminar-masivo/', clientes_eliminar_masivo_view, name='clientes_eliminar_masivo'),
     path('clientes/modificar-masivo/', clientes_modificar_masivo_view, name='clientes_modificar_masivo'),
 
     # Órdenes de Trabajo
     path('ordenes/', ordenes_trabajo_list, name='ordenes_list'),
+    path('ordenes/terminadas/', ordenes_terminadas_view, name='ordenes_terminadas'),
     path('ordenes/crear/', orden_crear_view, name='orden_crear'),
     path('ordenes/importar/', ordenes_importar_view, name='ordenes_importar'),
     path('ordenes/exportar/', ordenes_exportar_view, name='ordenes_exportar'),
@@ -112,6 +118,16 @@ urlpatterns = [
     path('ordenes/<int:pk>/subir-adjunto/', orden_subir_adjunto_view, name='orden_subir_adjunto'),
     path('ordenes/<int:pk>/registrar-equipos/', orden_registrar_equipos_view, name='orden_registrar_equipos'),
     path('ordenes/<int:pk>/subir-informe/', orden_subir_informe_view, name='orden_subir_informe'),
+    path(
+        'ordenes/<int:pk>/comunicacion/solicitar/',
+        orden_solicitar_validacion_comunicacion_view,
+        name='orden_solicitar_validacion_comunicacion',
+    ),
+    path(
+        'ordenes/<int:pk>/comunicacion/registrar/',
+        orden_registrar_validacion_comunicacion_view,
+        name='orden_registrar_validacion_comunicacion',
+    ),
     path('ordenes/<int:pk>/eliminar/', orden_eliminar_view, name='orden_eliminar'),
 
     # Movimientos de Inventario

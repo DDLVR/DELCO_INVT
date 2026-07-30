@@ -48,6 +48,10 @@ CAMPO_LABELS = {
     'sector': 'Sector',
     'ip': 'IP',
     'puerto': 'Puerto',
+    'modem': 'Módem',
+    'estado_sci4': 'Estado SCi4',
+    'estado_stb': 'Estado STB',
+    'medidor_actual_id': 'Medidor actual',
 }
 
 # Códigos típicos en valor anterior / valor nuevo

@@ -106,8 +106,44 @@
             <dt class="col-sm-4">Puerto</dt><dd class="col-sm-8">{{ cliente.puerto|default:"—" }}</dd>
             <dt class="col-sm-4">Módem</dt><dd class="col-sm-8">{{ cliente.modem|default:"—" }}</dd>
             <dt class="col-sm-4">Telemetría</dt><dd class="col-sm-8">{{ cliente.get_estado_telemetria_display }}</dd>
-            <dt class="col-sm-4">STB</dt><dd class="col-sm-8">{{ cliente.get_estado_stb_display }}</dd>
-            <dt class="col-sm-4">SCi4</dt><dd class="col-sm-8">{{ cliente.get_estado_sci4_display }}</dd>
+            <dt class="col-sm-4">STB</dt>
+            <dd class="col-sm-8">
+              {% if cliente.estado_stb == 'PENDIENTE' %}
+                <span class="badge text-bg-warning">{{ cliente.get_estado_stb_display }}</span>
+              {% elif cliente.estado_stb == 'ACTUALIZADO' %}
+                <span class="badge text-bg-success">{{ cliente.get_estado_stb_display }}</span>
+              {% else %}
+                <span class="badge text-bg-secondary">{{ cliente.get_estado_stb_display }}</span>
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">SCi4</dt>
+            <dd class="col-sm-8">
+              {% if cliente.estado_sci4 == 'PENDIENTE' %}
+                <span class="badge text-bg-warning">{{ cliente.get_estado_sci4_display }}</span>
+                {% if puede_editar %}
+                <form method="post" action="{% url 'cliente_marcar_sci4_actualizado' cliente.id %}" class="d-inline ms-2">
+                  {% csrf_token %}
+                  <input type="hidden" name="motivo" value="Validación externa en SCi4 confirmada desde ficha">
+                  <button type="submit" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-check2-circle"></i> Marcar actualizado en SCi4
+                  </button>
+                </form>
+                {% endif %}
+              {% elif cliente.estado_sci4 == 'ACTUALIZADO' %}
+                <span class="badge text-bg-success">{{ cliente.get_estado_sci4_display }}</span>
+              {% else %}
+                <span class="badge text-bg-secondary">{{ cliente.get_estado_sci4_display }}</span>
+                {% if puede_editar %}
+                <form method="post" action="{% url 'cliente_marcar_sci4_actualizado' cliente.id %}" class="d-inline ms-2">
+                  {% csrf_token %}
+                  <input type="hidden" name="motivo" value="Registro confirmado en SCi4 desde ficha">
+                  <button type="submit" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-check2-circle"></i> Marcar actualizado en SCi4
+                  </button>
+                </form>
+                {% endif %}
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">SIM operador</dt><dd class="col-sm-8">{{ cliente.sim_operador|default:"—" }}</dd>
             <dt class="col-sm-4">SIM ICCID</dt><dd class="col-sm-8">{{ cliente.sim_iccid|default:"—" }}</dd>
             <dt class="col-sm-4">SIM abonado</dt><dd class="col-sm-8">{{ cliente.sim_abonado|default:"—" }}</dd>

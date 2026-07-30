@@ -211,6 +211,7 @@
           <th>Dirección</th>
           <th>Marca Medidor</th>
           <th>Serie Medidor</th>
+          <th>SCi4</th>
           <th>Proyecto</th>
           <th>Acciones</th>
         </tr>
@@ -244,6 +245,15 @@
                 {{ cliente.meter_serial_n_1 }}
               {% endif %}
             </td>
+            <td>
+              {% if cliente.estado_sci4 == 'PENDIENTE' %}
+                <span class="badge text-bg-warning" title="Pendiente de actualización en SCi4">Pendiente</span>
+              {% elif cliente.estado_sci4 == 'ACTUALIZADO' %}
+                <span class="badge text-bg-success" title="Actualizado en SCi4">Actualizado</span>
+              {% else %}
+                <span class="badge text-bg-secondary" title="Sin registro en SCi4">Sin registro</span>
+              {% endif %}
+            </td>
             <td>{% if cliente.proyecto and not cliente.proyecto|es_sin_proyecto %}{{ cliente.proyecto }}{% endif %}</td>
             <td>
               <div class="d-flex flex-wrap gap-1">
@@ -265,6 +275,11 @@
                         data-proyecto="{% if cliente.proyecto and not cliente.proyecto|es_sin_proyecto %}{{ cliente.proyecto|escape }}{% endif %}"
                         data-meter-manufacturer-id="{{ cliente.meter_manufacturer_id|default:''|escape }}"
                         data-meter-serial="{{ cliente.meter_serial_n_1|default:''|escape }}"
+                        data-ip="{{ cliente.ip|default:''|escape }}"
+                        data-puerto="{{ cliente.puerto|default:''|escape }}"
+                        data-modem="{{ cliente.modem|default:''|escape }}"
+                        data-estado-sci4="{{ cliente.estado_sci4|default:''|escape }}"
+                        data-estado-sci4-display="{{ cliente.get_estado_sci4_display|escape }}"
                         data-estado-restriccion="{{ cliente.estado_restriccion|default:''|escape }}"
                         data-justificacion-restriccion="{{ cliente.justificacion_restriccion|default:''|escape }}">
                   <i class="bi bi-pencil"></i> Editar
@@ -281,7 +296,7 @@
           </tr>
         {% empty %}
           <tr>
-            <td colspan="11" class="text-center text-muted py-4">No hay clientes registrados.</td>
+            <td colspan="12" class="text-center text-muted py-4">No hay clientes registrados.</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -503,6 +518,24 @@
             <div class="col-md-4">
               <label class="form-label fw-semibold" for="editarMeterSerial">Serie Medidor</label>
               <input type="text" class="form-control" id="editarMeterSerial" name="meter_serial_n_1">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarIp">IP</label>
+              <input type="text" class="form-control" id="editarIp" name="ip" placeholder="Ej: 10.1.1.1">
+              <small class="text-muted">Cambio crítico → marca pendiente SCi4.</small>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarPuerto">Puerto</label>
+              <input type="text" class="form-control" id="editarPuerto" name="puerto">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold" for="editarModem">Módem</label>
+              <input type="text" class="form-control" id="editarModem" name="modem">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Estado SCi4</label>
+              <div class="form-control-plaintext" id="editarEstadoSci4Label">—</div>
+              <input type="hidden" id="editarEstadoSci4" value="">
             </div>
             <div class="col-md-6">
               <label class="form-label fw-semibold" for="editarEstadoRestriccion">Restricción / estado visita-IP</label>
@@ -1202,6 +1235,18 @@
                 }
                 document.getElementById('editarMeterManufacturer').value = button.getAttribute('data-meter-manufacturer-id') || '';
                 document.getElementById('editarMeterSerial').value = button.getAttribute('data-meter-serial') || '';
+                var editarIp = document.getElementById('editarIp');
+                var editarPuerto = document.getElementById('editarPuerto');
+                var editarModem = document.getElementById('editarModem');
+                var editarSci4 = document.getElementById('editarEstadoSci4');
+                var editarSci4Label = document.getElementById('editarEstadoSci4Label');
+                if (editarIp) editarIp.value = button.getAttribute('data-ip') || '';
+                if (editarPuerto) editarPuerto.value = button.getAttribute('data-puerto') || '';
+                if (editarModem) editarModem.value = button.getAttribute('data-modem') || '';
+                if (editarSci4) editarSci4.value = button.getAttribute('data-estado-sci4') || '';
+                if (editarSci4Label) {
+                  editarSci4Label.textContent = button.getAttribute('data-estado-sci4-display') || '—';
+                }
                 var estadoRest = document.getElementById('editarEstadoRestriccion');
                 var justRest = document.getElementById('editarJustificacionRestriccion');
                 if (estadoRest) estadoRest.value = button.getAttribute('data-estado-restriccion') || '';
@@ -1302,6 +1347,18 @@
                   }
                   document.getElementById('editarMeterManufacturer').value = btnTarget.getAttribute('data-meter-manufacturer-id') || '';
                   document.getElementById('editarMeterSerial').value = btnTarget.getAttribute('data-meter-serial') || '';
+                  var editarIpAuto = document.getElementById('editarIp');
+                  var editarPuertoAuto = document.getElementById('editarPuerto');
+                  var editarModemAuto = document.getElementById('editarModem');
+                  var editarSci4Auto = document.getElementById('editarEstadoSci4');
+                  var editarSci4LabelAuto = document.getElementById('editarEstadoSci4Label');
+                  if (editarIpAuto) editarIpAuto.value = btnTarget.getAttribute('data-ip') || '';
+                  if (editarPuertoAuto) editarPuertoAuto.value = btnTarget.getAttribute('data-puerto') || '';
+                  if (editarModemAuto) editarModemAuto.value = btnTarget.getAttribute('data-modem') || '';
+                  if (editarSci4Auto) editarSci4Auto.value = btnTarget.getAttribute('data-estado-sci4') || '';
+                  if (editarSci4LabelAuto) {
+                    editarSci4LabelAuto.textContent = btnTarget.getAttribute('data-estado-sci4-display') || '—';
+                  }
                   var tituloAuto = document.getElementById('modalEditarClienteLabel');
                   if (tituloAuto) {
                     var numAuto = btnTarget.getAttribute('data-numero-cliente') || '';

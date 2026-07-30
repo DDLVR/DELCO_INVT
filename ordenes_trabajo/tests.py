@@ -861,3 +861,253 @@ class OrdenRespaldoMoreappPdfTests(TestCase):
 				origen__in=['MOREAPP', 'RESPALDO_MOREAPP']
 			).exists()
 		)
+
+class OrdenesTerminadasViewTests(TestCase):
+	"""1.2 — Vista de trabajos terminados."""
+
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='60606060-6',
+			email='admin_term@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Term',
+			nombre_interno='admin_term',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.tecnico = Usuario.objects.create_user(
+			rut='70707070-7',
+			email='tecnico_term@delco.cl',
+			password=self.password,
+			nombre='Tecnico',
+			apellido='Term',
+			nombre_interno='tecnico_term',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.cliente = Cliente.objects.create(
+			numero_cliente='CLI-TERM-001',
+			direccion='Dir term',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='CENTRO',
+			customer_name='Cliente Term',
+			installation_address='Inst Term',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-TERM-001',
+			activo=True,
+		)
+		from django.utils import timezone
+		self.ot_finalizada = OrdenTrabajo.objects.create(
+			titulo='OT Finalizada test',
+			descripcion='Terminada',
+			tipo_trabajo='INSTALACION',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			tecnico_responsable=self.tecnico,
+			estado='FINALIZADA',
+			fecha_fin_ejecucion=timezone.now(),
+		)
+		self.ot_abierta = OrdenTrabajo.objects.create(
+			titulo='OT Abierta test',
+			descripcion='En campo',
+			tipo_trabajo='MANTENIMIENTO',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			tecnico_responsable=self.tecnico,
+			estado='EN_EJECUCION',
+		)
+		self.client = Client()
+
+	def test_lista_solo_terminadas(self):
+		from ordenes_trabajo.utils import ESTADOS_TERMINADOS
+		self.assertEqual(reverse('ordenes_terminadas'), '/ordenes/terminadas/')
+		ids = list(
+			OrdenTrabajo.objects.filter(
+				estado__in=ESTADOS_TERMINADOS, eliminado=False,
+			).values_list('id', flat=True)
+		)
+		self.assertIn(self.ot_finalizada.id, ids)
+		self.assertNotIn(self.ot_abierta.id, ids)
+		self.assertEqual(
+			OrdenTrabajo.objects.filter(estado='FINALIZADA', eliminado=False).count(),
+			1,
+		)
+
+	def test_tecnico_solo_ve_las_suyas(self):
+		from ordenes_trabajo.utils import ESTADOS_TERMINADOS
+		otro = Usuario.objects.create_user(
+			rut='80808080-8',
+			email='otro_term@delco.cl',
+			password=self.password,
+			nombre='Otro',
+			apellido='Term',
+			nombre_interno='otro_term',
+			rol='TECNICO',
+			is_active=True,
+		)
+		from django.utils import timezone
+		OrdenTrabajo.objects.create(
+			titulo='OT otro tecnico',
+			descripcion='x',
+			tipo_trabajo='INSTALACION',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			tecnico_responsable=otro,
+			estado='FINALIZADA',
+			fecha_fin_ejecucion=timezone.now(),
+		)
+		# Misma regla que la vista: técnico solo ve OT propias terminadas
+		ids = list(
+			OrdenTrabajo.objects.filter(
+				estado__in=ESTADOS_TERMINADOS,
+				eliminado=False,
+				tecnico_responsable=self.tecnico,
+			).values_list('id', flat=True)
+		)
+		self.assertEqual(ids, [self.ot_finalizada.id])
+
+
+class OrdenValidacionComunicacionTests(TestCase):
+	"""3 — Validación de comunicación en la OT."""
+
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='80808080-8',
+			email='admin_com@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Com',
+			nombre_interno='admin_com',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.admin_op = Usuario.objects.create_user(
+			rut='81818181-8',
+			email='adminop_com@delco.cl',
+			password=self.password,
+			nombre='AdminOp',
+			apellido='Com',
+			nombre_interno='adminop_com',
+			rol='ADMINISTRATIVO',
+			is_active=True,
+		)
+		self.tecnico = Usuario.objects.create_user(
+			rut='90909090-9',
+			email='tecnico_com@delco.cl',
+			password=self.password,
+			nombre='Tecnico',
+			apellido='Com',
+			nombre_interno='tecnico_com',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.otro_tecnico = Usuario.objects.create_user(
+			rut='91919191-1',
+			email='otro_com@delco.cl',
+			password=self.password,
+			nombre='Otro',
+			apellido='Com',
+			nombre_interno='otro_com',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.cliente = Cliente.objects.create(
+			numero_cliente='CLI-COM-001',
+			direccion='Dir com',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='CENTRO',
+			customer_name='Cliente Com',
+			installation_address='Inst Com',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-COM-001',
+			activo=True,
+		)
+		self.orden = OrdenTrabajo.objects.create(
+			titulo='OT Validación Comunicación',
+			descripcion='Prueba comunicación',
+			tipo_trabajo='INSTALACION',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			tecnico_responsable=self.tecnico,
+			estado='EN_EJECUCION',
+		)
+		self.client = Client()
+
+	def test_tecnico_solicita_validacion(self):
+		from ordenes_trabajo.models import ValidacionComunicacionOT
+		self.assertTrue(self.client.login(rut=self.tecnico.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_solicitar_validacion_comunicacion', kwargs={'pk': self.orden.pk}),
+			{'observaciones_solicitud': 'Probar IP 10.0.0.1'},
+		)
+		self.assertEqual(response.status_code, 302)
+		reg = ValidacionComunicacionOT.objects.get(orden=self.orden)
+		self.assertEqual(reg.estado, 'SOLICITADA')
+		self.assertEqual(reg.solicitado_por_id, self.tecnico.pk)
+		self.assertEqual(reg.observaciones_solicitud, 'Probar IP 10.0.0.1')
+
+	def test_otro_tecnico_no_puede_solicitar(self):
+		from ordenes_trabajo.models import ValidacionComunicacionOT
+		self.assertTrue(self.client.login(rut=self.otro_tecnico.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_solicitar_validacion_comunicacion', kwargs={'pk': self.orden.pk}),
+			{},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertFalse(ValidacionComunicacionOT.objects.filter(orden=self.orden).exists())
+
+	def test_administrativo_registra_resultado_sobre_solicitud(self):
+		from ordenes_trabajo.models import ValidacionComunicacionOT
+		sol = ValidacionComunicacionOT.objects.create(
+			orden=self.orden,
+			estado='SOLICITADA',
+			solicitado_por=self.tecnico,
+			observaciones_solicitud='Llamar a oficina',
+		)
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_registrar_validacion_comunicacion', kwargs={'pk': self.orden.pk}),
+			{
+				'validacion_id': str(sol.pk),
+				'resultado': 'EXITOSA',
+				'observaciones': 'Ping OK',
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		sol.refresh_from_db()
+		self.assertEqual(sol.estado, 'EXITOSA')
+		self.assertEqual(sol.validado_por_id, self.admin_op.pk)
+		self.assertEqual(sol.observaciones, 'Ping OK')
+		self.assertIsNotNone(sol.fecha_validacion)
+
+	def test_admin_registro_directo_fallida(self):
+		from ordenes_trabajo.models import ValidacionComunicacionOT
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_registrar_validacion_comunicacion', kwargs={'pk': self.orden.pk}),
+			{
+				'resultado': 'FALLIDA',
+				'observaciones': 'Sin respuesta del módem',
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		reg = ValidacionComunicacionOT.objects.get(orden=self.orden)
+		self.assertEqual(reg.estado, 'FALLIDA')
+		self.assertEqual(reg.validado_por_id, self.admin.pk)
+
+	def test_tecnico_no_puede_registrar_resultado(self):
+		from ordenes_trabajo.models import ValidacionComunicacionOT
+		self.assertTrue(self.client.login(rut=self.tecnico.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_registrar_validacion_comunicacion', kwargs={'pk': self.orden.pk}),
+			{'resultado': 'EXITOSA'},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertFalse(ValidacionComunicacionOT.objects.filter(orden=self.orden).exists())
