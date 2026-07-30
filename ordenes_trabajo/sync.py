@@ -64,7 +64,7 @@ def sync_equipos_desde_cliente(orden) -> bool:
     cliente = orden.cliente
     updates: list[str] = []
 
-    if cliente.medidor_actual_id and orden.medidor_id != cliente.medidor_actual_id:
+    if not orden.medidor_id and cliente.medidor_actual_id:
         orden.medidor_id = cliente.medidor_actual_id
         updates.append('medidor')
 
@@ -233,9 +233,26 @@ def sync_orden_a_inventario(orden, usuario, estado_destino: str) -> Dict[str, An
 
 
 def sincronizar_orden_completa(orden, usuario, estado_destino: str) -> Dict[str, Any]:
-    """Vincula equipos del cliente a la OT y aplica inventario si el estado lo requiere."""
+    """Vincula equipos del cliente a la OT, aplica inventario y alerta SCi4 si corresponde."""
     sync_equipos_desde_cliente(orden)
-    return sync_orden_a_inventario(orden, usuario, estado_destino)
+    result = sync_orden_a_inventario(orden, usuario, estado_destino)
+
+    sci4_alerta = False
+    if estado_destino in ESTADOS_APLICAN_INVENTARIO and orden.cliente_id:
+        from clientes.sci4 import TIPOS_OT_ALERTA_SCI4, alertar_sci4_por_orden_equipos
+
+        if (orden.tipo_trabajo or '') in TIPOS_OT_ALERTA_SCI4:
+            # Refrescar FKs de equipos por si sync mutó relaciones
+            if orden.medidor_id or orden.modem_id or orden.simcard_id:
+                orden.refresh_from_db()
+            sci4_alerta = alertar_sci4_por_orden_equipos(
+                orden,
+                actor_id=getattr(usuario, 'id', None),
+                es_retiro=(orden.tipo_trabajo or '') in TIPOS_RETIRAN,
+            )
+
+    result['sci4_alerta'] = sci4_alerta
+    return result
 
 
 def vincular_moreapp_a_orden(

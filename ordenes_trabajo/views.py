@@ -694,6 +694,13 @@ def cambiar_estado_orden_view(request, pk):
     resultado = orden.cambiar_estado(request.user, nuevo_estado, razon=observacion)
 
     if resultado['success']:
+        sync_info = resultado.get('sync_inventario') or {}
+        if sync_info.get('sci4_alerta') and orden.cliente_id:
+            messages.warning(
+                request,
+                'Cliente marcado como Pendiente SCi4: hay que actualizar la base comercial '
+                f'con los equipos de la OT #{orden.pk}.',
+            )
         if nuevo_estado == 'VALIDADA':
             messages.success(
                 request,
