@@ -706,3 +706,158 @@ class OrdenesReasignacionTecnicoTests(TestCase):
 		self.orden.refresh_from_db()
 		self.assertEqual(self.orden.tecnico_responsable_id, self.tecnico_1.id)
 		self.assertEqual(self.orden.estado, 'ASIGNADA')
+
+
+class OrdenRespaldoMoreappPdfTests(TestCase):
+	"""1.1 — Subida de PDF de respaldo MoreApp en la OT."""
+
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='30303030-3',
+			email='admin_respaldo@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Respaldo',
+			nombre_interno='admin_respaldo',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.tecnico = Usuario.objects.create_user(
+			rut='40404040-4',
+			email='tecnico_respaldo@delco.cl',
+			password=self.password,
+			nombre='Tecnico',
+			apellido='Respaldo',
+			nombre_interno='tecnico_respaldo',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.otro_tecnico = Usuario.objects.create_user(
+			rut='50505050-5',
+			email='otro_respaldo@delco.cl',
+			password=self.password,
+			nombre='Otro',
+			apellido='Tecnico',
+			nombre_interno='otro_respaldo',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.cliente = Cliente.objects.create(
+			numero_cliente='CLI-RESP-001',
+			direccion='Dir respaldo',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='CENTRO',
+			customer_name='Cliente Respaldo',
+			installation_address='Inst Respaldo',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-RESP-001',
+			activo=True,
+		)
+		self.orden = OrdenTrabajo.objects.create(
+			titulo='OT Respaldo MoreApp',
+			descripcion='Prueba respaldo PDF',
+			tipo_trabajo='INSTALACION',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			tecnico_responsable=self.tecnico,
+			estado='EN_EJECUCION',
+		)
+		self.client = Client()
+
+	def _pdf_file(self, name='moreapp_respaldo.pdf', content=b'%PDF-1.4 fake content'):
+		from django.core.files.uploadedfile import SimpleUploadedFile
+		return SimpleUploadedFile(name, content, content_type='application/pdf')
+
+	def test_tecnico_responsable_sube_respaldo_moreapp(self):
+		self.assertTrue(self.client.login(rut=self.tecnico.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_subir_informe', kwargs={'pk': self.orden.pk}),
+			{
+				'archivo': self._pdf_file(),
+				'como_respaldo_moreapp': '1',
+			},
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertTrue(data['success'])
+		self.assertEqual(data['origen'], 'RESPALDO_MOREAPP')
+		from .models import InformeCliente
+		informe = InformeCliente.objects.get(pk=data['informe_id'])
+		self.assertEqual(informe.origen, 'RESPALDO_MOREAPP')
+		self.assertEqual(informe.orden_id, self.orden.pk)
+		self.assertEqual(informe.cliente_id, self.cliente.pk)
+		self.assertEqual(informe.subido_por_id, self.tecnico.pk)
+
+	def test_rechaza_archivo_que_no_es_pdf_real(self):
+		self.assertTrue(self.client.login(rut=self.tecnico.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_subir_informe', kwargs={'pk': self.orden.pk}),
+			{
+				'archivo': self._pdf_file(name='falso.pdf', content=b'no es un pdf'),
+				'como_respaldo_moreapp': '1',
+			},
+		)
+		self.assertEqual(response.status_code, 400)
+		self.assertFalse(response.json()['success'])
+		from .models import InformeCliente
+		self.assertEqual(InformeCliente.objects.filter(orden=self.orden).count(), 0)
+
+	def test_otro_tecnico_no_puede_subir(self):
+		self.assertTrue(self.client.login(rut=self.otro_tecnico.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_subir_informe', kwargs={'pk': self.orden.pk}),
+			{
+				'archivo': self._pdf_file(),
+				'como_respaldo_moreapp': '1',
+			},
+		)
+		self.assertEqual(response.status_code, 403)
+
+	def test_orden_cancelada_bloquea_subida(self):
+		self.orden.estado = 'CANCELADA'
+		self.orden.save(update_fields=['estado'])
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_subir_informe', kwargs={'pk': self.orden.pk}),
+			{
+				'archivo': self._pdf_file(),
+				'como_respaldo_moreapp': '1',
+			},
+		)
+		self.assertEqual(response.status_code, 400)
+		self.assertIn('cancelada', response.json()['message'].lower())
+
+	def test_flags_respaldo_cuando_no_hay_moreapp(self):
+		"""Sin sync ni PDF: la OT queda marcada para pedir respaldo."""
+		informes = self.orden.informes.all()
+		sincronizaciones = self.orden.sincronizaciones_moreapp.filter(eliminado=False)
+		sin_evidencia = (
+			not sincronizaciones.exists()
+			and not informes.filter(origen__in=['MOREAPP', 'RESPALDO_MOREAPP']).exists()
+		)
+		puede_subir = (
+			self.tecnico.rol in ['ADMIN', 'ADMINISTRATIVO']
+			or self.orden.tecnico_responsable_id == self.tecnico.id
+		) and self.orden.estado != 'CANCELADA'
+		self.assertTrue(sin_evidencia)
+		self.assertTrue(puede_subir)
+
+		# Tras subir respaldo, ya no está "sin evidencia MoreApp"
+		self.assertTrue(self.client.login(rut=self.tecnico.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_subir_informe', kwargs={'pk': self.orden.pk}),
+			{'archivo': self._pdf_file(), 'como_respaldo_moreapp': '1'},
+		)
+		self.assertTrue(response.json()['success'])
+		self.assertTrue(
+			self.orden.informes.filter(origen='RESPALDO_MOREAPP').exists()
+		)
+		self.assertFalse(
+			not self.orden.sincronizaciones_moreapp.filter(eliminado=False).exists()
+			and not self.orden.informes.filter(
+				origen__in=['MOREAPP', 'RESPALDO_MOREAPP']
+			).exists()
+		)

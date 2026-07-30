@@ -590,7 +590,7 @@
                                 </select>
                             </div>
                             <div class="col-md-6">
-                                <input type="file" name="archivo" class="form-control" required>
+                                <input type="file" name="archivo" class="form-control" accept="image/*,.pdf,.jpg,.jpeg,.png,.webp,.gif" required>
                             </div>
                             <div class="col-md-2">
                                 <button type="submit" class="btn btn-primary w-100">
@@ -602,25 +602,44 @@
                     {% endif %}
                     
                     {% if adjuntos %}
-                        <div class="row">
+                        <div class="row g-3">
                             {% for adjunto in adjuntos %}
-                            <div class="col-md-4 mb-3">
-                                <div class="card h-100 delco-panel-card border">
-                                    <div class="card-body">
+                            <div class="col-sm-6 col-lg-4">
+                                <div class="card h-100 delco-panel-card border overflow-hidden">
+                                    {% if adjunto.es_imagen and adjunto.url_vista %}
+                                    <a href="{{ adjunto.url_vista }}" target="_blank" rel="noopener" class="d-block bg-dark bg-opacity-10 text-center" title="Ver imagen completa">
+                                        <img src="{{ adjunto.url_vista }}"
+                                             alt="{{ adjunto.nombre_archivo }}"
+                                             class="w-100"
+                                             style="height:180px;object-fit:cover;display:block;"
+                                             loading="lazy"
+                                             onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=\'p-4 text-muted small\'>No se pudo cargar la imagen</div>');">
+                                    </a>
+                                    {% else %}
+                                    <div class="d-flex align-items-center justify-content-center bg-light" style="height:120px;">
+                                        {% if adjunto.tipo == 'PDF' or adjunto.tipo == 'FPT' %}
+                                        <i class="bi bi-file-earmark-pdf text-danger" style="font-size:2.5rem;"></i>
+                                        {% else %}
+                                        <i class="bi bi-file-earmark text-secondary" style="font-size:2.5rem;"></i>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    <div class="card-body py-2">
                                         <p class="mb-1">
                                             <strong>{{ adjunto.get_tipo_display }}</strong>
                                         </p>
-                                        <p class="mb-1 small text-muted">{{ adjunto.nombre_archivo }}</p>
-                                        <p class="mb-1 small">
+                                        <p class="mb-1 small text-muted text-truncate" title="{{ adjunto.nombre_archivo }}">{{ adjunto.nombre_archivo }}</p>
+                                        <p class="mb-2 small text-muted">
                                             {{ adjunto.fecha_hora|date:"d/m/Y H:i" }}
+                                            {% if adjunto.subido_por %} · {{ adjunto.subido_por.nombre_interno }}{% endif %}
                                         </p>
-                                        {% if adjunto.archivo %}
-                                        <a href="{{ adjunto.archivo.url }}" target="_blank" class="btn btn-sm btn-primary">
+                                        {% if adjunto.url_vista %}
+                                        <a href="{{ adjunto.url_vista }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">
+                                            {% if adjunto.es_imagen %}
+                                            <i class="bi bi-zoom-in"></i> Ver
+                                            {% else %}
                                             <i class="bi bi-download"></i> Descargar
-                                        </a>
-                                        {% elif adjunto.url_externa %}
-                                        <a href="{{ adjunto.url_externa }}" target="_blank" class="btn btn-sm btn-primary">
-                                            <i class="bi bi-link"></i> Ver
+                                            {% endif %}
                                         </a>
                                         {% endif %}
                                     </div>
@@ -634,21 +653,54 @@
                 </div>
             </div>
 
-            <!-- Informes PDF del cliente -->
-            <div class="card mb-3 delco-panel-card">
-                <div class="card-header card-header-delco">
-                    <h5 class="mb-0">📄 Informes de Cliente (PDF)</h5>
+            <!-- Informes PDF del cliente / respaldo MoreApp -->
+            <div class="card mb-3 delco-panel-card" id="respaldo-moreapp">
+                <div class="card-header card-header-delco d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="mb-0">📄 Informes PDF y respaldo MoreApp</h5>
+                    <div class="d-flex gap-1 flex-wrap">
+                        {% if tiene_informe_moreapp_sync %}
+                        <span class="badge bg-success">MoreApp sincronizado</span>
+                        {% endif %}
+                        {% if tiene_respaldo_moreapp %}
+                        <span class="badge bg-info text-dark">Respaldo cargado</span>
+                        {% elif sin_evidencia_moreapp %}
+                        <span class="badge bg-warning text-dark">Sin PDF MoreApp</span>
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="card-body">
+                    {% if sin_evidencia_moreapp %}
+                    <div class="alert alert-warning py-2 small mb-3">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        <strong>No hay PDF de MoreApp vinculado.</strong>
+                        Si la sincronización falló, el técnico o administración pueden subir aquí el PDF
+                        generado en MoreApp como respaldo para no perder la evidencia.
+                    </div>
+                    {% endif %}
+
                     {% if informes %}
                     <ul class="list-group list-group-flush mb-3">
                         {% for informe in informes %}
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <li class="list-group-item d-flex justify-content-between align-items-center gap-2 flex-wrap">
                             <div>
                                 <i class="bi bi-file-earmark-pdf text-danger"></i>
-                                <a href="{{ informe.archivo.url }}" target="_blank">{{ informe.nombre_archivo }}</a><br>
-                                <small class="text-muted">{{ informe.fecha_subida|date:"d/m/Y H:i" }} — {{ informe.get_origen_display }}</small>
+                                {% if informe.archivo %}
+                                <a href="{{ informe.archivo.url }}" target="_blank" rel="noopener">{{ informe.nombre_archivo }}</a>
+                                {% else %}
+                                <span>{{ informe.nombre_archivo }}</span>
+                                {% endif %}
+                                <br>
+                                <small class="text-muted">
+                                    {{ informe.fecha_subida|date:"d/m/Y H:i" }}
+                                    — {{ informe.get_origen_display }}
+                                    {% if informe.subido_por %} · {{ informe.subido_por.nombre_interno }}{% endif %}
+                                </small>
                             </div>
+                            {% if informe.origen == 'RESPALDO_MOREAPP' %}
+                            <span class="badge bg-info text-dark">Respaldo</span>
+                            {% elif informe.origen == 'MOREAPP' %}
+                            <span class="badge bg-success">Sync</span>
+                            {% endif %}
                         </li>
                         {% endfor %}
                     </ul>
@@ -656,15 +708,35 @@
                     <p class="text-muted"><em>Sin informes PDF registrados</em></p>
                     {% endif %}
 
-                    {% if puede_editar or es_tecnico_responsable %}
-                    <form id="formSubirInforme" enctype="multipart/form-data">
-                        {% csrf_token %}
-                        <div class="input-group input-group-sm">
-                            <input type="file" class="form-control" name="archivo" accept=".pdf" required>
-                            <button type="submit" class="btn btn-primary">Subir PDF</button>
-                        </div>
-                        <small class="text-muted">Se guarda en <code>Registros/Evidencias</code></small>
-                    </form>
+                    {% if puede_subir_respaldo_moreapp %}
+                    <div class="border rounded p-3 bg-light">
+                        <p class="small mb-2 fw-semibold">
+                            <i class="bi bi-cloud-upload"></i> Subir respaldo PDF de MoreApp
+                        </p>
+                        <p class="small text-muted mb-2">
+                            Use el PDF descargado desde MoreApp cuando no llegue por sincronización.
+                            Solo PDF, máximo 15&nbsp;MB.
+                        </p>
+                        <form id="formSubirRespaldoMoreapp" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <input type="hidden" name="como_respaldo_moreapp" value="1">
+                            <div class="input-group input-group-sm">
+                                <input type="file" class="form-control" name="archivo" accept=".pdf,application/pdf" required>
+                                <button type="submit" class="btn btn-primary">Subir respaldo</button>
+                            </div>
+                        </form>
+                        <hr class="my-3">
+                        <p class="small mb-2 text-muted">También puede subir otro informe PDF del cliente (carga manual):</p>
+                        <form id="formSubirInforme" enctype="multipart/form-data">
+                            {% csrf_token %}
+                            <div class="input-group input-group-sm">
+                                <input type="file" class="form-control" name="archivo" accept=".pdf,application/pdf" required>
+                                <button type="submit" class="btn btn-outline-primary">Subir PDF</button>
+                            </div>
+                        </form>
+                    </div>
+                    {% elif orden.estado == 'CANCELADA' %}
+                    <p class="small text-muted mb-0">La orden está cancelada; no se admiten nuevos PDF.</p>
                     {% endif %}
                 </div>
             </div>
@@ -702,7 +774,12 @@
                 <div class="card-body py-3">
                     <i class="bi bi-hourglass-split text-warning"></i>
                     <strong>Sin informe MoreApp aún.</strong>
-                    <span class="text-muted">Cuando el técnico complete el formulario en terreno, aparecerá aquí y la orden pasará a comprobación.</span>
+                    <span class="text-muted">
+                        Cuando el técnico complete el formulario en terreno, aparecerá aquí.
+                        Si la sincronización falla, use
+                        <a href="#respaldo-moreapp">Respaldo PDF MoreApp</a>
+                        para adjuntar el PDF manualmente.
+                    </span>
                 </div>
             </div>
             {% endif %}
@@ -931,15 +1008,50 @@ document.getElementById('formEliminarOrden')?.addEventListener('submit', async f
     if (confirmado) this.submit();
 });
 
-// Subida de informe PDF
-document.getElementById('formSubirInforme')?.addEventListener('submit', function(e) {
-    e.preventDefault();
+// Subida de informe PDF (manual o respaldo MoreApp)
+function _subirInformePdf(formEl) {
+    if (!formEl) return;
+    const btn = formEl.querySelector('button[type="submit"]');
+    if (btn) btn.disabled = true;
     fetch("{% url 'orden_subir_informe' orden.id %}", {
         method: 'POST',
-        body: new FormData(this),
+        body: new FormData(formEl),
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
     })
-    .then(r => r.json())
-    .then(data => { alert(data.message); if (data.success) location.reload(); });
+    .then(async (r) => {
+        let data;
+        try {
+            data = await r.json();
+        } catch (err) {
+            throw new Error('Respuesta inválida del servidor (' + r.status + ').');
+        }
+        if (!r.ok || !data.success) {
+            throw new Error(data.message || 'No se pudo subir el PDF.');
+        }
+        if (window.showToast) {
+            showToast(data.message, 'success');
+        } else {
+            alert(data.message);
+        }
+        setTimeout(() => location.reload(), 800);
+    })
+    .catch((error) => {
+        if (window.showToast) {
+            showToast(error.message || 'Error al subir el PDF', 'danger');
+        } else {
+            alert(error.message || 'Error al subir el PDF');
+        }
+        if (btn) btn.disabled = false;
+    });
+}
+
+document.getElementById('formSubirInforme')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    _subirInformePdf(this);
+});
+document.getElementById('formSubirRespaldoMoreapp')?.addEventListener('submit', function(e) {
+    e.preventDefault();
+    _subirInformePdf(this);
 });
 
 // Manejo de subida de adjuntos con AJAX
