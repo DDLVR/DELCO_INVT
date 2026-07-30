@@ -69,6 +69,7 @@ INSTALLED_APPS = [
     'catalogos.apps.CatalogosConfig',
     'reportes.apps.ReportesConfig',
     'soporte.apps.SoporteConfig',
+    'cargas.apps.CargasConfig',
 ]
 
 MIDDLEWARE = [

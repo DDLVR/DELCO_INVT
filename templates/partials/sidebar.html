@@ -35,6 +35,12 @@
         <span class="badge {% if moreapp_aviso.nuevos %}bg-danger{% else %}bg-warning text-dark{% endif %} ms-1">{{ moreapp_aviso.por_revisar }}</span>
         {% endif %}
       </a>
+      {% url 'cargas_hub' as cargas_hub_url %}
+      {% if cargas_hub_url %}
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'cargas_hub' or request.resolver_match.url_name == 'cargas_list' or request.resolver_match.url_name == 'cargas_crear' or request.resolver_match.url_name == 'cargas_detalle' %}active bg-primary text-white{% endif %}" href="{{ cargas_hub_url }}">
+        <i class="bi bi-kanban me-2"></i> Cargas administrativas
+      </a>
+      {% endif %}
     {% endif %}
       <a class="list-group-item list-group-item-action app-nav-link {% if 'reportes_moreapp' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}" href="{% url 'reportes_moreapp_list' %}">
         <i class="bi bi-cloud-download me-2"></i> Reportes MoreApp

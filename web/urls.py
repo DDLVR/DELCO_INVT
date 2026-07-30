@@ -16,6 +16,13 @@ from .views import (
 )
 from reportes.views import reportes_hub_view, reportes_export_view
 from catalogos.views import catalogo_diagnostico_list_view
+from cargas.views import (
+    cargas_hub_view,
+    cargas_list_view,
+    cargas_crear_view,
+    cargas_detalle_view,
+    cargas_generar_pendientes_view,
+)
 from ordenes_trabajo.views import (
     ordenes_list_view as ordenes_trabajo_list,
     ordenes_terminadas_view,
@@ -144,6 +151,11 @@ urlpatterns = [
 
     # Vistas operativas (Puntos 2, 8, 9, 11)
     path('operacional/pendientes/', pendientes_operativos_view, name='pendientes_operativos'),
+    path('cargas/', cargas_hub_view, name='cargas_hub'),
+    path('cargas/listado/', cargas_list_view, name='cargas_list'),
+    path('cargas/crear/', cargas_crear_view, name='cargas_crear'),
+    path('cargas/generar-pendientes/', cargas_generar_pendientes_view, name='cargas_generar_pendientes'),
+    path('cargas/<int:pk>/', cargas_detalle_view, name='cargas_detalle'),
     path('reportes/', reportes_hub_view, name='reportes_hub'),
     path('reportes/exportar/<slug:slug>/', reportes_export_view, name='reportes_export'),
     path('auditoria/', auditoria_list_view, name='auditoria_list'),

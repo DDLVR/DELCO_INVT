@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+
+{% block title %}Cargas administrativas{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-1"><i class="bi bi-kanban"></i> Cargas administrativas</h1>
+      <p class="text-muted mb-0">Distribuye y sigue verificaciones y validaciones de oficina.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{% url 'cargas_list' %}" class="btn btn-outline-secondary">Ver todas</a>
+      <a href="{% url 'cargas_crear' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nueva carga</a>
+      <form method="post" action="{% url 'cargas_generar_pendientes' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-warning text-dark">
+          <i class="bi bi-lightning"></i> Generar desde pendientes
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="border rounded p-3 h-100">
+        <div class="small text-muted">Mis abiertas</div>
+        <div class="fs-3 fw-semibold">{{ contadores.mias|default:0 }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="border rounded p-3 h-100">
+        <div class="small text-muted">Sin asignar</div>
+        <div class="fs-3 fw-semibold">{{ contadores.sin_asignar }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="border rounded p-3 h-100">
+        <div class="small text-muted">Pendientes</div>
+        <div class="fs-3 fw-semibold">{{ contadores.pendientes }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="border rounded p-3 h-100">
+        <div class="small text-muted">En progreso</div>
+        <div class="fs-3 fw-semibold">{{ contadores.en_progreso }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    {% for cola in colas_rapidas %}
+    <div class="col-md-4">
+      <a href="{{ cola.url }}" class="text-decoration-none">
+        <div class="border rounded p-3 h-100">
+          <i class="bi {{ cola.icon }} me-1"></i> {{ cola.label }}
+          <span class="small text-muted d-block mt-1">Cola operativa</span>
+        </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-6">
+      <div class="card delco-panel-card">
+        <div class="card-header card-header-delco d-flex justify-content-between">
+          <strong>Mis cargas</strong>
+          <a href="{% url 'cargas_list' %}?vista=mias" class="small">Ver todas</a>
+        </div>
+        <div class="list-group list-group-flush">
+          {% for c in mias %}
+          <a href="{% url 'cargas_detalle' c.id %}" class="list-group-item list-group-item-action">
+            <div class="d-flex justify-content-between gap-2">
+              <span>{{ c.titulo|truncatechars:60 }}</span>
+              <span class="badge bg-{% if c.estado == 'EN_PROGRESO' %}info{% else %}warning text-dark{% endif %}">{{ c.get_estado_display }}</span>
+            </div>
+            <small class="text-muted">{{ c.get_tipo_display }} · {{ c.fecha_creacion|date:"d/m H:i" }}</small>
+          </a>
+          {% empty %}
+          <div class="p-3 text-muted small">No tienes cargas abiertas asignadas.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-6">
+      <div class="card delco-panel-card">
+        <div class="card-header card-header-delco d-flex justify-content-between">
+          <strong>Sin asignar</strong>
+          <a href="{% url 'cargas_list' %}?vista=sin_asignar" class="small">Ver todas</a>
+        </div>
+        <div class="list-group list-group-flush">
+          {% for c in sin_asignar %}
+          <a href="{% url 'cargas_detalle' c.id %}" class="list-group-item list-group-item-action">
+            <div class="d-flex justify-content-between gap-2">
+              <span>{{ c.titulo|truncatechars:60 }}</span>
+              <span class="badge bg-secondary">{{ c.get_prioridad_display }}</span>
+            </div>
+            <small class="text-muted">{{ c.get_tipo_display }} · {{ c.fecha_creacion|date:"d/m H:i" }}</small>
+          </a>
+          {% empty %}
+          <div class="p-3 text-muted small">No hay cargas sin asignar.</div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

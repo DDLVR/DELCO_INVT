@@ -1,0 +1,141 @@
+{% extends 'base.html' %}
+
+{% block title %}Carga #{{ carga.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+    <div>
+      <a href="{% url 'cargas_list' %}" class="small text-decoration-none">&larr; Volver al listado</a>
+      <h1 class="h3 mb-1">Carga #{{ carga.id }}</h1>
+      <p class="mb-0">{{ carga.titulo }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      {% if carga.estado == 'COMPLETADA' %}
+      <span class="badge bg-success fs-6">{{ carga.get_estado_display }}</span>
+      {% elif carga.estado == 'CANCELADA' %}
+      <span class="badge bg-dark fs-6">{{ carga.get_estado_display }}</span>
+      {% elif carga.estado == 'EN_PROGRESO' %}
+      <span class="badge bg-info text-dark fs-6">{{ carga.get_estado_display }}</span>
+      {% else %}
+      <span class="badge bg-warning text-dark fs-6">{{ carga.get_estado_display }}</span>
+      {% endif %}
+      <span class="badge bg-secondary">{{ carga.get_tipo_display }}</span>
+      <span class="badge bg-light text-dark border">{{ carga.get_prioridad_display }}</span>
+    </div>
+  </div>
+
+  <div class="row g-3">
+    <div class="col-lg-8">
+      <div class="card delco-panel-card mb-3">
+        <div class="card-header card-header-delco"><strong>Detalle</strong></div>
+        <div class="card-body">
+          {% if carga.descripcion %}
+          <p style="white-space: pre-wrap;">{{ carga.descripcion }}</p>
+          {% else %}
+          <p class="text-muted">Sin descripción.</p>
+          {% endif %}
+          <dl class="row mb-0 small">
+            <dt class="col-sm-3">Creada por</dt>
+            <dd class="col-sm-9">{{ carga.creado_por.nombre_interno }} · {{ carga.fecha_creacion|date:"d/m/Y H:i" }}</dd>
+            <dt class="col-sm-3">Asignada a</dt>
+            <dd class="col-sm-9">
+              {% if carga.asignado_a %}{{ carga.asignado_a.nombre_interno }}{% else %}<span class="text-muted">Sin asignar</span>{% endif %}
+              {% if carga.fecha_asignacion %} · {{ carga.fecha_asignacion|date:"d/m/Y H:i" }}{% endif %}
+            </dd>
+            {% if carga.fecha_completada %}
+            <dt class="col-sm-3">Completada</dt>
+            <dd class="col-sm-9">{{ carga.fecha_completada|date:"d/m/Y H:i" }}</dd>
+            {% endif %}
+            {% if carga.cliente %}
+            <dt class="col-sm-3">Cliente</dt>
+            <dd class="col-sm-9">
+              <a href="{% url 'cliente_historial' carga.cliente_id %}">{{ carga.cliente.numero_cliente }}</a>
+              {% if carga.cliente.customer_name %} — {{ carga.cliente.customer_name }}{% endif %}
+            </dd>
+            {% endif %}
+            {% if carga.orden %}
+            <dt class="col-sm-3">Orden</dt>
+            <dd class="col-sm-9"><a href="{% url 'orden_detalle' carga.orden_id %}">OT #{{ carga.orden_id }} — {{ carga.orden.titulo }}</a></dd>
+            {% endif %}
+            {% if carga.url_referencia %}
+            <dt class="col-sm-3">Referencia</dt>
+            <dd class="col-sm-9"><a href="{{ carga.url_referencia }}">Abrir pantalla de trabajo</a></dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+
+      <div class="card delco-panel-card">
+        <div class="card-header card-header-delco"><strong>Observaciones / resultado</strong></div>
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="guardar_obs">
+            <textarea name="observaciones" class="form-control mb-2" rows="4" {% if not carga.abierta %}readonly{% endif %}>{{ carga.observaciones }}</textarea>
+            {% if carga.abierta %}
+            <button type="submit" class="btn btn-sm btn-outline-primary">Guardar observaciones</button>
+            {% endif %}
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-4">
+      {% if carga.abierta %}
+      <div class="card delco-panel-card mb-3">
+        <div class="card-header card-header-delco"><strong>Acciones</strong></div>
+        <div class="card-body d-grid gap-2">
+          {% if carga.asignado_a_id != user.id %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="tomar">
+            <button type="submit" class="btn btn-outline-primary w-100"><i class="bi bi-hand-index"></i> Tomar carga</button>
+          </form>
+          {% endif %}
+          {% if carga.estado == 'PENDIENTE' %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="en_progreso">
+            <button type="submit" class="btn btn-outline-info w-100">Marcar en progreso</button>
+          </form>
+          {% endif %}
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="completar">
+            <label class="form-label small">Resultado al completar</label>
+            <textarea name="observaciones" class="form-control form-control-sm mb-2" rows="2" placeholder="Qué se hizo…">{{ carga.observaciones }}</textarea>
+            <button type="submit" class="btn btn-success w-100"><i class="bi bi-check2"></i> Completar</button>
+          </form>
+          <hr>
+          <form method="post" onsubmit="return confirm('¿Cancelar esta carga?');">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="cancelar">
+            <input type="text" name="motivo" class="form-control form-control-sm mb-2" placeholder="Motivo (opcional)">
+            <button type="submit" class="btn btn-outline-danger w-100">Cancelar carga</button>
+          </form>
+        </div>
+      </div>
+
+      <div class="card delco-panel-card">
+        <div class="card-header card-header-delco"><strong>Reasignar</strong></div>
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="asignar">
+            <select name="asignado_a" class="form-select form-select-sm mb-2" required>
+              {% for u in administrativos %}
+              <option value="{{ u.id }}" {% if carga.asignado_a_id == u.id %}selected{% endif %}>{{ u.nombre_interno }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-primary w-100">Asignar</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <div class="alert alert-secondary">Esta carga está cerrada; solo consulta.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
