@@ -3438,6 +3438,11 @@ def cliente_editar_view(request, pk):
                 'proyecto': '' if es_sin_proyecto(cliente.proyecto) else (cliente.proyecto or ''),
                 'meter_manufacturer_id': cliente.meter_manufacturer_id or '',
                 'meter_serial_n_1': cliente.meter_serial_n_1 or '',
+                'ip': cliente.ip or '',
+                'puerto': cliente.puerto or '',
+                'modem': cliente.modem or '',
+                'estado_sci4': cliente.estado_sci4 or '',
+                'estado_sci4_display': cliente.get_estado_sci4_display(),
                 'estado_restriccion': cliente.estado_restriccion or '',
                 'justificacion_restriccion': cliente.justificacion_restriccion or '',
             },
@@ -3453,6 +3458,9 @@ def cliente_editar_view(request, pk):
         proyecto = request.POST.get('proyecto', '').strip()
         meter_manufacturer_id = request.POST.get('meter_manufacturer_id', '').strip()
         meter_serial_n_1 = request.POST.get('meter_serial_n_1', '').strip()
+        ip = request.POST.get('ip', '').strip()
+        puerto = request.POST.get('puerto', '').strip()
+        modem = request.POST.get('modem', '').strip()
         estado_restriccion = (request.POST.get('estado_restriccion') or '').strip().upper()
         justificacion_restriccion = (request.POST.get('justificacion_restriccion') or '').strip()
         next_url = (request.POST.get('next') or '').strip()
@@ -3471,6 +3479,10 @@ def cliente_editar_view(request, pk):
             'meter_manufacturer_id': cliente.meter_manufacturer_id,
             'proyecto': cliente.proyecto,
             'meter_serial_n_1': cliente.meter_serial_n_1,
+            'ip': cliente.ip,
+            'puerto': cliente.puerto,
+            'modem': cliente.modem,
+            'medidor_actual_id': cliente.medidor_actual_id,
             'estado_restriccion': cliente.estado_restriccion or '',
             'justificacion_restriccion': cliente.justificacion_restriccion or '',
         }
@@ -3540,6 +3552,9 @@ def cliente_editar_view(request, pk):
         # proyecto se actualiza vía historial (no sobrescribir aquí)
         cliente.meter_serial_n_1 = meter_serial_n_1 or None
         cliente.medidor_actual = medidor_obj
+        cliente.ip = ip or None
+        cliente.puerto = puerto or None
+        cliente.modem = modem or None
         cliente.estado_restriccion = estado_restriccion
         cliente.justificacion_restriccion = justificacion_restriccion if estado_restriccion else ''
         cliente.save()
@@ -3563,6 +3578,10 @@ def cliente_editar_view(request, pk):
             'meter_manufacturer_id': cliente.meter_manufacturer_id,
             'proyecto': cliente.proyecto,
             'meter_serial_n_1': cliente.meter_serial_n_1,
+            'ip': cliente.ip,
+            'puerto': cliente.puerto,
+            'modem': cliente.modem,
+            'medidor_actual_id': cliente.medidor_actual_id,
             'estado_restriccion': cliente.estado_restriccion or '',
             'justificacion_restriccion': cliente.justificacion_restriccion or '',
         }
@@ -3582,13 +3601,32 @@ def cliente_editar_view(request, pk):
                     )
                 )
 
+        from clientes.sci4 import aplicar_pendiente_si_cambio_critico
+        sci4_marcado, campos_sci4 = aplicar_pendiente_si_cambio_critico(
+            cliente,
+            before_values,
+            after_values,
+            actor_id=getattr(request.user, 'id', None),
+        )
+        cliente.refresh_from_db(fields=['estado_sci4'])
+
         mensaje_ok = f'Cliente {numero_cliente_final} actualizado correctamente.'
+        if sci4_marcado:
+            mensaje_ok += (
+                ' Quedó marcado como pendiente de actualización en SCi4 '
+                f'por cambio en: {", ".join(campos_sci4)}.'
+            )
+        elif campos_sci4 and cliente.estado_sci4 == 'PENDIENTE':
+            mensaje_ok += ' SCi4 sigue pendiente de sincronización externa.'
+
         if _quiere_json():
             return JsonResponse({
                 'success': True,
                 'message': mensaje_ok,
                 'cliente': after_values,
                 'cliente_id': cliente.id,
+                'sci4_pendiente': cliente.estado_sci4 == 'PENDIENTE',
+                'sci4_marcado': sci4_marcado,
             })
 
         messages.success(request, mensaje_ok)
@@ -3599,6 +3637,45 @@ def cliente_editar_view(request, pk):
     # GET HTML clásico: redirige al listado (edición es modal)
     return redirect('clientes_list')
 
+
+@login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
+@require_POST
+def cliente_marcar_sci4_actualizado_view(request, pk):
+    """Confirma revisión externa en SCi4: pasa estado a ACTUALIZADO."""
+    from clientes.sci4 import marcar_sci4_actualizado
+
+    cliente = get_object_or_404(Cliente, pk=pk, activo=True)
+    motivo = (request.POST.get('motivo') or '').strip() or 'Validación externa en SCi4 confirmada'
+    cambiado = marcar_sci4_actualizado(
+        cliente,
+        actor_id=getattr(request.user, 'id', None),
+        reason=motivo,
+    )
+
+    quiere_json = (
+        request.POST.get('ajax') == '1'
+        or 'application/json' in (request.headers.get('Accept') or '').lower()
+        or (request.headers.get('X-Requested-With') or '') == 'XMLHttpRequest'
+    )
+    if cambiado:
+        mensaje = f'Cliente {cliente.numero_cliente} marcado como actualizado en SCi4.'
+    else:
+        mensaje = f'Cliente {cliente.numero_cliente} ya estaba actualizado en SCi4.'
+
+    if quiere_json:
+        return JsonResponse({
+            'success': True,
+            'message': mensaje,
+            'estado_sci4': cliente.estado_sci4,
+            'cambiado': cambiado,
+        })
+
+    if cambiado:
+        messages.success(request, mensaje)
+    else:
+        messages.info(request, mensaje)
+    return redirect('cliente_historial', pk=pk)
 
 @login_required
 def cliente_historial_view(request, pk):

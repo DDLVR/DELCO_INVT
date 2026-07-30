@@ -13,8 +13,11 @@
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'inventario_list' %}active bg-primary text-white{% endif %}" href="{% url 'inventario_list' %}">
         <i class="bi bi-box me-2"></i> Inventario
       </a>
-      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name in 'ordenes_list,orden_crear,orden_detalle,cambiar_estado_orden' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name in 'ordenes_list,orden_crear,orden_detalle,cambiar_estado_orden,ordenes_terminadas' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
         <i class="bi bi-clipboard-check me-2"></i> Órdenes de trabajo
+      </a>
+      <a class="list-group-item list-group-item-action app-nav-link ps-4 small {% if request.resolver_match.url_name == 'ordenes_terminadas' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_terminadas' %}">
+        <i class="bi bi-check2-circle me-2"></i> Trabajos terminados
       </a>
     {% endif %}
     {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}

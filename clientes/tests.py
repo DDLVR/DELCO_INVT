@@ -315,3 +315,95 @@ class ClienteImportarViewTests(TestCase):
 		self.assertEqual(data.get('modo_importacion'), 'sincronizacion_completa')
 		self.assertTrue(Cliente.objects.filter(numero_cliente='CLI-KEEP-UI', activo=True).exists())
 		self.assertFalse(Cliente.objects.filter(numero_cliente='CLI-DROP-UI', activo=True).exists())
+
+
+class ClienteSci4SyncTests(TestCase):
+	"""2.1 — Estado SCi4 y alerta por cambios críticos."""
+
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='91919191-9',
+			email='admin_sci4@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Sci4',
+			nombre_interno='admin_sci4',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.medidor_a = Medidor.objects.create(serie='SCI4-MED-A', marca='TEST', tipo_medidor='DIRECTO')
+		self.medidor_b = Medidor.objects.create(serie='SCI4-MED-B', marca='TEST', tipo_medidor='DIRECTO')
+		self.cliente = Cliente.objects.create(
+			numero_cliente='CLI-SCI4-001',
+			direccion='Dir Sci4',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='CENTRO',
+			customer_name='Cliente Sci4',
+			installation_address='Inst Sci4',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SCI4-MED-A',
+			medidor_actual=self.medidor_a,
+			ip='10.10.10.10',
+			modem='MOD-OLD',
+			estado_sci4='ACTUALIZADO',
+			activo=True,
+		)
+		self.client = Client()
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+
+	def test_cambio_serie_marca_pendiente_sci4(self):
+		response = self.client.post(
+			reverse('cliente_editar', kwargs={'pk': self.cliente.pk}),
+			{
+				'numero_cliente': self.cliente.numero_cliente,
+				'sector': self.cliente.sector,
+				'tipo_suministro': self.cliente.tipo_suministro,
+				'comuna': self.cliente.comuna,
+				'customer_name': self.cliente.customer_name,
+				'installation_address': self.cliente.installation_address,
+				'proyecto': '',
+				'meter_manufacturer_id': 'TEST',
+				'meter_serial_n_1': 'SCI4-MED-B',
+				'ip': '10.10.10.10',
+				'puerto': '',
+				'modem': 'MOD-OLD',
+				'estado_restriccion': '',
+				'justificacion_restriccion': '',
+				'ajax': '1',
+			},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+			HTTP_ACCEPT='application/json',
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertTrue(data['success'])
+		self.assertTrue(data.get('sci4_marcado'))
+		self.cliente.refresh_from_db()
+		self.assertEqual(self.cliente.estado_sci4, 'PENDIENTE')
+		self.assertEqual(self.cliente.meter_serial_n_1, 'SCI4-MED-B')
+
+	def test_marcar_sci4_actualizado(self):
+		self.cliente.estado_sci4 = 'PENDIENTE'
+		self.cliente.save(update_fields=['estado_sci4'])
+		response = self.client.post(
+			reverse('cliente_marcar_sci4_actualizado', kwargs={'pk': self.cliente.pk}),
+			{'motivo': 'Revisado en SCi4'},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.cliente.refresh_from_db()
+		self.assertEqual(self.cliente.estado_sci4, 'ACTUALIZADO')
+
+	def test_helper_cambio_ip(self):
+		from clientes.sci4 import aplicar_pendiente_si_cambio_critico
+		before = {'ip': '10.10.10.10', 'modem': 'MOD-OLD', 'meter_serial_n_1': 'SCI4-MED-A'}
+		after = {'ip': '10.10.10.99', 'modem': 'MOD-OLD', 'meter_serial_n_1': 'SCI4-MED-A'}
+		marcado, campos = aplicar_pendiente_si_cambio_critico(
+			self.cliente, before, after, actor_id=self.admin.id,
+		)
+		self.assertTrue(marcado)
+		self.assertIn('ip', campos)
+		self.cliente.refresh_from_db()
+		self.assertEqual(self.cliente.estado_sci4, 'PENDIENTE')

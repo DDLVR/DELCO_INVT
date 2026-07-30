@@ -16,6 +16,9 @@
                 {% endif %}
             </div>
             <div class="btn-group flex-wrap" role="group">
+                <a href="{% url 'ordenes_terminadas' %}" class="btn btn-outline-success">
+                    <i class="bi bi-check2-circle"></i> Trabajos terminados
+                </a>
                 {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
                 <a href="{% url 'orden_crear' %}" class="btn btn-success">
                     <i class="bi bi-plus-circle"></i> Nueva Orden

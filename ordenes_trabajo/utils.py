@@ -634,6 +634,19 @@ COLAS_ORDEN = (
     ('observadas', 'Observadas'),
 )
 
+# Trabajos ya ejecutados / cerrados (vista de consulta)
+ESTADOS_TERMINADOS = (
+    'REALIZADA',
+    'VALIDADA',
+    'FINALIZADA',
+)
+
+ESTADOS_TERMINADOS_LABELS = (
+    ('REALIZADA', 'Realizada'),
+    ('VALIDADA', 'Validada'),
+    ('FINALIZADA', 'Finalizada'),
+)
+
 
 def aplicar_cola_ordenes(qs, cola: str):
     """Filtros rápidos alineados al flujo Delco → técnico → MoreApp → validación."""

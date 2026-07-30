@@ -500,6 +500,73 @@ class RegistroValidacionOT(models.Model):
         return f'OT #{self.orden_id} · {self.accion} · {self.fecha:%Y-%m-%d %H:%M}'
 
 
+class ValidacionComunicacionOT(models.Model):
+    """
+    Prueba de comunicación técnico ↔ administrativo durante la ejecución de una OT.
+    El técnico solicita; el administrativo registra Exitosa / Fallida con trazabilidad.
+    """
+
+    ESTADO_CHOICES = [
+        ('SOLICITADA', 'Solicitada'),
+        ('EXITOSA', 'Exitosa'),
+        ('FALLIDA', 'Fallida'),
+    ]
+
+    orden = models.ForeignKey(
+        OrdenTrabajo,
+        on_delete=models.CASCADE,
+        related_name='validaciones_comunicacion',
+    )
+    estado = models.CharField(
+        max_length=20,
+        choices=ESTADO_CHOICES,
+        default='SOLICITADA',
+        db_index=True,
+    )
+    solicitado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.PROTECT,
+        related_name='validaciones_comunicacion_solicitadas',
+        null=True,
+        blank=True,
+        help_text='Técnico (u oficina) que pidió la prueba',
+    )
+    fecha_solicitud = models.DateTimeField(auto_now_add=True)
+    observaciones_solicitud = models.TextField(
+        blank=True,
+        help_text='Nota del técnico al solicitar la validación',
+    )
+    validado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.PROTECT,
+        related_name='validaciones_comunicacion_realizadas',
+        null=True,
+        blank=True,
+        help_text='Administrativo que registró el resultado',
+    )
+    fecha_validacion = models.DateTimeField(null=True, blank=True)
+    observaciones = models.TextField(
+        blank=True,
+        help_text='Observaciones del administrativo sobre el resultado',
+    )
+
+    class Meta:
+        ordering = ['-fecha_solicitud']
+        verbose_name = 'Validación de comunicación OT'
+        verbose_name_plural = 'Validaciones de comunicación OT'
+        indexes = [
+            models.Index(fields=['orden', '-fecha_solicitud']),
+            models.Index(fields=['estado', '-fecha_solicitud']),
+        ]
+
+    def __str__(self):
+        return f'OT #{self.orden_id} · comunicación {self.estado}'
+
+    @property
+    def pendiente(self) -> bool:
+        return self.estado == 'SOLICITADA'
+
+
 class AdjuntoOrden(models.Model):
     """Evidencias, fotos, FPTs adjuntos a una orden"""
     

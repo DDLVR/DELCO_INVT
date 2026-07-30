@@ -14,8 +14,8 @@
                     {{ orden.get_estado_display }}
                 </span>
             </h1>
-            <a href="{% url 'ordenes_list' %}" class="btn btn-secondary">
-                <i class="bi bi-arrow-left"></i> Volver
+            <a href="{% if volver_url %}{{ volver_url }}{% else %}{% url 'ordenes_list' %}{% endif %}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> {{ volver_label|default:"Volver" }}
             </a>
         </div>
     </div>
@@ -631,7 +631,9 @@
                                         <p class="mb-1 small text-muted text-truncate" title="{{ adjunto.nombre_archivo }}">{{ adjunto.nombre_archivo }}</p>
                                         <p class="mb-2 small text-muted">
                                             {{ adjunto.fecha_hora|date:"d/m/Y H:i" }}
-                                            {% if adjunto.subido_por %} · {{ adjunto.subido_por.nombre_interno }}{% endif %}
+                                            {% if adjunto.subido_por %}
+                                            · {% firstof adjunto.subido_por.nombre_interno adjunto.subido_por.get_full_name adjunto.subido_por.rut %}
+                                            {% endif %}
                                         </p>
                                         {% if adjunto.url_vista %}
                                         <a href="{{ adjunto.url_vista }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">
@@ -738,6 +740,156 @@
                     {% elif orden.estado == 'CANCELADA' %}
                     <p class="small text-muted mb-0">La orden está cancelada; no se admiten nuevos PDF.</p>
                     {% endif %}
+                </div>
+            </div>
+
+            <!-- Validación de comunicación técnico ↔ administrativo -->
+            <div class="card mb-3 delco-panel-card" id="validacion-comunicacion">
+                <div class="card-header card-header-delco d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="mb-0"><i class="bi bi-broadcast"></i> Validación de comunicación</h5>
+                    {% if tiene_comunicacion_pendiente %}
+                    <span class="badge bg-warning text-dark">Pendiente de prueba</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Durante el trabajo en terreno, el técnico puede solicitar una prueba de comunicación
+                        y administración registra el resultado (exitosa o fallida) con fecha, usuario y observaciones.
+                    </p>
+
+                    {% if validaciones_comunicacion %}
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Estado</th>
+                                    <th>Solicitud</th>
+                                    <th>Resultado</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for v in validaciones_comunicacion %}
+                                <tr>
+                                    <td>
+                                        {% if v.estado == 'SOLICITADA' %}
+                                        <span class="badge bg-warning text-dark">Solicitada</span>
+                                        {% elif v.estado == 'EXITOSA' %}
+                                        <span class="badge bg-success">Exitosa</span>
+                                        {% else %}
+                                        <span class="badge bg-danger">Fallida</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="small">
+                                        {{ v.fecha_solicitud|date:"d/m/Y H:i" }}
+                                        {% if v.solicitado_por %}
+                                        · {{ v.solicitado_por.nombre_interno }}
+                                        {% endif %}
+                                        {% if v.observaciones_solicitud %}
+                                        <br><span class="text-muted">{{ v.observaciones_solicitud|truncatechars:80 }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="small">
+                                        {% if v.estado != 'SOLICITADA' %}
+                                            {% if v.validado_por %}{{ v.validado_por.nombre_interno }}{% endif %}
+                                            {% if v.fecha_validacion %} · {{ v.fecha_validacion|date:"d/m/Y H:i" }}{% endif %}
+                                            {% if v.observaciones %}
+                                            <br><span class="text-muted">{{ v.observaciones|truncatechars:80 }}</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-end">
+                                        {% if v.estado == 'SOLICITADA' and puede_registrar_comunicacion %}
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-primary"
+                                                data-bs-toggle="collapse"
+                                                data-bs-target="#formComunicacion{{ v.id }}">
+                                            Registrar resultado
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% if v.estado == 'SOLICITADA' and puede_registrar_comunicacion %}
+                                <tr class="collapse" id="formComunicacion{{ v.id }}">
+                                    <td colspan="4" class="bg-light">
+                                        <form method="post" action="{% url 'orden_registrar_validacion_comunicacion' orden.id %}" class="row g-2 align-items-end p-2">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="validacion_id" value="{{ v.id }}">
+                                            <div class="col-md-3">
+                                                <label class="form-label small mb-0">Resultado</label>
+                                                <select name="resultado" class="form-select form-select-sm" required>
+                                                    <option value="EXITOSA">Exitosa</option>
+                                                    <option value="FALLIDA">Fallida</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <label class="form-label small mb-0">Observaciones</label>
+                                                <input type="text" name="observaciones" class="form-control form-control-sm" placeholder="Detalle de la prueba (opcional)">
+                                            </div>
+                                            <div class="col-md-3">
+                                                <button type="submit" class="btn btn-sm btn-primary w-100">
+                                                    Guardar como {{ user.nombre_interno }}
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endif %}
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <p class="text-muted small"><em>Sin validaciones de comunicación registradas</em></p>
+                    {% endif %}
+
+                    <div class="row g-3">
+                        {% if puede_solicitar_comunicacion %}
+                        <div class="col-md-{% if puede_registrar_comunicacion %}6{% else %}12{% endif %}">
+                            <div class="border rounded p-3 h-100">
+                                <p class="small fw-semibold mb-2"><i class="bi bi-telephone-outbound"></i> Solicitar validación</p>
+                                <form method="post" action="{% url 'orden_solicitar_validacion_comunicacion' orden.id %}">
+                                    {% csrf_token %}
+                                    <div class="mb-2">
+                                        <textarea name="observaciones_solicitud" class="form-control form-control-sm" rows="2" placeholder="Nota opcional (ej. IP/puerto a probar)"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-outline-warning" {% if tiene_comunicacion_pendiente %}disabled{% endif %}>
+                                        Solicitar prueba de comunicación
+                                    </button>
+                                    {% if tiene_comunicacion_pendiente %}
+                                    <p class="small text-muted mb-0 mt-1">Ya hay una solicitud pendiente.</p>
+                                    {% endif %}
+                                </form>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if puede_registrar_comunicacion %}
+                        <div class="col-md-{% if puede_solicitar_comunicacion %}6{% else %}12{% endif %}">
+                            <div class="border rounded p-3 h-100 bg-light">
+                                <p class="small fw-semibold mb-2"><i class="bi bi-clipboard-check"></i> Registrar resultado directo</p>
+                                <p class="small text-muted mb-2">Si la prueba se hace sin solicitud previa del técnico.</p>
+                                <form method="post" action="{% url 'orden_registrar_validacion_comunicacion' orden.id %}">
+                                    {% csrf_token %}
+                                    <div class="mb-2">
+                                        <select name="resultado" class="form-select form-select-sm" required>
+                                            <option value="EXITOSA">Exitosa</option>
+                                            <option value="FALLIDA">Fallida</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-2">
+                                        <input type="text" name="observaciones" class="form-control form-control-sm" placeholder="Observaciones (opcional)">
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-primary">
+                                        Registrar como {{ user.nombre_interno }}
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
                 </div>
             </div>
 

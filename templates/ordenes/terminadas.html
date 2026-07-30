@@ -1,0 +1,263 @@
+{% extends 'base.html' %}
+
+{% block title %}Trabajos terminados{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+    <div class="row mb-3">
+        <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+                <h1 class="mb-1"><i class="bi bi-check2-circle"></i> Trabajos terminados</h1>
+                <p class="text-muted mb-0">Consulta de órdenes realizadas, validadas o finalizadas, con resumen y filtros.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{% url 'ordenes_list' %}" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Volver a órdenes
+                </a>
+                {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
+                <a href="{% url 'ordenes_exportar' %}?filtrar=1&estado=FINALIZADA" class="btn btn-outline-info">
+                    <i class="bi bi-download"></i> Exportar finalizadas
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Resumen -->
+    <div class="row g-3 mb-3">
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card delco-panel-card h-100 border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="text-muted small">Total filtrado</div>
+                    <div class="fs-3 fw-semibold">{{ resumen.total }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card delco-panel-card h-100 border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="text-muted small">Finalizadas</div>
+                    <div class="fs-3 fw-semibold text-success">{{ resumen.finalizadas }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card delco-panel-card h-100 border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="text-muted small">Validadas</div>
+                    <div class="fs-3 fw-semibold text-primary">{{ resumen.validadas }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card delco-panel-card h-100 border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="text-muted small">Realizadas</div>
+                    <div class="fs-3 fw-semibold">{{ resumen.realizadas }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card delco-panel-card h-100 border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="text-muted small">Con MoreApp</div>
+                    <div class="fs-3 fw-semibold">{{ resumen.con_moreapp }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card delco-panel-card h-100 border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="text-muted small">Con PDF</div>
+                    <div class="fs-3 fw-semibold">{{ resumen.con_informe_pdf }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-xl-2">
+            <div class="card delco-panel-card h-100 border-0 shadow-sm">
+                <div class="card-body py-3">
+                    <div class="text-muted small">Con adjuntos</div>
+                    <div class="fs-3 fw-semibold">{{ resumen.con_adjuntos|default:0 }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if resumen.por_tecnico or resumen.por_tipo %}
+    <div class="row g-3 mb-3">
+        {% if resumen.por_tecnico %}
+        <div class="col-md-6">
+            <div class="card delco-panel-card h-100">
+                <div class="card-header card-header-delco py-2">
+                    <strong class="small">Por técnico (top)</strong>
+                </div>
+                <div class="card-body py-2">
+                    <ul class="list-unstyled mb-0 small">
+                        {% for row in resumen.por_tecnico %}
+                        <li class="d-flex justify-content-between border-bottom py-1">
+                            <span>{{ row.tecnico_responsable__nombre_interno }}</span>
+                            <span class="badge bg-secondary">{{ row.n }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% if resumen.por_tipo %}
+        <div class="col-md-6">
+            <div class="card delco-panel-card h-100">
+                <div class="card-header card-header-delco py-2">
+                    <strong class="small">Por tipo de trabajo</strong>
+                </div>
+                <div class="card-body py-2">
+                    <ul class="list-unstyled mb-0 small">
+                        {% for row in resumen.por_tipo %}
+                        <li class="d-flex justify-content-between border-bottom py-1">
+                            <span>{{ row.label }}</span>
+                            <span class="badge bg-secondary">{{ row.n }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Filtros -->
+    <div class="card delco-panel-card mb-3">
+        <div class="card-body">
+            <form method="get" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Estado</label>
+                    <select name="estado" class="form-select form-select-sm">
+                        <option value="">Todos terminados</option>
+                        {% for value, label in estados_terminados %}
+                        <option value="{{ value }}" {% if estado_filtro == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Tipo</label>
+                    <select name="tipo_trabajo" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for value, label in tipos_trabajo %}
+                        <option value="{{ value }}" {% if tipo_filtro == value %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% if request.user.rol != 'TECNICO' %}
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Técnico</label>
+                    <input type="hidden" name="tecnico" id="filtroTecnicoTermId" value="{{ tecnico_filtro }}">
+                    <input type="text" class="form-control form-control-sm" id="filtroTecnicoTermLabel"
+                           value="{{ tecnico_filtro_label }}" placeholder="Buscar técnico…" autocomplete="off"
+                           data-ac-url="{{ delco_api.buscar_tecnicos }}" data-ac-hidden="#filtroTecnicoTermId">
+                </div>
+                {% endif %}
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Cliente</label>
+                    <input type="text" name="cliente" class="form-control form-control-sm" value="{{ cliente_filtro }}" placeholder="Nº cliente">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Buscar</label>
+                    <input type="text" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Título / cliente">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Desde</label>
+                    <input type="date" name="fecha_desde" class="form-control form-control-sm" value="{{ fecha_desde }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small mb-1">Hasta</label>
+                    <input type="date" name="fecha_hasta" class="form-control form-control-sm" value="{{ fecha_hasta }}">
+                </div>
+                <div class="col-12 d-flex flex-wrap gap-2 mt-2">
+                    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
+                    <a href="?periodo=7" class="btn btn-sm {% if periodo == '7' %}btn-success{% else %}btn-outline-success{% endif %}">Últimos 7 días</a>
+                    <a href="?periodo=30" class="btn btn-sm {% if periodo == '30' %}btn-success{% else %}btn-outline-success{% endif %}">Últimos 30 días</a>
+                    <a href="{% url 'ordenes_terminadas' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card delco-panel-card">
+        <div class="card-header card-header-delco d-flex justify-content-between align-items-center">
+            <strong>Listado</strong>
+            <span class="badge bg-secondary">{{ resumen.total }} resultado(s)</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Título</th>
+                            <th class="d-none d-md-table-cell">Tipo</th>
+                            <th>Estado</th>
+                            <th class="d-none d-md-table-cell">Cliente</th>
+                            <th class="d-none d-lg-table-cell">Técnico</th>
+                            <th class="d-none d-lg-table-cell">Evidencia</th>
+                            <th class="d-none d-md-table-cell">Fin ejecución</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for orden in ordenes %}
+                        <tr>
+                            <td><a href="{% url 'orden_detalle' orden.id %}?desde=terminadas" class="fw-bold text-decoration-none">#{{ orden.id }}</a></td>
+                            <td>{{ orden.titulo }}</td>
+                            <td class="d-none d-md-table-cell"><span class="badge bg-secondary">{{ orden.get_tipo_trabajo_display }}</span></td>
+                            <td>
+                                <span class="badge bg-{% if orden.estado == 'FINALIZADA' %}success{% elif orden.estado == 'VALIDADA' %}primary{% else %}info text-dark{% endif %}">
+                                    {{ orden.get_estado_display }}
+                                </span>
+                            </td>
+                            <td class="d-none d-md-table-cell">{{ orden.cliente.numero_cliente|default:"—" }}</td>
+                            <td class="d-none d-lg-table-cell">{{ orden.tecnico_responsable.nombre_interno|default:"—" }}</td>
+                            <td class="d-none d-lg-table-cell">
+                                {% if orden.moreapp_count %}
+                                <span class="badge bg-success" title="MoreApp">MA {{ orden.moreapp_count }}</span>
+                                {% endif %}
+                                {% if orden.informes_count %}
+                                <span class="badge bg-info text-dark" title="PDF">PDF {{ orden.informes_count }}</span>
+                                {% endif %}
+                                {% if orden.adjuntos_count %}
+                                <span class="badge bg-secondary" title="Fotos / adjuntos">Adj {{ orden.adjuntos_count }}</span>
+                                {% endif %}
+                                {% if not orden.moreapp_count and not orden.informes_count and not orden.adjuntos_count %}
+                                <span class="text-muted">Sin evidencia</span>
+                                {% endif %}
+                            </td>
+                            <td class="d-none d-md-table-cell">{{ orden.fecha_fin_ejecucion|date:"d/m/Y H:i"|default:"—" }}</td>
+                            <td>
+                                <a href="{% url 'orden_detalle' orden.id %}?desde=terminadas" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i> Ver</a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center text-muted py-4">No hay trabajos terminados con estos filtros.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% if page_obj and page_obj.paginator.num_pages > 1 %}
+        <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <span class="text-muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+            <div class="btn-group btn-group-sm">
+                {% if page_obj.has_previous %}
+                <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+                {% endif %}
+                {% if page_obj.has_next %}
+                <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

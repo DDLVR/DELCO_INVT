@@ -13,7 +13,13 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.views.decorators.csrf import csrf_exempt
 import json
 
-from .models import OrdenTrabajo, AdjuntoOrden, IntegracionMoreApp, InformeCliente
+from .models import (
+    OrdenTrabajo,
+    AdjuntoOrden,
+    IntegracionMoreApp,
+    InformeCliente,
+    ValidacionComunicacionOT,
+)
 from .serializers import OrdenTrabajoSerializer
 from .services import validate_ot_for_creation
 from .utils import (
@@ -28,6 +34,8 @@ from .utils import (
     contadores_colas_ordenes,
     paso_operativo_ot,
     COLAS_ORDEN,
+    ESTADOS_TERMINADOS,
+    ESTADOS_TERMINADOS_LABELS,
 )
 from usuarios.models import Usuario
 from clientes.models import Cliente
@@ -182,6 +190,180 @@ def ordenes_list_view(request):
     }
 
     return render(request, 'ordenes/list.html', context)
+
+
+@login_required
+def ordenes_terminadas_view(request):
+    """
+    Vista de consulta de trabajos terminados (realizadas / validadas / finalizadas)
+    con filtros y resumen para seguimiento administrativo.
+    """
+    from datetime import datetime, timedelta
+    from django.core.paginator import Paginator
+    from django.db.models import Count
+
+    usuario = request.user
+    if usuario.rol not in ['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR', 'TECNICO']:
+        messages.error(request, 'No tienes acceso a trabajos terminados')
+        return redirect('dashboard')
+
+    base = _queryset_ordenes_filtrado(request, aplicar_filtros=False).filter(
+        estado__in=ESTADOS_TERMINADOS,
+    )
+
+    estado_filtro = (request.GET.get('estado') or '').strip()
+    tipo_filtro = (request.GET.get('tipo_trabajo') or '').strip()
+    tecnico_filtro = (request.GET.get('tecnico') or '').strip()
+    cliente_filtro = (request.GET.get('cliente') or '').strip()
+    buscar = (request.GET.get('buscar') or '').strip()
+    fecha_desde = (request.GET.get('fecha_desde') or '').strip()
+    fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
+    periodo = (request.GET.get('periodo') or '').strip().lower()
+
+    qs = base
+    if estado_filtro and estado_filtro in ESTADOS_TERMINADOS:
+        qs = qs.filter(estado=estado_filtro)
+    if tipo_filtro:
+        qs = qs.filter(tipo_trabajo=tipo_filtro)
+    if tecnico_filtro and tecnico_filtro.isdigit():
+        qs = qs.filter(tecnico_responsable_id=int(tecnico_filtro))
+    if cliente_filtro:
+        if cliente_filtro.isdigit():
+            qs = qs.filter(cliente_id=int(cliente_filtro))
+        else:
+            qs = qs.filter(cliente__numero_cliente__icontains=cliente_filtro)
+    if buscar:
+        qs = qs.filter(
+            Q(titulo__icontains=buscar)
+            | Q(descripcion__icontains=buscar)
+            | Q(cliente__numero_cliente__icontains=buscar)
+            | Q(cliente__customer_name__icontains=buscar)
+        )
+
+    ahora = timezone.now()
+    if periodo == '7':
+        qs = qs.filter(
+            Q(fecha_fin_ejecucion__gte=ahora - timedelta(days=7))
+            | Q(fecha_fin_ejecucion__isnull=True, fecha_creacion__gte=ahora - timedelta(days=7))
+        )
+    elif periodo == '30':
+        qs = qs.filter(
+            Q(fecha_fin_ejecucion__gte=ahora - timedelta(days=30))
+            | Q(fecha_fin_ejecucion__isnull=True, fecha_creacion__gte=ahora - timedelta(days=30))
+        )
+    else:
+        if fecha_desde:
+            try:
+                d0 = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+                qs = qs.filter(
+                    Q(fecha_fin_ejecucion__date__gte=d0)
+                    | Q(fecha_fin_ejecucion__isnull=True, fecha_creacion__date__gte=d0)
+                )
+            except ValueError:
+                fecha_desde = ''
+        if fecha_hasta:
+            try:
+                d1 = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+                qs = qs.filter(
+                    Q(fecha_fin_ejecucion__date__lte=d1)
+                    | Q(fecha_fin_ejecucion__isnull=True, fecha_creacion__date__lte=d1)
+                )
+            except ValueError:
+                fecha_hasta = ''
+
+    qs = qs.select_related(
+        'tecnico_responsable', 'cliente', 'validada_por', 'creada_por',
+    ).annotate(
+        moreapp_count=Count('sincronizaciones_moreapp', distinct=True),
+        informes_count=Count('informes', distinct=True),
+        adjuntos_count=Count('adjuntos', distinct=True),
+    ).order_by('-fecha_fin_ejecucion', '-id')
+
+    total = qs.count()
+    resumen_estado = {
+        row['estado']: row['n']
+        for row in qs.values('estado').annotate(n=Count('id'))
+    }
+    por_tecnico = list(
+        qs.exclude(tecnico_responsable__isnull=True)
+        .values('tecnico_responsable__nombre_interno')
+        .annotate(n=Count('id'))
+        .order_by('-n')[:8]
+    )
+    por_tipo = list(
+        qs.values('tipo_trabajo').annotate(n=Count('id')).order_by('-n')
+    )
+    con_moreapp = qs.filter(moreapp_count__gt=0).count()
+    con_informe_pdf = qs.filter(informes_count__gt=0).count()
+    con_adjuntos = qs.filter(adjuntos_count__gt=0).count()
+
+    try:
+        per_page = int(request.GET.get('per_page') or 50)
+    except (TypeError, ValueError):
+        per_page = 50
+    if per_page not in (25, 50, 100):
+        per_page = 50
+
+    page_obj = Paginator(qs, per_page).get_page(request.GET.get('page') or 1)
+
+    tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
+    tecnico_filtro_label = ''
+    if tecnico_filtro and tecnico_filtro.isdigit():
+        t = Usuario.objects.filter(pk=int(tecnico_filtro)).first()
+        if t:
+            tecnico_filtro_label = t.nombre_interno or str(t.pk)
+
+    cliente_filtro_label = ''
+    if cliente_filtro:
+        if cliente_filtro.isdigit():
+            c = Cliente.objects.filter(pk=int(cliente_filtro)).first()
+            if c:
+                cliente_filtro_label = f'{c.numero_cliente}' + (
+                    f' · {c.customer_name}' if c.customer_name else ''
+                )
+        else:
+            cliente_filtro_label = cliente_filtro
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+
+    tipo_labels = dict(OrdenTrabajo.TIPO_TRABAJO_CHOICES)
+    por_tipo_display = [
+        {'label': tipo_labels.get(row['tipo_trabajo'], row['tipo_trabajo']), 'n': row['n']}
+        for row in por_tipo
+    ]
+
+    context = {
+        'ordenes': page_obj.object_list,
+        'page_obj': page_obj,
+        'query_string': query_params.urlencode(),
+        'per_page': per_page,
+        'tecnicos': tecnicos,
+        'tipos_trabajo': OrdenTrabajo.TIPO_TRABAJO_CHOICES,
+        'estados_terminados': ESTADOS_TERMINADOS_LABELS,
+        'estado_filtro': estado_filtro,
+        'tipo_filtro': tipo_filtro,
+        'tecnico_filtro': tecnico_filtro,
+        'tecnico_filtro_label': tecnico_filtro_label,
+        'cliente_filtro': cliente_filtro,
+        'cliente_filtro_label': cliente_filtro_label,
+        'buscar': buscar,
+        'fecha_desde': fecha_desde,
+        'fecha_hasta': fecha_hasta,
+        'periodo': periodo,
+        'resumen': {
+            'total': total,
+            'finalizadas': resumen_estado.get('FINALIZADA', 0),
+            'validadas': resumen_estado.get('VALIDADA', 0),
+            'realizadas': resumen_estado.get('REALIZADA', 0),
+            'con_moreapp': con_moreapp,
+            'con_informe_pdf': con_informe_pdf,
+            'con_adjuntos': con_adjuntos,
+            'por_tecnico': por_tecnico,
+            'por_tipo': por_tipo_display,
+        },
+    }
+    return render(request, 'ordenes/terminadas.html', context)
 
 
 @login_required
@@ -406,6 +588,24 @@ def orden_detalle_view(request, pk):
     registros_validacion = (
         orden.registros_validacion.select_related('realizado_por').order_by('-fecha')[:50]
     )
+    validaciones_comunicacion = (
+        orden.validaciones_comunicacion
+        .select_related('solicitado_por', 'validado_por')
+        .order_by('-fecha_solicitud')[:50]
+    )
+    tiene_comunicacion_pendiente = orden.validaciones_comunicacion.filter(
+        estado='SOLICITADA'
+    ).exists()
+    puede_solicitar_comunicacion = (
+        orden.estado != 'CANCELADA'
+        and (
+            usuario.rol in ['ADMIN', 'ADMINISTRATIVO']
+            or orden.tecnico_responsable_id == usuario.id
+        )
+    )
+    puede_registrar_comunicacion = (
+        usuario.rol in ['ADMIN', 'ADMINISTRATIVO'] and orden.estado != 'CANCELADA'
+    )
 
     context = {
         'orden': orden,
@@ -415,6 +615,10 @@ def orden_detalle_view(request, pk):
         'paso_operativo': paso_operativo,
         'historial_ordenes_cliente': historial_ordenes_cliente,
         'registros_validacion': registros_validacion,
+        'validaciones_comunicacion': validaciones_comunicacion,
+        'tiene_comunicacion_pendiente': tiene_comunicacion_pendiente,
+        'puede_solicitar_comunicacion': puede_solicitar_comunicacion,
+        'puede_registrar_comunicacion': puede_registrar_comunicacion,
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'puede_reasignar': puede_reasignar,
         'tecnicos': tecnicos,
@@ -436,6 +640,17 @@ def orden_detalle_view(request, pk):
             and not informes.filter(origen__in=['MOREAPP', 'RESPALDO_MOREAPP']).exists()
         ),
     }
+
+    # Volver: si viene de trabajos terminados (o la OT ya está cerrada), regresar ahí
+    desde = (request.GET.get('desde') or '').strip().lower()
+    if desde == 'terminadas' or orden.estado in ESTADOS_TERMINADOS:
+        from django.urls import reverse
+        context['volver_url'] = reverse('ordenes_terminadas')
+        context['volver_label'] = 'Volver a trabajos terminados'
+    else:
+        from django.urls import reverse
+        context['volver_url'] = reverse('ordenes_list')
+        context['volver_label'] = 'Volver'
     
     return render(request, 'ordenes/detalle.html', context)
 
@@ -945,6 +1160,131 @@ def orden_subir_informe_view(request, pk):
         })
     except Exception as exc:
         return JsonResponse({'success': False, 'message': str(exc)}, status=500)
+
+
+@login_required
+@require_POST
+def orden_solicitar_validacion_comunicacion_view(request, pk):
+    """Técnico responsable (o admin) solicita prueba de comunicación en la OT."""
+    orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
+    usuario = request.user
+
+    if orden.estado == 'CANCELADA':
+        messages.error(request, 'No se puede solicitar validación en una orden cancelada.')
+        return redirect('orden_detalle', pk=pk)
+
+    es_admin = usuario.rol in ['ADMIN', 'ADMINISTRATIVO']
+    es_responsable = orden.tecnico_responsable_id == usuario.id
+    if not es_admin and not es_responsable:
+        messages.error(request, 'No tienes permiso para solicitar la validación de comunicación.')
+        return redirect('orden_detalle', pk=pk)
+
+    if orden.validaciones_comunicacion.filter(estado='SOLICITADA').exists():
+        messages.info(
+            request,
+            'Ya hay una solicitud de validación de comunicación pendiente en esta orden.',
+        )
+        return redirect('orden_detalle', pk=pk)
+
+    nota = (request.POST.get('observaciones_solicitud') or '').strip()
+    registro = ValidacionComunicacionOT.objects.create(
+        orden=orden,
+        estado='SOLICITADA',
+        solicitado_por=usuario,
+        observaciones_solicitud=nota,
+    )
+    register_audit_event(
+        AuditEvent(
+            actor_id=getattr(usuario, 'id', None),
+            action='OT_COMUNICACION_SOLICITADA',
+            entity='ValidacionComunicacionOT',
+            entity_id=str(registro.pk),
+            field_name='estado',
+            old_value='',
+            new_value='SOLICITADA',
+            reason=f'Solicitud de validación de comunicación en OT #{orden.pk}',
+        )
+    )
+    messages.success(
+        request,
+        'Solicitud de validación de comunicación registrada. '
+        'Administración podrá registrar el resultado de la prueba.',
+    )
+    return redirect('orden_detalle', pk=pk)
+
+
+@login_required
+@require_POST
+def orden_registrar_validacion_comunicacion_view(request, pk):
+    """Administrativo registra el resultado (Exitosa / Fallida) de la prueba."""
+    orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
+    usuario = request.user
+
+    if usuario.rol not in ['ADMIN', 'ADMINISTRATIVO']:
+        messages.error(request, 'Solo administración puede registrar el resultado de la prueba.')
+        return redirect('orden_detalle', pk=pk)
+
+    if orden.estado == 'CANCELADA':
+        messages.error(request, 'No se puede registrar validación en una orden cancelada.')
+        return redirect('orden_detalle', pk=pk)
+
+    resultado = (request.POST.get('resultado') or '').strip().upper()
+    if resultado not in ('EXITOSA', 'FALLIDA'):
+        messages.error(request, 'Debes indicar el resultado: Exitosa o Fallida.')
+        return redirect('orden_detalle', pk=pk)
+
+    observaciones = (request.POST.get('observaciones') or '').strip()
+    validacion_id = (request.POST.get('validacion_id') or '').strip()
+
+    registro = None
+    if validacion_id:
+        try:
+            registro = ValidacionComunicacionOT.objects.get(
+                pk=int(validacion_id),
+                orden=orden,
+                estado='SOLICITADA',
+            )
+        except (ValidacionComunicacionOT.DoesNotExist, ValueError, TypeError):
+            messages.error(request, 'La solicitud de validación no existe o ya fue resuelta.')
+            return redirect('orden_detalle', pk=pk)
+    else:
+        # Registro directo (sin solicitud previa del técnico)
+        registro = ValidacionComunicacionOT(
+            orden=orden,
+            solicitado_por=usuario,
+            observaciones_solicitud='Registro directo por administración',
+        )
+
+    estado_anterior = registro.estado if registro.pk else ''
+    registro.estado = resultado
+    registro.validado_por = usuario
+    registro.fecha_validacion = timezone.now()
+    registro.observaciones = observaciones
+    registro.save()
+
+    register_audit_event(
+        AuditEvent(
+            actor_id=getattr(usuario, 'id', None),
+            action='OT_COMUNICACION_REGISTRADA',
+            entity='ValidacionComunicacionOT',
+            entity_id=str(registro.pk),
+            field_name='estado',
+            old_value=estado_anterior,
+            new_value=resultado,
+            reason=(
+                f'Validación de comunicación {resultado} en OT #{orden.pk} '
+                f'por {usuario.nombre_interno}'
+                + (f': {observaciones}' if observaciones else '')
+            ),
+        )
+    )
+    label = 'Exitosa' if resultado == 'EXITOSA' else 'Fallida'
+    messages.success(
+        request,
+        f'Resultado de comunicación registrado: {label} '
+        f'(por {usuario.nombre_interno}).',
+    )
+    return redirect('orden_detalle', pk=pk)
 
 
 @login_required

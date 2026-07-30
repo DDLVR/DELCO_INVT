@@ -119,6 +119,7 @@ ALARMAS_CLIENTES_LABELS = {
     'medidor_duplicado': 'Medidor repetido',
     'posibles_duplicados': 'Posibles duplicados',
     'ejecutado_no_actualizado': 'Ejecutado, no actualizado en sistema',
+    'pendiente_sci4': 'Pendiente de actualización SCi4',
 }
 
 
@@ -135,6 +136,8 @@ def aplicar_filtro_alarma_clientes(qs, alarma: str):
         return qs.filter(id__in=_ids_clientes_posibles_duplicados())
     if key == 'ejecutado_no_actualizado':
         return qs.filter(id__in=_ids_clientes_ejecutado_no_actualizado())
+    if key == 'pendiente_sci4':
+        return qs.filter(estado_sci4='PENDIENTE')
     return qs
 
 
@@ -344,5 +347,12 @@ def build_panel_alarmas_analistas() -> List[Dict[str, Any]]:
             'count': count_clientes_ejecutado_no_actualizado(),
             'severity': 'danger',
             'url': _url_listado_clientes('ejecutado_no_actualizado'),
+        },
+        {
+            'key': 'pendiente_sci4',
+            'label': 'Pendiente SCi4',
+            'count': count_clientes_sin_actualizacion_sci4(),
+            'severity': 'warning',
+            'url': _url_listado_clientes('pendiente_sci4'),
         },
     ]
