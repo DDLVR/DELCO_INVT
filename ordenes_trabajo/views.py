@@ -425,6 +425,16 @@ def orden_detalle_view(request, pk):
         'puede_eliminar': usuario.rol == 'ADMIN' and not orden.eliminado,
         'es_tecnico_responsable': orden.tecnico_responsable == usuario if orden.tecnico_responsable else False,
         'puede_editar_observaciones': puede_editar_observaciones_orden(orden, usuario),
+        'puede_subir_respaldo_moreapp': (
+            usuario.rol in ['ADMIN', 'ADMINISTRATIVO']
+            or (orden.tecnico_responsable_id == usuario.id)
+        ) and orden.estado != 'CANCELADA',
+        'tiene_informe_moreapp_sync': informes.filter(origen='MOREAPP').exists(),
+        'tiene_respaldo_moreapp': informes.filter(origen='RESPALDO_MOREAPP').exists(),
+        'sin_evidencia_moreapp': (
+            not sincronizaciones.exists()
+            and not informes.filter(origen__in=['MOREAPP', 'RESPALDO_MOREAPP']).exists()
+        ),
     }
     
     return render(request, 'ordenes/detalle.html', context)
@@ -563,22 +573,36 @@ def orden_subir_adjunto_view(request, pk):
         try:
             archivo = request.FILES.get('archivo')
             tipo = request.POST.get('tipo', 'OTRO')
-            
+
             if not archivo:
                 return JsonResponse({'success': False, 'message': 'No se envió archivo'}, status=400)
-            
+
+            nombre = (archivo.name or '').strip()
+            ext = nombre.rsplit('.', 1)[-1].lower() if '.' in nombre else ''
+            # Si suben imagen, forzar tipo FOTO para que se previsualice
+            if ext in {'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'}:
+                tipo = 'FOTO'
+            elif ext == 'pdf' and tipo not in ('PDF', 'FPT'):
+                tipo = 'PDF'
+
+            tipos_ok = {c[0] for c in AdjuntoOrden.TIPO_CHOICES}
+            if tipo not in tipos_ok:
+                tipo = 'OTRO'
+
             adjunto = AdjuntoOrden()
             adjunto.orden = orden
             adjunto.tipo = tipo
-            adjunto.nombre_archivo = archivo.name
+            adjunto.nombre_archivo = nombre or archivo.name
             adjunto.archivo = archivo
             adjunto.subido_por = request.user
             adjunto.save()
-            
+
             return JsonResponse({
                 'success': True,
                 'message': 'Archivo subido exitosamente',
-                'adjunto_id': adjunto.id
+                'adjunto_id': adjunto.id,
+                'tipo': adjunto.tipo,
+                'es_imagen': adjunto.es_imagen,
             })
             
         except Exception as e:
@@ -846,35 +870,78 @@ def ordenes_modificar_masivo_view(request):
 @login_required
 @require_POST
 def orden_subir_informe_view(request, pk):
-    """Sube un informe PDF del cliente vinculado a la orden."""
+    """Sube un informe PDF del cliente vinculado a la orden (manual o respaldo MoreApp)."""
+    MAX_PDF_BYTES = 15 * 1024 * 1024  # 15 MB
+
     orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
 
     if request.user.rol not in ['ADMIN', 'ADMINISTRATIVO'] and orden.tecnico_responsable != request.user:
-        return JsonResponse({'success': False, 'message': 'No tienes permisos'}, status=403)
+        return JsonResponse({'success': False, 'message': 'No tienes permisos para subir el PDF.'}, status=403)
+
+    if orden.estado == 'CANCELADA':
+        return JsonResponse(
+            {'success': False, 'message': 'No se puede adjuntar PDF a una orden cancelada.'},
+            status=400,
+        )
 
     if not orden.cliente:
-        return JsonResponse({'success': False, 'message': 'La orden no tiene cliente asociado'}, status=400)
+        return JsonResponse(
+            {'success': False, 'message': 'La orden no tiene cliente asociado; no se puede guardar el PDF.'},
+            status=400,
+        )
 
     archivo = request.FILES.get('archivo')
     if not archivo:
-        return JsonResponse({'success': False, 'message': 'No se envió archivo'}, status=400)
+        return JsonResponse({'success': False, 'message': 'No se envió archivo.'}, status=400)
 
-    if not archivo.name.lower().endswith('.pdf'):
-        return JsonResponse({'success': False, 'message': 'Solo se permiten archivos PDF'}, status=400)
+    nombre = (archivo.name or '').strip()
+    if not nombre.lower().endswith('.pdf'):
+        return JsonResponse({'success': False, 'message': 'Solo se permiten archivos PDF.'}, status=400)
+
+    if archivo.size and archivo.size > MAX_PDF_BYTES:
+        return JsonResponse(
+            {'success': False, 'message': 'El PDF supera el tamaño máximo permitido (15 MB).'},
+            status=400,
+        )
+
+    # Validar cabecera PDF (evita renombrar .exe/.jpg a .pdf)
+    try:
+        cabecera = archivo.read(5)
+        archivo.seek(0)
+    except Exception:
+        return JsonResponse({'success': False, 'message': 'No se pudo leer el archivo.'}, status=400)
+    if cabecera != b'%PDF-':
+        return JsonResponse(
+            {'success': False, 'message': 'El archivo no parece un PDF válido.'},
+            status=400,
+        )
+
+    como_respaldo = str(request.POST.get('como_respaldo_moreapp', '')).strip().lower() in (
+        '1', 'true', 'yes', 'on', 'si', 'sí',
+    )
+    origen = 'RESPALDO_MOREAPP' if como_respaldo else 'MANUAL'
 
     try:
         informe = guardar_informe_pdf(
             cliente=orden.cliente,
             archivo_origen=archivo,
-            nombre_archivo=archivo.name,
+            nombre_archivo=nombre,
             orden=orden,
             usuario=request.user,
-            origen='MANUAL',
+            origen=origen,
         )
+        if origen == 'RESPALDO_MOREAPP':
+            mensaje = (
+                'Respaldo PDF de MoreApp guardado correctamente. '
+                'Quedó asociado a esta orden para revisión administrativa.'
+            )
+        else:
+            mensaje = 'Informe PDF guardado correctamente.'
         return JsonResponse({
             'success': True,
-            'message': 'Informe PDF guardado correctamente',
+            'message': mensaje,
             'informe_id': informe.id,
+            'origen': origen,
         })
     except Exception as exc:
         return JsonResponse({'success': False, 'message': str(exc)}, status=500)

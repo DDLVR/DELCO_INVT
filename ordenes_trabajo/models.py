@@ -556,7 +556,27 @@ class AdjuntoOrden(models.Model):
     
     def __str__(self):
         return f'{self.nombre_archivo} - OT #{self.orden.id}'
-    
+
+    @property
+    def es_imagen(self) -> bool:
+        """True si el adjunto se puede previsualizar como imagen."""
+        if self.tipo == 'FOTO':
+            return True
+        nombre = (self.nombre_archivo or '').lower()
+        if self.archivo and getattr(self.archivo, 'name', None):
+            nombre = self.archivo.name.lower()
+        return nombre.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'))
+
+    @property
+    def url_vista(self) -> str:
+        """URL para ver/descargar el archivo (local o externa)."""
+        if self.archivo:
+            try:
+                return self.archivo.url
+            except ValueError:
+                pass
+        return self.url_externa or ''
+
     class Meta:
         verbose_name_plural = 'Adjuntos de Órdenes'
         ordering = ['-fecha_hora']
@@ -571,7 +591,8 @@ class InformeCliente(models.Model):
 
     ORIGEN_CHOICES = [
         ('MANUAL', 'Carga manual'),
-        ('MOREAPP', 'MoreApp'),
+        ('MOREAPP', 'MoreApp (sincronizado)'),
+        ('RESPALDO_MOREAPP', 'Respaldo PDF MoreApp'),
         ('SISTEMA', 'Sistema'),
     ]
 
