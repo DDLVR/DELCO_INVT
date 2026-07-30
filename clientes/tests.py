@@ -407,3 +407,47 @@ class ClienteSci4SyncTests(TestCase):
 		self.assertIn('ip', campos)
 		self.cliente.refresh_from_db()
 		self.assertEqual(self.cliente.estado_sci4, 'PENDIENTE')
+
+	def test_ot_cambio_equipo_marca_sci4_pendiente(self):
+		from ordenes_trabajo.models import OrdenTrabajo
+		from ordenes_trabajo.sync import sincronizar_orden_completa
+
+		self.cliente.estado_sci4 = 'ACTUALIZADO'
+		self.cliente.meter_serial_n_1 = 'SCI4-MED-A'
+		self.cliente.save(update_fields=['estado_sci4', 'meter_serial_n_1'])
+
+		orden = OrdenTrabajo.objects.create(
+			titulo='OT Cambio Sci4',
+			descripcion='Reemplazo medidor',
+			tipo_trabajo='CAMBIO',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			tecnico_responsable=None,
+			estado='EN_EJECUCION',
+			medidor=self.medidor_b,
+		)
+		result = sincronizar_orden_completa(orden, self.admin, 'VALIDADA')
+		self.assertTrue(result.get('sci4_alerta'))
+		self.cliente.refresh_from_db()
+		self.assertEqual(self.cliente.estado_sci4, 'PENDIENTE')
+		self.assertEqual(self.cliente.meter_serial_n_1, 'SCI4-MED-B')
+
+	def test_ot_inspeccion_no_alerta_sci4(self):
+		from ordenes_trabajo.models import OrdenTrabajo
+		from ordenes_trabajo.sync import sincronizar_orden_completa
+
+		self.cliente.estado_sci4 = 'ACTUALIZADO'
+		self.cliente.save(update_fields=['estado_sci4'])
+		orden = OrdenTrabajo.objects.create(
+			titulo='OT Inspeccion Sci4',
+			descripcion='Sin cambio equipo',
+			tipo_trabajo='INSPECCION',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			estado='EN_EJECUCION',
+			medidor=self.medidor_b,
+		)
+		result = sincronizar_orden_completa(orden, self.admin, 'VALIDADA')
+		self.assertFalse(result.get('sci4_alerta'))
+		self.cliente.refresh_from_db()
+		self.assertEqual(self.cliente.estado_sci4, 'ACTUALIZADO')
