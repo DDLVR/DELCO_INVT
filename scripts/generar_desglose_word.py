@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from docx import Document
+from docx.enum.section import WD_ORIENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt, RGBColor
@@ -72,49 +73,45 @@ def _multiline_center(draw, box, lines, font, fill=C_WHITE, gap=2, fonts=None):
 
 
 def draw_edt_sistema(path: Path):
-    """EDT: raíz → Operación / Gobierno → ámbitos → detalle con más texto."""
-    w, h = 1720, 1020
+    """EDT legible: tipografía grande pensada para impresión en Word."""
+    w, h = 2200, 1280
     img = Image.new('RGB', (w, h), C_BG)
     draw = ImageDraw.Draw(img)
-    f_title = _font(24, True)
-    f_root = _font(18, True)
-    f_l1 = _font(13, True)
-    f_kid = _font(11, True)
-    f_sub = _font(10)
-    f_cap = _font(13, True)
-    note = _font(12)
+    f_title = _font(36, True)
+    f_root = _font(30, True)
+    f_l1 = _font(22, True)
+    f_kid = _font(19, True)
+    f_sub = _font(16)
+    f_cap = _font(24, True)
+    note = _font(18)
 
-    draw.text((40, 22), 'Estructura de desglose del sistema', font=f_title, fill=C_ROOT)
+    draw.text((48, 28), 'Estructura de desglose del sistema', font=f_title, fill=C_ROOT)
 
-    # Raíz
-    root = (610, 70, 1110, 135)
-    _rounded_box(draw, root, C_ROOT, radius=14)
+    root = (760, 90, 1440, 175)
+    _rounded_box(draw, root, C_ROOT, radius=16)
     _center_text(draw, root, 'DELCO Inventario', f_root)
     rcx = (root[0] + root[2]) // 2
 
-    # Bifurcación en dos ramas (barra por encima de los caps, sin atravesarlos)
-    y_bar = 168
-    draw.line([(rcx, root[3]), (rcx, y_bar)], fill=C_LINE, width=3)
+    y_bar = 215
+    draw.line([(rcx, root[3]), (rcx, y_bar)], fill=C_LINE, width=4)
 
-    op_mid, gov_cap_mid = 530, 1420
-    op_cap = (200, 188, 860, 235)
-    gov_cap = (1200, 188, 1640, 235)
-    spine_x = 1160  # a la izquierda de las cajas verdes (no las atraviesa)
+    op_mid, gov_cap_mid = 680, 1800
+    op_cap = (220, 240, 1140, 310)
+    gov_cap = (1520, 240, 2080, 310)
+    spine_x = 1460
 
-    # Tramos horizontales solo hasta el centro de cada cap
-    draw.line([(op_mid, y_bar), (gov_cap_mid, y_bar)], fill=C_LINE, width=3)
-    draw.line([(op_mid, y_bar), (op_mid, op_cap[1])], fill=C_LINE, width=2)
-    draw.line([(gov_cap_mid, y_bar), (gov_cap_mid, gov_cap[1])], fill=C_LINE, width=2)
+    draw.line([(op_mid, y_bar), (gov_cap_mid, y_bar)], fill=C_LINE, width=4)
+    draw.line([(op_mid, y_bar), (op_mid, op_cap[1])], fill=C_LINE, width=3)
+    draw.line([(gov_cap_mid, y_bar), (gov_cap_mid, gov_cap[1])], fill=C_LINE, width=3)
 
-    _rounded_box(draw, op_cap, C_L1, radius=10)
-    _rounded_box(draw, gov_cap, C_ACCENT, radius=10)
+    _rounded_box(draw, op_cap, C_L1, radius=12)
+    _rounded_box(draw, gov_cap, C_ACCENT, radius=12)
     _center_text(draw, op_cap, 'Operación diaria', f_cap)
     _center_text(draw, gov_cap, 'Gobierno y control', f_cap)
 
-    # Operación: 4 columnas con título + detalle en dos líneas
     ops = [
         (
-            40, 290, 270, 360, 'Inventario',
+            40, 380, 340, 470, 'Inventario',
             [
                 ('Activos de campo', 'Medidores, SIM y módems'),
                 ('Estado y ubicación', 'Disponible, instalado, bodega'),
@@ -122,15 +119,15 @@ def draw_edt_sistema(path: Path):
             ],
         ),
         (
-            290, 290, 520, 360, 'Clientes',
+            370, 380, 670, 470, 'Clientes',
             [
                 ('Ficha del punto', 'Datos del cliente y serie'),
-                ('Historial de proyectos', 'Cambios Actual / Reemplazado'),
+                ('Historial de proyectos', 'Actual / Reemplazado'),
                 ('Restricciones', 'Bloqueo con justificación'),
             ],
         ),
         (
-            540, 290, 770, 360, 'Órdenes de trabajo',
+            700, 380, 1000, 470, 'Órdenes de trabajo',
             [
                 ('Ciclo de vida', 'Creación hasta cierre'),
                 ('Asignación', 'Técnico responsable'),
@@ -138,7 +135,7 @@ def draw_edt_sistema(path: Path):
             ],
         ),
         (
-            790, 290, 1020, 360, 'MoreApp',
+            1030, 380, 1330, 470, 'MoreApp',
             [
                 ('Sincronización', 'Ingreso desde terreno'),
                 ('Cola de revisión', 'Casos pendientes'),
@@ -147,70 +144,62 @@ def draw_edt_sistema(path: Path):
         ),
     ]
 
-    # Barra de distribución BAJO el cap de Operación (no sobre el borde del texto)
-    y_fan = op_cap[3] + 18  # 253
+    y_fan = op_cap[3] + 28
     mids = [((o[0] + o[2]) // 2) for o in ops]
-    draw.line([(op_mid, op_cap[3]), (op_mid, y_fan)], fill=C_LINE, width=2)
-    draw.line([(mids[0], y_fan), (mids[-1], y_fan)], fill=C_LINE, width=2)
+    draw.line([(op_mid, op_cap[3]), (op_mid, y_fan)], fill=C_LINE, width=3)
+    draw.line([(mids[0], y_fan), (mids[-1], y_fan)], fill=C_LINE, width=3)
 
     for x0, y0, x1, y1, title, kids in ops:
         mx = (x0 + x1) // 2
-        # conector hasta el tope del ámbito (luego la caja lo cubre si hubiera solape)
-        draw.line([(mx, y_fan), (mx, y0)], fill=C_LINE, width=2)
-        _rounded_box(draw, (x0, y0, x1, y1), C_L1, radius=12)
+        draw.line([(mx, y_fan), (mx, y0)], fill=C_LINE, width=3)
+        _rounded_box(draw, (x0, y0, x1, y1), C_L1, radius=14)
         _center_text(draw, (x0, y0, x1, y1), title, f_l1)
 
-        # hijos: primero líneas solo en huecos, después cajas encima
         kid_boxes = []
-        ky = y1 + 18
+        ky = y1 + 22
         for titulo, detalle in kids:
-            box = (x0 + 6, ky, x1 - 6, ky + 58)
+            box = (x0 + 8, ky, x1 - 8, ky + 78)
             kid_boxes.append((box, titulo, detalle))
-            ky += 68
+            ky += 94
 
-        # del ámbito al primer hijo (tope)
-        draw.line([(mx, y1), (mx, kid_boxes[0][0][1])], fill=C_LINE, width=2)
-        # entre hijos: solo el espacio entre fondo de uno y tope del siguiente
+        draw.line([(mx, y1), (mx, kid_boxes[0][0][1])], fill=C_LINE, width=3)
         for i in range(len(kid_boxes) - 1):
             bottom = kid_boxes[i][0][3]
             top_next = kid_boxes[i + 1][0][1]
-            draw.line([(mx, bottom), (mx, top_next)], fill=C_LINE, width=2)
+            draw.line([(mx, bottom), (mx, top_next)], fill=C_LINE, width=3)
 
         for box, titulo, detalle in kid_boxes:
-            _rounded_box(draw, box, C_L2, radius=8)
+            _rounded_box(draw, box, C_L2, radius=10)
             _multiline_center(
-                draw, box, [titulo, detalle], f_kid, gap=3, fonts=[f_kid, f_sub],
+                draw, box, [titulo, detalle], f_kid, gap=4, fonts=[f_kid, f_sub],
             )
 
-    # Gobierno: espina a la IZQUIERDA de las cajas; stubs hasta el borde
     govs = [
-        (1200, 290, 1640, 365, 'Acceso y roles', 'Perfiles, permisos y segregación de funciones'),
-        (1200, 385, 1640, 460, 'Reportes', 'Exportes, filtros e indicadores de gestión'),
-        (1200, 480, 1640, 555, 'Auditoría', 'Trazabilidad de cambios y consultas de control'),
-        (1200, 575, 1640, 650, 'Soporte y catálogos', 'Maestros, parámetros y datos de apoyo'),
+        (1520, 380, 2120, 480, 'Acceso y roles', 'Perfiles, permisos y segregación de funciones'),
+        (1520, 510, 2120, 610, 'Reportes', 'Exportes, filtros e indicadores de gestión'),
+        (1520, 640, 2120, 740, 'Auditoría', 'Trazabilidad de cambios y consultas de control'),
+        (1520, 770, 2120, 870, 'Soporte y catálogos', 'Maestros, parámetros y datos de apoyo'),
     ]
-    # del cap hacia la espina (sin cruzar texto)
-    stem_y = gov_cap[3] + 14
+    stem_y = gov_cap[3] + 20
     first_cy = (govs[0][1] + govs[0][3]) // 2
-    draw.line([(gov_cap_mid, gov_cap[3]), (gov_cap_mid, stem_y)], fill=C_LINE, width=2)
-    draw.line([(spine_x, stem_y), (gov_cap_mid, stem_y)], fill=C_LINE, width=2)
-    draw.line([(spine_x, stem_y), (spine_x, first_cy)], fill=C_LINE, width=2)
+    draw.line([(gov_cap_mid, gov_cap[3]), (gov_cap_mid, stem_y)], fill=C_LINE, width=3)
+    draw.line([(spine_x, stem_y), (gov_cap_mid, stem_y)], fill=C_LINE, width=3)
+    draw.line([(spine_x, stem_y), (spine_x, first_cy)], fill=C_LINE, width=3)
 
     for i, (x0, y0, x1, y1, title, desc) in enumerate(govs):
         cy = (y0 + y1) // 2
         if i > 0:
             prev_bottom = govs[i - 1][3]
-            # tramo vertical solo en el hueco entre cajas
-            draw.line([(spine_x, prev_bottom), (spine_x, y0)], fill=C_LINE, width=2)
-            draw.line([(spine_x, y0), (spine_x, cy)], fill=C_LINE, width=2)
-        draw.line([(spine_x, cy), (x0, cy)], fill=C_LINE, width=2)
-        _rounded_box(draw, (x0, y0, x1, y1), C_ACCENT, radius=12)
+            draw.line([(spine_x, prev_bottom), (spine_x, y0)], fill=C_LINE, width=3)
+            draw.line([(spine_x, y0), (spine_x, cy)], fill=C_LINE, width=3)
+        draw.line([(spine_x, cy), (x0, cy)], fill=C_LINE, width=3)
+        _rounded_box(draw, (x0, y0, x1, y1), C_ACCENT, radius=14)
         _multiline_center(
-            draw, (x0, y0, x1, y1), [title, desc], f_l1, gap=4, fonts=[f_l1, f_sub],
+            draw, (x0, y0, x1, y1), [title, desc], f_l1, gap=6, fonts=[f_l1, f_sub],
         )
 
     draw.text(
-        (40, 960),
+        (48, 1200),
         'La EDT organiza el alcance en dos ramas: operación diaria (izquierda) y gobierno/control (derecha), '
         'sobre una misma plataforma de información.',
         font=note,
@@ -369,40 +358,39 @@ def draw_flujo_moreapp(path: Path):
 
 
 def draw_edt_roles(path: Path):
-    """EDT ligero de roles / quién usa qué."""
-    w, h = 1400, 480
+    """EDT de roles con tipografía grande para impresión."""
+    w, h = 1800, 620
     img = Image.new('RGB', (w, h), C_BG)
     draw = ImageDraw.Draw(img)
-    f_title = _font(22, True)
-    f_box = _font(14, True)
-    f_small = _font(12)
+    f_title = _font(34, True)
+    f_box = _font(22, True)
+    f_small = _font(18)
 
-    draw.text((40, 24), 'Responsabilidades por rol', font=f_title, fill=C_ROOT)
+    draw.text((48, 28), 'Responsabilidades por rol', font=f_title, fill=C_ROOT)
 
     roles = [
-        (50, 100, 300, 200, C_ROOT, ['ADMIN', 'Gobierno total']),
-        (330, 100, 580, 200, C_L1, ['ADMINISTRATIVO', 'Operación diaria']),
-        (610, 100, 860, 200, C_ACCENT, ['TÉCNICO', 'Trabajo en terreno']),
-        (890, 100, 1140, 200, C_WARN, ['GERENCIA', 'Visión agregada']),
-        (1170, 100, 1360, 200, C_L2, ['AUDITOR', 'Trazabilidad']),
+        (50, 110, 380, 240, C_ROOT, ['ADMIN', 'Gobierno total']),
+        (410, 110, 740, 240, C_L1, ['ADMINISTRATIVO', 'Operación diaria']),
+        (770, 110, 1100, 240, C_ACCENT, ['TÉCNICO', 'Trabajo en terreno']),
+        (1130, 110, 1460, 240, C_WARN, ['GERENCIA', 'Visión agregada']),
+        (1490, 110, 1750, 240, C_L2, ['AUDITOR', 'Trazabilidad']),
     ]
     for x0, y0, x1, y1, color, lines in roles:
-        _rounded_box(draw, (x0, y0, x1, y1), color, radius=12)
-        _multiline_center(draw, (x0, y0, x1, y1), lines, f_box)
+        _rounded_box(draw, (x0, y0, x1, y1), color, radius=14)
+        _multiline_center(draw, (x0, y0, x1, y1), lines, f_box, gap=6)
 
-    # foco debajo
     focos = [
-        (50, 260, 300, 400, ['Usuarios', 'configuración', 'control']),
-        (330, 260, 580, 400, ['Clientes', 'OT', 'MoreApp', 'inventario']),
-        (610, 260, 860, 400, ['Sus OT', 'evidencia', 'terreno']),
-        (890, 260, 1140, 400, ['Dashboards', 'indicadores']),
-        (1170, 260, 1360, 400, ['Auditoría', 'consulta']),
+        (50, 300, 380, 540, ['Usuarios', 'configuración', 'control']),
+        (410, 300, 740, 540, ['Clientes', 'OT', 'MoreApp', 'inventario']),
+        (770, 300, 1100, 540, ['Sus OT', 'evidencia', 'terreno']),
+        (1130, 300, 1460, 540, ['Dashboards', 'indicadores']),
+        (1490, 300, 1750, 540, ['Auditoría', 'consulta']),
     ]
     for x0, y0, x1, y1, lines in focos:
-        _rounded_box(draw, (x0, y0, x1, y1), C_WHITE, outline=C_LINE, radius=12, width=2)
-        _multiline_center(draw, (x0, y0, x1, y1), lines, f_small, fill=C_TEXT, gap=4)
+        _rounded_box(draw, (x0, y0, x1, y1), C_WHITE, outline=C_LINE, radius=14, width=3)
+        _multiline_center(draw, (x0, y0, x1, y1), lines, f_small, fill=C_TEXT, gap=8)
         mx = (x0 + x1) // 2
-        draw.line([(mx, 200), (mx, 260)], fill=C_LINE, width=3)
+        draw.line([(mx, 240), (mx, 300)], fill=C_LINE, width=3)
 
     img.save(path)
 
@@ -442,13 +430,30 @@ def add_image(doc, path: Path, width_cm=16.5):
     p.paragraph_format.space_after = Pt(12)
 
 
+def _set_section_portrait(section, margin_cm=1.5):
+    section.orientation = WD_ORIENT.PORTRAIT
+    # A4
+    section.page_width = Cm(21.0)
+    section.page_height = Cm(29.7)
+    section.top_margin = Cm(margin_cm)
+    section.bottom_margin = Cm(margin_cm)
+    section.left_margin = Cm(margin_cm)
+    section.right_margin = Cm(margin_cm)
+
+
+def _set_section_landscape(section, margin_cm=1.2):
+    section.orientation = WD_ORIENT.LANDSCAPE
+    section.page_width = Cm(29.7)
+    section.page_height = Cm(21.0)
+    section.top_margin = Cm(margin_cm)
+    section.bottom_margin = Cm(margin_cm)
+    section.left_margin = Cm(margin_cm)
+    section.right_margin = Cm(margin_cm)
+
+
 def build_docx(images: dict):
     doc = Document()
-    section = doc.sections[0]
-    section.top_margin = Cm(1.8)
-    section.bottom_margin = Cm(1.8)
-    section.left_margin = Cm(2)
-    section.right_margin = Cm(2)
+    _set_section_portrait(doc.sections[0], margin_cm=1.6)
 
     # Portada
     add_para(doc, 'DELCO Chile', size=12, bold=True, center=True)
@@ -492,7 +497,13 @@ def build_docx(images: dict):
         'sino partes de un mismo ciclo operativo que luego se gobierna con reportes '
         'y trazabilidad.',
     )
-    add_image(doc, images['edt'], width_cm=17)
+    # EDT a página completa horizontal para maximizar legibilidad
+    sec_edt = doc.add_section()
+    _set_section_landscape(sec_edt)
+    add_image(doc, images['edt'], width_cm=27.0)
+
+    sec_back = doc.add_section()
+    _set_section_portrait(sec_back)
     add_para(
         doc,
         'En operación, Inventario administra activos de campo (medidores, SIM y módems), '
@@ -518,7 +529,7 @@ def build_docx(images: dict):
         'sus órdenes; gerencia observa indicadores; auditoría consulta la trazabilidad '
         'de cambios relevantes.',
     )
-    add_image(doc, images['roles'])
+    add_image(doc, images['roles'], width_cm=18.0)
 
     doc.add_page_break()
 

@@ -34,7 +34,9 @@ class Command(BaseCommand):
     help = (
         'Elimina datos de prueba o resetea la plataforma operativa. '
         'Con --reset-completo deja en blanco OT, MoreApp, inventario, clientes, '
-        'auditoría y catálogo de diagnósticos (conserva usuarios y estados de inventario).'
+        'auditoría y catálogo (conserva usuarios y estados de inventario). '
+        'Con --conservar-clientes hace el mismo reset operativo pero mantiene '
+        'clientes e historial de proyectos.'
     )
 
     def add_arguments(self, parser):
@@ -54,6 +56,14 @@ class Command(BaseCommand):
             help='Borra todo el dato operativo: OT, MoreApp, inventario, clientes, auditoría y catálogo.',
         )
         parser.add_argument(
+            '--conservar-clientes',
+            action='store_true',
+            help=(
+                'Como --reset-completo, pero conserva Cliente e historial de proyectos. '
+                'Borra OT, MoreApp, inventario, auditoría, importaciones y catálogo.'
+            ),
+        )
+        parser.add_argument(
             '--flujo-operativo',
             action='store_true',
             help='Borra todas las OT, registros MoreApp y movimientos generados por MoreApp.',
@@ -71,7 +81,7 @@ class Command(BaseCommand):
         parser.add_argument(
             '--resembrar-catalogo',
             action='store_true',
-            help='Tras --reset-completo, vuelve a cargar el catálogo de diagnósticos base.',
+            help='Tras reset, vuelve a cargar el catálogo de diagnósticos base.',
         )
 
     def _conteo_reportes(self):
@@ -79,7 +89,7 @@ class Command(BaseCommand):
 
         return {slug: len(run_report(slug, {})[1]) for slug in REPORT_CATALOG}
 
-    def _resumen_reset_completo(self):
+    def _resumen_reset_completo(self, conservar_clientes=False):
         from ordenes_trabajo.models import (
             AdjuntoOrden,
             EquipoTrabajo,
@@ -97,7 +107,7 @@ class Command(BaseCommand):
             Ubicacion,
             VerificacionMedidor,
         )
-        from clientes.models import Cliente
+        from clientes.models import Cliente, ClienteProyectoHistorial
         from web.models import AuditLog
         from catalogos.models import CatalogoDiagnostico
         from importaciones.models import ImportacionExcel
@@ -112,7 +122,6 @@ class Command(BaseCommand):
             ('Módems', Modem.objects.count()),
             ('SIM Cards', SimCard.objects.count()),
             ('Verificaciones medidor', VerificacionMedidor.objects.count()),
-            ('Clientes', Cliente.objects.count()),
             ('Eventos de auditoría', AuditLog.objects.count()),
             ('Catálogo diagnósticos', CatalogoDiagnostico.objects.count()),
             ('Importaciones Excel', ImportacionExcel.objects.count()),
@@ -121,10 +130,24 @@ class Command(BaseCommand):
             ('Vehículos', Vehiculo.objects.count()),
             ('Ubicaciones', Ubicacion.objects.count()),
         ]
+        if conservar_clientes:
+            resumen.append(('Clientes (SE CONSERVAN)', Cliente.objects.count()))
+            resumen.append(
+                ('Historial proyectos (SE CONSERVA)', ClienteProyectoHistorial.objects.count())
+            )
+        else:
+            resumen.append(('Clientes', Cliente.objects.count()))
+            resumen.append(('Historial proyectos', ClienteProyectoHistorial.objects.count()))
 
         try:
             from integraciones.models import IntegracionMoreAppLog
             resumen.append(('Logs MoreApp', IntegracionMoreAppLog.objects.count()))
+        except Exception:
+            pass
+
+        try:
+            from soporte.models import TicketSoporte
+            resumen.append(('Tickets de soporte', TicketSoporte.objects.count()))
         except Exception:
             pass
 
@@ -194,13 +217,29 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options['dry_run']
         reset_completo = options['reset_completo']
+        conservar_clientes = options['conservar_clientes']
         flujo_operativo = options['flujo_operativo'] or options['incluir_moreapp']
         incluir_inventario_prueba = options['incluir_inventario_prueba']
         resembrar_catalogo = options['resembrar_catalogo']
         auto_confirm = options['yes']
 
-        if reset_completo:
-            resumen = self._resumen_reset_completo()
+        if reset_completo and conservar_clientes:
+            self.stdout.write(self.style.ERROR(
+                'No combines --reset-completo con --conservar-clientes. '
+                'Usa solo --conservar-clientes.'
+            ))
+            return
+
+        modo_reset = reset_completo or conservar_clientes
+
+        if conservar_clientes:
+            resumen = self._resumen_reset_completo(conservar_clientes=True)
+            self.stdout.write(
+                'Reset operativo CONSERVANDO clientes e historial de proyectos '
+                '(también conserva usuarios y estados de inventario):'
+            )
+        elif reset_completo:
+            resumen = self._resumen_reset_completo(conservar_clientes=False)
             self.stdout.write(
                 'Reset completo (conserva usuarios y estados de inventario de referencia):'
             )
@@ -214,7 +253,7 @@ class Command(BaseCommand):
         for etiqueta, cantidad in resumen:
             self.stdout.write(f'  - {etiqueta}: {cantidad}')
 
-        if incluir_inventario_prueba and not reset_completo:
+        if incluir_inventario_prueba and not modo_reset:
             _, qs_map = self._resumen_ejemplo_parcial()
             self.stdout.write('\nInventario de prueba adicional:')
             for etiqueta, cantidad in [
@@ -238,21 +277,26 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING('Modo dry-run: no se eliminó nada.'))
             return
 
-        if not any(c for _, c in resumen if c > 0) and not incluir_inventario_prueba and not reset_completo:
+        if not any(c for _, c in resumen if c > 0) and not incluir_inventario_prueba and not modo_reset:
             self.stdout.write(self.style.SUCCESS('No hay datos que borrar con los filtros seleccionados.'))
             return
 
         confirmar = auto_confirm
         if not confirmar:
-            prompt = '¿Confirmar eliminación TOTAL? [s/N]: ' if reset_completo else '¿Confirmar eliminación? [s/N]: '
+            if conservar_clientes:
+                prompt = '¿Confirmar reset conservando clientes/proyectos? [s/N]: '
+            elif reset_completo:
+                prompt = '¿Confirmar eliminación TOTAL? [s/N]: '
+            else:
+                prompt = '¿Confirmar eliminación? [s/N]: '
             confirmar = input(prompt).strip().lower() in ('s', 'si', 'sí', 'y', 'yes')
         if not confirmar:
             self.stdout.write(self.style.WARNING('Operación cancelada.'))
             return
 
         with transaction.atomic():
-            if reset_completo:
-                self._limpiar_reset_completo()
+            if modo_reset:
+                self._limpiar_reset_completo(conservar_clientes=conservar_clientes)
                 if resembrar_catalogo:
                     self._resembrar_catalogo_diagnostico()
             elif flujo_operativo:
@@ -260,15 +304,28 @@ class Command(BaseCommand):
             else:
                 self._limpiar_ejemplo_parcial()
 
-            if incluir_inventario_prueba and not reset_completo:
+            if incluir_inventario_prueba and not modo_reset:
                 self._limpiar_inventario_prueba()
 
-            if reset_completo:
-                self._reiniciar_secuencias_tras_limpieza(reset_completo=True)
+            if modo_reset:
+                self._reiniciar_secuencias_tras_limpieza(
+                    reset_completo=True,
+                    conservar_clientes=conservar_clientes,
+                )
             elif flujo_operativo:
                 self._reiniciar_secuencias_tras_limpieza(flujo_operativo=True)
 
-        if reset_completo:
+        if conservar_clientes:
+            self.stdout.write(self.style.SUCCESS(
+                'Reset operativo finalizado. Clientes e historial de proyectos se mantuvieron.'
+            ))
+            self.stdout.write('  Conservado: clientes, historial de proyectos, usuarios y estados de inventario.')
+            self.stdout.write('  Borrado: OT, MoreApp, inventario, auditoría, importaciones y catálogo.')
+            if not resembrar_catalogo:
+                self.stdout.write(
+                    '  Catálogo de diagnósticos vacío. Usa --resembrar-catalogo si quieres la lista base.'
+                )
+        elif reset_completo:
             self.stdout.write(self.style.SUCCESS(
                 'Reset completo finalizado. La plataforma quedó en blanco para pruebas manuales.'
             ))
@@ -324,7 +381,9 @@ class Command(BaseCommand):
             f'Secuencias SQLite reiniciadas: {", ".join(table_names)}'
         ))
 
-    def _reiniciar_secuencias_tras_limpieza(self, flujo_operativo=False, reset_completo=False):
+    def _reiniciar_secuencias_tras_limpieza(
+        self, flujo_operativo=False, reset_completo=False, conservar_clientes=False,
+    ):
         tablas = []
         if flujo_operativo or reset_completo:
             tablas.extend([
@@ -335,7 +394,6 @@ class Command(BaseCommand):
             ])
         if reset_completo:
             tablas.extend([
-                'clientes_cliente',
                 'inventario_medidor',
                 'inventario_modem',
                 'inventario_simcard',
@@ -349,6 +407,11 @@ class Command(BaseCommand):
                 'catalogos_catalogodiagnostico',
                 'integraciones_integracionmoreapplog',
             ])
+            if not conservar_clientes:
+                tablas.extend([
+                    'clientes_cliente',
+                    'clientes_clienteproyectohistorial',
+                ])
         self._reset_sqlite_sequences(tablas)
 
     def _limpiar_flujo_operativo(self):
@@ -361,7 +424,7 @@ class Command(BaseCommand):
 
         self._eliminar_moreapp_y_ot()
 
-    def _limpiar_reset_completo(self):
+    def _limpiar_reset_completo(self, conservar_clientes=False):
         from ordenes_trabajo.models import EquipoTrabajo, Herramienta, Vehiculo
         from inventario.models import (
             Medidor,
@@ -371,7 +434,7 @@ class Command(BaseCommand):
             Ubicacion,
             VerificacionMedidor,
         )
-        from clientes.models import Cliente
+        from clientes.models import Cliente, ClienteProyectoHistorial
         from web.models import AuditLog
         from catalogos.models import CatalogoDiagnostico
         from importaciones.models import ImportacionExcel
@@ -386,7 +449,12 @@ class Command(BaseCommand):
             deleted_ver, _ = VerificacionMedidor.objects.all().delete()
             self.stdout.write(self.style.SUCCESS(f'Verificaciones medidor eliminadas: {deleted_ver}'))
 
-        Cliente.objects.update(medidor_actual=None)
+        # Desvincular medidor actual para poder borrar inventario sin tocar clientes
+        n_desv = Cliente.objects.exclude(medidor_actual=None).update(medidor_actual=None)
+        if n_desv:
+            self.stdout.write(self.style.SUCCESS(
+                f'Clientes desvinculados de medidor_actual: {n_desv}'
+            ))
 
         for modelo, etiqueta in (
             (SimCard, 'SIM Cards'),
@@ -397,7 +465,13 @@ class Command(BaseCommand):
                 deleted, _ = modelo.objects.all().delete()
                 self.stdout.write(self.style.SUCCESS(f'{etiqueta} eliminados: {deleted}'))
 
-        if Cliente.objects.exists():
+        if conservar_clientes:
+            n_cli = Cliente.objects.count()
+            n_hist = ClienteProyectoHistorial.objects.count()
+            self.stdout.write(self.style.WARNING(
+                f'Conservados: {n_cli} clientes y {n_hist} registros de historial de proyectos.'
+            ))
+        elif Cliente.objects.exists():
             deleted_cli, _ = Cliente.objects.all().delete()
             self.stdout.write(self.style.SUCCESS(f'Clientes eliminados: {deleted_cli}'))
 
@@ -412,6 +486,14 @@ class Command(BaseCommand):
         if ImportacionExcel.objects.exists():
             deleted_imp, _ = ImportacionExcel.objects.all().delete()
             self.stdout.write(self.style.SUCCESS(f'Importaciones Excel eliminadas: {deleted_imp}'))
+
+        try:
+            from soporte.models import TicketSoporte
+            if TicketSoporte.objects.exists():
+                deleted_tk, _ = TicketSoporte.objects.all().delete()
+                self.stdout.write(self.style.SUCCESS(f'Tickets de soporte eliminados: {deleted_tk}'))
+        except Exception:
+            pass
 
         for equipo in EquipoTrabajo.objects.all():
             equipo.miembros.clear()
