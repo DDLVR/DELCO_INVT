@@ -41,6 +41,8 @@ from ordenes_trabajo.views import (
     orden_eliminar_view,
     orden_solicitar_validacion_comunicacion_view,
     orden_registrar_validacion_comunicacion_view,
+    orden_crear_comprobante_cambio_view,
+    comprobantes_cambio_list_view,
 )
 
 # Soporte es opcional en deploys parciales: si falta el paquete, el sitio no debe caer.
@@ -134,6 +136,16 @@ urlpatterns = [
         'ordenes/<int:pk>/comunicacion/registrar/',
         orden_registrar_validacion_comunicacion_view,
         name='orden_registrar_validacion_comunicacion',
+    ),
+    path(
+        'ordenes/<int:pk>/comprobante-cambio/',
+        orden_crear_comprobante_cambio_view,
+        name='orden_crear_comprobante_cambio',
+    ),
+    path(
+        'ordenes/comprobantes-cambio/',
+        comprobantes_cambio_list_view,
+        name='comprobantes_cambio_list',
     ),
     path('ordenes/<int:pk>/eliminar/', orden_eliminar_view, name='orden_eliminar'),
 

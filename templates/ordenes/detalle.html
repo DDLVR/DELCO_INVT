@@ -743,6 +743,65 @@
                 </div>
             </div>
 
+            <!-- Comprobante digital de cambio de medidor -->
+            <div class="card mb-3 delco-panel-card" id="comprobante-cambio-medidor">
+                <div class="card-header card-header-delco d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-medical"></i> Comprobante de cambio de medidor</h5>
+                    {% if comprobantes_cambio %}
+                    <span class="badge bg-success">{{ comprobantes_cambio|length }} registrado{{ comprobantes_cambio|length|pluralize:"s" }}</span>
+                    {% endif %}
+                </div>
+                <div class="card-body">
+                    <p class="small text-muted mb-3">
+                        Suba aquí el PDF del cambio de medidor (documento firmado o escaneado)
+                        para dejarlo asociado a esta orden y al cliente.
+                    </p>
+
+                    {% if comprobantes_cambio %}
+                    <ul class="list-group list-group-flush mb-3">
+                        {% for c in comprobantes_cambio %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center flex-wrap gap-2">
+                            <div class="small">
+                                <strong>{{ c.fecha_creacion|date:"d/m/Y H:i" }}</strong>
+                                <br>
+                                <span class="text-muted">
+                                    {{ c.creado_por.nombre_interno }}
+                                    {% if c.pdf %} · {{ c.pdf.name|default:"" }}{% endif %}
+                                </span>
+                            </div>
+                            {% if c.pdf %}
+                            <a href="{{ c.pdf.url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger">
+                                <i class="bi bi-file-earmark-pdf"></i> Ver PDF
+                            </a>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted small"><em>Sin comprobantes PDF subidos en esta OT</em></p>
+                    {% endif %}
+
+                    {% if puede_crear_comprobante %}
+                    <div class="border rounded p-3 bg-light">
+                        <p class="small fw-semibold mb-2"><i class="bi bi-cloud-upload"></i> Subir PDF de cambio de medidor</p>
+                        <form method="post" action="{% url 'orden_crear_comprobante_cambio' orden.id %}" enctype="multipart/form-data" id="formComprobanteCambio">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label class="form-label small mb-0">Archivo PDF *</label>
+                                <input type="file" name="pdf_firmado" class="form-control form-control-sm" accept=".pdf,application/pdf" required>
+                                <p class="small text-muted mb-0 mt-1">Solo PDF. Acta o comprobante firmado del cambio.</p>
+                            </div>
+                            <button type="submit" class="btn btn-sm btn-primary">
+                                <i class="bi bi-upload"></i> Subir comprobante
+                            </button>
+                        </form>
+                    </div>
+                    {% elif orden.estado == 'CANCELADA' %}
+                    <p class="small text-muted mb-0">Orden cancelada; no se admiten comprobantes.</p>
+                    {% endif %}
+                </div>
+            </div>
+
             <!-- Validación de comunicación técnico ↔ administrativo -->
             <div class="card mb-3 delco-panel-card" id="validacion-comunicacion">
                 <div class="card-header card-header-delco d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -1232,6 +1291,8 @@ document.getElementById('formSubirAdjunto')?.addEventListener('submit', function
         showToast('Error al subir archivo: ' + error.message, 'danger');
     });
 });
+
+// (comprobante de cambio: solo subida de PDF; sin campos extra)
 </script>
 
 {% endblock %}

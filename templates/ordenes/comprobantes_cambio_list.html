@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+
+{% block title %}Comprobantes de cambio de medidor{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-1"><i class="bi bi-file-earmark-medical"></i> Comprobantes de cambio de medidor</h1>
+      <p class="text-muted mb-0">Respaldo digital de intervenciones de cambio de medidor.</p>
+    </div>
+    <a href="{% url 'ordenes_list' %}" class="btn btn-outline-secondary">Órdenes de trabajo</a>
+  </div>
+
+  <form method="get" class="row g-2 mb-3">
+    <div class="col-md-8">
+      <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Buscar por cliente, serie o OT…">
+    </div>
+    <div class="col-md-4">
+      <button type="submit" class="btn btn-outline-primary w-100">Buscar</button>
+    </div>
+  </form>
+
+  <div class="card delco-panel-card">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle table-delco">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Fecha</th>
+            <th>Cliente</th>
+            <th>Retirado → Instalado</th>
+            <th>OT</th>
+            <th>PDF</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in comprobantes %}
+          <tr>
+            <td>{{ c.id }}</td>
+            <td class="small">{{ c.fecha_cambio|date:"d/m/Y H:i" }}</td>
+            <td>
+              <a href="{% url 'cliente_historial' c.cliente_id %}">{{ c.cliente.numero_cliente }}</a>
+              {% if c.cliente.customer_name %}<br><small class="text-muted">{{ c.cliente.customer_name|truncatechars:40 }}</small>{% endif %}
+            </td>
+            <td class="small">{{ c.medidor_retirado_serie|default:"—" }} → <strong>{{ c.medidor_instalado_serie }}</strong></td>
+            <td><a href="{% url 'orden_detalle' c.orden_id %}">#{{ c.orden_id }}</a></td>
+            <td>
+              {% if c.pdf %}
+              <a href="{{ c.pdf.url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger">PDF</a>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-muted p-4">No hay comprobantes registrados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if page_obj.has_other_pages %}
+  <nav class="mt-3">
+    <ul class="pagination">
+      {% if page_obj.has_previous %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}">Anterior</a></li>
+      {% endif %}
+      <li class="page-item disabled"><span class="page-link">{{ page_obj.number }} / {{ page_obj.paginator.num_pages }}</span></li>
+      {% if page_obj.has_next %}
+      <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}">Siguiente</a></li>
+      {% endif %}
+    </ul>
+  </nav>
+  {% endif %}
+</div>
+{% endblock %}

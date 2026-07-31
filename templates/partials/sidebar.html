@@ -19,6 +19,11 @@
       <a class="list-group-item list-group-item-action app-nav-link ps-4 small {% if request.resolver_match.url_name == 'ordenes_terminadas' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_terminadas' %}">
         <i class="bi bi-check2-circle me-2"></i> Trabajos terminados
       </a>
+      {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}
+      <a class="list-group-item list-group-item-action app-nav-link ps-4 small {% if request.resolver_match.url_name == 'comprobantes_cambio_list' %}active bg-primary text-white{% endif %}" href="{% url 'comprobantes_cambio_list' %}">
+        <i class="bi bi-file-earmark-medical me-2"></i> Comprobantes cambio
+      </a>
+      {% endif %}
     {% endif %}
     {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'movimientos_list' or request.resolver_match.url_name == 'movimientos_detalle' or request.resolver_match.url_name == 'movimientos_historial_equipo' %}active bg-primary text-white{% endif %}" href="{% url 'movimientos_list' %}">
