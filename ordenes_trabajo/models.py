@@ -707,6 +707,96 @@ class InformeCliente(models.Model):
         ordering = ['-fecha_subida']
 
 
+class ComprobanteCambioMedidor(models.Model):
+    """
+    Registro digital del cambio de medidor (acta/comprobante) con datos,
+    firmas y PDF generado para respaldo legal y auditoría.
+    """
+
+    orden = models.ForeignKey(
+        OrdenTrabajo,
+        on_delete=models.CASCADE,
+        related_name='comprobantes_cambio_medidor',
+    )
+    cliente = models.ForeignKey(
+        'clientes.Cliente',
+        on_delete=models.PROTECT,
+        related_name='comprobantes_cambio_medidor',
+    )
+
+    medidor_retirado_serie = models.CharField(max_length=100, blank=True)
+    medidor_retirado_marca = models.CharField(max_length=100, blank=True)
+    medidor_instalado_serie = models.CharField(max_length=100)
+    medidor_instalado_marca = models.CharField(max_length=100, blank=True)
+
+    fecha_cambio = models.DateTimeField(
+        help_text='Fecha y hora del cambio de medidor',
+    )
+    nombre_firmante_cliente = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text='Nombre de quien firma por el cliente',
+    )
+    observaciones = models.TextField(blank=True)
+
+    firma_cliente = models.FileField(
+        upload_to=evidencia_upload_to,
+        storage=evidencias_storage,
+        blank=True,
+        null=True,
+        help_text='Imagen PNG de la firma del cliente',
+    )
+    firma_tecnico = models.FileField(
+        upload_to=evidencia_upload_to,
+        storage=evidencias_storage,
+        blank=True,
+        null=True,
+        help_text='Imagen PNG de la firma del técnico (opcional)',
+    )
+    pdf = models.FileField(
+        upload_to=evidencia_upload_to,
+        storage=evidencias_storage,
+        blank=True,
+        null=True,
+        help_text='PDF del comprobante generado o subido',
+    )
+    pdf_subido = models.BooleanField(
+        default=False,
+        help_text='True si el PDF se subió firmado externamente en lugar de generarse',
+    )
+
+    tecnico = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='comprobantes_cambio_tecnico',
+        limit_choices_to={'rol': 'TECNICO'},
+    )
+    creado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.PROTECT,
+        related_name='comprobantes_cambio_creados',
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-fecha_cambio', '-fecha_creacion']
+        verbose_name = 'Comprobante de cambio de medidor'
+        verbose_name_plural = 'Comprobantes de cambio de medidor'
+        indexes = [
+            models.Index(fields=['orden', '-fecha_cambio']),
+            models.Index(fields=['cliente', '-fecha_cambio']),
+        ]
+
+    def __str__(self):
+        return (
+            f'Comprobante OT #{self.orden_id} '
+            f'{self.medidor_retirado_serie or "—"} → {self.medidor_instalado_serie}'
+        )
+
+
 class IntegracionMoreApp(models.Model):
     """
     Registro de sincronizaciones con MoreApp para trazabilidad

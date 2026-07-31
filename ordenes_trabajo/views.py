@@ -606,6 +606,33 @@ def orden_detalle_view(request, pk):
     puede_registrar_comunicacion = (
         usuario.rol in ['ADMIN', 'ADMINISTRATIVO'] and orden.estado != 'CANCELADA'
     )
+    comprobantes_cambio = (
+        orden.comprobantes_cambio_medidor
+        .select_related('creado_por', 'tecnico')
+        .order_by('-fecha_cambio')[:20]
+    )
+    puede_crear_comprobante = (
+        orden.estado != 'CANCELADA'
+        and orden.cliente_id
+        and (
+            usuario.rol in ['ADMIN', 'ADMINISTRATIVO']
+            or orden.tecnico_responsable_id == usuario.id
+        )
+    )
+    # Prefill: retirado = serie actual del cliente; instalado = medidor de la OT
+    medidor_retirado_sugerido = ''
+    medidor_instalado_sugerido = ''
+    if orden.cliente_id:
+        medidor_retirado_sugerido = (
+            getattr(orden.cliente, 'meter_serial_n_1', '') or ''
+        )
+        if orden.cliente.medidor_actual_id:
+            medidor_retirado_sugerido = (
+                medidor_retirado_sugerido
+                or getattr(orden.cliente.medidor_actual, 'serie', '')
+            )
+    if orden.medidor_id:
+        medidor_instalado_sugerido = orden.medidor.serie
 
     context = {
         'orden': orden,
@@ -619,6 +646,10 @@ def orden_detalle_view(request, pk):
         'tiene_comunicacion_pendiente': tiene_comunicacion_pendiente,
         'puede_solicitar_comunicacion': puede_solicitar_comunicacion,
         'puede_registrar_comunicacion': puede_registrar_comunicacion,
+        'comprobantes_cambio': comprobantes_cambio,
+        'puede_crear_comprobante': puede_crear_comprobante,
+        'medidor_retirado_sugerido': medidor_retirado_sugerido,
+        'medidor_instalado_sugerido': medidor_instalado_sugerido,
         'puede_editar': usuario.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'puede_reasignar': puede_reasignar,
         'tecnicos': tecnicos,
@@ -1292,6 +1323,117 @@ def orden_registrar_validacion_comunicacion_view(request, pk):
         f'(por {usuario.nombre_interno}).',
     )
     return redirect('orden_detalle', pk=pk)
+
+
+@login_required
+@require_POST
+def orden_crear_comprobante_cambio_view(request, pk):
+    """Sube el PDF de comprobante de cambio de medidor y lo asocia a la OT."""
+    from ordenes_trabajo.comprobantes import crear_comprobante_cambio
+
+    orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
+    usuario = request.user
+
+    if orden.estado == 'CANCELADA':
+        messages.error(request, 'No se puede subir comprobante en una orden cancelada.')
+        return redirect('orden_detalle', pk=pk)
+
+    if not orden.cliente_id:
+        messages.error(request, 'La orden no tiene cliente asociado.')
+        return redirect('orden_detalle', pk=pk)
+
+    es_admin = usuario.rol in ['ADMIN', 'ADMINISTRATIVO']
+    es_responsable = orden.tecnico_responsable_id == usuario.id
+    if not es_admin and not es_responsable:
+        messages.error(request, 'No tienes permiso para subir el comprobante.')
+        return redirect('orden_detalle', pk=pk)
+
+    pdf_file = request.FILES.get('pdf_firmado')
+    if not pdf_file:
+        messages.error(request, 'Debe seleccionar un archivo PDF.')
+        return redirect('orden_detalle', pk=pk)
+
+    nombre = (pdf_file.name or '').lower()
+    if not nombre.endswith('.pdf'):
+        messages.error(request, 'El archivo debe ser PDF.')
+        return redirect('orden_detalle', pk=pk)
+
+    # Validar cabecera PDF
+    try:
+        cabecera = pdf_file.read(5)
+        pdf_file.seek(0)
+    except Exception:
+        messages.error(request, 'No se pudo leer el archivo.')
+        return redirect('orden_detalle', pk=pk)
+    if cabecera != b'%PDF-':
+        messages.error(request, 'El archivo no parece un PDF válido.')
+        return redirect('orden_detalle', pk=pk)
+
+    MAX_PDF = 15 * 1024 * 1024
+    if pdf_file.size and pdf_file.size > MAX_PDF:
+        messages.error(request, 'El PDF supera el máximo de 15 MB.')
+        return redirect('orden_detalle', pk=pk)
+
+    serie_inst = 'VER_PDF'
+    if orden.medidor_id:
+        serie_inst = orden.medidor.serie or serie_inst
+
+    try:
+        comprobante = crear_comprobante_cambio(
+            orden=orden,
+            usuario=usuario,
+            medidor_instalado_serie=serie_inst,
+            medidor_retirado_serie=(
+                getattr(orden.cliente, 'meter_serial_n_1', '') or ''
+            ),
+            fecha_cambio=timezone.now(),
+            observaciones='',
+            pdf_subido=pdf_file,
+        )
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect('orden_detalle', pk=pk)
+    except Exception as exc:
+        messages.error(request, f'No se pudo subir el comprobante: {exc}')
+        return redirect('orden_detalle', pk=pk)
+
+    messages.success(
+        request,
+        f'Comprobante PDF #{comprobante.pk} subido y asociado a la OT.',
+    )
+    return redirect('orden_detalle', pk=pk)
+
+
+@login_required
+def comprobantes_cambio_list_view(request):
+    """Listado administrativo de comprobantes de cambio de medidor."""
+    from django.core.paginator import Paginator
+    from ordenes_trabajo.models import ComprobanteCambioMedidor
+
+    if request.user.rol not in ['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR']:
+        messages.error(request, 'No tienes acceso a comprobantes de cambio.')
+        return redirect('dashboard')
+
+    qs = (
+        ComprobanteCambioMedidor.objects
+        .select_related('orden', 'cliente', 'tecnico', 'creado_por')
+        .order_by('-fecha_cambio')
+    )
+    q = (request.GET.get('q') or '').strip()
+    if q:
+        qs = qs.filter(
+            Q(cliente__numero_cliente__icontains=q)
+            | Q(medidor_instalado_serie__icontains=q)
+            | Q(medidor_retirado_serie__icontains=q)
+            | Q(orden__titulo__icontains=q)
+        )
+
+    page = Paginator(qs, 25).get_page(request.GET.get('page') or 1)
+    return render(request, 'ordenes/comprobantes_cambio_list.html', {
+        'page_obj': page,
+        'comprobantes': page.object_list,
+        'q': q,
+    })
 
 
 @login_required

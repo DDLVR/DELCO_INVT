@@ -1111,3 +1111,109 @@ class OrdenValidacionComunicacionTests(TestCase):
 		)
 		self.assertEqual(response.status_code, 302)
 		self.assertFalse(ValidacionComunicacionOT.objects.filter(orden=self.orden).exists())
+
+
+class ComprobanteCambioMedidorTests(TestCase):
+	"""2.2 — Comprobante digital de cambio de medidor."""
+
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='15151515-1',
+			email='admin_comp@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Comp',
+			nombre_interno='admin_comp',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.tecnico = Usuario.objects.create_user(
+			rut='16161616-1',
+			email='tec_comp@delco.cl',
+			password=self.password,
+			nombre='Tec',
+			apellido='Comp',
+			nombre_interno='tec_comp',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.cliente = Cliente.objects.create(
+			numero_cliente='CLI-COMP-001',
+			direccion='Dir comp',
+			comuna='Santiago',
+			tipo_suministro='ELECTRICO',
+			sector='CENTRO',
+			customer_name='Cliente Comp',
+			installation_address='Inst Comp',
+			meter_manufacturer_id='TEST',
+			meter_serial_n_1='SER-OLD-001',
+			activo=True,
+		)
+		self.orden = OrdenTrabajo.objects.create(
+			titulo='OT Cambio medidor comprobante',
+			descripcion='Cambio',
+			tipo_trabajo='CAMBIO',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			tecnico_responsable=self.tecnico,
+			estado='EN_EJECUCION',
+		)
+		self.client = Client()
+
+	def test_crear_comprobante_genera_pdf(self):
+		"""Compat: crear sin PDF subido aún genera PDF interno (ruta secundaria)."""
+		from ordenes_trabajo.models import ComprobanteCambioMedidor
+		from ordenes_trabajo.comprobantes import crear_comprobante_cambio
+		comp = crear_comprobante_cambio(
+			orden=self.orden,
+			usuario=self.admin,
+			medidor_instalado_serie='SER-NEW-002',
+			medidor_retirado_serie='SER-OLD-001',
+		)
+		self.assertTrue(bool(comp.pdf))
+		self.assertFalse(comp.pdf_subido)
+		self.assertEqual(ComprobanteCambioMedidor.objects.filter(orden=self.orden).count(), 1)
+
+	def test_subir_pdf_firmado(self):
+		from django.core.files.uploadedfile import SimpleUploadedFile
+		from ordenes_trabajo.models import ComprobanteCambioMedidor
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		pdf = SimpleUploadedFile('acta.pdf', b'%PDF-1.4 fake', content_type='application/pdf')
+		response = self.client.post(
+			reverse('orden_crear_comprobante_cambio', kwargs={'pk': self.orden.pk}),
+			{
+				'medidor_instalado_serie': 'SER-NEW-009',
+				'pdf_firmado': pdf,
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		comp = ComprobanteCambioMedidor.objects.get(orden=self.orden)
+		self.assertTrue(comp.pdf_subido)
+		self.assertTrue(bool(comp.pdf))
+
+	def test_subir_requiere_pdf(self):
+		self.assertTrue(self.client.login(rut=self.tecnico.rut, password=self.password))
+		response = self.client.post(
+			reverse('orden_crear_comprobante_cambio', kwargs={'pk': self.orden.pk}),
+			{'medidor_instalado_serie': 'SER-X'},
+		)
+		self.assertEqual(response.status_code, 302)
+		from ordenes_trabajo.models import ComprobanteCambioMedidor
+		self.assertFalse(ComprobanteCambioMedidor.objects.filter(orden=self.orden).exists())
+
+	def test_listado_comprobantes(self):
+		from ordenes_trabajo.comprobantes import crear_comprobante_cambio
+		from ordenes_trabajo.models import ComprobanteCambioMedidor
+		crear_comprobante_cambio(
+			orden=self.orden,
+			usuario=self.admin,
+			medidor_instalado_serie='SER-LIST-1',
+			medidor_retirado_serie='SER-OLD-001',
+		)
+		self.assertEqual(
+			ComprobanteCambioMedidor.objects.filter(medidor_instalado_serie='SER-LIST-1').count(),
+			1,
+		)
+		self.assertEqual(reverse('comprobantes_cambio_list'), '/ordenes/comprobantes-cambio/')

@@ -22,5 +22,11 @@ evidencias_storage = EvidenciasStorage()
 def evidencia_upload_to(instance, filename):
     """Ruta relativa dentro de Registros/Evidencias."""
     safe_name = get_valid_filename(filename)
-    subcarpeta = 'informes' if instance.__class__.__name__ == 'InformeCliente' else 'adjuntos'
+    class_name = instance.__class__.__name__
+    if class_name == 'InformeCliente':
+        subcarpeta = 'informes'
+    elif class_name == 'ComprobanteCambioMedidor':
+        subcarpeta = 'comprobantes'
+    else:
+        subcarpeta = 'adjuntos'
     return f'{subcarpeta}/{timezone.now():%Y/%m}/{safe_name}'
