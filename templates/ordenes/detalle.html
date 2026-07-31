@@ -205,6 +205,7 @@
                             {% if puede_reasignar %}
                             <form method="post" class="mt-1" id="formReasignarTecnico">
                                 {% csrf_token %}
+                                {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                                 <input type="hidden" name="accion" value="reasignar_tecnico">
                                 <select name="tecnico_responsable" class="form-select form-select-sm mb-2" required>
                                     <option value="">— Seleccionar técnico —</option>
@@ -375,6 +376,7 @@
                     <h6 class="mb-3"><i class="bi bi-plus-circle"></i> Registrar/Actualizar Equipos Usados</h6>
                     <form method="post" action="{% url 'orden_registrar_equipos' orden.id %}" id="formRegistrarEquipos">
                         {% csrf_token %}
+                        {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                         <div class="row">
                             <!-- Campo de Búsqueda de Medidor -->
                             <div class="col-md-4 mb-2">
@@ -557,6 +559,7 @@
                     {% if puede_editar_observaciones %}
                     <form method="post" action="{% url 'orden_detalle' orden.id %}">
                         {% csrf_token %}
+                        {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                         <input type="hidden" name="accion" value="guardar_observaciones">
                         <textarea name="observaciones_tecnicas" class="form-control mb-2" rows="4"
                                   placeholder="Instrucciones, detalles del trabajo o notas del técnico...">{{ orden.observaciones_tecnicas }}</textarea>
@@ -1058,6 +1061,7 @@
                 <div class="card-body">
                     <form method="post" action="{% url 'cambiar_estado_orden' orden.id %}">
                         {% csrf_token %}
+                        {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                         <label class="form-label">Cambiar Estado</label>
                         <select name="nuevo_estado" class="form-select mb-2">
                             {% if puede_editar %}
@@ -1096,6 +1100,7 @@
                     <p class="small text-muted">La orden ya fue validada. Confirme el cierre para terminar el ciclo en la plataforma.</p>
                     <form method="post" action="{% url 'cambiar_estado_orden' orden.id %}">
                         {% csrf_token %}
+                        {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                         <input type="hidden" name="nuevo_estado" value="FINALIZADA">
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="bi bi-flag-fill"></i> Marcar como finalizada
@@ -1122,6 +1127,7 @@
                     <p class="small text-muted">Revise el informe MoreApp y los equipos. Si aprueba, la orden queda validada a su nombre. Si rechaza, debe dejar comentario y se creará una OT derivada.</p>
                     <form method="post" action="{% url 'cambiar_estado_orden' orden.id %}" id="formValidacionOrden">
                         {% csrf_token %}
+                        {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                         <label class="form-label">Resultado</label>
                         <select name="nuevo_estado" class="form-select mb-2" id="selectResultadoValidacion">
                             <option value="VALIDADA">Validada (aprobar trabajo)</option>
@@ -1152,6 +1158,7 @@
                     <p class="small text-muted">Puede marcar la orden como observada si detecta problemas. Se creará una OT derivada para corrección en terreno. No puede validar el cierre del trabajo.</p>
                     <form method="post" action="{% url 'cambiar_estado_orden' orden.id %}" id="formObservacionAuditor">
                         {% csrf_token %}
+                        {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                         <input type="hidden" name="nuevo_estado" value="OBSERVADA">
                         <label class="form-label" for="observacionAuditor">Motivo de la observación</label>
                         <textarea name="observacion_validacion" id="observacionAuditor" class="form-control mb-2" rows="3" required placeholder="Indique qué debe corregirse en terreno...">{{ orden.observacion_validacion }}</textarea>
