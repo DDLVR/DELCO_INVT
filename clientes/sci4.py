@@ -110,6 +110,23 @@ def marcar_sci4_actualizado(
             reason=reason,
         )
     )
+
+    # Cerrar cargas abiertas de verificación SCi4 del mismo cliente
+    try:
+        from django.utils import timezone
+        from cargas.models import CargaAdministrativa
+
+        CargaAdministrativa.objects.filter(
+            cliente_id=cliente.pk,
+            tipo='VERIFICACION_SCI4',
+            estado__in=['PENDIENTE', 'EN_PROGRESO'],
+        ).update(
+            estado='COMPLETADA',
+            fecha_completada=timezone.now(),
+        )
+    except Exception:
+        pass
+
     return True
 
 
@@ -247,6 +264,10 @@ def alertar_sci4_por_orden_equipos(
 
     cliente = orden.cliente
     campos = actualizar_ficha_cliente_desde_ot(orden, es_retiro=es_retiro)
+    # Sin cambios en ficha no hay nada que actualizar en la base comercial
+    if not campos:
+        return False
+
     equipos = []
     if orden.medidor_id:
         equipos.append(f'medidor {getattr(orden.medidor, "serie", orden.medidor_id)}')
@@ -266,5 +287,5 @@ def alertar_sci4_por_orden_equipos(
         cliente,
         actor_id=actor_id,
         reason=reason,
-        campos=campos or None,
+        campos=campos,
     )

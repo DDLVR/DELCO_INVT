@@ -38,6 +38,16 @@ from .utils import (
     ESTADOS_TERMINADOS_LABELS,
 )
 from usuarios.models import Usuario
+from django.urls import reverse
+
+
+def _redirect_orden_detalle(request, pk):
+    """Redirect a detalle OT preservando ?desde=terminadas si aplica."""
+    desde = (request.POST.get('desde') or request.GET.get('desde') or '').strip().lower()
+    url = reverse('orden_detalle', kwargs={'pk': pk})
+    if desde == 'terminadas':
+        return redirect(f'{url}?desde=terminadas')
+    return redirect(url)
 from clientes.models import Cliente
 from inventario.models import Medidor, SimCard, Modem
 from web.decorators import admin_only
@@ -670,16 +680,15 @@ def orden_detalle_view(request, pk):
             not sincronizaciones.exists()
             and not informes.filter(origen__in=['MOREAPP', 'RESPALDO_MOREAPP']).exists()
         ),
+        'desde_terminadas': (request.GET.get('desde') or '').strip().lower() == 'terminadas',
     }
 
-    # Volver: si viene de trabajos terminados (o la OT ya está cerrada), regresar ahí
+    # Volver: solo a terminadas si el usuario vino desde esa vista
     desde = (request.GET.get('desde') or '').strip().lower()
-    if desde == 'terminadas' or orden.estado in ESTADOS_TERMINADOS:
-        from django.urls import reverse
+    if desde == 'terminadas':
         context['volver_url'] = reverse('ordenes_terminadas')
         context['volver_label'] = 'Volver a trabajos terminados'
     else:
-        from django.urls import reverse
         context['volver_url'] = reverse('ordenes_list')
         context['volver_label'] = 'Volver'
     
@@ -1209,20 +1218,20 @@ def orden_solicitar_validacion_comunicacion_view(request, pk):
 
     if orden.estado == 'CANCELADA':
         messages.error(request, 'No se puede solicitar validación en una orden cancelada.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     es_admin = usuario.rol in ['ADMIN', 'ADMINISTRATIVO']
     es_responsable = orden.tecnico_responsable_id == usuario.id
     if not es_admin and not es_responsable:
         messages.error(request, 'No tienes permiso para solicitar la validación de comunicación.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     if orden.validaciones_comunicacion.filter(estado='SOLICITADA').exists():
         messages.info(
             request,
             'Ya hay una solicitud de validación de comunicación pendiente en esta orden.',
         )
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     nota = (request.POST.get('observaciones_solicitud') or '').strip()
     registro = ValidacionComunicacionOT.objects.create(
@@ -1248,7 +1257,7 @@ def orden_solicitar_validacion_comunicacion_view(request, pk):
         'Solicitud de validación de comunicación registrada. '
         'Administración podrá registrar el resultado de la prueba.',
     )
-    return redirect('orden_detalle', pk=pk)
+    return _redirect_orden_detalle(request, pk)
 
 
 @login_required
@@ -1260,16 +1269,16 @@ def orden_registrar_validacion_comunicacion_view(request, pk):
 
     if usuario.rol not in ['ADMIN', 'ADMINISTRATIVO']:
         messages.error(request, 'Solo administración puede registrar el resultado de la prueba.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     if orden.estado == 'CANCELADA':
         messages.error(request, 'No se puede registrar validación en una orden cancelada.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     resultado = (request.POST.get('resultado') or '').strip().upper()
     if resultado not in ('EXITOSA', 'FALLIDA'):
         messages.error(request, 'Debes indicar el resultado: Exitosa o Fallida.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     observaciones = (request.POST.get('observaciones') or '').strip()
     validacion_id = (request.POST.get('validacion_id') or '').strip()
@@ -1284,14 +1293,21 @@ def orden_registrar_validacion_comunicacion_view(request, pk):
             )
         except (ValidacionComunicacionOT.DoesNotExist, ValueError, TypeError):
             messages.error(request, 'La solicitud de validación no existe o ya fue resuelta.')
-            return redirect('orden_detalle', pk=pk)
+            return _redirect_orden_detalle(request, pk)
     else:
-        # Registro directo (sin solicitud previa del técnico)
-        registro = ValidacionComunicacionOT(
-            orden=orden,
-            solicitado_por=usuario,
-            observaciones_solicitud='Registro directo por administración',
+        # Preferir cerrar la solicitud pendiente si existe (evita dejar SOLICITADA huérfana)
+        registro = (
+            orden.validaciones_comunicacion
+            .filter(estado='SOLICITADA')
+            .order_by('fecha_solicitud')
+            .first()
         )
+        if registro is None:
+            registro = ValidacionComunicacionOT(
+                orden=orden,
+                solicitado_por=usuario,
+                observaciones_solicitud='Registro directo por administración',
+            )
 
     estado_anterior = registro.estado if registro.pk else ''
     registro.estado = resultado
@@ -1322,7 +1338,7 @@ def orden_registrar_validacion_comunicacion_view(request, pk):
         f'Resultado de comunicación registrado: {label} '
         f'(por {usuario.nombre_interno}).',
     )
-    return redirect('orden_detalle', pk=pk)
+    return _redirect_orden_detalle(request, pk)
 
 
 @login_required
@@ -1336,27 +1352,27 @@ def orden_crear_comprobante_cambio_view(request, pk):
 
     if orden.estado == 'CANCELADA':
         messages.error(request, 'No se puede subir comprobante en una orden cancelada.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     if not orden.cliente_id:
         messages.error(request, 'La orden no tiene cliente asociado.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     es_admin = usuario.rol in ['ADMIN', 'ADMINISTRATIVO']
     es_responsable = orden.tecnico_responsable_id == usuario.id
     if not es_admin and not es_responsable:
         messages.error(request, 'No tienes permiso para subir el comprobante.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     pdf_file = request.FILES.get('pdf_firmado')
     if not pdf_file:
         messages.error(request, 'Debe seleccionar un archivo PDF.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     nombre = (pdf_file.name or '').lower()
     if not nombre.endswith('.pdf'):
         messages.error(request, 'El archivo debe ser PDF.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     # Validar cabecera PDF
     try:
@@ -1364,44 +1380,46 @@ def orden_crear_comprobante_cambio_view(request, pk):
         pdf_file.seek(0)
     except Exception:
         messages.error(request, 'No se pudo leer el archivo.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
     if cabecera != b'%PDF-':
         messages.error(request, 'El archivo no parece un PDF válido.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     MAX_PDF = 15 * 1024 * 1024
     if pdf_file.size and pdf_file.size > MAX_PDF:
         messages.error(request, 'El PDF supera el máximo de 15 MB.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
-    serie_inst = 'VER_PDF'
+    serie_inst = ''
     if orden.medidor_id:
-        serie_inst = orden.medidor.serie or serie_inst
+        serie_inst = (orden.medidor.serie or '').strip()
+
+    serie_ret = (getattr(orden.cliente, 'meter_serial_n_1', None) or '').strip()
+    if not serie_ret and getattr(orden.cliente, 'medidor_actual_id', None):
+        serie_ret = (getattr(orden.cliente.medidor_actual, 'serie', None) or '').strip()
 
     try:
         comprobante = crear_comprobante_cambio(
             orden=orden,
             usuario=usuario,
             medidor_instalado_serie=serie_inst,
-            medidor_retirado_serie=(
-                getattr(orden.cliente, 'meter_serial_n_1', '') or ''
-            ),
+            medidor_retirado_serie=serie_ret,
             fecha_cambio=timezone.now(),
             observaciones='',
             pdf_subido=pdf_file,
         )
     except ValueError as exc:
         messages.error(request, str(exc))
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
     except Exception as exc:
         messages.error(request, f'No se pudo subir el comprobante: {exc}')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     messages.success(
         request,
         f'Comprobante PDF #{comprobante.pk} subido y asociado a la OT.',
     )
-    return redirect('orden_detalle', pk=pk)
+    return _redirect_orden_detalle(request, pk)
 
 
 @login_required

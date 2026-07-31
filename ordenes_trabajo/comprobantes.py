@@ -361,7 +361,8 @@ def crear_comprobante_cambio(
         raise ValueError('La orden no tiene cliente asociado.')
 
     serie_inst = (medidor_instalado_serie or '').strip()
-    if not serie_inst:
+    # Con PDF subido la serie es opcional (el documento ya trae el detalle)
+    if not serie_inst and not pdf_subido:
         raise ValueError('Debe indicar la serie del medidor instalado.')
 
     if fecha_cambio is None:

@@ -786,6 +786,7 @@
                         <p class="small fw-semibold mb-2"><i class="bi bi-cloud-upload"></i> Subir PDF de cambio de medidor</p>
                         <form method="post" action="{% url 'orden_crear_comprobante_cambio' orden.id %}" enctype="multipart/form-data" id="formComprobanteCambio">
                             {% csrf_token %}
+                            {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                             <div class="mb-3">
                                 <label class="form-label small mb-0">Archivo PDF *</label>
                                 <input type="file" name="pdf_firmado" class="form-control form-control-sm" accept=".pdf,application/pdf" required>
@@ -864,35 +865,39 @@
                                         <button type="button"
                                                 class="btn btn-sm btn-outline-primary"
                                                 data-bs-toggle="collapse"
-                                                data-bs-target="#formComunicacion{{ v.id }}">
+                                                data-bs-target="#formComunicacion{{ v.id }}"
+                                                aria-expanded="false">
                                             Registrar resultado
                                         </button>
                                         {% endif %}
                                     </td>
                                 </tr>
                                 {% if v.estado == 'SOLICITADA' and puede_registrar_comunicacion %}
-                                <tr class="collapse" id="formComunicacion{{ v.id }}">
-                                    <td colspan="4" class="bg-light">
-                                        <form method="post" action="{% url 'orden_registrar_validacion_comunicacion' orden.id %}" class="row g-2 align-items-end p-2">
-                                            {% csrf_token %}
-                                            <input type="hidden" name="validacion_id" value="{{ v.id }}">
-                                            <div class="col-md-3">
-                                                <label class="form-label small mb-0">Resultado</label>
-                                                <select name="resultado" class="form-select form-select-sm" required>
-                                                    <option value="EXITOSA">Exitosa</option>
-                                                    <option value="FALLIDA">Fallida</option>
-                                                </select>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <label class="form-label small mb-0">Observaciones</label>
-                                                <input type="text" name="observaciones" class="form-control form-control-sm" placeholder="Detalle de la prueba (opcional)">
-                                            </div>
-                                            <div class="col-md-3">
-                                                <button type="submit" class="btn btn-sm btn-primary w-100">
-                                                    Guardar como {{ user.nombre_interno }}
-                                                </button>
-                                            </div>
-                                        </form>
+                                <tr>
+                                    <td colspan="4" class="p-0 border-0">
+                                        <div class="collapse" id="formComunicacion{{ v.id }}">
+                                            <form method="post" action="{% url 'orden_registrar_validacion_comunicacion' orden.id %}" class="row g-2 align-items-end p-3 bg-light border-bottom">
+                                                {% csrf_token %}
+                                                {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
+                                                <input type="hidden" name="validacion_id" value="{{ v.id }}">
+                                                <div class="col-md-3">
+                                                    <label class="form-label small mb-0">Resultado</label>
+                                                    <select name="resultado" class="form-select form-select-sm" required>
+                                                        <option value="EXITOSA">Exitosa</option>
+                                                        <option value="FALLIDA">Fallida</option>
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label small mb-0">Observaciones</label>
+                                                    <input type="text" name="observaciones" class="form-control form-control-sm" placeholder="Detalle de la prueba (opcional)">
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <button type="submit" class="btn btn-sm btn-primary w-100">
+                                                        Guardar como {{ user.nombre_interno }}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endif %}
@@ -911,6 +916,7 @@
                                 <p class="small fw-semibold mb-2"><i class="bi bi-telephone-outbound"></i> Solicitar validación</p>
                                 <form method="post" action="{% url 'orden_solicitar_validacion_comunicacion' orden.id %}">
                                     {% csrf_token %}
+                                    {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                                     <div class="mb-2">
                                         <textarea name="observaciones_solicitud" class="form-control form-control-sm" rows="2" placeholder="Nota opcional (ej. IP/puerto a probar)"></textarea>
                                     </div>
@@ -932,6 +938,7 @@
                                 <p class="small text-muted mb-2">Si la prueba se hace sin solicitud previa del técnico.</p>
                                 <form method="post" action="{% url 'orden_registrar_validacion_comunicacion' orden.id %}">
                                     {% csrf_token %}
+                                    {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                                     <div class="mb-2">
                                         <select name="resultado" class="form-select form-select-sm" required>
                                             <option value="EXITOSA">Exitosa</option>

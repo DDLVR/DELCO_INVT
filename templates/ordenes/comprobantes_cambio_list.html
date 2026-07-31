@@ -43,7 +43,7 @@
               <a href="{% url 'cliente_historial' c.cliente_id %}">{{ c.cliente.numero_cliente }}</a>
               {% if c.cliente.customer_name %}<br><small class="text-muted">{{ c.cliente.customer_name|truncatechars:40 }}</small>{% endif %}
             </td>
-            <td class="small">{{ c.medidor_retirado_serie|default:"—" }} → <strong>{{ c.medidor_instalado_serie }}</strong></td>
+            <td class="small">{{ c.medidor_retirado_serie|default:"—" }} → <strong>{{ c.medidor_instalado_serie|default:"(ver PDF)" }}</strong></td>
             <td><a href="{% url 'orden_detalle' c.orden_id %}">#{{ c.orden_id }}</a></td>
             <td>
               {% if c.pdf %}
