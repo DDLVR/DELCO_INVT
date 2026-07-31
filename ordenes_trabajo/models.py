@@ -726,7 +726,7 @@ class ComprobanteCambioMedidor(models.Model):
 
     medidor_retirado_serie = models.CharField(max_length=100, blank=True)
     medidor_retirado_marca = models.CharField(max_length=100, blank=True)
-    medidor_instalado_serie = models.CharField(max_length=100)
+    medidor_instalado_serie = models.CharField(max_length=100, blank=True, default='')
     medidor_instalado_marca = models.CharField(max_length=100, blank=True)
 
     fecha_cambio = models.DateTimeField(

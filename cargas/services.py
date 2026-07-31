@@ -107,6 +107,15 @@ def completar_carga(carga: CargaAdministrativa, actor, observaciones: str = '') 
         new_value='COMPLETADA',
         reason=observaciones[:200] if observaciones else 'Carga completada',
     )
+    # Completar verificación SCi4 también marca el cliente como actualizado
+    if carga.tipo == 'VERIFICACION_SCI4' and carga.cliente_id:
+        from clientes.sci4 import marcar_sci4_actualizado
+
+        marcar_sci4_actualizado(
+            carga.cliente,
+            actor_id=getattr(actor, 'id', None),
+            reason=f'Carga administrativa #{carga.pk} completada',
+        )
     return carga
 
 
