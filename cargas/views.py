@@ -87,9 +87,13 @@ def cargas_hub_view(request):
 @login_required
 @admin_or_administrativo
 def cargas_list_view(request):
-    qs = CargaAdministrativa.objects.select_related(
-        'asignado_a', 'creado_por', 'orden', 'cliente',
-    ).order_by('-fecha_creacion')
+    qs = (
+        CargaAdministrativa.objects.select_related(
+            'asignado_a', 'creado_por', 'orden', 'cliente',
+        )
+        .annotate(_prio=PRIORIDAD_ORDER)
+        .order_by('-_prio', '-fecha_creacion')
+    )
 
     estado = (request.GET.get('estado') or '').strip()
     tipo = (request.GET.get('tipo') or '').strip()

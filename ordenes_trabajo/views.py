@@ -485,12 +485,12 @@ def orden_detalle_view(request, pk):
             messages.success(request, 'Observaciones técnicas guardadas')
         else:
             messages.error(request, 'No tienes permiso para editar las observaciones técnicas')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     if request.method == 'POST' and request.POST.get('accion') == 'reasignar_tecnico':
         if usuario.rol not in ['ADMIN', 'ADMINISTRATIVO']:
             messages.error(request, 'No tienes permiso para reasignar el técnico')
-            return redirect('orden_detalle', pk=pk)
+            return _redirect_orden_detalle(request, pk)
         if orden.eliminado:
             messages.error(request, 'No se puede reasignar una orden eliminada')
             return redirect('ordenes_list')
@@ -499,16 +499,16 @@ def orden_detalle_view(request, pk):
         motivo_reasignacion = request.POST.get('motivo_reasignacion', '').strip()
         if not tecnico_id:
             messages.error(request, 'Debes seleccionar un técnico')
-            return redirect('orden_detalle', pk=pk)
+            return _redirect_orden_detalle(request, pk)
         if not motivo_reasignacion:
             messages.error(request, 'Debes indicar un comentario al reasignar la orden.')
-            return redirect('orden_detalle', pk=pk)
+            return _redirect_orden_detalle(request, pk)
 
         try:
             nuevo_tecnico = Usuario.objects.get(pk=int(tecnico_id), rol='TECNICO', is_active=True)
         except (Usuario.DoesNotExist, ValueError, TypeError):
             messages.error(request, 'Técnico no válido')
-            return redirect('orden_detalle', pk=pk)
+            return _redirect_orden_detalle(request, pk)
 
         tecnico_anterior = orden.tecnico_responsable
         tecnico_anterior_id = getattr(tecnico_anterior, 'id', None)
@@ -516,7 +516,7 @@ def orden_detalle_view(request, pk):
         if tecnico_anterior_id is not None:
             if tecnico_anterior_id == nuevo_tecnico.id and orden.estado == 'REASIGNADA':
                 messages.info(request, 'El técnico ya está asignado a esta orden')
-                return redirect('orden_detalle', pk=pk)
+                return _redirect_orden_detalle(request, pk)
 
         orden.tecnico_responsable = nuevo_tecnico
         orden.estado = 'REASIGNADA'
@@ -564,7 +564,7 @@ def orden_detalle_view(request, pk):
             request,
             f'Técnico reasignado a {nuevo_tecnico.nombre_interno}. Estado: Reasignada.',
         )
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
     
     # Obtener adjuntos e informes
     adjuntos = orden.adjuntos.all()
@@ -699,18 +699,18 @@ def orden_detalle_view(request, pk):
 def orden_guardar_observaciones_view(request, pk):
     """Guarda observaciones técnicas (admin, administrativo o técnico responsable)."""
     if request.method != 'POST':
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     orden = get_object_or_404(OrdenTrabajo, pk=pk, eliminado=False)
 
     if not puede_editar_observaciones_orden(orden, request.user):
         messages.error(request, 'No tienes permiso para editar las observaciones técnicas')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '').strip()
     orden.save(update_fields=['observaciones_tecnicas'])
     messages.success(request, 'Observaciones técnicas guardadas')
-    return redirect('orden_detalle', pk=pk)
+    return _redirect_orden_detalle(request, pk)
 
 
 @login_required
@@ -724,11 +724,11 @@ def cambiar_estado_orden_view(request, pk):
 
     if not orden.puede_cambiar_estado(request.user, nuevo_estado):
         messages.error(request, 'No tienes permiso para cambiar este estado')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     if nuevo_estado == 'OBSERVADA' and not observacion:
         messages.error(request, 'Debe indicar el motivo de la observación antes de rechazar.')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
 
     # La validación/rechazo siempre queda a nombre del usuario autenticado.
     resultado = orden.cambiar_estado(request.user, nuevo_estado, razon=observacion)
@@ -753,13 +753,13 @@ def cambiar_estado_orden_view(request, pk):
                 request,
                 f'Orden observada. Se creó la OT derivada #{nueva.pk} para reintento en terreno.',
             )
-            return redirect('orden_detalle', pk=nueva.pk)
+            return _redirect_orden_detalle(request, nueva.pk)
         else:
             messages.success(request, resultado['mensaje'])
     else:
         messages.error(request, resultado['mensaje'])
 
-    return redirect('orden_detalle', pk=pk)
+    return _redirect_orden_detalle(request, pk)
 
 
 @login_required
@@ -772,13 +772,13 @@ def orden_editar_tecnico_view(request, pk):
     # Validar que es el técnico responsable
     if orden.tecnico_responsable != request.user:
         messages.error(request, 'No eres responsable de esta orden')
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
     
     # Validar ediciones permitidas
     puede_editar, razon = orden.puede_tecnico_editar(request.user)
     if not puede_editar:
         messages.error(request, razon)
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
     
     if request.method == 'POST':
         try:
@@ -817,7 +817,7 @@ def orden_editar_tecnico_view(request, pk):
         except Exception as e:
             messages.error(request, f'Error al actualizar orden: {str(e)}')
     
-    return redirect('orden_detalle', pk=pk)
+    return _redirect_orden_detalle(request, pk)
 
 
 @login_required
@@ -884,12 +884,12 @@ def orden_registrar_equipos_view(request, pk):
         # Verificar que sea el técnico responsable
         if orden.tecnico_responsable != request.user:
             messages.error(request, 'Solo el técnico responsable puede registrar equipos')
-            return redirect('orden_detalle', pk=pk)
+            return _redirect_orden_detalle(request, pk)
         
         # Verificar que la orden esté en ejecución o finalizada
         if orden.estado not in ['EN_EJECUCION', 'FINALIZADA']:
             messages.error(request, 'La orden debe estar en ejecución o finalizada para registrar equipos')
-            return redirect('orden_detalle', pk=pk)
+            return _redirect_orden_detalle(request, pk)
         
         try:
             # Registrar medidor (primero intenta por ID si viene del autocomplete, luego por serie)
@@ -965,9 +965,9 @@ def orden_registrar_equipos_view(request, pk):
         except Exception as e:
             messages.error(request, f'❌ Error al registrar equipos: {str(e)}')
         
-        return redirect('orden_detalle', pk=pk)
+        return _redirect_orden_detalle(request, pk)
     
-    return redirect('orden_detalle', pk=pk)
+    return _redirect_orden_detalle(request, pk)
 
 
 def _requiere_admin_ordenes(view_func):
