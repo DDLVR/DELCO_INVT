@@ -373,32 +373,10 @@
               <td class="small">{{ reg.tecnico_visible|default:"—" }}</td>
               <td class="small text-nowrap">{{ reg.fecha_visible|date:"d/m/Y H:i" }}</td>
               <td>
-                {% if reg.estado_sincronizacion|moreapp_sync_ok %}
-                  <span class="badge bg-success">Procesado</span>
-                {% elif reg.estado_sincronizacion == 'ALERTA_REVISION' %}
-                  <span class="badge bg-warning text-dark">Alerta</span>
-                {% elif reg.estado_sincronizacion == 'DUPLICADO' %}
-                  <span class="badge bg-secondary">Duplicado</span>
-                {% elif reg.estado_sincronizacion == 'ERROR_JSON' %}
-                  <span class="badge bg-danger">Error JSON</span>
-                {% elif reg.estado_sincronizacion == 'ERROR_LECTURA' %}
-                  <span class="badge bg-danger">Error lectura</span>
-                {% elif reg.estado_sincronizacion == 'PENDIENTE' %}
-                  <span class="badge bg-info text-dark">Pendiente</span>
-                {% else %}
-                  <span class="badge delco-badge-muted">{{ reg.get_estado_sincronizacion_display|default:reg.estado_sincronizacion }}</span>
-                {% endif %}
+                {% badge_moreapp_sync reg.estado_sincronizacion %}
               </td>
               <td>
-                {% if reg.estado_revision == 'REVISADO' %}
-                  <span class="badge bg-success">Revisado</span>
-                {% elif reg.estado_revision == 'CON_ADVERTENCIA' %}
-                  <span class="badge bg-warning text-dark">Con advertencia</span>
-                {% elif reg.estado_revision == 'DESCARTADO' %}
-                  <span class="badge bg-secondary">Descartado</span>
-                {% else %}
-                  <span class="badge bg-primary">Pendiente</span>
-                {% endif %}
+                {% badge_moreapp_revision reg.estado_revision reg.get_estado_revision_display %}
               </td>
               <td class="small">
                 {% if reg.orden_id %}

@@ -399,28 +399,30 @@ document.addEventListener('DOMContentLoaded', function() {
         'PROCESADO': 'Procesado', 'EXITOSO': 'Procesado', 'ALERTA_REVISION': 'Alerta revisión', 'DUPLICADO': 'Duplicado',
         'ERROR_JSON': 'Error JSON', 'ERROR_LECTURA': 'Error lectura', 'PENDIENTE': 'Pendiente', 'ERROR': 'Error',
     };
-    const ESTADO_SYNC_COLORS = {
-        'PROCESADO': '#16a34a', 'EXITOSO': '#16a34a', 'ALERTA_REVISION': '#f59e0b', 'DUPLICADO': '#64748b',
-        'ERROR_JSON': '#dc2626', 'ERROR_LECTURA': '#ef4444', 'PENDIENTE': '#0ea5e9', 'ERROR': '#991b1b',
+    const ESTADO_SYNC_COLORS = (window.DelcoCharts && DelcoCharts.ESTADO_SYNC_COLORS) || {
+        'PROCESADO': '#198754', 'EXITOSO': '#198754', 'ALERTA_REVISION': '#ffc107', 'DUPLICADO': '#6c757d',
+        'ERROR_JSON': '#dc3545', 'ERROR_LECTURA': '#dc3545', 'PENDIENTE': '#0dcaf0', 'ERROR': '#dc3545',
     };
     const MOV_TIPO_LABELS = {
         'ENTREGA': 'Entrega', 'RECEPCION': 'Recepción', 'INSTALACION': 'Instalación',
         'RETIRO': 'Retiro', 'DEVOLUCION': 'Devolución', 'ELIMINACION': 'Eliminación',
     };
-    const MOV_TIPO_COLORS = {
-        'ENTREGA': '#22c55e', 'RECEPCION': '#0ea5e9', 'INSTALACION': '#2563eb',
-        'RETIRO': '#f59e0b', 'DEVOLUCION': '#ef4444', 'ELIMINACION': '#7c3aed',
+    const MOV_TIPO_COLORS = (window.DelcoCharts && DelcoCharts.MOV_TIPO_COLORS) || {
+        'ENTREGA': '#198754', 'RECEPCION': '#0dcaf0', 'INSTALACION': '#0d6efd',
+        'RETIRO': '#ffc107', 'DEVOLUCION': '#dc3545', 'ELIMINACION': '#212529',
     };
     const ADV_COLORS = {
         'Sin equipo en inventario': '#f97316', 'Bloqueo de regla operativa': '#e11d48', 'Doble trabajo / conflicto': '#facc15',
     };
-    const PALETTE_BASE = ['#1d4ed8', '#0ea5e9', '#14b8a6', '#22c55e', '#eab308', '#f97316', '#ef4444', '#a855f7', '#64748b'];
+    const PALETTE_BASE = ['#1a3a5c', '#0d6efd', '#0dcaf0', '#198754', '#ffc107', '#fd7e14', '#dc3545', '#5b5bd6', '#6c757d'];
 
     function chartSliceBorderColor() {
-        return document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#1a1f26' : '#ffffff';
+        return (window.DelcoCharts && DelcoCharts.chartDefaults().borderColor) ||
+            (document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#1a1f26' : '#ffffff');
     }
     function chartLegendColor() {
-        return document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#dee2e6' : '#666666';
+        return (window.DelcoCharts && DelcoCharts.chartDefaults().legendColor) ||
+            (document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#dee2e6' : '#666666');
     }
 
     function crearDonut({ canvasId, jsonId, emptyMessage, labelGetter, valueGetter, colorGetter }) {

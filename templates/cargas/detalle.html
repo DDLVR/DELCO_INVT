@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Carga #{{ carga.id }}{% endblock %}
 
@@ -11,17 +12,9 @@
       <p class="mb-0">{{ carga.titulo }}</p>
     </div>
     <div class="d-flex flex-wrap gap-2 align-items-center">
-      {% if carga.estado == 'COMPLETADA' %}
-      <span class="badge bg-success fs-6">{{ carga.get_estado_display }}</span>
-      {% elif carga.estado == 'CANCELADA' %}
-      <span class="badge bg-dark fs-6">{{ carga.get_estado_display }}</span>
-      {% elif carga.estado == 'EN_PROGRESO' %}
-      <span class="badge bg-info text-dark fs-6">{{ carga.get_estado_display }}</span>
-      {% else %}
-      <span class="badge bg-warning text-dark fs-6">{{ carga.get_estado_display }}</span>
-      {% endif %}
+      {% badge_carga_estado carga.estado carga.get_estado_display %}
       <span class="badge bg-secondary">{{ carga.get_tipo_display }}</span>
-      <span class="badge bg-light text-dark border">{{ carga.get_prioridad_display }}</span>
+      {% badge_prioridad carga.prioridad carga.get_prioridad_display %}
     </div>
   </div>
 
@@ -37,7 +30,7 @@
           {% endif %}
           <dl class="row mb-0 small">
             <dt class="col-sm-3">Creada por</dt>
-            <dd class="col-sm-9">{{ carga.creado_por.nombre_interno }} · {{ carga.fecha_creacion|date:"d/m/Y H:i" }}</dd>
+            <dd class="col-sm-9">{{ carga.creado_por.nombre_interno }} · {{ carga.fecha_creacion|format_fecha_hora }}</dd>
             <dt class="col-sm-3">Asignada a</dt>
             <dd class="col-sm-9">
               {% if carga.asignado_a %}{{ carga.asignado_a.nombre_interno }}{% else %}<span class="text-muted">Sin asignar</span>{% endif %}
