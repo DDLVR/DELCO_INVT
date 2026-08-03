@@ -225,7 +225,6 @@ def _consumir_aviso_export_reportes(request):
         messages.warning(request, aviso)
 
 
-@csrf_exempt
 def login_view(request):
     """Autenticación de usuarios con RUT"""
     # Si ya está logueado, no mostrar login
@@ -3023,6 +3022,7 @@ def clientes_list_view(request):
 
 
 @login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR'])
 def clientes_exportar_view(request):
     """Exportar clientes a Excel (respeta filtros activos salvo padrón completo)."""
     from web.services.filtros_export import queryset_clientes_filtrado
@@ -4572,27 +4572,27 @@ def movimientos_importar_moreapp_webhook(request):
     from django.db.models import Q
     
     try:
-        # Seguridad webhook: validar secreto compartido
+        # Seguridad webhook: secreto obligatorio (fail-closed)
         expected_secret = str(getattr(settings, 'MOREAPP_WEBHOOK_SECRET', '') or '').strip()
-        if expected_secret:
-            provided_secret = (request.headers.get('X-MoreApp-Secret', '') or '').strip()
-            auth_header = (request.headers.get('Authorization', '') or '').strip()
-            if not provided_secret and auth_header.lower().startswith('bearer '):
-                provided_secret = auth_header[7:].strip()
-            if not provided_secret or not hmac.compare_digest(provided_secret, expected_secret):
-                return JsonResponse({'success': False, 'error': 'Webhook no autorizado'}, status=403)
+        if not expected_secret:
+            logger.error('MOREAPP_WEBHOOK_SECRET no configurado; webhook rechazado')
+            return JsonResponse({'success': False, 'error': 'Webhook no autorizado'}, status=403)
+        provided_secret = (request.headers.get('X-MoreApp-Secret', '') or '').strip()
+        auth_header = (request.headers.get('Authorization', '') or '').strip()
+        if not provided_secret and auth_header.lower().startswith('bearer '):
+            provided_secret = auth_header[7:].strip()
+        if not provided_secret or not hmac.compare_digest(provided_secret, expected_secret):
+            return JsonResponse({'success': False, 'error': 'Webhook no autorizado'}, status=403)
 
-        # MODO DEBUG: Loguear todo lo que llega
-        logger.info("="*80)
-        logger.info("WEBHOOK RECIBIDO DE MOREAPP")
-        logger.info(f"Headers: {dict(request.headers)}")
-        logger.info(f"Body raw: {request.body.decode('utf-8')[:1000]}")  # Primeros 1000 caracteres
-        logger.info("="*80)
-        
-        # Parsear datos JSON de MoreApp
+        # Parsear datos JSON de MoreApp (sin loguear headers/body con secretos)
         data = json.loads(request.body)
         form_name = data.get('form_name', data.get('formName', ''))
         submission_id = data.get('registrationId', data.get('submission_id', ''))
+        logger.info(
+            'Webhook MoreApp recibido form_name=%s submission_id=%s',
+            form_name,
+            submission_id,
+        )
 
         # Modo principal: procesamiento en tiempo real del payload oficial MoreApp.
         if getattr(settings, 'MOREAPP_WEBHOOK_REALTIME_ENABLED', True):
@@ -4794,7 +4794,7 @@ def movimientos_importar_moreapp_webhook(request):
         logger.error(f"Error procesando webhook MoreApp: {str(e)}\n{traceback.format_exc()}")
         return JsonResponse({
             'success': False,
-            'error': f'Error interno: {str(e)}'
+            'error': 'Error interno',
         }, status=500)
 
 

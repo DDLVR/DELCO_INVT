@@ -4,6 +4,8 @@ Configuración de Django para producción en Hostingplus
 from .settings import *
 import os
 
+from django.core.exceptions import ImproperlyConfigured
+
 # Configurar PyMySQL como reemplazo de MySQLdb
 import pymysql
 pymysql.install_as_MySQLdb()
@@ -16,11 +18,31 @@ def _env_list(var_name, default_values=None):
         return [item.strip() for item in raw.split(',') if item.strip()]
     return list(default_values or [])
 
+
+def _require_env(var_name):
+    """Exige variable de entorno (sin secretos embebidos en el código)."""
+    value = (os.environ.get(var_name) or '').strip()
+    if not value:
+        raise ImproperlyConfigured(
+            'Falta la variable de entorno obligatoria %s. '
+            'Definirla en Passenger / Hostingplus (ver .env.example).' % var_name
+        )
+    return value
+
+
 # SEGURIDAD
 DEBUG = os.environ.get('DEBUG', 'False').strip().lower() == 'true'
 
-# IMPORTANTE: Cambiar esta clave por una segura y única
-SECRET_KEY = os.environ.get('SECRET_KEY', 'CAMBIAR-POR-CLAVE-SEGURA-EN-PRODUCCION')
+SECRET_KEY = _require_env('SECRET_KEY')
+_PLACEHOLDER_KEYS = {
+    'CAMBIAR-POR-CLAVE-SEGURA-EN-PRODUCCION',
+    'cambiar-por-clave-larga-y-unica',
+}
+if SECRET_KEY in _PLACEHOLDER_KEYS or SECRET_KEY.startswith('django-insecure-'):
+    raise ImproperlyConfigured(
+        'SECRET_KEY de producción inválida o de plantilla. '
+        'Usar una clave larga y única en el entorno del hosting.'
+    )
 
 # Dominios permitidos - Configuración mínima para producción
 ALLOWED_HOSTS = _env_list('ALLOWED_HOSTS', [
@@ -42,24 +64,40 @@ CSRF_COOKIE_SAMESITE = 'Lax'  # Permite cookies cross-site en POST desde mismo d
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_HTTPONLY = True
+# Activar en Passenger cuando el proxy envía X-Forwarded-Proto correctamente:
+# SECURE_SSL_REDIRECT=True
 SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False').strip().lower() == 'true'
+# HSTS solo si SSL redirect está activo (evita forzar HTTPS antes de tiempo)
+if SECURE_SSL_REDIRECT:
+    SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = (
+        os.environ.get('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True').strip().lower() == 'true'
+    )
+    SECURE_HSTS_PRELOAD = os.environ.get('SECURE_HSTS_PRELOAD', 'False').strip().lower() == 'true'
 CSRF_COOKIE_AGE = 31449600  # 1 año en segundos
 
-# Base de datos MySQL (Hostingplus usa MySQL)
+# Base de datos MySQL (Hostingplus usa MySQL) — credenciales solo desde env
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': os.environ.get('DB_NAME', 'delcochi_DelcoChile_Inventario'),
-        'USER': os.environ.get('DB_USER', 'delcochi_DDLVR'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'Chomuske132$$'),
+        'NAME': _require_env('DB_NAME'),
+        'USER': _require_env('DB_USER'),
+        'PASSWORD': _require_env('DB_PASSWORD'),
         'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': '3306',
+        'PORT': os.environ.get('DB_PORT', '3306'),
         'OPTIONS': {
             'init_command': "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci, sql_mode='STRICT_TRANS_TABLES'",
             'charset': 'utf8mb4',
         },
     }
 }
+
+# Webhook: hereda de settings.py; en producción debe estar definido en el entorno
+if not (MOREAPP_WEBHOOK_SECRET or '').strip():
+    raise ImproperlyConfigured(
+        'MOREAPP_WEBHOOK_SECRET es obligatorio en producción. '
+        'Definirlo en Passenger / Hostingplus (ver .env.example).'
+    )
 
 # Archivos estáticos
 STATIC_URL = '/static/'
