@@ -1,5 +1,5 @@
 # coding: utf-8
-"""Helpers de configuración segura (sin secretos embebidos)."""
+"""Helpers de configuración (env / .env en el servidor)."""
 
 import os
 
@@ -12,6 +12,8 @@ def require_env(var_name):
     if not value:
         raise ImproperlyConfigured(
             'Falta la variable de entorno obligatoria %s. '
-            'Definirla en Passenger / Hostingplus (ver .env.example).' % var_name
+            'Crear archivo .env en el servidor (junto a passenger_wsgi.py) '
+            'o definirla en Setup Python App → Environment variables. '
+            'Plantilla: .env.example' % var_name
         )
     return value
