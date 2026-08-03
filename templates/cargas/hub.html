@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Cargas administrativas{% endblock %}
 
@@ -73,9 +74,9 @@
           <a href="{% url 'cargas_detalle' c.id %}" class="list-group-item list-group-item-action">
             <div class="d-flex justify-content-between gap-2">
               <span>{{ c.titulo|truncatechars:60 }}</span>
-              <span class="badge bg-{% if c.estado == 'EN_PROGRESO' %}info{% else %}warning text-dark{% endif %}">{{ c.get_estado_display }}</span>
+              <span>{% badge_carga_estado c.estado c.get_estado_display %}</span>
             </div>
-            <small class="text-muted">{{ c.get_tipo_display }} · {{ c.fecha_creacion|date:"d/m H:i" }}</small>
+            <small class="text-muted">{{ c.get_tipo_display }} · {{ c.fecha_creacion|format_fecha_corta }}</small>
           </a>
           {% empty %}
           <div class="p-3 text-muted small">No tienes cargas abiertas asignadas.</div>
@@ -94,9 +95,9 @@
           <a href="{% url 'cargas_detalle' c.id %}" class="list-group-item list-group-item-action">
             <div class="d-flex justify-content-between gap-2">
               <span>{{ c.titulo|truncatechars:60 }}</span>
-              <span class="badge bg-secondary">{{ c.get_prioridad_display }}</span>
+              {% badge_prioridad c.prioridad c.get_prioridad_display %}
             </div>
-            <small class="text-muted">{{ c.get_tipo_display }} · {{ c.fecha_creacion|date:"d/m H:i" }}</small>
+            <small class="text-muted">{{ c.get_tipo_display }} · {{ c.fecha_creacion|format_fecha_corta }}</small>
           </a>
           {% empty %}
           <div class="p-3 text-muted small">No hay cargas sin asignar.</div>

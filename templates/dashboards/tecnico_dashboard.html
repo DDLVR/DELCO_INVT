@@ -1,9 +1,10 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Dashboard - Técnico{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-5">
+<div class="container-fluid py-3">
     {% if not ordenes_habilitadas %}
     <div class="alert alert-warning" role="alert">
         El módulo de órdenes de trabajo está deshabilitado para este entorno.
@@ -11,81 +12,80 @@
     {% endif %}
 
     {% if ordenes_habilitadas %}
-    <div class="row mb-4">
-        <div class="col-12">
-            <h1>Mis Órdenes de Trabajo</h1>
-            <p class="text-muted">Técnico: {{ usuario.nombre_interno }}</p>
-        </div>
-    </div>
-
-    <!-- Resumen -->
-    <div class="row mb-4">
-        <div class="col-md-4">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title">En Ejecución</h5>
-                    <h2 class="text-warning">{{ en_ejecucion }}</h2>
+    <div class="card delco-dash-hero shadow-sm mb-3">
+        <div class="card-body py-3">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div>
+                    <h1 class="h5 mb-0"><i class="bi bi-clipboard-check"></i> Mis Órdenes de Trabajo</h1>
+                    <span class="small delco-dash-hero-muted">Técnico: {{ usuario.nombre_interno }}</span>
                 </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title">Mis Órdenes</h5>
-                    <h2 class="text-primary">{{ mis_ordenes.count }}</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="card text-center">
-                <div class="card-body">
-                    <h5 class="card-title">Finalizadas</h5>
-                    <h2 class="text-success">{{ finalizadas }}</h2>
-                </div>
+                <a href="{% url 'ordenes_list' %}" class="btn btn-sm delco-dash-btn">
+                    <i class="bi bi-list-ul"></i> Ver todas
+                </a>
             </div>
         </div>
     </div>
 
-    <!-- Listado de Órdenes -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0">Órdenes Asignadas</h5>
-                </div>
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>Título</th>
-                                <th>Estado</th>
-                                <th>Cliente</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for orden in mis_ordenes %}
-                            <tr>
-                                <td>{{ orden.id }}</td>
-                                <td>{{ orden.titulo }}</td>
-                                <td>
-                                    <span class="badge bg-info">{{ orden.get_estado_display }}</span>
-                                </td>
-                                <td>{{ orden.cliente.numero_cliente }}</td>
-                                <td>
-                                    <a href="{% url 'orden_detalle' orden.id %}" class="btn btn-sm btn-primary">Ver</a>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center text-muted">Sin órdenes asignadas</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card delco-panel-card delco-kpi-card h-100" style="--delco-kpi-accent: var(--bs-warning);">
+                <div class="card-body text-center py-3">
+                    <div class="text-muted small mb-1">En ejecución</div>
+                    <div class="delco-kpi-value text-warning">{{ en_ejecucion|format_numero }}</div>
                 </div>
             </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card delco-panel-card delco-kpi-card h-100" style="--delco-kpi-accent: var(--bs-primary);">
+                <div class="card-body text-center py-3">
+                    <div class="text-muted small mb-1">Mis órdenes</div>
+                    <div class="delco-kpi-value text-primary">{{ mis_ordenes.count|format_numero }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card delco-panel-card delco-kpi-card h-100" style="--delco-kpi-accent: var(--bs-success);">
+                <div class="card-body text-center py-3">
+                    <div class="text-muted small mb-1">Finalizadas</div>
+                    <div class="delco-kpi-value text-success">{{ finalizadas|format_numero }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card delco-panel-card shadow-sm">
+        <div class="card-header card-header-delco">
+            <h5 class="mb-0">Órdenes asignadas</h5>
+        </div>
+        <div class="table-responsive delco-table-wrap">
+            <table class="table table-hover table-sm delco-table-compact mb-0">
+                <thead class="table-delco">
+                    <tr>
+                        <th>#</th>
+                        <th>Título</th>
+                        <th>Estado</th>
+                        <th class="d-none d-md-table-cell">Cliente</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for orden in mis_ordenes %}
+                    <tr>
+                        <td><a href="{% url 'orden_detalle' orden.id %}" class="fw-bold text-decoration-none">#{{ orden.id }}</a></td>
+                        <td>{{ orden.titulo }}</td>
+                        <td>{% badge_ot orden.estado orden.get_estado_display %}</td>
+                        <td class="d-none d-md-table-cell">{{ orden.cliente.numero_cliente|default:"—" }}</td>
+                        <td>
+                            <a href="{% url 'orden_detalle' orden.id %}" class="btn btn-sm btn-primary">
+                                <i class="bi bi-eye"></i> Ver
+                            </a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    {% include "partials/empty_row.html" with colspan=5 message="Sin órdenes asignadas" %}
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
     {% endif %}

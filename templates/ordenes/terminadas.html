@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Trabajos terminados{% endblock %}
 
@@ -211,9 +212,7 @@
                             <td>{{ orden.titulo }}</td>
                             <td class="d-none d-md-table-cell"><span class="badge bg-secondary">{{ orden.get_tipo_trabajo_display }}</span></td>
                             <td>
-                                <span class="badge bg-{% if orden.estado == 'FINALIZADA' %}success{% elif orden.estado == 'VALIDADA' %}primary{% else %}info text-dark{% endif %}">
-                                    {{ orden.get_estado_display }}
-                                </span>
+                                {% badge_ot orden.estado orden.get_estado_display %}
                             </td>
                             <td class="d-none d-md-table-cell">{{ orden.cliente.numero_cliente|default:"—" }}</td>
                             <td class="d-none d-lg-table-cell">{{ orden.tecnico_responsable.nombre_interno|default:"—" }}</td>

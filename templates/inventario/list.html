@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Inventario - {{ titulo }}{% endblock %}
 
 {% block content %}
 {# Calcular el número total de columnas según el tipo #}
-<div class="container-fluid py-5">
+<div class="container-fluid py-3">
     <div class="row mb-4">
         <div class="col-12 d-flex justify-content-between align-items-center">
             <div>
@@ -349,15 +350,11 @@
                                 <td>{% if equipo.tecnico_display %}{{ equipo.tecnico_display }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
                                 {% endif %}
                                 <td>
-                                    <span class="badge bg-{% if equipo.estado_inventario %}{% if equipo.estado_inventario.nombre == 'Instalado' %}success{% elif equipo.estado_inventario.nombre == 'En Trayecto' %}primary{% elif equipo.estado_inventario.nombre == 'Retirado' or equipo.estado_inventario.nombre == 'Devuelta' %}warning{% elif equipo.estado_inventario.nombre == 'En reparación' or equipo.estado_inventario.nombre == 'Con Problemas' %}info{% elif equipo.estado_inventario.nombre == 'Sin Conexión' %}dark{% elif equipo.estado_inventario.nombre == 'Dado de baja' %}danger{% elif equipo.estado_inventario.nombre == 'En peaje' %}dark{% else %}secondary{% endif %}{% else %}secondary{% endif %}">
-                                        {% if tipo == 'todos' %}
-                                            {{ equipo.estado_nombre|default:"Sin estado" }}
-                                        {% elif tipo == 'medidor' or tipo == 'modem' %}
-                                            {{ equipo.estado_inventario.nombre|default:"No hay" }}
-                                        {% else %}
-                                            {{ equipo.estado_inventario.nombre|default:"Sin estado" }}
-                                        {% endif %}
-                                    </span>
+                                    {% if tipo == 'todos' %}
+                                        {% badge_inventario equipo.estado_nombre %}
+                                    {% else %}
+                                        {% badge_inventario equipo.estado_inventario.nombre %}
+                                    {% endif %}
                                 </td>
                                 <td>
                                     {% if tipo == 'todos' %}

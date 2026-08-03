@@ -108,33 +108,13 @@
 
           <div class="mb-3">
             <label class="form-label fw-semibold">RUT</label>
-            <input type="text" name="username" class="form-control" id="login-rut" maxlength="12" pattern="\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]" placeholder="Ej: 12.345.678-K" required autofocus autocomplete="off">
+            <input type="text" name="username" class="form-control" id="login-rut" data-delco-rut maxlength="12" pattern="\d{1,2}\.\d{3}\.\d{3}-[0-9Kk]" placeholder="Ej: 12.345.678-K" required autofocus autocomplete="off">
             <small class="text-muted">Ejemplo: 12.345.678-K</small>
           </div>
+  <script src="{% static 'js/delco_rut.js' %}"></script>
   <script>
-  // Formateo automático de RUT en login
   document.addEventListener('DOMContentLoaded', function() {
-    const rutInput = document.getElementById('login-rut');
-    rutInput.addEventListener('input', function() {
-      let val = this.value.replace(/[^0-9Kk]/g, '').toUpperCase();
-      let formatted = '';
-      if (val.length > 1) {
-        // Dígito verificador
-        let dv = val.slice(-1);
-        let num = val.slice(0, -1);
-        // Formateo progresivo
-        if (num.length > 6) {
-          formatted = num.slice(0, num.length - 6) + '.' + num.slice(num.length - 6, num.length - 3) + '.' + num.slice(num.length - 3) + '-' + dv;
-        } else if (num.length > 3) {
-          formatted = num.slice(0, num.length - 3) + '.' + num.slice(num.length - 3) + '-' + dv;
-        } else {
-          formatted = num + '-' + dv;
-        }
-      } else {
-        formatted = val;
-      }
-      this.value = formatted;
-    });
+    if (window.DelcoRut) DelcoRut.bind(document.getElementById('login-rut'));
   });
   </script>
 

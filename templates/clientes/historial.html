@@ -108,19 +108,12 @@
             <dt class="col-sm-4">Telemetría</dt><dd class="col-sm-8">{{ cliente.get_estado_telemetria_display }}</dd>
             <dt class="col-sm-4">STB</dt>
             <dd class="col-sm-8">
-              {% if cliente.estado_stb == 'PENDIENTE' %}
-                <span class="badge text-bg-warning">{{ cliente.get_estado_stb_display }}</span>
-              {% elif cliente.estado_stb == 'ACTUALIZADO' %}
-                <span class="badge text-bg-success">{{ cliente.get_estado_stb_display }}</span>
-              {% else %}
-                <span class="badge text-bg-secondary">{{ cliente.get_estado_stb_display }}</span>
-              {% endif %}
+              {% badge_estado_externo cliente.estado_stb cliente.get_estado_stb_display sistema="STB" %}
             </dd>
             <dt class="col-sm-4">SCi4</dt>
             <dd class="col-sm-8">
-              {% if cliente.estado_sci4 == 'PENDIENTE' %}
-                <span class="badge text-bg-warning">{{ cliente.get_estado_sci4_display }}</span>
-                {% if puede_editar %}
+              {% badge_estado_externo cliente.estado_sci4 cliente.get_estado_sci4_display sistema="SCi4" %}
+              {% if cliente.estado_sci4 == 'PENDIENTE' and puede_editar %}
                 <form method="post" action="{% url 'cliente_marcar_sci4_actualizado' cliente.id %}" class="d-inline ms-2">
                   {% csrf_token %}
                   <input type="hidden" name="motivo" value="Validación externa en SCi4 confirmada desde ficha">
@@ -128,12 +121,7 @@
                     <i class="bi bi-check2-circle"></i> Marcar actualizado en SCi4
                   </button>
                 </form>
-                {% endif %}
-              {% elif cliente.estado_sci4 == 'ACTUALIZADO' %}
-                <span class="badge text-bg-success">{{ cliente.get_estado_sci4_display }}</span>
-              {% else %}
-                <span class="badge text-bg-secondary">{{ cliente.get_estado_sci4_display }}</span>
-                {% if puede_editar %}
+              {% elif cliente.estado_sci4 != 'ACTUALIZADO' and puede_editar %}
                 <form method="post" action="{% url 'cliente_marcar_sci4_actualizado' cliente.id %}" class="d-inline ms-2">
                   {% csrf_token %}
                   <input type="hidden" name="motivo" value="Registro confirmado en SCi4 desde ficha">
@@ -141,7 +129,6 @@
                     <i class="bi bi-check2-circle"></i> Marcar actualizado en SCi4
                   </button>
                 </form>
-                {% endif %}
               {% endif %}
             </dd>
             <dt class="col-sm-4">SIM operador</dt><dd class="col-sm-8">{{ cliente.sim_operador|default:"—" }}</dd>
@@ -275,13 +262,11 @@
             <tr>
               <td><strong>#{{ orden.id }}</strong></td>
               <td>
-                <span class="badge bg-{% if orden.estado == 'FINALIZADA' or orden.estado == 'VALIDADA' or orden.estado == 'REALIZADA' %}success{% elif orden.estado == 'CANCELADA' %}danger{% elif orden.estado == 'EN_EJECUCION' or orden.estado == 'ASIGNADA' %}primary{% else %}secondary{% endif %}">
-                  {{ orden.get_estado_display }}
-                </span>
+                {% badge_ot orden.estado orden.get_estado_display %}
               </td>
               <td>{{ orden.get_tipo_trabajo_display }}</td>
               <td>{{ orden.tecnico_responsable.nombre_interno|default:"Sin asignar" }}</td>
-              <td>{{ orden.fecha_creacion|date:"d/m/Y H:i" }}</td>
+              <td>{{ orden.fecha_creacion|format_fecha_hora }}</td>
               <td>
                 {% if orden.alerta_duplicado %}
                 <span class="badge bg-warning text-dark" title="{{ orden.descripcion_alerta_duplicado }}">Duplicado</span>

@@ -143,25 +143,9 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
   // Formateo automático de RUT en crear usuario
-  const rutInput = document.getElementById('crear-rut');
-  rutInput.addEventListener('input', function() {
-    let val = this.value.replace(/[^0-9Kk]/g, '').toUpperCase();
-    let formatted = '';
-    if (val.length > 1) {
-      let dv = val.slice(-1);
-      let num = val.slice(0, -1);
-      if (num.length > 6) {
-        formatted = num.slice(0, num.length - 6) + '.' + num.slice(num.length - 6, num.length - 3) + '.' + num.slice(num.length - 3) + '-' + dv;
-      } else if (num.length > 3) {
-        formatted = num.slice(0, num.length - 3) + '.' + num.slice(num.length - 3) + '-' + dv;
-      } else {
-        formatted = num + '-' + dv;
-      }
-    } else {
-      formatted = val;
-    }
-    this.value = formatted;
-  });
+  if (window.DelcoRut) {
+    DelcoRut.bind(document.getElementById('crear-rut'));
+  }
 
   // Generador de contraseña aleatoria configurable
   const passwordInput = document.getElementById('password-input');
