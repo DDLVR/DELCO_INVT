@@ -193,24 +193,31 @@ Migraciones recientes a tener en cuenta (si el servidor aún no las tiene):
 - Roles limitan vistas y acciones sensibles (exportación de clientes: ADMIN / ADMINISTRATIVO / GERENCIA / AUDITOR)
 - Sesión con timeout absoluto (`AbsoluteSessionTimeoutMiddleware`)
 - Auditoría consultable en `/auditoria/`
-- **Secretos solo por entorno** (nunca en el repo): `SECRET_KEY`, `DB_*`, `MOREAPP_WEBHOOK_SECRET` — ver `.env.example`
+- **Secretos solo en el servidor** (Passenger o archivo `.env`; nunca en Git): `SECRET_KEY`, `DB_*`, `MOREAPP_WEBHOOK_SECRET` — ver `.env.example`
 - Webhook `/api/moreapp-webhook/` exige secreto (`X-MoreApp-Secret` o `Authorization: Bearer …`); sin secreto → 403
 - `/media/` y `/registros/evidencias/` requieren sesión autenticada
-- En producción (`config.settings_production`) la app **no arranca** si faltan variables obligatorias
+- En producción la app **no arranca** si faltan esas variables (evita quedar expuesto sin querer)
 
-### Variables de entorno (producción / Passenger)
+### Cómo configurar secretos en Hostingplus
 
-| Variable | Obligatoria | Notas |
-|----------|-------------|--------|
-| `SECRET_KEY` | Sí | Clave larga única (no plantilla) |
-| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Sí | MySQL Hostingplus |
-| `MOREAPP_WEBHOOK_SECRET` | Sí | Mismo valor configurado en MoreApp |
-| `ALLOWED_HOSTS` | Recomendada | Lista separada por comas |
-| `CSRF_TRUSTED_ORIGINS` | Recomendada | Con esquema `https://…` |
-| `SECURE_SSL_REDIRECT` | Recomendada | `True` cuando el proxy envía `X-Forwarded-Proto` |
-| `DEBUG` | — | Debe ser `False` en producción |
+**Opción A — archivo `.env` (más simple)**  
+1. cPanel → Administrador de archivos → carpeta del proyecto (junto a `passenger_wsgi.py`)  
+2. Crear archivo `.env` (copiar desde `.env.example`)  
+3. Completar `SECRET_KEY`, `DB_PASSWORD`, `MOREAPP_WEBHOOK_SECRET`, etc.  
+4. Setup Python App → **Restart**
 
-Tras rotar `DB_PASSWORD` o `MOREAPP_WEBHOOK_SECRET` (si alguna vez estuvieron en el código), actualizar Passenger y MoreApp, luego reiniciar la app.
+**Opción B — variables en Setup Python App**  
+Las mismas claves (`SECRET_KEY`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `MOREAPP_WEBHOOK_SECRET`, `DEBUG=False`) en Environment variables → Restart.
+
+| Variable | Notas |
+|----------|--------|
+| `SECRET_KEY` | Única; generar con `python -c "import secrets; print(secrets.token_urlsafe(50))"` |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Las de cPanel → MySQL |
+| `MOREAPP_WEBHOOK_SECRET` | Mismo valor en MoreApp |
+| `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` | Dominio de producción |
+| `DEBUG` | `False` |
+
+Tras rotar `DB_PASSWORD` o el secreto MoreApp, actualizar `.env`/Passenger y reiniciar.
 
 ---
 

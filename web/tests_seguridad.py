@@ -137,11 +137,13 @@ class ProductionSettingsRequireEnvTests(TestCase):
 			with self.assertRaises(ImproperlyConfigured):
 				require_env('SECRET_KEY_INEXISTENTE_XYZ')
 
-	def test_codigo_sin_password_hardcodeado(self):
+	def test_codigo_sin_secretos_hardcodeados(self):
 		prod = Path(__file__).resolve().parents[1] / 'config' / 'settings_production.py'
 		texto = prod.read_text(encoding='utf-8')
 		self.assertNotIn('Chomuske', texto)
 		self.assertIn("_require_env('DB_PASSWORD')", texto)
+		self.assertIn("_require_env('SECRET_KEY')", texto)
+		self.assertIn("_require_env('MOREAPP_WEBHOOK_SECRET')", texto)
 		settings_py = Path(__file__).resolve().parents[1] / 'config' / 'settings.py'
 		settings_texto = settings_py.read_text(encoding='utf-8')
 		self.assertNotIn('REMOVED_MOREAPP_WEBHOOK_SECRET=', settings_texto)
