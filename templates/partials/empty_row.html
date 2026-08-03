@@ -1,0 +1,7 @@
+{# Estado vacío uniforme para tablas #}
+<tr class="delco-fila-vacia">
+  <td colspan="{{ colspan|default:8 }}" class="text-center text-muted py-4">
+    <i class="bi {{ icon|default:'bi-inbox' }} d-block mb-2 fs-3 opacity-50"></i>
+    {{ message|default:"No hay registros" }}
+  </td>
+</tr>

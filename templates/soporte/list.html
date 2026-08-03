@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Tickets de soporte{% endblock %}
 
@@ -41,17 +42,17 @@
   </form>
 
   <div class="card delco-panel-card shadow-sm">
-    <div class="table-responsive">
-      <table class="table table-hover mb-0 align-middle table-delco">
-        <thead>
+    <div class="table-responsive delco-table-wrap">
+      <table class="table table-hover table-sm delco-table-compact mb-0 align-middle">
+        <thead class="table-delco">
           <tr>
             <th>#</th>
             <th>Título</th>
-            <th>Categoría</th>
+            <th class="d-none d-md-table-cell">Categoría</th>
             <th>Prioridad</th>
             <th>Estado</th>
-            <th>Creado por</th>
-            <th>Fecha</th>
+            <th class="d-none d-lg-table-cell">Creado por</th>
+            <th class="d-none d-md-table-cell">Fecha</th>
             <th></th>
           </tr>
         </thead>
@@ -60,19 +61,17 @@
           <tr>
             <td><strong>{{ t.id }}</strong></td>
             <td>{{ t.titulo }}</td>
-            <td>{{ t.get_categoria_display }}</td>
+            <td class="d-none d-md-table-cell">{{ t.get_categoria_display }}</td>
             <td>
-              <span class="badge {% if t.prioridad == 'CRITICA' %}bg-danger{% elif t.prioridad == 'ALTA' %}bg-warning text-dark{% elif t.prioridad == 'MEDIA' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
-                {{ t.get_prioridad_display }}
-              </span>
+              {% badge_prioridad t.prioridad t.get_prioridad_display %}
             </td>
             <td>{{ t.get_estado_display }}</td>
-            <td>{{ t.creado_por.nombre_interno }}</td>
-            <td>{{ t.fecha_creacion|date:"d/m/Y H:i" }}</td>
+            <td class="d-none d-lg-table-cell">{{ t.creado_por.nombre_interno }}</td>
+            <td class="d-none d-md-table-cell">{{ t.fecha_creacion|format_fecha_hora }}</td>
             <td class="text-end"><a href="{% url 'soporte_detalle' t.id %}" class="btn btn-sm btn-outline-primary">Ver</a></td>
           </tr>
           {% empty %}
-          <tr><td colspan="8" class="text-muted p-4">No hay tickets con esos filtros.</td></tr>
+          {% include "partials/empty_row.html" with colspan=8 message="No hay tickets con esos filtros." %}
           {% endfor %}
         </tbody>
       </table>
