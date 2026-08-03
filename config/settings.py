@@ -239,12 +239,8 @@ MOREAPP_FIRST_SCAN_TAIL = int(os.getenv('MOREAPP_FIRST_SCAN_TAIL', '40'))
 ORDENES_TRABAJO_ENABLED = os.getenv('ORDENES_TRABAJO_ENABLED', 'false').strip().lower() == 'true'
 
 # Configuracion API para integracion con MoreApp (Webhooks)
-# Preferir MOREAPP_WEBHOOK_SECRET en Passenger / .env del servidor.
-# Fallback de compatibilidad: el valor previo ya expuesto en el repo (rotar cuando se pueda).
-MOREAPP_WEBHOOK_SECRET = os.getenv(
-    'MOREAPP_WEBHOOK_SECRET',
-    'nC1IeThyHxR1h_DoZ2f8-KG9kGB3Ca98wZPkTiilQA4=',
-).strip()
+# Sin valor → el webhook rechaza con 403. En producción settings_production lo exige.
+MOREAPP_WEBHOOK_SECRET = os.getenv('MOREAPP_WEBHOOK_SECRET', '').strip()
 
 # Directorio raíz donde MoreApp deposita los registros (vía FTPS)
 # Estructura: {MOREAPP_REGISTROS_DIR}/{customerId}/{formName}/{correlativo}/registration.json

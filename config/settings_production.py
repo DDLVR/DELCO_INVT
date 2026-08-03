@@ -1,17 +1,19 @@
 """
 Configuración de Django para producción en Hostingplus
+
+Secretos: solo Passenger (Environment variables) o archivo .env en el servidor.
+Nunca commitear .env — está en .gitignore.
 """
 from .settings import *
-import logging
 import os
+
+from django.core.exceptions import ImproperlyConfigured
 
 # Configurar PyMySQL como reemplazo de MySQLdb
 import pymysql
 pymysql.install_as_MySQLdb()
 
-from config.env_utils import env_or_default
-
-logger = logging.getLogger(__name__)
+from config.env_utils import require_env as _require_env
 
 
 def _env_list(var_name, default_values=None):
@@ -25,54 +27,54 @@ def _env_list(var_name, default_values=None):
 # SEGURIDAD
 DEBUG = os.environ.get('DEBUG', 'False').strip().lower() == 'true'
 
-# Preferir SECRET_KEY en Passenger / .env. Fallback solo para no tumbar el sitio
-# tras el endurecimiento de seguridad (rotar y definir env lo antes posible).
-SECRET_KEY = env_or_default(
-    'SECRET_KEY',
+SECRET_KEY = _require_env('SECRET_KEY')
+_PLACEHOLDER_KEYS = {
+    'CAMBIAR-POR-CLAVE-SEGURA-EN-PRODUCCION',
+    'cambiar-por-clave-larga-y-unica',
     'delco-prod-compat-key-cambiar-en-passenger-o-dotenv',
-)
+}
+if SECRET_KEY in _PLACEHOLDER_KEYS or SECRET_KEY.startswith('django-insecure-'):
+    raise ImproperlyConfigured(
+        'SECRET_KEY inválida o de plantilla. '
+        'Definir una clave única en Passenger o en el .env del servidor '
+        '(ver .env.example y docs de hosting).'
+    )
 
-# Dominios permitidos - Configuración mínima para producción
+# Dominios permitidos
 ALLOWED_HOSTS = _env_list('ALLOWED_HOSTS', [
     'inventario.delcochile.cl',
     'www.inventario.delcochile.cl',
 ])
 
-# Origenes confiables para CSRF (requieren esquema http/https).
 CSRF_TRUSTED_ORIGINS = _env_list('CSRF_TRUSTED_ORIGINS', [
     'https://inventario.delcochile.cl',
     'http://inventario.delcochile.cl',
 ])
 
-# Configuración para proxy reverso
+# Proxy / cookies
 USE_X_FORWARDED_HOST = True
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 CSRF_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SAMESITE = 'Lax'  # Permite cookies cross-site en POST desde mismo dominio
+CSRF_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SECURE = not DEBUG
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_HTTPONLY = True
-# Activar en Passenger cuando el proxy envía X-Forwarded-Proto correctamente:
-# SECURE_SSL_REDIRECT=True
 SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT', 'False').strip().lower() == 'true'
-# HSTS solo si SSL redirect está activo (evita forzar HTTPS antes de tiempo)
 if SECURE_SSL_REDIRECT:
     SECURE_HSTS_SECONDS = int(os.environ.get('SECURE_HSTS_SECONDS', '31536000'))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = (
         os.environ.get('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'True').strip().lower() == 'true'
     )
     SECURE_HSTS_PRELOAD = os.environ.get('SECURE_HSTS_PRELOAD', 'False').strip().lower() == 'true'
-CSRF_COOKIE_AGE = 31449600  # 1 año en segundos
+CSRF_COOKIE_AGE = 31449600
 
-# Base de datos MySQL (Hostingplus).
-# Preferir DB_* en Passenger / .env. Fallbacks = valores con los que ya corría el sitio
-# (compatibilidad de arranque). Mover a env y rotar DB_PASSWORD cuando se pueda.
+# MySQL — obligatorio por entorno / .env del servidor (sin contraseñas en el código)
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': env_or_default('DB_NAME', 'delcochi_DelcoChile_Inventario'),
-        'USER': env_or_default('DB_USER', 'delcochi_DDLVR'),
-        'PASSWORD': env_or_default('DB_PASSWORD', 'Chomuske132$$'),
+        'NAME': _require_env('DB_NAME'),
+        'USER': _require_env('DB_USER'),
+        'PASSWORD': _require_env('DB_PASSWORD'),
         'HOST': os.environ.get('DB_HOST', 'localhost') or 'localhost',
         'PORT': os.environ.get('DB_PORT', '3306') or '3306',
         'OPTIONS': {
@@ -82,42 +84,33 @@ DATABASES = {
     }
 }
 
-# Webhook: settings.py ya define MOREAPP_WEBHOOK_SECRET (env o fallback de compatibilidad)
-if not (MOREAPP_WEBHOOK_SECRET or '').strip():
-    logger.error(
-        'MOREAPP_WEBHOOK_SECRET vacío: el webhook /api/moreapp-webhook/ rechazará con 403.'
-    )
+# Webhook MoreApp — obligatorio
+MOREAPP_WEBHOOK_SECRET = _require_env('MOREAPP_WEBHOOK_SECRET')
 
 # Archivos estáticos
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(str(BASE_DIR), 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
-# Servir archivos estaticos directamente desde Django en Passenger.
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     *[mw for mw in MIDDLEWARE if mw != 'django.middleware.security.SecurityMiddleware'],
 ]
 
-# Archivos multimedia
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(str(BASE_DIR), 'mediafiles')
 
-# CORS - Configurar según tus necesidades
 CORS_ALLOWED_ORIGINS = [
     "https://inventario.delcochile.cl",
     "https://www.inventario.delcochile.cl",
 ]
-
 CORS_ALLOW_CREDENTIALS = True
 
-# Seguridad adicional para HTTPS
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'SAMEORIGIN'
 
-# Logging
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -143,13 +136,9 @@ LOGGING = {
     },
 }
 
-# Crear directorio de logs si no existe
 os.makedirs(os.path.join(str(BASE_DIR), 'logs'), exist_ok=True)
-
-# Crear directorio tmp para Passenger restarts
 os.makedirs(os.path.join(str(BASE_DIR), 'tmp'), exist_ok=True)
 
-# Sync MoreApp por navegador: corto para no chocar con Connection Timeout del hosting
 MOREAPP_WEB_SYNC_MAX_SEGUNDOS = int(os.environ.get('MOREAPP_WEB_SYNC_MAX_SEGUNDOS', '30'))
 MOREAPP_WEB_SYNC_MAX_ARCHIVOS = int(os.environ.get('MOREAPP_WEB_SYNC_MAX_ARCHIVOS', '40'))
 MOREAPP_WEB_SKIP_DUPLICATE_REPROCESS = os.environ.get(
@@ -157,7 +146,6 @@ MOREAPP_WEB_SKIP_DUPLICATE_REPROCESS = os.environ.get(
 ).strip().lower() == 'true'
 MOREAPP_FIRST_SCAN_TAIL = int(os.environ.get('MOREAPP_FIRST_SCAN_TAIL', '25'))
 MOREAPP_INCREMENTAL_LOOKBACK = int(os.environ.get('MOREAPP_INCREMENTAL_LOOKBACK', '1'))
-# No sincronizar MoreApp dentro de cada página: evita timeout con muchos registros.
 MOREAPP_AUTO_SYNC_ENABLED = os.environ.get('MOREAPP_AUTO_SYNC_ENABLED', 'false').strip().lower() == 'true'
 MOREAPP_AUTO_REFRESH_SECONDS = int(os.environ.get('MOREAPP_AUTO_REFRESH_SECONDS', '0') or 0)
 
