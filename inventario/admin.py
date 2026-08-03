@@ -1,7 +1,7 @@
 from django.contrib import admin
 from .models import (
     EstadoInventario, Ubicacion, Medidor, SimCard, Modem,
-    MovimientoInventario, MovimientoItem, VerificacionMedidor
+    MovimientoInventario, MovimientoItem,
 )
 
 
@@ -29,14 +29,17 @@ class MedidorAdmin(admin.ModelAdmin):
         ('Información de Recepción', {
             'fields': ('fecha_recepcion', 'bodega', 'marca', 'caja', 'serie', 'modulo')
         }),
-        ('Información de Entrega', {
-            'fields': ('fecha_entrega', 'entregado_a', 'cliente', 'estado_inventario')
+        ('Entrega y Estado', {
+            'fields': ('fecha_entrega', 'entregado_a', 'entregado_a_otro', 'entregado_a_info', 'estado_inventario')
         }),
-        ('Trazabilidad', {
-            'fields': ('en_custodia_de', 'ubicacion_actual', 'observaciones')
+        ('Asignación', {
+            'fields': ('cliente', 'cliente_otro', 'proyecto', 'tipo_medidor')
         }),
-        ('Fechas', {
-            'fields': ('fecha_creacion', 'fecha_actualizacion'),
+        ('Ubicación', {
+            'fields': ('ubicacion_actual', 'en_custodia_de')
+        }),
+        ('Auditoría', {
+            'fields': ('observaciones', 'fecha_creacion', 'fecha_actualizacion', 'eliminado'),
             'classes': ('collapse',)
         }),
     )
@@ -44,56 +47,34 @@ class MedidorAdmin(admin.ModelAdmin):
 
 @admin.register(SimCard)
 class SimCardAdmin(admin.ModelAdmin):
-    list_display = ('imei', 'operador', 'abonado', 'estado_inventario', 'cliente', 'medidor')
-    list_filter = ('operador', 'estado_inventario', 'fecha_recepcion', 'fecha_entrega')
-    search_fields = ('imei', 'abonado', 'operador', 'apn', 'direccion_ip')
-    readonly_fields = ('fecha_creacion',)
-    
+    list_display = ('imei', 'operador', 'abonado', 'direccion_ip', 'estado_inventario', 'cliente')
+    list_filter = ('estado_inventario', 'operador', 'fecha_recepcion')
+    search_fields = ('imei', 'abonado', 'direccion_ip', 'operador', 'msisdn')
     fieldsets = (
-        ('Información desde Planilla (Amarillo)', {
+        ('Datos de recepción', {
             'fields': ('imei', 'operador', 'abonado', 'direccion_ip', 'apn', 'fecha_recepcion', 'entregado_a_nombre')
         }),
-        ('Información Administrativa (Verde)', {
-            'fields': ('fecha_entrega', 'estado_inventario', 'cliente', 'medidor')
+        ('Asignación', {
+            'fields': ('fecha_entrega', 'estado_inventario', 'cliente', 'cliente_otro', 'medidor', 'medidor_otro', 'proyecto')
         }),
-        ('Campos Legacy', {
+        ('Ubicación / legacy', {
             'fields': ('msisdn', 'proveedor', 'serie_plastico', 'ip_fija', 'ubicacion_actual', 'en_custodia_de'),
-            'classes': ('collapse',)
-        }),
-        ('Fechas', {
-            'fields': ('fecha_creacion',),
-            'classes': ('collapse',)
+            'classes': ('collapse',),
         }),
     )
 
 
 @admin.register(Modem)
 class ModemAdmin(admin.ModelAdmin):
-    list_display = ('serie', 'caja', 'marca', 'modulo', 'estado_inventario', 'entregado_a', 'cliente')
-    list_filter = ('estado_inventario', 'marca', 'fecha_recepcion', 'fecha_entrega')
-    search_fields = ('serie', 'caja', 'marca', 'modulo')
+    list_display = ('serie', 'marca', 'modelo', 'imei', 'estado_inventario', 'cliente')
+    list_filter = ('estado_inventario', 'marca', 'fecha_recepcion')
+    search_fields = ('serie', 'imei', 'marca', 'modelo')
     readonly_fields = ('fecha_creacion', 'fecha_actualizacion')
-    
-    fieldsets = (
-        ('Información de Recepción', {
-            'fields': ('fecha_recepcion', 'bodega', 'marca', 'caja', 'serie', 'modulo')
-        }),
-        ('Información de Entrega', {
-            'fields': ('fecha_entrega', 'entregado_a', 'cliente', 'estado_inventario')
-        }),
-        ('Trazabilidad', {
-            'fields': ('en_custodia_de', 'ubicacion_actual', 'observaciones')
-        }),
-        ('Fechas', {
-            'fields': ('fecha_creacion', 'fecha_actualizacion'),
-            'classes': ('collapse',)
-        }),
-    )
 
 
 class MovimientoItemInline(admin.TabularInline):
     model = MovimientoItem
-    extra = 1
+    extra = 0
 
 
 @admin.register(MovimientoInventario)
@@ -109,35 +90,3 @@ class MovimientoInventarioAdmin(admin.ModelAdmin):
 class MovimientoItemAdmin(admin.ModelAdmin):
     list_display = ('movimiento', 'get_tipo_equipo_display', 'cantidad')
     list_filter = ('tipo_equipo',)
-
-
-@admin.register(VerificacionMedidor)
-class VerificacionMedidorAdmin(admin.ModelAdmin):
-    list_display = ('submission_id_corto', 'num_orden', 'num_cliente', 'comuna', 'resultado_visita', 'fecha_recepcion', 'procesado')
-    list_filter = ('procesado', 'fecha_recepcion', 'comuna', 'resultado_visita')
-    search_fields = ('num_cliente', 'num_orden', 'direccion', 'comuna', 'submission_id')
-    readonly_fields = ('fecha_recepcion', 'submission_id', 'datos_completos')
-    list_editable = ('procesado',)
-    
-    def submission_id_corto(self, obj):
-        return obj.submission_id[:20] + "..." if len(obj.submission_id) > 20 else obj.submission_id
-    submission_id_corto.short_description = "ID MoreApp"
-    
-    fieldsets = (
-        ('Información del Formulario', {
-            'fields': ('submission_id', 'fecha_recepcion', 'procesado')
-        }),
-        ('Datos de la Verificación', {
-            'fields': ('num_cliente', 'num_orden', 'direccion', 'comuna', 'resultado_visita', 'estado_medidor')
-        }),
-        ('Evidencia', {
-            'fields': ('foto_fachada_url',)
-        }),
-        ('Procesamiento', {
-            'fields': ('notas',)
-        }),
-        ('Datos Completos (JSON)', {
-            'fields': ('datos_completos',),
-            'classes': ('collapse',)
-        }),
-    )

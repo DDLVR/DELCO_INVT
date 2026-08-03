@@ -3297,7 +3297,6 @@ def cliente_crear_view(request):
             direccion=direccion,
             comuna=comuna,
             tipo_suministro=tipo_suministro,
-            pod=None,
             sector=sector,
             city=None,
             customer_name=customer_name,
@@ -4568,7 +4567,7 @@ def movimientos_importar_moreapp_webhook(request):
     
     NO requiere polling ni descargas manuales - es instantáneo.
     """
-    from inventario.models import MovimientoInventario, MovimientoItem, VerificacionMedidor
+    from inventario.models import MovimientoInventario, MovimientoItem
     from django.conf import settings
     from django.db.models import Q
     
@@ -4617,36 +4616,9 @@ def movimientos_importar_moreapp_webhook(request):
         
         logger.info(f"Formulario: {form_name}")
         logger.info(f"Submission ID: {submission_id}")
-        
-        # DETECTAR TIPO DE FORMULARIO
-        # Si es "Verificacion de Medidores", guardar en tabla temporal
-        if 'verificacion' in form_name.lower() or 'medidor' in form_name.lower():
-            logger.info("Detectado formulario de VERIFICACIÓN DE MEDIDORES")
-            
-            # Extraer campos del formulario
-            verificacion = VerificacionMedidor.objects.create(
-                submission_id=submission_id or f"temp-{datetime.now().timestamp()}",
-                num_cliente=data.get('numCliente', data.get('num_cliente', '')),
-                num_orden=data.get('numOrden', data.get('num_orden', '')),
-                direccion=data.get('direccion', ''),
-                comuna=data.get('comuna', ''),
-                resultado_visita=data.get('resultadoDeVisita', data.get('resultado_visita', '')),
-                estado_medidor=data.get('estadoDeMedidor', data.get('estado_medidor', '')),
-                foto_fachada_url=data.get('fotoFachada', data.get('foto_fachada', '')),
-                datos_completos=data
-            )
-            
-            logger.info(f"✅ Verificación #{verificacion.id} guardada exitosamente")
-            
-            return JsonResponse({
-                'success': True,
-                'verificacion_id': verificacion.id,
-                'message': 'Verificación guardada correctamente',
-                'tipo': 'verificacion_medidor'
-            })
-        
-        # Si no es verificación, procesar como movimiento de inventario normal
-        logger.info("Procesando como MOVIMIENTO DE INVENTARIO")
+
+        # Fallback legado: payload simplificado como movimiento de inventario
+        logger.info("Procesando como MOVIMIENTO DE INVENTARIO (fallback legacy)")
         
         # Extraer información del formulario
         tipo_trabajo = data.get('tipo', 'ENTREGA')
