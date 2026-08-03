@@ -193,24 +193,24 @@ Migraciones recientes a tener en cuenta (si el servidor aún no las tiene):
 - Roles limitan vistas y acciones sensibles (exportación de clientes: ADMIN / ADMINISTRATIVO / GERENCIA / AUDITOR)
 - Sesión con timeout absoluto (`AbsoluteSessionTimeoutMiddleware`)
 - Auditoría consultable en `/auditoria/`
-- **Secretos solo por entorno** (nunca en el repo): `SECRET_KEY`, `DB_*`, `MOREAPP_WEBHOOK_SECRET` — ver `.env.example`
+- **Secretos preferidos por entorno** (Passenger o `.env` en el servidor): `SECRET_KEY`, `DB_*`, `MOREAPP_WEBHOOK_SECRET` — ver `.env.example`
 - Webhook `/api/moreapp-webhook/` exige secreto (`X-MoreApp-Secret` o `Authorization: Bearer …`); sin secreto → 403
 - `/media/` y `/registros/evidencias/` requieren sesión autenticada
-- En producción (`config.settings_production`) la app **no arranca** si faltan variables obligatorias
+- En producción se carga `.env` del servidor si existe; si faltan variables, hay **fallbacks de compatibilidad** para no tumbar el sitio (definir env y rotar credenciales lo antes posible)
 
 ### Variables de entorno (producción / Passenger)
 
 | Variable | Obligatoria | Notas |
 |----------|-------------|--------|
-| `SECRET_KEY` | Sí | Clave larga única (no plantilla) |
-| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Sí | MySQL Hostingplus |
-| `MOREAPP_WEBHOOK_SECRET` | Sí | Mismo valor configurado en MoreApp |
+| `SECRET_KEY` | Recomendada | Clave larga única (hay fallback temporal) |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Recomendada | MySQL Hostingplus (hay fallbacks temporales) |
+| `MOREAPP_WEBHOOK_SECRET` | Recomendada | Mismo valor configurado en MoreApp |
 | `ALLOWED_HOSTS` | Recomendada | Lista separada por comas |
 | `CSRF_TRUSTED_ORIGINS` | Recomendada | Con esquema `https://…` |
 | `SECURE_SSL_REDIRECT` | Recomendada | `True` cuando el proxy envía `X-Forwarded-Proto` |
 | `DEBUG` | — | Debe ser `False` en producción |
 
-Tras rotar `DB_PASSWORD` o `MOREAPP_WEBHOOK_SECRET` (si alguna vez estuvieron en el código), actualizar Passenger y MoreApp, luego reiniciar la app.
+Tras rotar `DB_PASSWORD` o `MOREAPP_WEBHOOK_SECRET`, actualizar Passenger o el `.env` del servidor y MoreApp, luego reiniciar la app.
 
 ---
 

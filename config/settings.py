@@ -13,13 +13,12 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 
-# Intentar cargar variables de entorno desde .env, pero no fallar si dotenv no esta disponible
+# Cargar .env siempre (desarrollo y producción en Hostingplus).
+# En producción el archivo .env vive solo en el servidor (está en .gitignore).
 try:
     from dotenv import load_dotenv  # type: ignore
     BASE_DIR = Path(__file__).resolve().parent.parent
-    current_settings_module = os.getenv('DJANGO_SETTINGS_MODULE', '')
-    if current_settings_module != 'config.settings_production':
-        load_dotenv(BASE_DIR / '.env')
+    load_dotenv(BASE_DIR / '.env')
 except ImportError:
     # Si python-dotenv no esta instalado, usar las variables de entorno del servidor
     BASE_DIR = Path(__file__).resolve().parent.parent
@@ -240,8 +239,12 @@ MOREAPP_FIRST_SCAN_TAIL = int(os.getenv('MOREAPP_FIRST_SCAN_TAIL', '40'))
 ORDENES_TRABAJO_ENABLED = os.getenv('ORDENES_TRABAJO_ENABLED', 'false').strip().lower() == 'true'
 
 # Configuracion API para integracion con MoreApp (Webhooks)
-# Sin valor → el webhook rechaza con 403 (fail-closed). Definir en .env / Passenger.
-MOREAPP_WEBHOOK_SECRET = os.getenv('MOREAPP_WEBHOOK_SECRET', '').strip()
+# Preferir MOREAPP_WEBHOOK_SECRET en Passenger / .env del servidor.
+# Fallback de compatibilidad: el valor previo ya expuesto en el repo (rotar cuando se pueda).
+MOREAPP_WEBHOOK_SECRET = os.getenv(
+    'MOREAPP_WEBHOOK_SECRET',
+    'nC1IeThyHxR1h_DoZ2f8-KG9kGB3Ca98wZPkTiilQA4=',
+).strip()
 
 # Directorio raíz donde MoreApp deposita los registros (vía FTPS)
 # Estructura: {MOREAPP_REGISTROS_DIR}/{customerId}/{formName}/{correlativo}/registration.json
