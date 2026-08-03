@@ -92,12 +92,9 @@ class Command(BaseCommand):
     def _resumen_reset_completo(self, conservar_clientes=False):
         from ordenes_trabajo.models import (
             AdjuntoOrden,
-            EquipoTrabajo,
-            Herramienta,
             InformeCliente,
             IntegracionMoreApp,
             OrdenTrabajo,
-            Vehiculo,
         )
         from inventario.models import (
             Medidor,
@@ -105,7 +102,6 @@ class Command(BaseCommand):
             MovimientoInventario,
             SimCard,
             Ubicacion,
-            VerificacionMedidor,
         )
         from clientes.models import Cliente, ClienteProyectoHistorial
         from web.models import AuditLog
@@ -121,13 +117,9 @@ class Command(BaseCommand):
             ('Medidores', Medidor.objects.count()),
             ('Módems', Modem.objects.count()),
             ('SIM Cards', SimCard.objects.count()),
-            ('Verificaciones medidor', VerificacionMedidor.objects.count()),
             ('Eventos de auditoría', AuditLog.objects.count()),
             ('Catálogo diagnósticos', CatalogoDiagnostico.objects.count()),
             ('Importaciones Excel', ImportacionExcel.objects.count()),
-            ('Equipos de trabajo', EquipoTrabajo.objects.count()),
-            ('Herramientas', Herramienta.objects.count()),
-            ('Vehículos', Vehiculo.objects.count()),
             ('Ubicaciones', Ubicacion.objects.count()),
         ]
         if conservar_clientes:
@@ -138,12 +130,6 @@ class Command(BaseCommand):
         else:
             resumen.append(('Clientes', Cliente.objects.count()))
             resumen.append(('Historial proyectos', ClienteProyectoHistorial.objects.count()))
-
-        try:
-            from integraciones.models import IntegracionMoreAppLog
-            resumen.append(('Logs MoreApp', IntegracionMoreAppLog.objects.count()))
-        except Exception:
-            pass
 
         try:
             from soporte.models import TicketSoporte
@@ -352,14 +338,6 @@ class Command(BaseCommand):
             deleted_ma, _ = IntegracionMoreApp.objects.all().delete()
             self.stdout.write(self.style.SUCCESS(f'Registros MoreApp eliminados: {deleted_ma}'))
 
-        try:
-            from integraciones.models import IntegracionMoreAppLog
-            if IntegracionMoreAppLog.objects.exists():
-                deleted_log, _ = IntegracionMoreAppLog.objects.all().delete()
-                self.stdout.write(self.style.SUCCESS(f'Logs MoreApp eliminados: {deleted_log}'))
-        except Exception:
-            pass
-
         if OrdenTrabajo.objects.exists():
             deleted_adj, _ = AdjuntoOrden.objects.all().delete()
             self.stdout.write(self.style.SUCCESS(f'Adjuntos eliminados: {deleted_adj}'))
@@ -400,12 +378,10 @@ class Command(BaseCommand):
                 'inventario_movimientoinventario',
                 'inventario_movimientoitem',
                 'inventario_ubicacion',
-                'inventario_verificacionmedidor',
                 'web_auditlog',
                 'importaciones_importacionexcel',
                 'importaciones_importacionexcelerror',
                 'catalogos_catalogodiagnostico',
-                'integraciones_integracionmoreapplog',
             ])
             if not conservar_clientes:
                 tablas.extend([
@@ -425,14 +401,12 @@ class Command(BaseCommand):
         self._eliminar_moreapp_y_ot()
 
     def _limpiar_reset_completo(self, conservar_clientes=False):
-        from ordenes_trabajo.models import EquipoTrabajo, Herramienta, Vehiculo
         from inventario.models import (
             Medidor,
             Modem,
             MovimientoInventario,
             SimCard,
             Ubicacion,
-            VerificacionMedidor,
         )
         from clientes.models import Cliente, ClienteProyectoHistorial
         from web.models import AuditLog
@@ -444,10 +418,6 @@ class Command(BaseCommand):
         if MovimientoInventario.objects.exists():
             deleted_mov, _ = MovimientoInventario.objects.all().delete()
             self.stdout.write(self.style.SUCCESS(f'Movimientos de inventario eliminados: {deleted_mov}'))
-
-        if VerificacionMedidor.objects.exists():
-            deleted_ver, _ = VerificacionMedidor.objects.all().delete()
-            self.stdout.write(self.style.SUCCESS(f'Verificaciones medidor eliminadas: {deleted_ver}'))
 
         # Desvincular medidor actual para poder borrar inventario sin tocar clientes
         n_desv = Cliente.objects.exclude(medidor_actual=None).update(medidor_actual=None)
@@ -494,20 +464,6 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.SUCCESS(f'Tickets de soporte eliminados: {deleted_tk}'))
         except Exception:
             pass
-
-        for equipo in EquipoTrabajo.objects.all():
-            equipo.miembros.clear()
-        if EquipoTrabajo.objects.exists():
-            deleted_eq, _ = EquipoTrabajo.objects.all().delete()
-            self.stdout.write(self.style.SUCCESS(f'Equipos de trabajo eliminados: {deleted_eq}'))
-
-        if Herramienta.objects.exists():
-            deleted_her, _ = Herramienta.objects.all().delete()
-            self.stdout.write(self.style.SUCCESS(f'Herramientas eliminadas: {deleted_her}'))
-
-        if Vehiculo.objects.exists():
-            deleted_veh, _ = Vehiculo.objects.all().delete()
-            self.stdout.write(self.style.SUCCESS(f'Vehículos eliminados: {deleted_veh}'))
 
         if Ubicacion.objects.exists():
             deleted_ubi, _ = Ubicacion.objects.all().delete()

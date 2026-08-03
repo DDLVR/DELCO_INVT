@@ -57,13 +57,6 @@ class Cliente(models.Model):
         help_text='Tipo de suministro asociado al cliente'
     )
 
-    pod = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text='Punto de entrega (POD) del cliente'
-    )
-
     sector = models.CharField(
         max_length=100,
         blank=True,

@@ -1,7 +1,6 @@
 from django.contrib import admin
 from .models import (
-    OrdenTrabajo, EquipoTrabajo, Vehiculo, Herramienta,
-    OrdenHerramientaRequerida, AdjuntoOrden, IntegracionMoreApp, InformeCliente,
+    OrdenTrabajo, AdjuntoOrden, IntegracionMoreApp, InformeCliente,
 )
 
 
@@ -37,7 +36,7 @@ class OrdenTrabajoAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
         ('Asignación', {
-            'fields': ('tecnico_responsable', 'equipo_trabajo', 'tecnicos_equipo')
+            'fields': ('tecnico_responsable',)
         }),
         ('Observaciones', {
             'fields': ('observaciones_tecnicas', 'observacion_validacion')
@@ -61,39 +60,12 @@ class OrdenTrabajoAdmin(admin.ModelAdmin):
     )
 
 
-@admin.register(EquipoTrabajo)
-class EquipoTrabajoAdmin(admin.ModelAdmin):
-    list_display = ('responsable', 'vehiculo', 'activo', 'fecha_creacion')
-    list_filter = ('activo', 'fecha_creacion')
-    search_fields = ('responsable__nombre_interno',)
-    filter_horizontal = ('miembros',)
-
-
-@admin.register(Vehiculo)
-class VehiculoAdmin(admin.ModelAdmin):
-    list_display = ('patente', 'modelo', 'estado')
-    list_filter = ('estado',)
-    search_fields = ('patente', 'modelo')
-
-
-@admin.register(Herramienta)
-class HerramientaAdmin(admin.ModelAdmin):
-    list_display = ('codigo_interno', 'nombre', 'estado')
-    list_filter = ('estado',)
-    search_fields = ('codigo_interno', 'nombre')
-
-
-class OrdenHerramientaRequeridalInline(admin.TabularInline):
-    model = OrdenHerramientaRequerida
-    extra = 0
-
-
 @admin.register(AdjuntoOrden)
 class AdjuntoOrdenAdmin(admin.ModelAdmin):
     list_display = ('nombre_archivo', 'orden', 'tipo', 'subido_por', 'fecha_hora')
     list_filter = ('tipo', 'fecha_hora')
     search_fields = ('nombre_archivo', 'orden__titulo')
-    readonly_fields = ('fecha_hora', 'hash_archivo')
+    readonly_fields = ('fecha_hora',)
 
 
 @admin.register(InformeCliente)
