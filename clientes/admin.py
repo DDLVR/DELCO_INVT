@@ -11,7 +11,7 @@ class ClienteAdmin(admin.ModelAdmin):
 
     fieldsets = (
         ('Información Básica (VERDES)', {
-            'fields': ('numero_cliente', 'customer_name', 'tipo_suministro', 'pod', 'sector', 'city', 'installation_address', 'proyecto', 'comuna', 'referencia'),
+            'fields': ('numero_cliente', 'customer_name', 'tipo_suministro', 'sector', 'city', 'installation_address', 'proyecto', 'comuna', 'referencia'),
             'description': 'Datos principales de identificación del cliente'
         }),
         ('Medidor / Conexión', {

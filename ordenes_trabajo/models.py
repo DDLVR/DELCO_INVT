@@ -3,115 +3,6 @@ from usuarios.models import Usuario
 from config.storage import evidencias_storage, evidencia_upload_to
 
 
-class EquipoTrabajo(models.Model):
-    """
-    Equipo/cuadrilla de técnicos que trabaja en conjunto (binomio/cuadrilla).
-    """
-    
-    vehiculo = models.ForeignKey(
-        'Vehiculo',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='equipos'
-    )
-    
-    responsable = models.ForeignKey(
-        Usuario,
-        on_delete=models.PROTECT,
-        related_name='equipos_responsable',
-        limit_choices_to={'rol': 'TECNICO'}
-    )
-    
-    miembros = models.ManyToManyField(
-        Usuario,
-        related_name='equipos_miembro',
-        limit_choices_to={'rol': 'TECNICO'},
-        help_text='Técnicos que forman parte del equipo (2 a 4 recomendado)'
-    )
-    
-    activo = models.BooleanField(default=True)
-    
-    fecha_creacion = models.DateTimeField(auto_now_add=True)
-    
-    def __str__(self):
-        return f'Equipo: {self.responsable.nombre_interno}'
-    
-    class Meta:
-        verbose_name_plural = 'Equipos de Trabajo'
-
-
-class Vehiculo(models.Model):
-    """Vehículos de transporte para técnicos"""
-    
-    patente = models.CharField(max_length=20, unique=True)
-    modelo = models.CharField(max_length=100)
-    descripcion = models.TextField(blank=True)
-    
-    ESTADO_CHOICES = [
-        ('ACTIVO', 'Activo'),
-        ('MANTENIMIENTO', 'En mantenimiento'),
-        ('BAJA', 'Baja'),
-    ]
-    
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='ACTIVO')
-    
-    def __str__(self):
-        return f'{self.patente} - {self.modelo}'
-    
-    class Meta:
-        verbose_name_plural = 'Vehículos'
-
-
-class Herramienta(models.Model):
-    """Herramientas utilizadas en órdenes de trabajo"""
-    
-    codigo_interno = models.CharField(max_length=50, unique=True)
-    nombre = models.CharField(max_length=200)
-    
-    ESTADO_CHOICES = [
-        ('DISPONIBLE', 'Disponible'),
-        ('EN_USO', 'En uso'),
-        ('REPARACION', 'En reparación'),
-        ('BAJA', 'Baja'),
-    ]
-    
-    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default='DISPONIBLE')
-    observacion = models.TextField(blank=True)
-    
-    def __str__(self):
-        return f'{self.codigo_interno} - {self.nombre}'
-    
-    class Meta:
-        verbose_name_plural = 'Herramientas'
-
-
-class OrdenHerramientaRequerida(models.Model):
-    """Herramientas específicas necesarias para una OT"""
-    
-    orden = models.ForeignKey(
-        'OrdenTrabajo',
-        on_delete=models.CASCADE,
-        related_name='herramientas_requeridas'
-    )
-    
-    herramienta = models.ForeignKey(
-        Herramienta,
-        on_delete=models.PROTECT,
-        related_name='ordenes_uso'
-    )
-    
-    cantidad = models.PositiveIntegerField(default=1)
-    obligatoria = models.BooleanField(default=True)
-    
-    def __str__(self):
-        return f'{self.herramienta.nombre} x{self.cantidad}'
-    
-    class Meta:
-        verbose_name_plural = 'Herramientas Requeridas'
-        unique_together = ('orden', 'herramienta')
-
-
 class OrdenTrabajo(models.Model):
     """Orden de trabajo con flujo operativo"""
 
@@ -212,22 +103,6 @@ class OrdenTrabajo(models.Model):
         limit_choices_to={'rol': 'TECNICO'},
         null=True,
         blank=True,
-    )
-    
-    equipo_trabajo = models.ForeignKey(
-        EquipoTrabajo,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name='ordenes'
-    )
-
-    tecnicos_equipo = models.ManyToManyField(
-        Usuario,
-        related_name='ordenes_equipo',
-        limit_choices_to={'rol': 'TECNICO'},
-        blank=True,
-        help_text='Otros técnicos que participan (además del responsable)'
     )
 
     # Auditoría
@@ -453,7 +328,6 @@ class OrdenTrabajo(models.Model):
             models.Index(fields=['tecnico_responsable']),
             models.Index(fields=['cliente']),
             models.Index(fields=['-fecha_creacion']),
-            models.Index(fields=['eliminado']),
         ]
 
 
@@ -608,13 +482,7 @@ class AdjuntoOrden(models.Model):
     )
     
     fecha_hora = models.DateTimeField(auto_now_add=True)
-    
-    hash_archivo = models.CharField(
-        max_length=64,
-        blank=True,
-        help_text='Hash SHA256 para evitar duplicados'
-    )
-    
+
     metadata = models.JSONField(
         default=dict,
         blank=True,
@@ -928,11 +796,8 @@ class IntegracionMoreApp(models.Model):
         verbose_name_plural = 'Integraciones MoreApp'
         ordering = ['-fecha_recepcion']
         indexes = [
-            models.Index(fields=['moreapp_submission_id']),
             models.Index(fields=['estado_sincronizacion']),
             models.Index(fields=['-fecha_recepcion']),
             models.Index(fields=['alerta_doble_trabajo']),
-            models.Index(fields=['estado_revision']),
-            models.Index(fields=['eliminado']),
         ]
 
