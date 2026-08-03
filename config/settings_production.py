@@ -10,6 +10,8 @@ from django.core.exceptions import ImproperlyConfigured
 import pymysql
 pymysql.install_as_MySQLdb()
 
+from config.env_utils import require_env as _require_env
+
 
 def _env_list(var_name, default_values=None):
     """Obtiene una lista separada por coma desde variables de entorno."""
@@ -17,17 +19,6 @@ def _env_list(var_name, default_values=None):
     if raw:
         return [item.strip() for item in raw.split(',') if item.strip()]
     return list(default_values or [])
-
-
-def _require_env(var_name):
-    """Exige variable de entorno (sin secretos embebidos en el código)."""
-    value = (os.environ.get(var_name) or '').strip()
-    if not value:
-        raise ImproperlyConfigured(
-            'Falta la variable de entorno obligatoria %s. '
-            'Definirla en Passenger / Hostingplus (ver .env.example).' % var_name
-        )
-    return value
 
 
 # SEGURIDAD

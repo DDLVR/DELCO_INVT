@@ -8,8 +8,10 @@ from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured
-from django.test import Client, TestCase, override_settings
+from django.test import TestCase, override_settings
 from django.urls import reverse
+
+from config.env_utils import require_env
 
 
 Usuario = get_user_model()
@@ -34,15 +36,16 @@ class WebhookSeguridadTests(TestCase):
 		)
 		self.assertEqual(resp.status_code, 403)
 
-	def test_webhook_con_secreto_valido_no_es_500(self):
+	def test_webhook_con_secreto_valido_pasa_auth(self):
 		resp = self.client.post(
 			reverse('movimientos_webhook_moreapp'),
-			data='{}',
+			data='{"tipo":"NO_EXISTE"}',
 			content_type='application/json',
 			HTTP_X_MOREAPP_SECRET='test-webhook-secret',
 		)
-		self.assertNotEqual(resp.status_code, 500)
+		# Auth OK: no 403. Payload inválido → 400 (legacy) de negocio.
 		self.assertNotEqual(resp.status_code, 403)
+		self.assertEqual(resp.status_code, 400)
 
 	@override_settings(MOREAPP_WEBHOOK_SECRET='')
 	def test_webhook_sin_config_responde_403(self):
@@ -104,7 +107,8 @@ class MediaProtegidaTests(TestCase):
 		with override_settings(MEDIA_ROOT=str(self.media_root)):
 			resp = self.client.get('/media/privado.txt')
 		self.assertEqual(resp.status_code, 200)
-		self.assertEqual(resp.content, b'dato-privado')
+		body = b''.join(resp.streaming_content)
+		self.assertEqual(body, b'dato-privado')
 
 
 class ClientesExportRolTests(TestCase):
@@ -129,8 +133,15 @@ class ClientesExportRolTests(TestCase):
 
 class ProductionSettingsRequireEnvTests(TestCase):
 	def test_require_env_falla_sin_variable(self):
-		from config import settings_production as prod
-
 		with mock.patch.dict(os.environ, {}, clear=True):
 			with self.assertRaises(ImproperlyConfigured):
-				prod._require_env('SECRET_KEY_INEXISTENTE_XYZ')
+				require_env('SECRET_KEY_INEXISTENTE_XYZ')
+
+	def test_codigo_sin_password_hardcodeado(self):
+		prod = Path(__file__).resolve().parents[1] / 'config' / 'settings_production.py'
+		texto = prod.read_text(encoding='utf-8')
+		self.assertNotIn('Chomuske', texto)
+		self.assertIn("_require_env('DB_PASSWORD')", texto)
+		settings_py = Path(__file__).resolve().parents[1] / 'config' / 'settings.py'
+		settings_texto = settings_py.read_text(encoding='utf-8')
+		self.assertNotIn('nC1IeThyHxR1h_DoZ2f8-KG9kGB3Ca98wZPkTiilQA4=', settings_texto)
