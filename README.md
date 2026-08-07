@@ -63,6 +63,7 @@ Apps Django instaladas:
   - OT de tipo **CAMBIO / INSTALACIÓN / RETIRO** marca pendiente **solo si la ficha del cliente cambió**
   - Botón “Marcar actualizado en SCi4” en historial del cliente
 - Alarmas operativas (STB / SCi4) en listado y dashboard
+- **Historial del cliente** también muestra **cargas administrativas** (observaciones, miniaturas de adjuntos y enlace al detalle; abrir carga solo roles admin/administrativo)
 
 ### 4.3 Órdenes de trabajo (`ordenes_trabajo`)
 - Creación, listado con colas, asignación masiva, detalle completo
@@ -81,6 +82,12 @@ Apps Django instaladas:
 - “Generar desde pendientes” (OT por validar, clientes SCi4, comunicación pendiente)
 - Completar una carga SCi4 marca el cliente como actualizado (y viceversa)
 - Orden de prioridad real: **ALTA → MEDIA → BAJA**
+- **Adjuntos en la carga** (mientras esté abierta):
+  - Fotos / capturas del sistema (vista previa en galería)
+  - PDF u archivo MoreApp subido a mano (vincular informe ya sincronizado: pendiente a futuro)
+  - Tipos: FOTO, PDF, MOREAPP, OTRO — archivos en `Registros/Evidencias/adjuntos_cargas/`
+  - Al cerrar la carga no se puede subir, editar observaciones ni eliminar adjuntos
+- Observaciones y adjuntos se reflejan en el **historial del cliente** asociado
 
 ### 4.5 MoreApp e integraciones (`integraciones`, `reportes`)
 - Webhook: `/api/moreapp-webhook/`
@@ -109,6 +116,8 @@ Apps Django instaladas:
 | `/ordenes/terminadas/` | Trabajos cerrados |
 | `/ordenes/comprobantes-cambio/` | Comprobantes PDF de cambio de medidor |
 | `/cargas/` | Hub de cargas administrativas |
+| `/cargas/<id>/` | Detalle de carga (observaciones + adjuntos) |
+| `/clientes/<id>/historial/` | Ficha e historial (OT, MoreApp, cargas, auditoría) |
 | `/reportes/moreapp/` | Informes MoreApp |
 | `/operacional/pendientes/` | Cola de revisión operativa |
 | `/auditoria/` | Eventos de auditoría |
@@ -124,6 +133,7 @@ Apps Django instaladas:
 4. Si aplica cambio de medidor: **subir PDF** del comprobante en la OT.
 5. Si el técnico pide prueba de red: **validación de comunicación** en el detalle.
 6. Usar **cargas** (`/cargas/`) para repartir trabajo de oficina; “Generar desde pendientes”.
+   - Adjuntar capturas o PDF MoreApp y dejar observaciones; se verán en el historial del cliente.
 7. Tras actualizar la base comercial externa: marcar cliente **SCi4 actualizado**.
 8. Ejecutar `verificar_calidad` en cierre diario/semanal.
 
@@ -178,9 +188,10 @@ Migraciones recientes a tener en cuenta (si el servidor aún no las tiene):
 - `ordenes_trabajo.0018` — comprobante cambio medidor  
 - `ordenes_trabajo.0019` — serie instalada del comprobante puede ir en blanco  
 - `cargas.0001` — cargas administrativas  
+- `cargas.0002` — adjuntos de carga (fotos / PDF MoreApp)  
 
 4. Reiniciar la app Passenger / Python App en el panel del hosting  
-5. Verificar login y rutas nuevas (`/cargas/`, `/ordenes/terminadas/`, comprobantes)
+5. Verificar login y rutas nuevas (`/cargas/`, `/ordenes/terminadas/`, comprobantes, adjuntos en carga, historial cliente)
 
 > La app `cargas` se importa en `web/urls.py` de forma fija: el deploy debe incluir la app y su migración o el sitio no arranca.
 
@@ -188,7 +199,7 @@ Migraciones recientes a tener en cuenta (si el servidor aún no las tiene):
 
 ## 9. Seguridad y trazabilidad
 
-- Acciones relevantes quedan con **usuario responsable** (movimientos, validaciones, SCi4, cargas, comunicación, comprobantes)
+- Acciones relevantes quedan con **usuario responsable** (movimientos, validaciones, SCi4, cargas, comunicación, comprobantes, adjuntos de carga)
 - MoreApp se traza por `submission_id` / sincronización
 - Roles limitan vistas y acciones sensibles (exportación de clientes: ADMIN / ADMINISTRATIVO / GERENCIA / AUDITOR)
 - Sesión con timeout absoluto (`AbsoluteSessionTimeoutMiddleware`)
@@ -230,11 +241,14 @@ Resumen de lo incorporado a partir del feedback operativo:
 | 1.1 | Respaldo PDF MoreApp en OT |
 | 1.2 | Vista trabajos terminados + navegación Volver |
 | 1.3 | Cargas administrativas |
+| 1.3b | Adjuntos en carga (fotos / PDF MoreApp) + visibilidad en historial del cliente |
 | 2.1 / 2.1b | SCi4 visible + pendiente por cambios críticos / OT de equipo |
 | 2.2 | Comprobante cambio medidor (solo upload PDF) |
 | 3 | Validación de comunicación técnico ↔ administración |
 
-Correcciones asociadas: sin serie falsa `VER_PDF`, cierre correcto de solicitudes de comunicación, prioridad de cargas, SCi4 solo con cambio real de ficha, sync carga↔SCi4, preservar `desde=terminadas` tras acciones en el detalle.
+Correcciones asociadas: sin serie falsa `VER_PDF`, cierre correcto de solicitudes de comunicación, prioridad de cargas, SCi4 solo con cambio real de ficha, sync carga↔SCi4, preservar `desde=terminadas` tras acciones en el detalle, adjuntos solo en carga abierta, preview por extensión de archivo.
+
+Pendiente a futuro: vincular un informe MoreApp ya sincronizado desde la carga (hoy se sube el archivo a mano).
 
 ---
 
@@ -248,7 +262,7 @@ DELCO_INVT/
 ├── inventario/          # medidores, SIM, módems, movimientos
 ├── clientes/            # ficha cliente + lógica SCi4
 ├── ordenes_trabajo/     # OT, comunicación, comprobantes, sync inventario
-├── cargas/              # tareas administrativas
+├── cargas/              # tareas administrativas + AdjuntoCarga
 ├── integraciones/       # MoreApp y afines
 ├── reportes/            # hub reportes / MoreApp
 ├── importaciones/       # import Excel y errores
@@ -268,7 +282,7 @@ DELCO_INVT/
 ## 12. Estado actual
 
 - Base funcional activa en producción.
-- Feedback operativo (SCi4, cargas, comunicación, comprobantes, terminadas, respaldo MoreApp) **implementado** en rama `Principal`.
-- Tras cada deploy: **pull + migrate + reinicio**.
+- Feedback operativo (SCi4, cargas + adjuntos, comunicación, comprobantes, terminadas, respaldo MoreApp) **implementado** en rama `Principal`.
+- Tras cada deploy: **pull + migrate + reinicio** (incluir `cargas.0002`).
 
 Para dudas de negocio o de despliegue, revisar este README y el historial de commits en `Principal`.
