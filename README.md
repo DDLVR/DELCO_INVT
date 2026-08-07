@@ -63,7 +63,11 @@ Apps Django instaladas:
   - OT de tipo **CAMBIO / INSTALACIÓN / RETIRO** marca pendiente **solo si la ficha del cliente cambió**
   - Botón “Marcar actualizado en SCi4” en historial del cliente
 - Alarmas operativas (STB / SCi4) en listado y dashboard
-- **Historial del cliente** también muestra **cargas administrativas** (observaciones, miniaturas de adjuntos y enlace al detalle; abrir carga solo roles admin/administrativo)
+- **Historial del cliente** (`/clientes/<id>/historial/`):
+  - **Ficha del cliente** (datos principales y operativos actuales)
+  - **Cambios de la ficha** (auditoría: usuario, campo, valor anterior/nuevo)
+  - OT, MoreApp, **cargas administrativas** (observaciones + miniaturas de adjuntos)
+  - Abrir carga solo roles admin/administrativo
 
 ### 4.3 Órdenes de trabajo (`ordenes_trabajo`)
 - Creación, listado con colas, asignación masiva, detalle completo
@@ -86,8 +90,10 @@ Apps Django instaladas:
   - Fotos / capturas del sistema (vista previa en galería)
   - PDF u archivo MoreApp subido a mano (vincular informe ya sincronizado: pendiente a futuro)
   - Tipos: FOTO, PDF, MOREAPP, OTRO — archivos en `Registros/Evidencias/adjuntos_cargas/`
-  - Al cerrar la carga no se puede subir, editar observaciones ni eliminar adjuntos
-- Observaciones y adjuntos se reflejan en el **historial del cliente** asociado
+  - Tras completar/cancelar **sigue editable**: observaciones, subir/reemplazar adjuntos y papelera
+  - Botón **Reabrir en progreso** si necesitas dejarla abierta otra vez
+  - **Reemplazar** un adjunto subido por error; **papelera** (recuperar) o **borrado definitivo** (solo ADMIN)
+  - Observaciones y adjuntos activos se reflejan en el **historial del cliente** asociado
 
 ### 4.5 MoreApp e integraciones (`integraciones`, `reportes`)
 - Webhook: `/api/moreapp-webhook/`
@@ -189,6 +195,7 @@ Migraciones recientes a tener en cuenta (si el servidor aún no las tiene):
 - `ordenes_trabajo.0019` — serie instalada del comprobante puede ir en blanco  
 - `cargas.0001` — cargas administrativas  
 - `cargas.0002` — adjuntos de carga (fotos / PDF MoreApp)  
+- `cargas.0003` — papelera / soft-delete de adjuntos  
 
 4. Reiniciar la app Passenger / Python App en el panel del hosting  
 5. Verificar login y rutas nuevas (`/cargas/`, `/ordenes/terminadas/`, comprobantes, adjuntos en carga, historial cliente)
@@ -284,5 +291,7 @@ DELCO_INVT/
 - Base funcional activa en producción.
 - Feedback operativo (SCi4, cargas + adjuntos, comunicación, comprobantes, terminadas, respaldo MoreApp) **implementado** en rama `Principal`.
 - Tras cada deploy: **pull + migrate + reinicio** (incluir `cargas.0002`).
+
+**Localhost vs hosting:** son entornos y bases de datos **distintos**. Lo que creas o editas en `localhost` (SQLite/local) no aparece en inventario.delcochile.cl hasta que el código esté desplegado **y** los datos existan en la BD MySQL del servidor. La ficha, auditoría y cargas se ven en el historial de **cada** ambiente con sus propios datos.
 
 Para dudas de negocio o de despliegue, revisar este README y el historial de commits en `Principal`.

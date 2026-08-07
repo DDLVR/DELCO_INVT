@@ -135,6 +135,17 @@ class AdjuntoCarga(models.Model):
     fecha_hora = models.DateTimeField(auto_now_add=True)
     hash_archivo = models.CharField(max_length=64, blank=True)
 
+    # Papelera: soft-delete para poder recuperar o borrar definitivo
+    eliminado = models.BooleanField(default=False, db_index=True)
+    fecha_eliminacion = models.DateTimeField(null=True, blank=True)
+    eliminado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adjuntos_carga_eliminados',
+    )
+
     class Meta:
         ordering = ['-fecha_hora']
         verbose_name = 'Adjunto de carga'
@@ -142,6 +153,7 @@ class AdjuntoCarga(models.Model):
         indexes = [
             models.Index(fields=['carga']),
             models.Index(fields=['tipo']),
+            models.Index(fields=['carga', 'eliminado']),
         ]
 
     def __str__(self):
