@@ -3904,6 +3904,17 @@ def cliente_historial_view(request, pk):
         entity_id=str(cliente.pk),
     ).order_by('-created_at')[:40]
 
+    from cargas.models import CargaAdministrativa
+    cargas_admin = list(
+        CargaAdministrativa.objects.filter(
+            Q(cliente=cliente) | Q(orden__cliente=cliente)
+        )
+        .select_related('asignado_a', 'creado_por', 'orden')
+        .prefetch_related('adjuntos')
+        .distinct()
+        .order_by('-fecha_creacion')[:50]
+    )
+
     context = {
         'cliente': cliente,
         'ordenes': ordenes,
@@ -3915,6 +3926,7 @@ def cliente_historial_view(request, pk):
         'fichas_mismo_numero': fichas_mismo_numero,
         'moreapp_regs': moreapp_regs,
         'auditoria': auditoria,
+        'cargas_admin': cargas_admin,
         'proyectos_historial': proyectos_historial,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'estado_restriccion_choices': _cliente_estado_restriccion_choices(),

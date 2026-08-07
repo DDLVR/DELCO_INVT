@@ -1,3 +1,4 @@
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -96,7 +97,6 @@ class CargasAdministrativasTests(TestCase):
 				tipo='VERIFICACION_SCI4', cliente=self.cliente, estado='PENDIENTE'
 			).exists()
 		)
-		# Segunda corrida no duplica abiertas
 		result2 = generar_desde_pendientes(self.admin)
 		self.assertEqual(result2['creadas'], 0)
 		self.assertGreater(result2['omitidas'], 0)
@@ -127,3 +127,96 @@ class CargasAdministrativasTests(TestCase):
 		carga.refresh_from_db()
 		self.assertEqual(carga.asignado_a_id, self.admin_op.pk)
 		self.assertEqual(carga.estado, 'EN_PROGRESO')
+
+	def test_subir_adjunto_imagen_y_pdf(self):
+		carga = crear_carga(
+			self.admin,
+			titulo='Con adjuntos',
+			tipo='VERIFICACION_SCI4',
+			cliente=self.cliente,
+		)
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+
+		png = (
+			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+			b'\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00'
+			b'\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+		)
+		response = self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{
+				'accion': 'subir_adjunto',
+				'tipo': 'FOTO',
+				'archivo': SimpleUploadedFile('captura.png', png, content_type='image/png'),
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(carga.adjuntos.filter(tipo='FOTO').count(), 1)
+
+		pdf = SimpleUploadedFile(
+			'moreapp.pdf',
+			b'%PDF-1.4\n%demo\n',
+			content_type='application/pdf',
+		)
+		response = self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{
+				'accion': 'subir_adjunto',
+				'tipo': 'MOREAPP',
+				'archivo': pdf,
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(carga.adjuntos.count(), 2)
+		self.assertTrue(carga.adjuntos.filter(tipo='MOREAPP').exists())
+
+	def test_historial_cliente_muestra_carga_y_observaciones(self):
+		carga = crear_carga(
+			self.admin,
+			titulo='Actualizar SCi4 cliente',
+			tipo='VERIFICACION_SCI4',
+			cliente=self.cliente,
+			asignado_a=self.admin_op,
+		)
+		carga.observaciones = 'Captura de pantalla SCi4 actualizada'
+		carga.save(update_fields=['observaciones'])
+
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		response = self.client.get(reverse('cliente_historial', kwargs={'pk': self.cliente.pk}))
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Cargas administrativas')
+		self.assertContains(response, 'Actualizar SCi4 cliente')
+		self.assertContains(response, 'Captura de pantalla SCi4 actualizada')
+		cargas_ctx = response.context['cargas_admin']
+		self.assertTrue(any(c.pk == carga.pk for c in cargas_ctx))
+
+	def test_no_editar_obs_ni_adjunto_en_carga_cerrada(self):
+		carga = crear_carga(self.admin, titulo='Cerrada', tipo='OTRO', cliente=self.cliente)
+		carga.estado = 'COMPLETADA'
+		carga.observaciones = 'Original'
+		carga.save(update_fields=['estado', 'observaciones'])
+
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		response = self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{'accion': 'guardar_obs', 'observaciones': 'Hack'},
+		)
+		self.assertEqual(response.status_code, 302)
+		carga.refresh_from_db()
+		self.assertEqual(carga.observaciones, 'Original')
+
+		png = (
+			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+			b'\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00'
+			b'\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+		)
+		response = self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{
+				'accion': 'subir_adjunto',
+				'tipo': 'FOTO',
+				'archivo': SimpleUploadedFile('x.png', png, content_type='image/png'),
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(carga.adjuntos.count(), 0)
