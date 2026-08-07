@@ -67,35 +67,41 @@ def _inferir_tipo_adjunto(tipo_post, nombre):
     return 'OTRO'
 
 
-def _guardar_adjunto_carga(carga, request):
-    """Valida y crea AdjuntoCarga. Retorna (ok, mensaje)."""
-    if not carga.abierta:
-        return False, 'No se pueden subir adjuntos en una carga cerrada.'
-
+def _validar_archivo_adjunto(request):
+    """Valida archivo subido. Retorna (ok, mensaje_o_nombre, archivo, tipo)."""
     archivo = request.FILES.get('archivo')
     if not archivo:
-        return False, 'Debes seleccionar un archivo.'
+        return False, 'Debes seleccionar un archivo.', None, None
 
     nombre = get_valid_filename(archivo.name or 'adjunto')
     lower = nombre.lower()
     if not lower.endswith(EXTENSIONES_PERMITIDAS):
-        return False, 'Solo se permiten imágenes (jpg, png, webp, gif) o PDF.'
+        return False, 'Solo se permiten imágenes (jpg, png, webp, gif) o PDF.', None, None
 
     size = getattr(archivo, 'size', None) or 0
     if size <= 0:
-        return False, 'El archivo está vacío.'
+        return False, 'El archivo está vacío.', None, None
     if size > MAX_ADJUNTO_BYTES:
-        return False, 'El archivo supera el máximo de 15 MB.'
+        return False, 'El archivo supera el máximo de 15 MB.', None, None
 
     tipo = _inferir_tipo_adjunto(request.POST.get('tipo'), nombre)
+    return True, nombre, archivo, tipo
+
+
+def _guardar_adjunto_carga(carga, request):
+    """Valida y crea AdjuntoCarga. Retorna (ok, mensaje)."""
+    # Admin/administrativo pueden corregir adjuntos también en cargas completadas
+    ok, nombre_o_msg, archivo, tipo = _validar_archivo_adjunto(request)
+    if not ok:
+        return False, nombre_o_msg
 
     adjunto = AdjuntoCarga(
         carga=carga,
         tipo=tipo,
-        nombre_archivo=nombre,
+        nombre_archivo=nombre_o_msg,
         subido_por=request.user,
     )
-    adjunto.archivo.save(nombre, archivo, save=True)
+    adjunto.archivo.save(nombre_o_msg, archivo, save=True)
 
     register_audit_event(
         AuditEvent(
@@ -105,11 +111,144 @@ def _guardar_adjunto_carga(carga, request):
             entity_id=str(adjunto.pk),
             field_name='archivo',
             old_value='',
-            new_value=nombre,
+            new_value=nombre_o_msg,
             reason=f'Adjunto {tipo} en carga #{carga.pk}',
         )
     )
-    return True, f'Adjunto «{nombre}» subido.'
+    return True, f'Adjunto «{nombre_o_msg}» subido.'
+
+
+def _reemplazar_adjunto_carga(carga, request):
+    """Reemplaza el archivo de un adjunto activo. Retorna (ok, mensaje)."""
+    adj_id = (request.POST.get('adjunto_id') or '').strip()
+    adjunto = (
+        AdjuntoCarga.objects.filter(pk=int(adj_id), carga=carga, eliminado=False).first()
+        if adj_id.isdigit() else None
+    )
+    if not adjunto:
+        return False, 'Adjunto no encontrado.'
+
+    ok, nombre_o_msg, archivo, tipo = _validar_archivo_adjunto(request)
+    if not ok:
+        return False, nombre_o_msg
+
+    anterior = adjunto.nombre_archivo
+    if adjunto.archivo:
+        adjunto.archivo.delete(save=False)
+    adjunto.tipo = tipo
+    adjunto.nombre_archivo = nombre_o_msg
+    adjunto.subido_por = request.user
+    adjunto.archivo.save(nombre_o_msg, archivo, save=True)
+
+    register_audit_event(
+        AuditEvent(
+            actor_id=request.user.id,
+            action='CARGA_ADJUNTO_REPLACE',
+            entity='AdjuntoCarga',
+            entity_id=str(adjunto.pk),
+            field_name='archivo',
+            old_value=anterior,
+            new_value=nombre_o_msg,
+            reason=f'Reemplazo en carga #{carga.pk}',
+        )
+    )
+    return True, f'Adjunto reemplazado: «{anterior}» → «{nombre_o_msg}».'
+
+
+def _papelera_adjunto(carga, request):
+    """Soft-delete: mueve a papelera. Retorna (ok, mensaje)."""
+    adj_id = (request.POST.get('adjunto_id') or '').strip()
+    adjunto = (
+        AdjuntoCarga.objects.filter(pk=int(adj_id), carga=carga, eliminado=False).first()
+        if adj_id.isdigit() else None
+    )
+    if not adjunto:
+        return False, 'Adjunto no encontrado.'
+
+    nombre = adjunto.nombre_archivo
+    adjunto.eliminado = True
+    adjunto.fecha_eliminacion = timezone.now()
+    adjunto.eliminado_por = request.user
+    adjunto.save(update_fields=['eliminado', 'fecha_eliminacion', 'eliminado_por'])
+
+    register_audit_event(
+        AuditEvent(
+            actor_id=request.user.id,
+            action='CARGA_ADJUNTO_TRASH',
+            entity='AdjuntoCarga',
+            entity_id=str(adjunto.pk),
+            field_name='eliminado',
+            old_value='False',
+            new_value='True',
+            reason=f'Papelera carga #{carga.pk}: {nombre}',
+        )
+    )
+    return True, f'Adjunto «{nombre}» enviado a papelera. Puedes recuperarlo o borrarlo definitivo.'
+
+
+def _recuperar_adjunto(carga, request):
+    """Saca un adjunto de la papelera. Retorna (ok, mensaje)."""
+    adj_id = (request.POST.get('adjunto_id') or '').strip()
+    adjunto = (
+        AdjuntoCarga.objects.filter(pk=int(adj_id), carga=carga, eliminado=True).first()
+        if adj_id.isdigit() else None
+    )
+    if not adjunto:
+        return False, 'Adjunto en papelera no encontrado.'
+
+    nombre = adjunto.nombre_archivo
+    adjunto.eliminado = False
+    adjunto.fecha_eliminacion = None
+    adjunto.eliminado_por = None
+    adjunto.save(update_fields=['eliminado', 'fecha_eliminacion', 'eliminado_por'])
+
+    register_audit_event(
+        AuditEvent(
+            actor_id=request.user.id,
+            action='CARGA_ADJUNTO_RESTORE',
+            entity='AdjuntoCarga',
+            entity_id=str(adjunto.pk),
+            field_name='eliminado',
+            old_value='True',
+            new_value='False',
+            reason=f'Recuperado en carga #{carga.pk}: {nombre}',
+        )
+    )
+    return True, f'Adjunto «{nombre}» recuperado.'
+
+
+def _borrar_definitivo_adjunto(carga, request):
+    """Borra el archivo del disco y el registro. Solo ADMIN. Retorna (ok, mensaje)."""
+    if request.user.rol != 'ADMIN':
+        return False, 'Solo un administrador puede borrar adjuntos de forma definitiva.'
+
+    adj_id = (request.POST.get('adjunto_id') or '').strip()
+    adjunto = (
+        AdjuntoCarga.objects.filter(pk=int(adj_id), carga=carga).first()
+        if adj_id.isdigit() else None
+    )
+    if not adjunto:
+        return False, 'Adjunto no encontrado.'
+
+    nombre = adjunto.nombre_archivo
+    if adjunto.archivo:
+        adjunto.archivo.delete(save=False)
+    pk = adjunto.pk
+    adjunto.delete()
+
+    register_audit_event(
+        AuditEvent(
+            actor_id=request.user.id,
+            action='CARGA_ADJUNTO_PURGE',
+            entity='AdjuntoCarga',
+            entity_id=str(pk),
+            field_name='archivo',
+            old_value=nombre,
+            new_value='',
+            reason=f'Borrado definitivo carga #{carga.pk}',
+        )
+    )
+    return True, f'Adjunto «{nombre}» borrado definitivamente del sistema.'
 
 
 @login_required
@@ -317,54 +456,106 @@ def cargas_detalle_view(request, pk):
                 )
                 messages.warning(request, 'Carga cancelada.')
         elif accion == 'guardar_obs':
-            if not carga.abierta:
-                messages.error(request, 'No se pueden editar observaciones en una carga cerrada.')
+            # Se puede corregir observaciones también después de completar
+            carga.observaciones = (request.POST.get('observaciones') or '').strip()
+            carga.save(update_fields=['observaciones', 'fecha_actualizacion'])
+            register_audit_event(
+                AuditEvent(
+                    actor_id=request.user.id,
+                    action='CARGA_UPDATE',
+                    entity='CargaAdministrativa',
+                    entity_id=str(carga.pk),
+                    field_name='observaciones',
+                    old_value='',
+                    new_value=carga.observaciones[:200],
+                    reason=(
+                        'Observaciones actualizadas'
+                        + ('' if carga.abierta else ' (carga cerrada)')
+                    ),
+                )
+            )
+            messages.success(request, 'Observaciones guardadas.')
+        elif accion == 'reabrir':
+            if carga.estado not in ('COMPLETADA', 'CANCELADA'):
+                messages.info(request, 'La carga ya está abierta.')
             else:
-                carga.observaciones = (request.POST.get('observaciones') or '').strip()
-                carga.save(update_fields=['observaciones', 'fecha_actualizacion'])
-                messages.success(request, 'Observaciones guardadas.')
+                anterior = carga.estado
+                carga.estado = 'EN_PROGRESO'
+                carga.fecha_completada = None
+                if not carga.asignado_a_id:
+                    carga.asignado_a = request.user
+                    carga.fecha_asignacion = timezone.now()
+                carga.save(update_fields=[
+                    'estado', 'fecha_completada', 'asignado_a',
+                    'fecha_asignacion', 'fecha_actualizacion',
+                ])
+                register_audit_event(
+                    AuditEvent(
+                        actor_id=request.user.id,
+                        action='CARGA_UPDATE',
+                        entity='CargaAdministrativa',
+                        entity_id=str(carga.pk),
+                        field_name='estado',
+                        old_value=anterior,
+                        new_value='EN_PROGRESO',
+                        reason='Carga reabierta para corrección',
+                    )
+                )
+                messages.success(request, 'Carga reabierta en progreso. Puedes seguir editando.')
         elif accion == 'subir_adjunto':
             ok, msg = _guardar_adjunto_carga(carga, request)
             if ok:
                 messages.success(request, msg)
             else:
                 messages.error(request, msg)
-        elif accion == 'eliminar_adjunto':
-            if request.user.rol != 'ADMIN':
-                messages.error(request, 'Solo un administrador puede eliminar adjuntos.')
-            elif not carga.abierta:
-                messages.error(request, 'No se pueden eliminar adjuntos de una carga cerrada.')
+        elif accion == 'reemplazar_adjunto':
+            ok, msg = _reemplazar_adjunto_carga(carga, request)
+            if ok:
+                messages.success(request, msg)
             else:
-                adj_id = (request.POST.get('adjunto_id') or '').strip()
-                adjunto = carga.adjuntos.filter(pk=int(adj_id)).first() if adj_id.isdigit() else None
-                if not adjunto:
-                    messages.error(request, 'Adjunto no encontrado.')
-                else:
-                    nombre = adjunto.nombre_archivo
-                    if adjunto.archivo:
-                        adjunto.archivo.delete(save=False)
-                    adjunto.delete()
-                    register_audit_event(
-                        AuditEvent(
-                            actor_id=request.user.id,
-                            action='CARGA_ADJUNTO_DELETE',
-                            entity='AdjuntoCarga',
-                            entity_id=str(adj_id),
-                            field_name='archivo',
-                            old_value=nombre,
-                            new_value='',
-                            reason=f'Eliminado de carga #{carga.pk}',
-                        )
-                    )
-                    messages.success(request, f'Adjunto «{nombre}» eliminado.')
+                messages.error(request, msg)
+        elif accion == 'papelera_adjunto':
+            ok, msg = _papelera_adjunto(carga, request)
+            if ok:
+                messages.warning(request, msg)
+            else:
+                messages.error(request, msg)
+        elif accion == 'recuperar_adjunto':
+            ok, msg = _recuperar_adjunto(carga, request)
+            if ok:
+                messages.success(request, msg)
+            else:
+                messages.error(request, msg)
+        elif accion == 'borrar_definitivo_adjunto':
+            ok, msg = _borrar_definitivo_adjunto(carga, request)
+            if ok:
+                messages.success(request, msg)
+            else:
+                messages.error(request, msg)
+        elif accion == 'eliminar_adjunto':
+            # Compatibilidad: mismo flujo que papelera
+            ok, msg = _papelera_adjunto(carga, request)
+            if ok:
+                messages.warning(request, msg)
+            else:
+                messages.error(request, msg)
         return redirect('cargas_detalle', pk=pk)
+
+    adjuntos = list(carga.adjuntos.filter(eliminado=False))
+    adjuntos_papelera = list(
+        carga.adjuntos.filter(eliminado=True).select_related('eliminado_por')
+    )
+    es_admin = request.user.rol == 'ADMIN'
 
     return render(request, 'cargas/detalle.html', {
         'carga': carga,
-        'adjuntos': carga.adjuntos.all(),
+        'adjuntos': adjuntos,
+        'adjuntos_papelera': adjuntos_papelera,
         'tipos_adjunto': AdjuntoCarga.TIPO_CHOICES,
         'administrativos': _administrativos_qs(),
-        'puede_eliminar_adjunto': request.user.rol == 'ADMIN',
+        'puede_gestionar_adjuntos': True,
+        'puede_editar_contenido': True,
+        'puede_borrar_definitivo': es_admin,
     })
 
 

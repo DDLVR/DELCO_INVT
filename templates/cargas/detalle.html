@@ -65,9 +65,10 @@
           <form method="post">
             {% csrf_token %}
             <input type="hidden" name="accion" value="guardar_obs">
-            <textarea name="observaciones" class="form-control mb-2" rows="4" {% if not carga.abierta %}readonly{% endif %}>{{ carga.observaciones }}</textarea>
-            {% if carga.abierta %}
+            <textarea name="observaciones" class="form-control mb-2" rows="4">{{ carga.observaciones }}</textarea>
             <button type="submit" class="btn btn-sm btn-outline-primary">Guardar observaciones</button>
+            {% if not carga.abierta %}
+            <p class="small text-muted mb-0 mt-2">La carga está {{ carga.get_estado_display|lower }}; igual puedes corregir observaciones si falta algo.</p>
             {% endif %}
           </form>
         </div>
@@ -99,27 +100,41 @@
                   {{ a.get_tipo_display }}
                   {% if a.fecha_hora %} · {{ a.fecha_hora|date:"d/m/Y H:i" }}{% endif %}
                 </div>
-                {% if puede_eliminar_adjunto and carga.abierta %}
-                <form method="post" class="mt-1" onsubmit="return confirm('¿Eliminar este adjunto?');">
-                  {% csrf_token %}
-                  <input type="hidden" name="accion" value="eliminar_adjunto">
-                  <input type="hidden" name="adjunto_id" value="{{ a.id }}">
-                  <button type="submit" class="btn btn-link btn-sm text-danger p-0">Eliminar</button>
-                </form>
+                {% if puede_gestionar_adjuntos %}
+                <details class="mt-2">
+                  <summary class="small text-primary" style="cursor:pointer;">Editar / papelera</summary>
+                  <form method="post" enctype="multipart/form-data" class="mt-2">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="reemplazar_adjunto">
+                    <input type="hidden" name="adjunto_id" value="{{ a.id }}">
+                    <select name="tipo" class="form-select form-select-sm mb-1">
+                      {% for value, label in tipos_adjunto %}
+                      <option value="{{ value }}" {% if a.tipo == value %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                    <input type="file" name="archivo" class="form-control form-control-sm mb-1" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.pdf,image/*,application/pdf" required>
+                    <button type="submit" class="btn btn-sm btn-outline-primary w-100 mb-1">
+                      <i class="bi bi-arrow-repeat"></i> Reemplazar archivo
+                    </button>
+                  </form>
+                  <form method="post" onsubmit="return confirm('¿Enviar este adjunto a la papelera? Podrás recuperarlo después.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="papelera_adjunto">
+                    <input type="hidden" name="adjunto_id" value="{{ a.id }}">
+                    <button type="submit" class="btn btn-sm btn-outline-warning w-100">
+                      <i class="bi bi-trash"></i> A papelera
+                    </button>
+                  </form>
+                </details>
                 {% endif %}
               </div>
             </div>
             {% endfor %}
           </div>
           {% else %}
-          {% if carga.abierta %}
           <p class="text-muted small mb-3">Sin adjuntos. Puedes subir capturas del sistema o el PDF MoreApp.</p>
-          {% else %}
-          <p class="text-muted small mb-3">Sin adjuntos.</p>
-          {% endif %}
           {% endif %}
 
-          {% if carga.abierta %}
           <form method="post" enctype="multipart/form-data" class="border rounded p-3 bg-body-tertiary">
             {% csrf_token %}
             <input type="hidden" name="accion" value="subir_adjunto">
@@ -142,8 +157,43 @@
                 </button>
               </div>
             </div>
-            <p class="small text-muted mb-0 mt-2">Imágenes o PDF hasta 15 MB. Usa «Archivo MoreApp» para el PDF descargado de MoreApp.</p>
+            <p class="small text-muted mb-0 mt-2">Imágenes o PDF hasta 15 MB. Si te equivocas: reemplaza el archivo o envíalo a papelera. También puedes subir después de completar la carga.</p>
           </form>
+
+          {% if adjuntos_papelera %}
+          <div class="border rounded p-3 mt-3 bg-warning-subtle">
+            <p class="small fw-semibold mb-2"><i class="bi bi-recycle"></i> Papelera ({{ adjuntos_papelera|length }})</p>
+            <ul class="list-unstyled mb-0 small">
+              {% for a in adjuntos_papelera %}
+              <li class="d-flex flex-wrap align-items-center justify-content-between gap-2 border-bottom py-2">
+                <span>
+                  <strong>{{ a.nombre_archivo }}</strong>
+                  <span class="text-muted"> · {{ a.get_tipo_display }}</span>
+                  {% if a.fecha_eliminacion %} · {{ a.fecha_eliminacion|date:"d/m/Y H:i" }}{% endif %}
+                </span>
+                <span class="d-flex gap-1">
+                  <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="recuperar_adjunto">
+                    <input type="hidden" name="adjunto_id" value="{{ a.id }}">
+                    <button type="submit" class="btn btn-sm btn-success">Recuperar</button>
+                  </form>
+                  {% if puede_borrar_definitivo %}
+                  <form method="post" onsubmit="return confirm('¿Borrar DEFINITIVAMENTE «{{ a.nombre_archivo }}»? No se podrá recuperar.');">
+                    {% csrf_token %}
+                    <input type="hidden" name="accion" value="borrar_definitivo_adjunto">
+                    <input type="hidden" name="adjunto_id" value="{{ a.id }}">
+                    <button type="submit" class="btn btn-sm btn-danger">Borrar definitivo</button>
+                  </form>
+                  {% endif %}
+                </span>
+              </li>
+              {% endfor %}
+            </ul>
+            {% if not puede_borrar_definitivo %}
+            <p class="small text-muted mb-0 mt-2">El borrado definitivo del sistema lo realiza un administrador.</p>
+            {% endif %}
+          </div>
           {% endif %}
         </div>
       </div>
@@ -201,7 +251,37 @@
         </div>
       </div>
       {% else %}
-      <div class="alert alert-secondary">Esta carga está cerrada; solo consulta.</div>
+      <div class="card delco-panel-card mb-3">
+        <div class="card-header card-header-delco"><strong>Carga cerrada</strong></div>
+        <div class="card-body d-grid gap-2">
+          <p class="small text-muted mb-0">
+            Estado: <strong>{{ carga.get_estado_display }}</strong>.
+            Igual puedes editar observaciones, subir o corregir adjuntos si te equivocaste o falta algo.
+          </p>
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="reabrir">
+            <button type="submit" class="btn btn-outline-primary w-100">
+              <i class="bi bi-arrow-counterclockwise"></i> Reabrir en progreso
+            </button>
+          </form>
+        </div>
+      </div>
+      <div class="card delco-panel-card">
+        <div class="card-header card-header-delco"><strong>Reasignar</strong></div>
+        <div class="card-body">
+          <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="accion" value="asignar">
+            <select name="asignado_a" class="form-select form-select-sm mb-2" required>
+              {% for u in administrativos %}
+              <option value="{{ u.id }}" {% if carga.asignado_a_id == u.id %}selected{% endif %}>{{ u.nombre_interno }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-primary w-100">Asignar</button>
+          </form>
+        </div>
+      </div>
       {% endif %}
     </div>
   </div>

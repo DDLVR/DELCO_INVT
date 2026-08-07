@@ -65,7 +65,13 @@
   </div>
 
   <div class="row g-3 mb-4">
-    {# ── Datos visibles / principales ── #}
+    {# ── Ficha del cliente ── #}
+    <div class="col-12">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
+        <h2 class="h5 mb-0"><i class="bi bi-person-vcard me-1"></i> Ficha del cliente</h2>
+        <span class="text-muted small">Datos actuales de la ficha · los cambios quedan en Auditoría más abajo</span>
+      </div>
+    </div>
     <div class="col-lg-6">
       <div class="card border-0 shadow-sm h-100">
         <div class="card-header bg-body"><strong>Datos principales</strong></div>
@@ -416,13 +422,17 @@
 
   {# ── Auditoría ── #}
   <div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-body"><strong><i class="bi bi-journal-text me-1"></i> Auditoría de cambios</strong></div>
+    <div class="card-header bg-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <strong><i class="bi bi-journal-text me-1"></i> Cambios de datos de la ficha</strong>
+      <span class="text-muted small">Quién editó qué campo y cuándo (auditoría del cliente)</span>
+    </div>
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-sm mb-0">
-          <thead>
+        <table class="table table-sm mb-0 align-middle">
+          <thead class="table-delco">
             <tr>
               <th>Fecha</th>
+              <th>Usuario</th>
               <th>Acción</th>
               <th>Campo</th>
               <th>Anterior</th>
@@ -434,6 +444,13 @@
             {% for log in auditoria %}
             <tr>
               <td>{{ log.created_at|date:"d/m/Y H:i" }}</td>
+              <td class="small">
+                {% if log.actor %}
+                  {{ log.actor.nombre_interno|default:log.actor.email }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
               <td>{{ log.action|audit_action_label }}</td>
               <td>{{ log.field_name|audit_field_label }}</td>
               <td class="small">{{ log.old_value|audit_value_label }}</td>
@@ -442,7 +459,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="6" class="text-center text-muted py-3">Sin eventos de auditoría para esta ficha.</td>
+              <td colspan="7" class="text-center text-muted py-3">Sin eventos de auditoría para esta ficha.</td>
             </tr>
             {% endfor %}
           </tbody>

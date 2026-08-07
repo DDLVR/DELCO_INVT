@@ -3898,18 +3898,28 @@ def cliente_historial_view(request, pk):
                 if len(moreapp_regs) >= 20:
                     break
 
-    auditoria = AuditLog.objects.filter(
-        entity='Cliente',
-        entity_id=str(cliente.pk),
-    ).order_by('-created_at')[:40]
+    auditoria = (
+        AuditLog.objects.filter(
+            entity='Cliente',
+            entity_id=str(cliente.pk),
+        )
+        .select_related('actor')
+        .order_by('-created_at')[:80]
+    )
 
-    from cargas.models import CargaAdministrativa
+    from cargas.models import CargaAdministrativa, AdjuntoCarga
+    from django.db.models import Prefetch
     cargas_admin = list(
         CargaAdministrativa.objects.filter(
             Q(cliente=cliente) | Q(orden__cliente=cliente)
         )
         .select_related('asignado_a', 'creado_por', 'orden')
-        .prefetch_related('adjuntos')
+        .prefetch_related(
+            Prefetch(
+                'adjuntos',
+                queryset=AdjuntoCarga.objects.filter(eliminado=False),
+            )
+        )
         .distinct()
         .order_by('-fecha_creacion')[:50]
     )

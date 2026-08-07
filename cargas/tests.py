@@ -190,20 +190,20 @@ class CargasAdministrativasTests(TestCase):
 		cargas_ctx = response.context['cargas_admin']
 		self.assertTrue(any(c.pk == carga.pk for c in cargas_ctx))
 
-	def test_no_editar_obs_ni_adjunto_en_carga_cerrada(self):
-		carga = crear_carga(self.admin, titulo='Cerrada', tipo='OTRO', cliente=self.cliente)
+	def test_editar_contenido_en_carga_completada(self):
+		carga = crear_carga(self.admin, titulo='Cerrada editable', tipo='OTRO', cliente=self.cliente)
 		carga.estado = 'COMPLETADA'
 		carga.observaciones = 'Original'
 		carga.save(update_fields=['estado', 'observaciones'])
 
-		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
 		response = self.client.post(
 			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
-			{'accion': 'guardar_obs', 'observaciones': 'Hack'},
+			{'accion': 'guardar_obs', 'observaciones': 'Corregido tras completar'},
 		)
 		self.assertEqual(response.status_code, 302)
 		carga.refresh_from_db()
-		self.assertEqual(carga.observaciones, 'Original')
+		self.assertEqual(carga.observaciones, 'Corregido tras completar')
 
 		png = (
 			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
@@ -215,8 +215,82 @@ class CargasAdministrativasTests(TestCase):
 			{
 				'accion': 'subir_adjunto',
 				'tipo': 'FOTO',
-				'archivo': SimpleUploadedFile('x.png', png, content_type='image/png'),
+				'archivo': SimpleUploadedFile('extra.png', png, content_type='image/png'),
 			},
 		)
 		self.assertEqual(response.status_code, 302)
-		self.assertEqual(carga.adjuntos.count(), 0)
+		self.assertEqual(carga.adjuntos.filter(eliminado=False).count(), 1)
+
+		response = self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{'accion': 'reabrir'},
+		)
+		self.assertEqual(response.status_code, 302)
+		carga.refresh_from_db()
+		self.assertEqual(carga.estado, 'EN_PROGRESO')
+
+	def test_reemplazar_papelera_recuperar_y_borrar_definitivo(self):
+		from .models import AdjuntoCarga
+
+		carga = crear_carga(self.admin, titulo='Adjuntos ciclo', tipo='OTRO', cliente=self.cliente)
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		png = (
+			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+			b'\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00'
+			b'\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+		)
+		self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{
+				'accion': 'subir_adjunto',
+				'tipo': 'FOTO',
+				'archivo': SimpleUploadedFile('malo.png', png, content_type='image/png'),
+			},
+		)
+		adj = AdjuntoCarga.objects.get(carga=carga, eliminado=False)
+		self.assertEqual(adj.nombre_archivo, 'malo.png')
+
+		self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{
+				'accion': 'reemplazar_adjunto',
+				'adjunto_id': str(adj.pk),
+				'tipo': 'FOTO',
+				'archivo': SimpleUploadedFile('bueno.png', png, content_type='image/png'),
+			},
+		)
+		adj.refresh_from_db()
+		self.assertEqual(adj.nombre_archivo, 'bueno.png')
+
+		self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{'accion': 'papelera_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		adj.refresh_from_db()
+		self.assertTrue(adj.eliminado)
+
+		self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{'accion': 'recuperar_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		adj.refresh_from_db()
+		self.assertFalse(adj.eliminado)
+
+		self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{'accion': 'papelera_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		# Administrativo no puede borrar definitivo
+		self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{'accion': 'borrar_definitivo_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		self.assertTrue(AdjuntoCarga.objects.filter(pk=adj.pk).exists())
+
+		self.client.logout()
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{'accion': 'borrar_definitivo_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		self.assertFalse(AdjuntoCarga.objects.filter(pk=adj.pk).exists())
