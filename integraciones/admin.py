@@ -1,25 +1,3 @@
 from django.contrib import admin
-from .models import IntegracionMoreAppLog
 
-
-@admin.register(IntegracionMoreAppLog)
-class IntegracionMoreAppLogAdmin(admin.ModelAdmin):
-    list_display = ('estado', 'orden_asociada_ref', 'adjunto_creado_ref', 'fecha_hora')
-    list_filter = ('estado', 'fecha_hora')
-    search_fields = ('mensaje_error', 'payload_crudo')
-    readonly_fields = ('fecha_hora', 'payload_crudo')
-    
-    fieldsets = (
-        ('Información', {
-            'fields': ('estado', 'fecha_hora')
-        }),
-        ('Asociaciones', {
-            'fields': ('orden_asociada_ref', 'adjunto_creado_ref')
-        }),
-        ('Payload Recibido', {
-            'fields': ('payload_crudo',)
-        }),
-        ('Errores', {
-            'fields': ('mensaje_error',)
-        }),
-    )
+# Sin modelos propios: MoreApp operativo vive en ordenes_trabajo.IntegracionMoreApp

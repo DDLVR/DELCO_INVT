@@ -32,14 +32,6 @@
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
 
   <style>
-    :root {
-      --delco-primary: #1a3a5c;
-      --delco-secondary: #2c5282;
-      --delco-accent: #4a90e2;
-      --delco-dark: #0f2438;
-      --delco-light: #e8f1f8;
-    }
-
     body {
       display: flex;
       flex-direction: column;
@@ -122,20 +114,6 @@
         padding: 0;
       }
     }
-
-    /* Encabezados de tablas — mismo estilo que el navbar */
-    .table-delco thead th,
-    thead.table-delco th {
-      background: linear-gradient(135deg, var(--delco-primary) 0%, var(--delco-secondary) 100%) !important;
-      color: #fff !important;
-      border-color: var(--delco-primary) !important;
-      font-weight: 600;
-    }
-
-    .card-header-delco {
-      background: linear-gradient(135deg, var(--delco-primary) 0%, var(--delco-secondary) 100%);
-      color: #fff;
-    }
   </style>
 </head>
 
@@ -180,6 +158,8 @@
   <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 
   <script src="{% static 'js/delco_autocomplete.js' %}"></script>
+  <script src="{% static 'js/delco_rut.js' %}"></script>
+  <script src="{% static 'js/delco_charts.js' %}"></script>
 
   <!-- ════════════════════════════════════════════
        SISTEMA GLOBAL DE TOASTS
@@ -223,7 +203,7 @@
   <div class="modal fade" id="modalTicketRapido" tabindex="-1" aria-labelledby="modalTicketRapidoLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow">
-        <div class="modal-header text-white" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);">
+        <div class="modal-header card-header-delco text-white">
           <h5 class="modal-title" id="modalTicketRapidoLabel">
             <i class="bi bi-life-preserver me-1"></i> Reportar ticket
           </h5>

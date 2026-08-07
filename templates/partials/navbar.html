@@ -1,5 +1,6 @@
 {% load static %}
-<nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%); box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+{% load custom_filters %}
+<nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, var(--delco-primary, #1a3a5c) 0%, var(--delco-secondary, #2c5282) 100%); box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
   <div class="container-fluid d-flex align-items-center">
     <a class="navbar-brand fw-semibold d-flex align-items-center" href="{% url 'dashboard' %}" style="gap: 10px;">
       <img src="{% static 'img/delco.png' %}" alt="Delco" style="height: 35px; width: auto;">
@@ -37,8 +38,8 @@
 <div class="modal fade" id="profileModal" tabindex="-1" aria-labelledby="profileModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
-      <div class="modal-header text-white" style="background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);">
-        <h5 class="modal-title" id="profileModalLabel">👤 Mi Perfil</h5>
+      <div class="modal-header card-header-delco text-white">
+        <h5 class="modal-title" id="profileModalLabel"><i class="bi bi-person-circle"></i> Mi Perfil</h5>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form id="profileForm">
@@ -53,7 +54,7 @@
           <div class="row mb-3">
             <div class="col-4 text-end fw-semibold text-muted">RUT:</div>
             <div class="col-8">
-              <input type="text" class="form-control" value="{{ user.rut }}" disabled>
+              <input type="text" class="form-control" value="{{ user.rut|format_rut }}" disabled>
             </div>
           </div>
           <div class="row mb-3">

@@ -1550,30 +1550,25 @@ class OrdenTrabajoViewSet(viewsets.ModelViewSet):
 
 @csrf_exempt
 @api_view(['POST'])
-@permission_classes([AllowAny])  # MoreApp no usa autenticación estándar
+@permission_classes([AllowAny])
 def moreapp_webhook_view(request):
     """
-    Recibe webhooks de MoreApp con datos de terreno
-    
-    Payload esperado de MoreApp:
-    {
-        "submission_id": "abc123",
-        "form_name": "Instalación Medidores",
-        "completed_at": "2026-01-27T10:30:00Z",
-        "data": {
-            "orden_trabajo_id": "123",
-            "tecnico_nombre": "Juan Pérez",
-            "cliente_numero": "CLI001",
-            "tipo_trabajo": "INSTALACION",
-            "medidor_serie": "MED-001",
-            "sim_imei": "123456789",
-            "modem_imei": "987654321",
-            "observaciones": "Instalación exitosa",
-            "fotos": ["url1", "url2"]
-        }
-    }
+    Webhook alternativo (no montado en urls raíz). Exige MOREAPP_WEBHOOK_SECRET.
+    Preferir `/api/moreapp-webhook/`.
     """
-    
+    import hmac
+    from django.conf import settings as dj_settings
+
+    expected = str(getattr(dj_settings, 'MOREAPP_WEBHOOK_SECRET', '') or '').strip()
+    if not expected:
+        return JsonResponse({'success': False, 'error': 'Webhook no autorizado'}, status=403)
+    provided = (request.headers.get('X-MoreApp-Secret', '') or '').strip()
+    auth_header = (request.headers.get('Authorization', '') or '').strip()
+    if not provided and auth_header.lower().startswith('bearer '):
+        provided = auth_header[7:].strip()
+    if not provided or not hmac.compare_digest(provided, expected):
+        return JsonResponse({'success': False, 'error': 'Webhook no autorizado'}, status=403)
+
     try:
         # Parsear payload
         if isinstance(request.body, bytes):

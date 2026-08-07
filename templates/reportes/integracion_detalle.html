@@ -30,24 +30,12 @@
         <i class="bi bi-exclamation-triangle-fill"></i> Alerta doble trabajo
       </span>
       {% endif %}
-      {% if registro.estado_revision == 'CON_ADVERTENCIA' %}
-      <span class="badge bg-warning text-dark fs-6 align-self-center">Con advertencia</span>
-      {% elif registro.estado_revision == 'PENDIENTE' %}
-      <span class="badge bg-primary fs-6 align-self-center">Revisión pendiente</span>
-      {% elif registro.estado_revision == 'REVISADO' %}
-      <span class="badge bg-success fs-6 align-self-center">Revisado</span>
+      {% if registro.estado_revision == 'PENDIENTE' %}
+      {% badge_moreapp_revision "PENDIENTE" "Revisión pendiente" %}
+      {% elif registro.estado_revision %}
+      {% badge_moreapp_revision registro.estado_revision registro.get_estado_revision_display %}
       {% endif %}
-      {% if registro.estado_sincronizacion|moreapp_sync_ok %}
-        <span class="badge bg-success fs-6 align-self-center">Procesado</span>
-      {% elif registro.estado_sincronizacion == 'DUPLICADO' %}
-        <span class="badge bg-secondary fs-6 align-self-center">Duplicado</span>
-      {% elif registro.estado_sincronizacion == 'ERROR_JSON' or registro.estado_sincronizacion == 'ERROR_LECTURA' or registro.estado_sincronizacion == 'ERROR' %}
-        <span class="badge bg-danger fs-6 align-self-center">{{ registro.get_estado_sincronizacion_display }}</span>
-      {% elif registro.estado_sincronizacion == 'ALERTA_REVISION' %}
-        <span class="badge bg-warning text-dark fs-6 align-self-center">{{ registro.get_estado_sincronizacion_display }}</span>
-      {% else %}
-        <span class="badge delco-badge-muted fs-6 align-self-center">{{ registro.get_estado_sincronizacion_display|default:registro.estado_sincronizacion }}</span>
-      {% endif %}
+      {% badge_moreapp_sync registro.estado_sincronizacion registro.get_estado_sincronizacion_display %}
       {% if mostrar_panel_operativo and registro.datos_recibidos.data %}
       <form method="post" action="{% url 'moreapp_reprocesar' registro.pk %}">
         {% csrf_token %}

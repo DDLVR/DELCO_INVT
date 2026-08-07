@@ -10,9 +10,7 @@
         <div class="col-12 d-flex justify-content-between align-items-center">
             <h1>
                 <i class="bi bi-clipboard-check"></i> Orden #{{ orden.id }}
-                <span class="badge bg-{% if orden.estado == 'REALIZADA' or orden.estado == 'FINALIZADA' %}success{% elif orden.estado == 'REALIZADA_PENDIENTE_COMPROBACION' %}info{% elif orden.estado == 'CANCELADA' %}danger{% elif orden.estado == 'EN_EJECUCION' %}primary{% elif orden.estado == 'ASIGNADA' %}warning text-dark{% else %}secondary{% endif %}">
-                    {{ orden.get_estado_display }}
-                </span>
+                {% badge_ot orden.estado orden.get_estado_display %}
             </h1>
             <a href="{% if volver_url %}{{ volver_url }}{% else %}{% url 'ordenes_list' %}{% endif %}" class="btn btn-secondary">
                 <i class="bi bi-arrow-left"></i> {{ volver_label|default:"Volver" }}
@@ -279,18 +277,10 @@
                                     <td><strong>#{{ prev.id }}</strong></td>
                                     <td>{{ prev.get_tipo_trabajo_display }}</td>
                                     <td>
-                                        <span class="badge bg-{% if prev.estado == 'REALIZADA' or prev.estado == 'FINALIZADA' or prev.estado == 'VALIDADA' %}success{% elif prev.estado == 'OBSERVADA' or prev.estado == 'CANCELADA' %}danger{% elif prev.estado == 'REALIZADA_PENDIENTE_COMPROBACION' or prev.estado == 'PENDIENTE_VALIDACION' %}warning text-dark{% else %}secondary{% endif %}">
-                                            {{ prev.get_estado_display }}
-                                        </span>
+                                        {% badge_ot prev.estado prev.get_estado_display %}
                                     </td>
                                     <td>{{ prev.tecnico_responsable.nombre_interno|default:"—" }}</td>
-                                    <td>
-                                        {% if prev.fecha_creacion %}
-                                            {{ prev.fecha_creacion|date:"d/m/Y H:i" }}
-                                        {% else %}
-                                            —
-                                        {% endif %}
-                                    </td>
+                                    <td>{{ prev.fecha_creacion|format_fecha_hora }}</td>
                                     <td class="text-end">
                                         <a href="{% url 'orden_detalle' prev.id %}" class="btn btn-sm btn-outline-primary">Ver</a>
                                     </td>
@@ -976,16 +966,14 @@
                                 {% if sync.numero_correlativo %}#{{ sync.numero_correlativo }}{% else %}Informe{% endif %}
                                 — {{ sync.nombre_formulario|truncatechars:40 }}
                             </a><br>
-                            <small class="text-muted">{{ sync.fecha_recepcion|date:"d/m/Y H:i" }}</small>
+                            <small class="text-muted">{{ sync.fecha_recepcion|format_fecha_hora }}</small>
                             {% if sync.estado_revision == 'CON_ADVERTENCIA' %}
                             <br><small class="text-warning"><i class="bi bi-exclamation-triangle"></i> Con advertencias</small>
                             {% elif sync.estado_revision == 'REVISADO' %}
                             <br><small class="text-success"><i class="bi bi-check-circle"></i> Revisado</small>
                             {% endif %}
                         </div>
-                        <span class="badge bg-{% if sync.estado_sincronizacion|moreapp_sync_ok %}success{% elif sync.estado_sincronizacion == 'ERROR' or sync.estado_sincronizacion == 'ERROR_JSON' %}danger{% else %}warning text-dark{% endif %}">
-                            {{ sync.get_estado_sincronizacion_display }}
-                        </span>
+                        {% badge_moreapp_sync sync.estado_sincronizacion sync.get_estado_sincronizacion_display %}
                     </div>
                     {% endfor %}
                 </div>

@@ -57,13 +57,6 @@ class Cliente(models.Model):
         help_text='Tipo de suministro asociado al cliente'
     )
 
-    pod = models.CharField(
-        max_length=100,
-        blank=True,
-        null=True,
-        help_text='Punto de entrega (POD) del cliente'
-    )
-
     sector = models.CharField(
         max_length=100,
         blank=True,
@@ -371,8 +364,9 @@ class ClienteProyectoHistorial(models.Model):
         verbose_name_plural = 'Historial de proyectos de clientes'
         ordering = ['-fecha_inicio', '-id']
         indexes = [
-            models.Index(fields=['cliente', 'vigente']),
-            models.Index(fields=['proyecto']),
+            # Nombres fijos (iguales a 0010) para evitar RenameIndex en hosting.
+            models.Index(fields=['cliente', 'vigente'], name='clientes_cl_cliente_6a0f0f_idx'),
+            models.Index(fields=['proyecto'], name='clientes_cl_proyect_7b1c2d_idx'),
         ]
 
     def __str__(self):

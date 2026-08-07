@@ -32,6 +32,14 @@ except Exception as e:
 # Agregar el directorio del proyecto al path
 sys.path.insert(0, current_dir)
 
+# Cargar .env del servidor antes de Django (Passenger / Hostingplus)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(current_dir, '.env'))
+    logging.info('Archivo .env cargado (si existe)')
+except Exception as e:
+    logging.info('Sin dotenv/.env (%s); se usan variables del panel Passenger', e)
+
 # Usar configuración de producción (las variables de entorno se configuran en Setup Python App)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings_production')
 

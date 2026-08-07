@@ -1,6 +1,52 @@
 :root {
   --mobile-gap: 12px;
   --delco-sidebar-width: 220px;
+  /* Marca Delco */
+  --delco-primary: #1a3a5c;
+  --delco-secondary: #2c5282;
+  --delco-accent: #4a90e2;
+  --delco-dark: #0f2438;
+  --delco-light: #e8f1f8;
+}
+
+/* Encabezados de tablas — mismo estilo que el navbar */
+.table-delco thead th,
+thead.table-delco th {
+  background: linear-gradient(135deg, var(--delco-primary) 0%, var(--delco-secondary) 100%) !important;
+  color: #fff !important;
+  border-color: var(--delco-primary) !important;
+  font-weight: 600;
+}
+
+.card-header-delco {
+  background: linear-gradient(135deg, var(--delco-primary) 0%, var(--delco-secondary) 100%);
+  color: #fff;
+}
+
+/* KPI unificado */
+.delco-kpi-card {
+  border-left: 4px solid var(--delco-kpi-accent, var(--bs-primary));
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.delco-kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-bs-theme="dark"] .delco-kpi-card:hover {
+  box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.35) !important;
+}
+
+/* Alias de badges (nomenclatura delco-badge-*) */
+.badge-delco-import {
+  background-color: #5b5bd6 !important;
+  color: #fff !important;
+}
+
+.badge-delco-moreapp {
+  background-color: #0891b2 !important;
+  color: #fff !important;
 }
 
 html {
@@ -59,6 +105,25 @@ code {
   filter: none;
 }
 
+[data-bs-theme="dark"] .delco-toast.delco-toast-warning {
+  background-color: rgba(255, 193, 7, 0.2) !important;
+  color: #ffe69c !important;
+  border-color: rgba(255, 193, 7, 0.45) !important;
+}
+[data-bs-theme="dark"] .delco-toast.delco-toast-warning .toast-body,
+[data-bs-theme="dark"] .delco-toast.delco-toast-warning .delco-toast-msg {
+  color: #ffe69c !important;
+}
+[data-bs-theme="dark"] .delco-toast.delco-toast-danger {
+  background-color: rgba(220, 53, 69, 0.22) !important;
+  color: #f1aeb5 !important;
+  border-color: rgba(220, 53, 69, 0.45) !important;
+}
+[data-bs-theme="dark"] .delco-toast.delco-toast-danger .toast-body,
+[data-bs-theme="dark"] .delco-toast.delco-toast-danger .delco-toast-msg {
+  color: #f1aeb5 !important;
+}
+
 .delco-app .container-fluid {
   max-width: 100%;
   padding-left: 0.75rem;
@@ -92,8 +157,8 @@ code {
 }
 
 .delco-sidebar .list-group-item.active {
-  background-color: #667eea !important;
-  border-left: 4px solid #667eea;
+  background-color: var(--delco-primary) !important;
+  border-left: 4px solid var(--delco-accent);
   font-weight: 600;
   color: #fff !important;
 }
@@ -184,10 +249,6 @@ body.delco-navigating main {
 }
 
 .text-purple { color: #5b5bd6 !important; }
-
-.badge-delco-import { background-color: #5b5bd6 !important; color: #fff !important; }
-
-.badge-delco-moreapp { background-color: #0891b2 !important; color: #fff !important; }
 
 .delco-timeline-item {
   background-color: var(--bs-secondary-bg) !important;
@@ -533,7 +594,7 @@ main .table-responsive {
 .delco-form-section {
   background-color: var(--bs-secondary-bg) !important;
   border: 1px solid var(--bs-border-color);
-  border-left: 5px solid #1a3a5c !important;
+  border-left: 5px solid var(--delco-primary) !important;
 }
 
 .delco-form-section > .card-body {
@@ -624,10 +685,6 @@ main .table-responsive {
 
 [data-bs-theme="dark"] .list-group-flush > .list-group-item {
   border-color: var(--bs-border-color);
-}
-
-[data-bs-theme="dark"] .card-header.bg-warning {
-  color: var(--bs-dark) !important;
 }
 
 [data-bs-theme="dark"] .card-header.bg-warning {

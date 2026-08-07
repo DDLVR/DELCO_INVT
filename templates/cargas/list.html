@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Listado de cargas{% endblock %}
 
@@ -26,7 +27,12 @@
     <a href="{% url 'cargas_list' %}" class="btn btn-sm {% if not vista %}btn-primary{% else %}btn-outline-primary{% endif %}">Todas</a>
   </div>
 
-  <form method="get" class="row g-2 mb-3">
+  <div class="card delco-panel-card mb-3">
+    <div class="card-header delco-card-header-muted py-2">
+      <strong class="small"><i class="bi bi-funnel"></i> Filtros</strong>
+    </div>
+    <div class="card-body py-2">
+  <form method="get" class="row g-2">
     {% if vista %}<input type="hidden" name="vista" value="{{ vista }}">{% endif %}
     <div class="col-md-3">
       <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Buscar…">
@@ -60,19 +66,21 @@
       <button class="btn btn-outline-primary w-100" type="submit">Filtrar</button>
     </div>
   </form>
+    </div>
+  </div>
 
   <div class="card delco-panel-card">
-    <div class="table-responsive">
-      <table class="table table-hover mb-0 align-middle table-delco">
-        <thead>
+    <div class="table-responsive delco-table-wrap">
+      <table class="table table-hover table-sm delco-table-compact mb-0 align-middle">
+        <thead class="table-delco">
           <tr>
             <th>#</th>
             <th>Título</th>
-            <th>Tipo</th>
+            <th class="d-none d-md-table-cell">Tipo</th>
             <th>Prioridad</th>
             <th>Estado</th>
-            <th>Asignado</th>
-            <th>Fecha</th>
+            <th class="d-none d-lg-table-cell">Asignado</th>
+            <th class="d-none d-md-table-cell">Fecha</th>
             <th></th>
           </tr>
         </thead>
@@ -85,29 +93,19 @@
               {% if c.cliente %}<br><small class="text-muted">Cliente {{ c.cliente.numero_cliente }}</small>{% endif %}
               {% if c.orden %}<br><small class="text-muted">OT #{{ c.orden_id }}</small>{% endif %}
             </td>
-            <td class="small">{{ c.get_tipo_display }}</td>
+            <td class="small d-none d-md-table-cell">{{ c.get_tipo_display }}</td>
             <td>
-              <span class="badge {% if c.prioridad == 'ALTA' %}bg-warning text-dark{% elif c.prioridad == 'BAJA' %}bg-secondary{% else %}bg-info text-dark{% endif %}">
-                {{ c.get_prioridad_display }}
-              </span>
+              {% badge_prioridad c.prioridad c.get_prioridad_display %}
             </td>
             <td>
-              {% if c.estado == 'COMPLETADA' %}
-              <span class="badge bg-success">{{ c.get_estado_display }}</span>
-              {% elif c.estado == 'CANCELADA' %}
-              <span class="badge bg-dark">{{ c.get_estado_display }}</span>
-              {% elif c.estado == 'EN_PROGRESO' %}
-              <span class="badge bg-info text-dark">{{ c.get_estado_display }}</span>
-              {% else %}
-              <span class="badge bg-warning text-dark">{{ c.get_estado_display }}</span>
-              {% endif %}
+              {% badge_carga_estado c.estado c.get_estado_display %}
             </td>
-            <td class="small">{% if c.asignado_a %}{{ c.asignado_a.nombre_interno }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-            <td class="small">{{ c.fecha_creacion|date:"d/m/Y H:i" }}</td>
+            <td class="small d-none d-lg-table-cell">{% if c.asignado_a %}{{ c.asignado_a.nombre_interno }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td class="small d-none d-md-table-cell">{{ c.fecha_creacion|format_fecha_hora }}</td>
             <td class="text-end"><a href="{% url 'cargas_detalle' c.id %}" class="btn btn-sm btn-outline-primary">Abrir</a></td>
           </tr>
           {% empty %}
-          <tr><td colspan="8" class="text-muted p-4">No hay cargas con esos filtros. Usa “Generar desde pendientes” o crea una nueva.</td></tr>
+          {% include "partials/empty_row.html" with colspan=8 message="No hay cargas con esos filtros. Usa “Generar desde pendientes” o crea una nueva." %}
           {% endfor %}
         </tbody>
       </table>
