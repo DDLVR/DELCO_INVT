@@ -116,26 +116,10 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if reg.estado_sincronizacion|moreapp_sync_ok %}
-                                    <span class="badge bg-success">Procesado</span>
-                                {% elif reg.estado_sincronizacion == 'ALERTA_REVISION' %}
-                                    <span class="badge bg-warning delco-badge-warn">Alerta</span>
-                                {% elif reg.estado_sincronizacion == 'DUPLICADO' %}
-                                    <span class="badge delco-badge-muted">Duplicado</span>
-                                {% elif reg.estado_sincronizacion == 'ERROR_JSON' or reg.estado_sincronizacion == 'ERROR_LECTURA' or reg.estado_sincronizacion == 'ERROR' %}
-                                    <span class="badge bg-danger">Error</span>
-                                {% elif reg.estado_sincronizacion == 'PENDIENTE' %}
-                                    <span class="badge bg-info delco-badge-info">Pendiente</span>
-                                {% else %}
-                                    <span class="badge delco-badge-muted">{{ reg.get_estado_sincronizacion_display|default:reg.estado_sincronizacion }}</span>
-                                {% endif %}
+                                {% badge_moreapp_sync reg.estado_sincronizacion %}
                             </td>
                             <td>
-                                <span id="badge-revision-{{ reg.pk }}" class="badge
-                                    {% if reg.estado_revision == 'REVISADO' %}bg-success
-                                    {% elif reg.estado_revision == 'CON_ADVERTENCIA' %}bg-warning delco-badge-warn
-                                    {% elif reg.estado_revision == 'DESCARTADO' %}delco-badge-muted
-                                    {% else %}bg-primary{% endif %}">
+                                <span id="badge-revision-{{ reg.pk }}" class="badge {{ reg.estado_revision|badge_moreapp_revision_class }}">
                                     {{ reg.get_estado_revision_display }}
                                 </span>
                             </td>
@@ -210,7 +194,7 @@ const ESTADO_FILTRO = '{{ estado_filtro }}';
 
 const BADGE_REVISION_CLASS = {
     'REVISADO': 'badge bg-success',
-    'CON_ADVERTENCIA': 'badge bg-warning delco-badge-warn',
+    'CON_ADVERTENCIA': 'badge bg-warning text-dark',
     'DESCARTADO': 'badge delco-badge-muted',
     'PENDIENTE': 'badge bg-primary',
 };

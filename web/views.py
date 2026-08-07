@@ -225,7 +225,6 @@ def _consumir_aviso_export_reportes(request):
         messages.warning(request, aviso)
 
 
-@csrf_exempt
 def login_view(request):
     """Autenticación de usuarios con RUT"""
     # Si ya está logueado, no mostrar login
@@ -3023,6 +3022,7 @@ def clientes_list_view(request):
 
 
 @login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR'])
 def clientes_exportar_view(request):
     """Exportar clientes a Excel (respeta filtros activos salvo padrón completo)."""
     from web.services.filtros_export import queryset_clientes_filtrado
@@ -3297,7 +3297,6 @@ def cliente_crear_view(request):
             direccion=direccion,
             comuna=comuna,
             tipo_suministro=tipo_suministro,
-            pod=None,
             sector=sector,
             city=None,
             customer_name=customer_name,
@@ -4580,32 +4579,32 @@ def movimientos_importar_moreapp_webhook(request):
     
     NO requiere polling ni descargas manuales - es instantáneo.
     """
-    from inventario.models import MovimientoInventario, MovimientoItem, VerificacionMedidor
+    from inventario.models import MovimientoInventario, MovimientoItem
     from django.conf import settings
     from django.db.models import Q
     
     try:
-        # Seguridad webhook: validar secreto compartido
+        # Seguridad webhook: secreto obligatorio (fail-closed)
         expected_secret = str(getattr(settings, 'MOREAPP_WEBHOOK_SECRET', '') or '').strip()
-        if expected_secret:
-            provided_secret = (request.headers.get('X-MoreApp-Secret', '') or '').strip()
-            auth_header = (request.headers.get('Authorization', '') or '').strip()
-            if not provided_secret and auth_header.lower().startswith('bearer '):
-                provided_secret = auth_header[7:].strip()
-            if not provided_secret or not hmac.compare_digest(provided_secret, expected_secret):
-                return JsonResponse({'success': False, 'error': 'Webhook no autorizado'}, status=403)
+        if not expected_secret:
+            logger.error('MOREAPP_WEBHOOK_SECRET no configurado; webhook rechazado')
+            return JsonResponse({'success': False, 'error': 'Webhook no autorizado'}, status=403)
+        provided_secret = (request.headers.get('X-MoreApp-Secret', '') or '').strip()
+        auth_header = (request.headers.get('Authorization', '') or '').strip()
+        if not provided_secret and auth_header.lower().startswith('bearer '):
+            provided_secret = auth_header[7:].strip()
+        if not provided_secret or not hmac.compare_digest(provided_secret, expected_secret):
+            return JsonResponse({'success': False, 'error': 'Webhook no autorizado'}, status=403)
 
-        # MODO DEBUG: Loguear todo lo que llega
-        logger.info("="*80)
-        logger.info("WEBHOOK RECIBIDO DE MOREAPP")
-        logger.info(f"Headers: {dict(request.headers)}")
-        logger.info(f"Body raw: {request.body.decode('utf-8')[:1000]}")  # Primeros 1000 caracteres
-        logger.info("="*80)
-        
-        # Parsear datos JSON de MoreApp
+        # Parsear datos JSON de MoreApp (sin loguear headers/body con secretos)
         data = json.loads(request.body)
         form_name = data.get('form_name', data.get('formName', ''))
         submission_id = data.get('registrationId', data.get('submission_id', ''))
+        logger.info(
+            'Webhook MoreApp recibido form_name=%s submission_id=%s',
+            form_name,
+            submission_id,
+        )
 
         # Modo principal: procesamiento en tiempo real del payload oficial MoreApp.
         if getattr(settings, 'MOREAPP_WEBHOOK_REALTIME_ENABLED', True):
@@ -4629,36 +4628,9 @@ def movimientos_importar_moreapp_webhook(request):
         
         logger.info(f"Formulario: {form_name}")
         logger.info(f"Submission ID: {submission_id}")
-        
-        # DETECTAR TIPO DE FORMULARIO
-        # Si es "Verificacion de Medidores", guardar en tabla temporal
-        if 'verificacion' in form_name.lower() or 'medidor' in form_name.lower():
-            logger.info("Detectado formulario de VERIFICACIÓN DE MEDIDORES")
-            
-            # Extraer campos del formulario
-            verificacion = VerificacionMedidor.objects.create(
-                submission_id=submission_id or f"temp-{datetime.now().timestamp()}",
-                num_cliente=data.get('numCliente', data.get('num_cliente', '')),
-                num_orden=data.get('numOrden', data.get('num_orden', '')),
-                direccion=data.get('direccion', ''),
-                comuna=data.get('comuna', ''),
-                resultado_visita=data.get('resultadoDeVisita', data.get('resultado_visita', '')),
-                estado_medidor=data.get('estadoDeMedidor', data.get('estado_medidor', '')),
-                foto_fachada_url=data.get('fotoFachada', data.get('foto_fachada', '')),
-                datos_completos=data
-            )
-            
-            logger.info(f"✅ Verificación #{verificacion.id} guardada exitosamente")
-            
-            return JsonResponse({
-                'success': True,
-                'verificacion_id': verificacion.id,
-                'message': 'Verificación guardada correctamente',
-                'tipo': 'verificacion_medidor'
-            })
-        
-        # Si no es verificación, procesar como movimiento de inventario normal
-        logger.info("Procesando como MOVIMIENTO DE INVENTARIO")
+
+        # Fallback legado: payload simplificado como movimiento de inventario
+        logger.info("Procesando como MOVIMIENTO DE INVENTARIO (fallback legacy)")
         
         # Extraer información del formulario
         tipo_trabajo = data.get('tipo', 'ENTREGA')
@@ -4834,7 +4806,7 @@ def movimientos_importar_moreapp_webhook(request):
         logger.error(f"Error procesando webhook MoreApp: {str(e)}\n{traceback.format_exc()}")
         return JsonResponse({
             'success': False,
-            'error': f'Error interno: {str(e)}'
+            'error': 'Error interno',
         }, status=500)
 
 

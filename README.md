@@ -190,9 +190,34 @@ Migraciones recientes a tener en cuenta (si el servidor aún no las tiene):
 
 - Acciones relevantes quedan con **usuario responsable** (movimientos, validaciones, SCi4, cargas, comunicación, comprobantes)
 - MoreApp se traza por `submission_id` / sincronización
-- Roles limitan vistas y acciones sensibles
+- Roles limitan vistas y acciones sensibles (exportación de clientes: ADMIN / ADMINISTRATIVO / GERENCIA / AUDITOR)
 - Sesión con timeout absoluto (`AbsoluteSessionTimeoutMiddleware`)
 - Auditoría consultable en `/auditoria/`
+- **Secretos solo en el servidor** (Passenger o archivo `.env`; nunca en Git): `SECRET_KEY`, `DB_*`, `MOREAPP_WEBHOOK_SECRET` — ver `.env.example`
+- Webhook `/api/moreapp-webhook/` exige secreto (`X-MoreApp-Secret` o `Authorization: Bearer …`); sin secreto → 403
+- `/media/` y `/registros/evidencias/` requieren sesión autenticada
+- En producción la app **no arranca** si faltan esas variables (evita quedar expuesto sin querer)
+
+### Cómo configurar secretos en Hostingplus
+
+**Opción A — archivo `.env` (más simple)**  
+1. cPanel → Administrador de archivos → carpeta del proyecto (junto a `passenger_wsgi.py`)  
+2. Crear archivo `.env` (copiar desde `.env.example`)  
+3. Completar `SECRET_KEY`, `DB_PASSWORD`, `MOREAPP_WEBHOOK_SECRET`, etc.  
+4. Setup Python App → **Restart**
+
+**Opción B — variables en Setup Python App**  
+Las mismas claves (`SECRET_KEY`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `MOREAPP_WEBHOOK_SECRET`, `DEBUG=False`) en Environment variables → Restart.
+
+| Variable | Notas |
+|----------|--------|
+| `SECRET_KEY` | Única; generar con `python -c "import secrets; print(secrets.token_urlsafe(50))"` |
+| `DB_NAME`, `DB_USER`, `DB_PASSWORD` | Las de cPanel → MySQL |
+| `MOREAPP_WEBHOOK_SECRET` | Mismo valor en MoreApp |
+| `ALLOWED_HOSTS` / `CSRF_TRUSTED_ORIGINS` | Dominio de producción |
+| `DEBUG` | `False` |
+
+Tras rotar `DB_PASSWORD` o el secreto MoreApp, actualizar `.env`/Passenger y reiniciar.
 
 ---
 

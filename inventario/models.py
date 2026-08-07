@@ -174,10 +174,8 @@ class Medidor(models.Model):
     class Meta:
         verbose_name_plural = 'Medidores'
         indexes = [
-            models.Index(fields=['serie']),
             models.Index(fields=['caja']),
             models.Index(fields=['estado_inventario']),
-            models.Index(fields=['eliminado']),
         ]
 
 
@@ -365,9 +363,6 @@ class SimCard(models.Model):
     
     class Meta:
         verbose_name_plural = 'SIM Cards'
-        indexes = [
-            models.Index(fields=['eliminado']),
-        ]
 
 
 class Modem(models.Model):
@@ -600,10 +595,8 @@ class Modem(models.Model):
     class Meta:
         verbose_name_plural = 'Módems'
         indexes = [
-            models.Index(fields=['serie']),
             models.Index(fields=['caja']),
             models.Index(fields=['estado_inventario']),
-            models.Index(fields=['eliminado']),
         ]
 
 
@@ -779,44 +772,3 @@ class MovimientoItem(models.Model):
     
     class Meta:
         verbose_name_plural = 'Ítems de Movimiento'
-
-
-# =============================================================================
-# VERIFICACIONES DE MEDIDORES (Temporal - desde MoreApp)
-# =============================================================================
-
-class VerificacionMedidor(models.Model):
-    """
-    Verificación de medidor recibida desde MoreApp
-    Guarda temporalmente los datos del formulario hasta procesar
-    """
-    
-    # Metadatos de MoreApp
-    submission_id = models.CharField(max_length=255, unique=True, help_text="ID único del formulario en MoreApp")
-    fecha_recepcion = models.DateTimeField(auto_now_add=True, help_text="Cuándo se recibió")
-    
-    # Datos del formulario
-    num_cliente = models.CharField(max_length=100, blank=True, null=True, verbose_name="Número de Cliente")
-    num_orden = models.CharField(max_length=100, blank=True, null=True, verbose_name="Número de Orden")
-    direccion = models.CharField(max_length=255, blank=True, null=True, verbose_name="Dirección")
-    comuna = models.CharField(max_length=100, blank=True, null=True, verbose_name="Comuna")
-    resultado_visita = models.CharField(max_length=255, blank=True, null=True, verbose_name="Resultado de Visita")
-    estado_medidor = models.CharField(max_length=100, blank=True, null=True, verbose_name="Estado del Medidor")
-    
-    # Foto (URL de MoreApp)
-    foto_fachada_url = models.URLField(max_length=500, blank=True, null=True, verbose_name="URL Foto")
-    
-    # JSON completo
-    datos_completos = models.JSONField(default=dict, blank=True, verbose_name="JSON completo")
-    
-    # Estado
-    procesado = models.BooleanField(default=False, help_text="Si ya se procesó")
-    notas = models.TextField(blank=True, null=True)
-    
-    class Meta:
-        verbose_name = "Verificación de Medidor"
-        verbose_name_plural = "Verificaciones de Medidores"
-        ordering = ['-fecha_recepcion']
-        
-    def __str__(self):
-        return f"Verificación {self.num_orden or self.submission_id[:8]} - {self.fecha_recepcion.strftime('%d/%m/%Y')}"

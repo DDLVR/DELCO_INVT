@@ -1530,7 +1530,6 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                         cliente_existente.meter_serial_n_1 = meter_serial_n_1
                     if referencia:
                         cliente_existente.referencia = referencia
-                    cliente_existente.pod = None
                     if city:
                         cliente_existente.city = city
                     if client_type:
@@ -1568,7 +1567,6 @@ def importar_clientes_excel(archivo, usuario, sincronizar_completo=False):
                         comuna=comuna or '',
                         referencia=referencia,
                         tipo_suministro=tipo_suministro,
-                        pod=None,
                         sector=sector,
                         city=city,
                         customer_name=customer_name,
@@ -1940,7 +1938,7 @@ def exportar_clientes_excel_completo(clientes):
         ws,
         clientes,
         Cliente,
-        excluir_campos={'id', 'pod'},
+        excluir_campos={'id'},
         incluir_ids_relacion=False,
     )
     return wb

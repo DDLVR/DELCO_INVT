@@ -257,7 +257,7 @@ def _sanitizar_cliente_para_mysql(cliente_obj) -> None:
     """Limpia Char/Text del cliente in-place antes de save (defensa extra)."""
     campos_texto = (
         'numero_cliente', 'direccion', 'comuna', 'referencia', 'tipo_suministro',
-        'pod', 'sector', 'city', 'customer_name', 'installation_address',
+        'sector', 'city', 'customer_name', 'installation_address',
         'proyecto', 'meter_manufacturer_id', 'meter_serial_n_1', 'empresa',
         'ip', 'puerto', 'modem', 'estado_telemetria', 'note', 'trabajo',
         'sim_operador', 'sim_iccid', 'sim_abonado',

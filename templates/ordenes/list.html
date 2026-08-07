@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Órdenes de Trabajo{% endblock %}
 
@@ -172,7 +173,7 @@
     <!-- Tabla -->
     <div class="row">
         <div class="col-12">
-            <div class="card">
+            <div class="card delco-panel-card">
                 <div class="table-responsive delco-table-wrap">
                     <table id="tablaOrdenes" class="table table-hover table-sm delco-table-compact mb-0">
                         <thead class="table-delco">
@@ -205,11 +206,9 @@
                                 <td>{{ orden.titulo }}</td>
                                 <td class="d-none d-lg-table-cell"><span class="badge bg-secondary">{{ orden.get_tipo_trabajo_display }}</span></td>
                                 <td>
-                                    <span class="badge bg-{% if orden.estado == 'REALIZADA' or orden.estado == 'FINALIZADA' %}success{% elif orden.estado == 'REALIZADA_PENDIENTE_COMPROBACION' %}info{% elif orden.estado == 'CANCELADA' %}danger{% elif orden.estado == 'EN_EJECUCION' %}primary{% elif orden.estado == 'ASIGNADA' %}warning text-dark{% elif orden.estado == 'PENDIENTE_VALIDACION' %}warning{% else %}secondary{% endif %}">
-                                        {{ orden.get_estado_display }}
-                                    </span>
+                                    {% badge_ot orden.estado orden.get_estado_display %}
                                 </td>
-                                <td class="d-none d-md-table-cell">{{ orden.cliente.numero_cliente|default:"-" }}</td>
+                                <td class="d-none d-md-table-cell">{{ orden.cliente.numero_cliente|default:"—" }}</td>
                                 <td class="d-none d-lg-table-cell">{{ orden.tecnico_responsable.nombre_interno|default:"Sin asignar" }}</td>
                                 <td class="d-none d-md-table-cell">
                                     {% if orden.moreapp_count %}
@@ -220,14 +219,14 @@
                                     <span class="text-muted">—</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ orden.fecha_creacion|date:"d/m/Y H:i" }}</td>
-                                <td class="d-none d-xl-table-cell">{{ orden.fecha_asignacion|date:"d/m/Y H:i"|default:"-" }}</td>
+                                <td>{{ orden.fecha_creacion|format_fecha_hora }}</td>
+                                <td class="d-none d-xl-table-cell">{{ orden.fecha_asignacion|format_fecha_hora }}</td>
                                 <td class="d-none d-lg-table-cell">
                                     {% if orden.alerta_duplicado %}
                                     <span class="text-warning" title="{{ orden.descripcion_alerta_duplicado|escape }}">
                                         <i class="bi bi-exclamation-triangle-fill"></i>
                                     </span>
-                                    {% else %}-{% endif %}
+                                    {% else %}—{% endif %}
                                 </td>
                                 <td>
                                     <a href="{% url 'orden_detalle' orden.id %}" class="btn btn-sm btn-primary">
