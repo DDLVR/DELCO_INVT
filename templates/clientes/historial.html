@@ -302,6 +302,86 @@
     </div>
   </div>
 
+  {# ── Cargas administrativas ── #}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-body d-flex justify-content-between align-items-center">
+      <strong><i class="bi bi-briefcase me-1"></i> Cargas administrativas</strong>
+      {% if puede_editar %}
+      {% url 'cargas_list' as cargas_list_url %}
+      {% if cargas_list_url %}
+      <a href="{{ cargas_list_url }}?q={{ cliente.numero_cliente }}" class="btn btn-sm btn-outline-primary">Ver en cargas</a>
+      {% endif %}
+      {% endif %}
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle">
+          <thead class="table-delco">
+            <tr>
+              <th>#</th>
+              <th>Tipo</th>
+              <th>Estado</th>
+              <th>Título</th>
+              <th>Asignado</th>
+              <th>Observaciones</th>
+              <th>Adjuntos</th>
+              <th>Creada</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for carga in cargas_admin %}
+            <tr>
+              <td><strong>#{{ carga.id }}</strong></td>
+              <td><span class="badge bg-secondary">{{ carga.get_tipo_display }}</span></td>
+              <td>
+                <span class="badge bg-{% if carga.estado == 'COMPLETADA' %}success{% elif carga.estado == 'CANCELADA' %}dark{% elif carga.estado == 'EN_PROGRESO' %}info text-dark{% else %}warning text-dark{% endif %}">
+                  {{ carga.get_estado_display }}
+                </span>
+              </td>
+              <td class="small">{{ carga.titulo|truncatechars:60 }}</td>
+              <td class="small">{{ carga.asignado_a.nombre_interno|default:"—" }}</td>
+              <td class="small" style="max-width:220px;white-space:pre-wrap;">{% if carga.observaciones %}{{ carga.observaciones|truncatechars:180 }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+              <td>
+                <div class="d-flex flex-wrap gap-1 align-items-center">
+                  {% for a in carga.adjuntos.all %}
+                    {% if a.es_imagen and a.url_vista %}
+                    <a href="{{ a.url_vista }}" target="_blank" rel="noopener" title="{{ a.nombre_archivo }}">
+                      <img src="{{ a.url_vista }}" alt="" style="width:40px;height:40px;object-fit:cover;" class="rounded border">
+                    </a>
+                    {% elif a.url_vista %}
+                    <a href="{{ a.url_vista }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-danger py-0 px-1" title="{{ a.nombre_archivo }}">
+                      <i class="bi bi-file-earmark-pdf"></i>
+                    </a>
+                    {% endif %}
+                  {% empty %}
+                    <span class="text-muted">—</span>
+                  {% endfor %}
+                </div>
+              </td>
+              <td class="small">{{ carga.fecha_creacion|date:"d/m/Y H:i" }}</td>
+              <td>
+                {% if puede_editar %}
+                {% url 'cargas_detalle' carga.id as carga_url %}
+                {% if carga_url %}
+                <a href="{{ carga_url }}" class="btn btn-sm btn-outline-secondary">Abrir</a>
+                {% endif %}
+                {% else %}
+                <span class="text-muted small">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="9" class="text-center text-muted py-4">Sin cargas administrativas asociadas a este cliente.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   {# ── MoreApp ── #}
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-body"><strong><i class="bi bi-phone me-1"></i> Registros MoreApp vinculados</strong></div>

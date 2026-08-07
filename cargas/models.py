@@ -1,5 +1,6 @@
 from django.db import models
 
+from config.storage import evidencia_upload_to, evidencias_storage
 from usuarios.models import Usuario
 
 
@@ -100,3 +101,65 @@ class CargaAdministrativa(models.Model):
     @property
     def abierta(self) -> bool:
         return self.estado in ('PENDIENTE', 'EN_PROGRESO')
+
+
+class AdjuntoCarga(models.Model):
+    """Fotos, PDF MoreApp u otros archivos adjuntos a una carga administrativa."""
+
+    TIPO_CHOICES = [
+        ('FOTO', 'Fotografía / captura de pantalla'),
+        ('PDF', 'PDF'),
+        ('MOREAPP', 'Archivo MoreApp'),
+        ('OTRO', 'Otro'),
+    ]
+
+    carga = models.ForeignKey(
+        CargaAdministrativa,
+        on_delete=models.CASCADE,
+        related_name='adjuntos',
+    )
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='FOTO')
+    nombre_archivo = models.CharField(max_length=255)
+    archivo = models.FileField(
+        upload_to=evidencia_upload_to,
+        storage=evidencias_storage,
+        help_text='Archivo en Registros/Evidencias/adjuntos_cargas',
+    )
+    subido_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adjuntos_carga_subidos',
+    )
+    fecha_hora = models.DateTimeField(auto_now_add=True)
+    hash_archivo = models.CharField(max_length=64, blank=True)
+
+    class Meta:
+        ordering = ['-fecha_hora']
+        verbose_name = 'Adjunto de carga'
+        verbose_name_plural = 'Adjuntos de cargas'
+        indexes = [
+            models.Index(fields=['carga']),
+            models.Index(fields=['tipo']),
+        ]
+
+    def __str__(self):
+        return f'{self.nombre_archivo} — Carga #{self.carga_id}'
+
+    @property
+    def es_imagen(self) -> bool:
+        """True solo si el archivo es una imagen (por extensión)."""
+        nombre = (self.nombre_archivo or '').lower()
+        if self.archivo and getattr(self.archivo, 'name', None):
+            nombre = self.archivo.name.lower()
+        return nombre.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'))
+
+    @property
+    def url_vista(self) -> str:
+        if self.archivo:
+            try:
+                return self.archivo.url
+            except ValueError:
+                pass
+        return ''

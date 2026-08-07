@@ -27,6 +27,8 @@ def evidencia_upload_to(instance, filename):
         subcarpeta = 'informes'
     elif class_name == 'ComprobanteCambioMedidor':
         subcarpeta = 'comprobantes'
+    elif class_name == 'AdjuntoCarga':
+        subcarpeta = 'adjuntos_cargas'
     else:
         subcarpeta = 'adjuntos'
     return f'{subcarpeta}/{timezone.now():%Y/%m}/{safe_name}'
