@@ -420,6 +420,7 @@ def resumen_importacion(importacion: ImportacionExcel) -> Dict[str, int]:
 def exportar_cargas_excel(cargas):
     """Genera workbook Excel con las cargas administrativas recibidas."""
     from importaciones.utils import aplicar_estilo_hoja_exportacion
+    from ordenes_trabajo.observaciones_html import observaciones_a_texto_plano
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -454,7 +455,7 @@ def exportar_cargas_excel(cargas):
             carga.cliente.numero_cliente if carga.cliente_id else '',
             carga.orden_id or '',
             carga.url_referencia or '',
-            carga.observaciones or '',
+            observaciones_a_texto_plano(carga.observaciones or ''),
             carga.creado_por.nombre_interno if carga.creado_por_id else '',
             carga.fecha_creacion.strftime('%d/%m/%Y %H:%M') if carga.fecha_creacion else '',
             carga.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if carga.fecha_asignacion else '',
