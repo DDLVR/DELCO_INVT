@@ -205,6 +205,25 @@ class CargasAdministrativasTests(TestCase):
 		carga.refresh_from_db()
 		self.assertEqual(carga.observaciones, 'Corregido tras completar')
 
+		response = self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{
+				'accion': 'guardar_obs',
+				'observaciones': 'Ver <b>negrita</b> y <mark>resaltado</mark><script>alert(1)</script>',
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		carga.refresh_from_db()
+		self.assertIn('<b>negrita</b>', carga.observaciones)
+		self.assertIn('<mark>resaltado</mark>', carga.observaciones)
+		self.assertNotIn('<script>', carga.observaciones)
+
+		detalle = self.client.get(reverse('cargas_detalle', kwargs={'pk': carga.pk}))
+		self.assertEqual(detalle.status_code, 200)
+		self.assertContains(detalle, 'btnCargaObsBold')
+		self.assertContains(detalle, 'btnCargaObsHighlight')
+		self.assertContains(detalle, 'observacionesCargaEditor')
+
 		png = (
 			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
 			b'\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00'

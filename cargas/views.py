@@ -494,10 +494,14 @@ def cargas_detalle_view(request, pk):
             if not carga.abierta:
                 messages.error(request, 'La carga ya no está abierta.')
             else:
+                from ordenes_trabajo.observaciones_html import sanitizar_observaciones_html
+
                 completar_carga(
                     carga,
                     request.user,
-                    observaciones=(request.POST.get('observaciones') or '').strip(),
+                    observaciones=sanitizar_observaciones_html(
+                        request.POST.get('observaciones') or ''
+                    ),
                 )
                 messages.success(request, 'Carga marcada como completada.')
         elif accion == 'cancelar':
@@ -511,8 +515,12 @@ def cargas_detalle_view(request, pk):
                 )
                 messages.warning(request, 'Carga cancelada.')
         elif accion == 'guardar_obs':
+            from ordenes_trabajo.observaciones_html import sanitizar_observaciones_html
+
             # Se puede corregir observaciones también después de completar
-            carga.observaciones = (request.POST.get('observaciones') or '').strip()
+            carga.observaciones = sanitizar_observaciones_html(
+                request.POST.get('observaciones') or ''
+            )
             carga.save(update_fields=['observaciones', 'fecha_actualizacion'])
             register_audit_event(
                 AuditEvent(

@@ -69,10 +69,27 @@
       <div class="card delco-panel-card mb-3">
         <div class="card-header card-header-delco"><strong>Observaciones / resultado</strong></div>
         <div class="card-body">
-          <form method="post">
+          <form method="post" id="formObservacionesCarga">
             {% csrf_token %}
             <input type="hidden" name="accion" value="guardar_obs">
-            <textarea name="observaciones" class="form-control mb-2" rows="4">{{ carga.observaciones }}</textarea>
+            <input type="hidden" name="observaciones" id="observacionesCargaInput" value="">
+            <div class="btn-toolbar mb-2 gap-1" role="toolbar" aria-label="Formato de observaciones">
+              <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsBold" title="Negrita">
+                  <i class="bi bi-type-bold"></i> Negrita
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsHighlight" title="Resaltar">
+                  <i class="bi bi-highlighter"></i> Resaltar
+                </button>
+              </div>
+              <small class="text-muted align-self-center ms-1">Selecciona texto y aplica el formato</small>
+            </div>
+            <div id="observacionesCargaEditor"
+                 class="form-control delco-obs-editor mb-2"
+                 contenteditable="true"
+                 role="textbox"
+                 aria-multiline="true"
+                 data-placeholder="Notas de avance o resultado…">{% if carga.observaciones %}{{ carga.observaciones|safe }}{% endif %}</div>
             <button type="submit" class="btn btn-sm btn-outline-primary">Guardar observaciones</button>
             {% if not carga.abierta %}
             <p class="small text-muted mb-0 mt-2">La carga está {{ carga.get_estado_display|lower }}; igual puedes corregir observaciones si falta algo.</p>
@@ -225,11 +242,23 @@
             <button type="submit" class="btn btn-outline-info w-100">Marcar en progreso</button>
           </form>
           {% endif %}
-          <form method="post">
+          <form method="post" id="formCompletarCarga">
             {% csrf_token %}
             <input type="hidden" name="accion" value="completar">
+            <input type="hidden" name="observaciones" id="completarCargaObsInput" value="">
             <label class="form-label small">Resultado al completar</label>
-            <textarea name="observaciones" class="form-control form-control-sm mb-2" rows="2" placeholder="Qué se hizo…">{{ carga.observaciones }}</textarea>
+            <div class="btn-toolbar mb-1 gap-1" role="toolbar" aria-label="Formato">
+              <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary" id="btnCompletarObsBold" title="Negrita"><i class="bi bi-type-bold"></i></button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCompletarObsHighlight" title="Resaltar"><i class="bi bi-highlighter"></i></button>
+              </div>
+            </div>
+            <div id="completarCargaObsEditor"
+                 class="form-control form-control-sm delco-obs-editor mb-2"
+                 contenteditable="true"
+                 role="textbox"
+                 aria-multiline="true"
+                 data-placeholder="Qué se hizo…">{% if carga.observaciones %}{{ carga.observaciones|safe }}{% endif %}</div>
             <button type="submit" class="btn btn-success w-100"><i class="bi bi-check2"></i> Completar</button>
           </form>
           <hr>
@@ -300,23 +329,93 @@
 <script>
 (function() {
   var btn = document.getElementById('btnEliminarCargaDetalle');
-  if (!btn) return;
-  btn.addEventListener('click', async function() {
-    var adjuntos = parseInt(btn.dataset.adjuntos || '0', 10) || 0;
-    var mensaje = '¿Está seguro de que desea eliminar esta orden de trabajo?';
-    if (adjuntos > 0) {
-      mensaje += ' Tiene ' + adjuntos + ' adjunto(s): se conservarán (eliminación lógica).';
-    } else {
-      mensaje += ' La eliminación es lógica y se puede cancelar antes de confirmar.';
+  if (btn) {
+    btn.addEventListener('click', async function() {
+      var adjuntos = parseInt(btn.dataset.adjuntos || '0', 10) || 0;
+      var mensaje = '¿Está seguro de que desea eliminar esta orden de trabajo?';
+      if (adjuntos > 0) {
+        mensaje += ' Tiene ' + adjuntos + ' adjunto(s): se conservarán (eliminación lógica).';
+      } else {
+        mensaje += ' La eliminación es lógica y se puede cancelar antes de confirmar.';
+      }
+      var ok = window.showConfirm
+        ? await window.showConfirm(mensaje, 'Eliminar orden de trabajo', 'Sí, eliminar', 'Cancelar')
+        : confirm(mensaje);
+      if (!ok) return;
+      var form = document.getElementById('formEliminarCargaDetalle');
+      form.action = btn.dataset.url;
+      form.submit();
+    });
+  }
+
+  function wireObsEditor(formId, editorId, hiddenId, boldBtnId, highlightBtnId) {
+    var form = document.getElementById(formId);
+    var editor = document.getElementById(editorId);
+    var hidden = document.getElementById(hiddenId);
+    if (!form || !editor || !hidden) return;
+
+    function normalizeMarks() {
+      editor.querySelectorAll('span[style]').forEach(function (span) {
+        var style = (span.getAttribute('style') || '').toLowerCase();
+        if (style.indexOf('background') !== -1 && (
+          style.indexOf('fff59d') !== -1 ||
+          style.indexOf('yellow') !== -1 ||
+          style.indexOf('rgb(255, 245, 157)') !== -1
+        )) {
+          var mark = document.createElement('mark');
+          while (span.firstChild) mark.appendChild(span.firstChild);
+          span.parentNode.replaceChild(mark, span);
+        }
+      });
     }
-    var ok = window.showConfirm
-      ? await window.showConfirm(mensaje, 'Eliminar orden de trabajo', 'Sí, eliminar', 'Cancelar')
-      : confirm(mensaje);
-    if (!ok) return;
-    var form = document.getElementById('formEliminarCargaDetalle');
-    form.action = btn.dataset.url;
-    form.submit();
-  });
+
+    var boldBtn = document.getElementById(boldBtnId);
+    if (boldBtn) {
+      boldBtn.addEventListener('click', function () {
+        editor.focus();
+        document.execCommand('bold', false, null);
+      });
+    }
+    var hiBtn = document.getElementById(highlightBtnId);
+    if (hiBtn) {
+      hiBtn.addEventListener('click', function () {
+        editor.focus();
+        var sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+          document.execCommand('hiliteColor', false, '#fff59d');
+          return;
+        }
+        try {
+          document.execCommand('hiliteColor', false, '#fff59d');
+        } catch (e) {
+          var range = sel.getRangeAt(0);
+          var mark = document.createElement('mark');
+          mark.appendChild(range.extractContents());
+          range.insertNode(mark);
+        }
+      });
+    }
+
+    form.addEventListener('submit', function () {
+      normalizeMarks();
+      hidden.value = editor.innerHTML;
+    });
+  }
+
+  wireObsEditor(
+    'formObservacionesCarga',
+    'observacionesCargaEditor',
+    'observacionesCargaInput',
+    'btnCargaObsBold',
+    'btnCargaObsHighlight'
+  );
+  wireObsEditor(
+    'formCompletarCarga',
+    'completarCargaObsEditor',
+    'completarCargaObsInput',
+    'btnCompletarObsBold',
+    'btnCompletarObsHighlight'
+  );
 })();
 </script>
 {% endblock %}
