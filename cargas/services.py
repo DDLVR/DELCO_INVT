@@ -136,6 +136,65 @@ def cancelar_carga(carga: CargaAdministrativa, actor, motivo: str = '') -> Carga
     return carga
 
 
+def eliminar_carga(carga: CargaAdministrativa, actor, motivo: str = '') -> bool:
+    """
+    Soft-delete de una carga administrativa.
+    No borra adjuntos, vínculos ni archivos: solo oculta la carga del listado.
+    Returns True si se eliminó ahora; False si ya estaba eliminada.
+    """
+    if getattr(carga, 'eliminado', False):
+        return False
+
+    carga.eliminado = True
+    carga.fecha_eliminacion = timezone.now()
+    carga.eliminado_por = actor
+    update_fields = ['eliminado', 'fecha_eliminacion', 'eliminado_por', 'fecha_actualizacion']
+    if motivo:
+        nota = f'[Eliminada] {motivo.strip()}'
+        carga.observaciones = (carga.observaciones + '\n' if carga.observaciones else '') + nota
+        update_fields.append('observaciones')
+    carga.save(update_fields=update_fields)
+
+    adjuntos_activos = carga.adjuntos.filter(eliminado=False).count()
+    reason = motivo[:200] if motivo else 'Eliminación lógica de carga administrativa'
+    if adjuntos_activos:
+        reason = f'{reason} (conserva {adjuntos_activos} adjunto(s))'
+
+    _audit(
+        actor,
+        carga,
+        'CARGA_DELETE',
+        field_name='eliminado',
+        old_value='False',
+        new_value='True',
+        reason=reason,
+    )
+    return True
+
+
+def eliminar_cargas_masivo(ids, actor, motivo: str = '') -> Dict[str, Any]:
+    """Elimina (soft) varias cargas. Ignora IDs inexistentes o ya eliminados."""
+    eliminadas = 0
+    omitidas = 0
+    detalle: List[Dict[str, Any]] = []
+    qs = CargaAdministrativa.objects.filter(pk__in=list(ids), eliminado=False)
+    encontradas = {c.pk: c for c in qs}
+    for pk in ids:
+        carga = encontradas.get(int(pk)) if str(pk).isdigit() or isinstance(pk, int) else None
+        if not carga:
+            omitidas += 1
+            detalle.append({'id': pk, 'ok': False, 'motivo': 'No encontrada o ya eliminada'})
+            continue
+        ok = eliminar_carga(carga, actor, motivo=motivo)
+        if ok:
+            eliminadas += 1
+            detalle.append({'id': carga.pk, 'ok': True, 'titulo': carga.titulo})
+        else:
+            omitidas += 1
+            detalle.append({'id': carga.pk, 'ok': False, 'motivo': 'Ya eliminada'})
+    return {'eliminadas': eliminadas, 'omitidas': omitidas, 'detalle': detalle}
+
+
 def generar_desde_pendientes(usuario) -> Dict[str, Any]:
     """
     Crea cargas abiertas a partir de colas operativas existentes,
@@ -158,6 +217,7 @@ def generar_desde_pendientes(usuario) -> Dict[str, Any]:
     )
     ot_ids_con_carga = set(
         CargaAdministrativa.objects.filter(
+            eliminado=False,
             tipo='VALIDACION_OT',
             estado__in=ESTADOS_ABIERTOS,
             orden_id__isnull=False,
@@ -189,6 +249,7 @@ def generar_desde_pendientes(usuario) -> Dict[str, Any]:
     clientes_sci4 = Cliente.objects.filter(activo=True, estado_sci4='PENDIENTE').order_by('-fecha_actualizacion')[:200]
     cli_ids_con_carga = set(
         CargaAdministrativa.objects.filter(
+            eliminado=False,
             tipo='VERIFICACION_SCI4',
             estado__in=ESTADOS_ABIERTOS,
             cliente_id__isnull=False,
@@ -223,6 +284,7 @@ def generar_desde_pendientes(usuario) -> Dict[str, Any]:
     )
     ot_com_con_carga = set(
         CargaAdministrativa.objects.filter(
+            eliminado=False,
             tipo='COMUNICACION',
             estado__in=ESTADOS_ABIERTOS,
             orden_id__isnull=False,
@@ -255,7 +317,7 @@ def generar_desde_pendientes(usuario) -> Dict[str, Any]:
 
 
 def contadores_cargas(usuario=None) -> Dict[str, int]:
-    qs = CargaAdministrativa.objects.all()
+    qs = CargaAdministrativa.objects.filter(eliminado=False)
     data = {
         'pendientes': qs.filter(estado='PENDIENTE').count(),
         'en_progreso': qs.filter(estado='EN_PROGRESO').count(),

@@ -3911,6 +3911,8 @@ def cliente_historial_view(request, pk):
     from django.db.models import Prefetch
     cargas_admin = list(
         CargaAdministrativa.objects.filter(
+            eliminado=False,
+        ).filter(
             Q(cliente=cliente) | Q(orden__cliente=cliente)
         )
         .select_related('asignado_a', 'creado_por', 'orden')

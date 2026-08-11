@@ -83,6 +83,17 @@ class CargaAdministrativa(models.Model):
     fecha_completada = models.DateTimeField(null=True, blank=True)
     fecha_actualizacion = models.DateTimeField(auto_now=True)
 
+    # Soft-delete: oculta la carga sin borrar adjuntos ni vínculos
+    eliminado = models.BooleanField(default=False, db_index=True)
+    fecha_eliminacion = models.DateTimeField(null=True, blank=True)
+    eliminado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cargas_eliminadas',
+    )
+
     class Meta:
         ordering = ['-fecha_creacion']
         verbose_name = 'Carga administrativa'
@@ -93,6 +104,7 @@ class CargaAdministrativa(models.Model):
             models.Index(fields=['tipo', 'estado']),
             models.Index(fields=['orden']),
             models.Index(fields=['cliente']),
+            models.Index(fields=['eliminado', 'estado']),
         ]
 
     def __str__(self):

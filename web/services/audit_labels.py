@@ -13,6 +13,12 @@ ACCION_LABELS = {
     'OT_CREATE': 'Orden de trabajo — Creación',
     'OT_STATE_CHANGE': 'Orden de trabajo — Cambio de estado',
     'OT_REASSIGN_TECH': 'Orden de trabajo — Reasignación de técnico',
+    'CARGA_CREATE': 'Carga administrativa — Creación',
+    'CARGA_ASSIGN': 'Carga administrativa — Asignación',
+    'CARGA_COMPLETE': 'Carga administrativa — Completada',
+    'CARGA_CANCEL': 'Carga administrativa — Cancelación',
+    'CARGA_DELETE': 'Carga administrativa — Eliminación',
+    'CARGA_UPDATE': 'Carga administrativa — Actualización',
     'SOFT_DELETE': 'Eliminación lógica',
     'TEST_AUDIT': 'Prueba de auditoría',
 }
@@ -20,6 +26,8 @@ ACCION_LABELS = {
 ENTIDAD_LABELS = {
     'Cliente': 'Cliente',
     'OrdenTrabajo': 'Orden de trabajo',
+    'CargaAdministrativa': 'Orden de trabajo administrativa',
+    'AdjuntoCarga': 'Adjunto de carga administrativa',
     'IntegracionMoreApp': 'MoreApp',
     'Medidor': 'Medidor',
     'SimCard': 'SIM Card',
