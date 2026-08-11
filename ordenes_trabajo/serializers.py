@@ -20,6 +20,7 @@ class OrdenTrabajoSerializer(serializers.ModelSerializer):
             'simcard',
             'modem',
             'observaciones_tecnicas',
+            'proyecto_carga_administrativa',
             'estado',
             'tecnico_responsable',
             'fecha_creacion',

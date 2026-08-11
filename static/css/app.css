@@ -1487,3 +1487,32 @@ td.cliente-numero-duplicado strong {
 .medidor-tabla-wrap .medidor-libre-row.table-active {
   --bs-table-bg-state: rgba(13, 110, 253, 0.12);
 }
+
+/* Observaciones técnicas con formato (negrita / resaltado) */
+.delco-obs-editor {
+  min-height: 110px;
+  max-height: 320px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.delco-obs-editor:empty:before {
+  content: attr(data-placeholder);
+  color: var(--bs-secondary-color);
+  pointer-events: none;
+}
+
+.delco-obs-editor mark,
+.delco-obs-view mark {
+  background-color: #fff59d;
+  color: inherit;
+  padding: 0 0.1em;
+  border-radius: 0.15rem;
+}
+
+.delco-obs-view {
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}

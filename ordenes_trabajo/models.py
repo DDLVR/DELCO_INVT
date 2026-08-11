@@ -89,6 +89,15 @@ class OrdenTrabajo(models.Model):
         help_text='Observaciones del técnico durante la ejecución'
     )
 
+    # Proyecto / carga administrativa asociada al trabajo (independiente del cliente)
+    proyecto_carga_administrativa = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text='Proyecto o carga administrativa a la que pertenece este trabajo',
+    )
+
     estado = models.CharField(
         max_length=40,
         choices=ESTADO_CHOICES,

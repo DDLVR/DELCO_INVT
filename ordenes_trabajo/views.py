@@ -81,6 +81,7 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
         cliente_filtro = request.GET.get('cliente', '')
         buscar = request.GET.get('buscar', '')
         cola = request.GET.get('cola', '')
+        proyecto_filtro = (request.GET.get('proyecto_carga') or '').strip()
 
         if estado_filtro:
             ordenes = ordenes.filter(estado=estado_filtro)
@@ -93,11 +94,14 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
                 ordenes = ordenes.filter(cliente_id=int(cliente_filtro))
             else:
                 ordenes = ordenes.filter(cliente__numero_cliente__icontains=cliente_filtro)
+        if proyecto_filtro:
+            ordenes = ordenes.filter(proyecto_carga_administrativa__icontains=proyecto_filtro)
         if buscar:
             ordenes = ordenes.filter(
                 Q(titulo__icontains=buscar)
                 | Q(descripcion__icontains=buscar)
                 | Q(cliente__numero_cliente__icontains=buscar)
+                | Q(proyecto_carga_administrativa__icontains=buscar)
             )
         if cola:
             ordenes = aplicar_cola_ordenes(ordenes, cola)
@@ -106,6 +110,22 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
         if alarma == 'ot_sin_responder':
             from reportes.services import ESTADOS_PENDIENTES_OT
             ordenes = ordenes.filter(estado__in=ESTADOS_PENDIENTES_OT)
+
+    orden_campo = (request.GET.get('orden') or '').strip().lower()
+    orden_dir = (request.GET.get('dir') or 'asc').strip().lower()
+    campos_orden = {
+        'id': 'id',
+        'titulo': 'titulo',
+        'estado': 'estado',
+        'proyecto': 'proyecto_carga_administrativa',
+        'proyecto_carga': 'proyecto_carga_administrativa',
+        'fecha': 'fecha_creacion',
+        'fecha_creacion': 'fecha_creacion',
+        'tecnico': 'tecnico_responsable__nombre_interno',
+    }
+    campo_db = campos_orden.get(orden_campo, 'id')
+    if orden_dir == 'desc':
+        campo_db = '-' + campo_db.lstrip('-')
 
     return ordenes.select_related(
         'tecnico_responsable',
@@ -116,7 +136,7 @@ def _queryset_ordenes_filtrado(request, aplicar_filtros=True):
         'creada_por',
     ).annotate(
         moreapp_count=Count('sincronizaciones_moreapp', distinct=True),
-    ).order_by('id')
+    ).order_by(campo_db, 'id')
 
 
 @login_required
@@ -137,6 +157,9 @@ def ordenes_list_view(request):
     buscar = request.GET.get('buscar', '')
     cola_filtro = request.GET.get('cola', '')
     alarma_filtro = (request.GET.get('alarma') or '').strip().lower()
+    proyecto_filtro = (request.GET.get('proyecto_carga') or '').strip()
+    orden_filtro = (request.GET.get('orden') or 'id').strip().lower()
+    orden_dir = (request.GET.get('dir') or 'asc').strip().lower()
 
     try:
         per_page = int(request.GET.get('per_page') or 50)
@@ -146,8 +169,7 @@ def ordenes_list_view(request):
         per_page = 50
 
     total_alertas_duplicado = ordenes_qs.filter(alerta_duplicado=True).count()
-    # Forzar ID asc aquí: anotar/colas no deben perder el orden visible.
-    ordenes_qs = ordenes_qs.order_by('id')
+    # Conservar orden del queryset filtrado (incluye orden=proyecto_carga, etc.)
     page_obj = Paginator(ordenes_qs, per_page).get_page(request.GET.get('page') or 1)
 
     tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
@@ -189,6 +211,9 @@ def ordenes_list_view(request):
         'cliente_filtro_label': cliente_filtro_label,
         'tecnico_filtro_label': tecnico_filtro_label,
         'buscar': buscar,
+        'proyecto_filtro': proyecto_filtro,
+        'orden_filtro': orden_filtro,
+        'orden_dir': orden_dir,
         'cola_filtro': cola_filtro,
         'alarma': alarma_filtro,
         'alarma_label': 'OT sin responder' if alarma_filtro == 'ot_sin_responder' else '',
@@ -226,6 +251,7 @@ def ordenes_terminadas_view(request):
     tecnico_filtro = (request.GET.get('tecnico') or '').strip()
     cliente_filtro = (request.GET.get('cliente') or '').strip()
     buscar = (request.GET.get('buscar') or '').strip()
+    proyecto_filtro = (request.GET.get('proyecto_carga') or '').strip()
     fecha_desde = (request.GET.get('fecha_desde') or '').strip()
     fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
     periodo = (request.GET.get('periodo') or '').strip().lower()
@@ -242,12 +268,15 @@ def ordenes_terminadas_view(request):
             qs = qs.filter(cliente_id=int(cliente_filtro))
         else:
             qs = qs.filter(cliente__numero_cliente__icontains=cliente_filtro)
+    if proyecto_filtro:
+        qs = qs.filter(proyecto_carga_administrativa__icontains=proyecto_filtro)
     if buscar:
         qs = qs.filter(
             Q(titulo__icontains=buscar)
             | Q(descripcion__icontains=buscar)
             | Q(cliente__numero_cliente__icontains=buscar)
             | Q(cliente__customer_name__icontains=buscar)
+            | Q(proyecto_carga_administrativa__icontains=buscar)
         )
 
     ahora = timezone.now()
@@ -358,6 +387,7 @@ def ordenes_terminadas_view(request):
         'cliente_filtro': cliente_filtro,
         'cliente_filtro_label': cliente_filtro_label,
         'buscar': buscar,
+        'proyecto_filtro': proyecto_filtro,
         'fecha_desde': fecha_desde,
         'fecha_hasta': fecha_hasta,
         'periodo': periodo,
@@ -410,6 +440,13 @@ def orden_crear_view(request):
                 return redirect('orden_crear')
 
             orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '')
+            proyecto_carga = (request.POST.get('proyecto_carga_administrativa') or '').strip()
+            if not proyecto_carga and cliente and getattr(cliente, 'proyecto', None):
+                # Prefill desde proyecto del cliente si el usuario no indicó nada
+                from web.services.filtros_export import es_sin_proyecto
+                if not es_sin_proyecto(cliente.proyecto):
+                    proyecto_carga = (cliente.proyecto or '').strip()
+            orden.proyecto_carga_administrativa = proyecto_carga[:255]
             
             # Técnico responsable (opcional — sin técnico queda CREADA)
             tecnico_id = request.POST.get('tecnico_responsable', '').strip()
@@ -454,11 +491,26 @@ def orden_crear_view(request):
     # GET - Mostrar formulario (tope: evita renderizar miles de clientes en el select)
     tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
     clientes = Cliente.objects.filter(activo=True).exclude(numero_cliente='0').order_by('numero_cliente')[:500]
+    proyectos_sugeridos = (
+        OrdenTrabajo.objects.exclude(proyecto_carga_administrativa='')
+        .values_list('proyecto_carga_administrativa', flat=True)
+        .distinct()
+        .order_by('proyecto_carga_administrativa')[:80]
+    )
+    proyectos_cliente = (
+        Cliente.objects.exclude(proyecto__isnull=True)
+        .exclude(proyecto='')
+        .values_list('proyecto', flat=True)
+        .distinct()
+        .order_by('proyecto')[:80]
+    )
+    sugerencias_proyecto = sorted({*(proyectos_sugeridos or []), *(proyectos_cliente or [])})
     
     context = {
         'tecnicos': tecnicos,
         'clientes': clientes,
         'tipos_trabajo': OrdenTrabajo.TIPO_TRABAJO_CHOICES,
+        'sugerencias_proyecto': sugerencias_proyecto,
     }
     
     return render(request, 'ordenes/crear.html', context)
@@ -480,11 +532,37 @@ def orden_detalle_view(request, pk):
 
     if request.method == 'POST' and request.POST.get('accion') == 'guardar_observaciones':
         if puede_editar_observaciones_orden(orden, usuario):
-            orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '').strip()
+            from ordenes_trabajo.observaciones_html import sanitizar_observaciones_html
+            orden.observaciones_tecnicas = sanitizar_observaciones_html(
+                request.POST.get('observaciones_tecnicas', '')
+            )
             orden.save(update_fields=['observaciones_tecnicas'])
             messages.success(request, 'Observaciones técnicas guardadas')
         else:
             messages.error(request, 'No tienes permiso para editar las observaciones técnicas')
+        return _redirect_orden_detalle(request, pk)
+
+    if request.method == 'POST' and request.POST.get('accion') == 'guardar_proyecto_carga':
+        if usuario.rol not in ['ADMIN', 'ADMINISTRATIVO']:
+            messages.error(request, 'No tienes permiso para editar el proyecto / carga administrativa')
+            return _redirect_orden_detalle(request, pk)
+        valor = (request.POST.get('proyecto_carga_administrativa') or '').strip()[:255]
+        anterior = orden.proyecto_carga_administrativa or ''
+        orden.proyecto_carga_administrativa = valor
+        orden.save(update_fields=['proyecto_carga_administrativa'])
+        register_audit_event(
+            AuditEvent(
+                actor_id=getattr(usuario, 'id', None),
+                action='OT_UPDATE',
+                entity='OrdenTrabajo',
+                entity_id=str(orden.pk),
+                field_name='proyecto_carga_administrativa',
+                old_value=anterior or None,
+                new_value=valor or None,
+                reason='Actualización de proyecto / carga administrativa',
+            )
+        )
+        messages.success(request, 'Proyecto / carga administrativa actualizado')
         return _redirect_orden_detalle(request, pk)
 
     if request.method == 'POST' and request.POST.get('accion') == 'reasignar_tecnico':
@@ -670,6 +748,7 @@ def orden_detalle_view(request, pk):
         'puede_eliminar': usuario.rol == 'ADMIN' and not orden.eliminado,
         'es_tecnico_responsable': orden.tecnico_responsable == usuario if orden.tecnico_responsable else False,
         'puede_editar_observaciones': puede_editar_observaciones_orden(orden, usuario),
+        'puede_descargar_pdf_completado': orden.estado in ESTADOS_TERMINADOS,
         'puede_subir_respaldo_moreapp': (
             usuario.rol in ['ADMIN', 'ADMINISTRATIVO']
             or (orden.tecnico_responsable_id == usuario.id)
@@ -707,10 +786,53 @@ def orden_guardar_observaciones_view(request, pk):
         messages.error(request, 'No tienes permiso para editar las observaciones técnicas')
         return _redirect_orden_detalle(request, pk)
 
-    orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '').strip()
+    from ordenes_trabajo.observaciones_html import sanitizar_observaciones_html
+    orden.observaciones_tecnicas = sanitizar_observaciones_html(
+        request.POST.get('observaciones_tecnicas', '')
+    )
     orden.save(update_fields=['observaciones_tecnicas'])
     messages.success(request, 'Observaciones técnicas guardadas')
     return _redirect_orden_detalle(request, pk)
+
+
+@login_required
+def orden_pdf_completado_view(request, pk):
+    """Descarga PDF de resumen para OT completada (REALIZADA/VALIDADA/FINALIZADA)."""
+    from ordenes_trabajo.pdf_trabajo import (
+        generar_pdf_trabajo_completado,
+        nombre_archivo_pdf_ot,
+        orden_permite_pdf_completado,
+    )
+
+    orden = get_object_or_404(
+        OrdenTrabajo.objects.select_related(
+            'cliente', 'tecnico_responsable', 'medidor', 'simcard', 'modem',
+            'creada_por', 'validada_por',
+        ).prefetch_related('adjuntos', 'informes', 'comprobantes_cambio_medidor'),
+        pk=pk,
+        eliminado=False,
+    )
+
+    usuario = request.user
+    if usuario.rol not in ['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR']:
+        if usuario.rol != 'TECNICO' or orden.tecnico_responsable_id != usuario.id:
+            messages.error(request, 'No tienes acceso a esta orden')
+            return redirect('ordenes_list')
+
+    if not orden_permite_pdf_completado(orden):
+        messages.warning(
+            request,
+            'El PDF de trabajo completado solo está disponible para órdenes '
+            'realizadas, validadas o finalizadas.',
+        )
+        return _redirect_orden_detalle(request, pk)
+
+    pdf_bytes = generar_pdf_trabajo_completado(orden)
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="{}"'.format(
+        nombre_archivo_pdf_ot(orden)
+    )
+    return response
 
 
 @login_required
@@ -782,8 +904,11 @@ def orden_editar_tecnico_view(request, pk):
     
     if request.method == 'POST':
         try:
-            # Actualizar observaciones
-            orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '')
+            # Actualizar observaciones (con formato seguro)
+            from ordenes_trabajo.observaciones_html import sanitizar_observaciones_html
+            orden.observaciones_tecnicas = sanitizar_observaciones_html(
+                request.POST.get('observaciones_tecnicas', '')
+            )
             
             # Actualizar campos de medidor/simcard/modem si se proporciona
             medidor_id = request.POST.get('medidor_id', '').strip()

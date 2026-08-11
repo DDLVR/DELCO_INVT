@@ -69,6 +69,11 @@ COLUMNAS_ORDEN = {
     ),
     'estado': ('estado',),
     'observaciones_tecnicas': ('observaciones tecnicas', 'observaciones_tecnicas'),
+    'proyecto_carga_administrativa': (
+        'proyecto', 'proyecto carga', 'proyecto / carga administrativa',
+        'proyecto carga administrativa', 'carga administrativa', 'proyecto_carga',
+        'proyecto_carga_administrativa',
+    ),
     'id_orden': ('id orden', 'id_orden'),
     'direccion_cliente': ('direccion cliente', 'direccion_cliente', 'direccion'),
     'comuna': ('comuna',),
@@ -364,6 +369,7 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                 tecnico = _resolver_tecnico(tecnico_nombre)
                 estado_import = _resolver_estado(_valor_fila(valores, indice, 'estado'))
                 observaciones_tecnicas = _valor_fila(valores, indice, 'observaciones_tecnicas')
+                proyecto_carga = _valor_fila(valores, indice, 'proyecto_carga_administrativa')
                 orden_id = _parse_id_orden(_valor_fila(valores, indice, 'id_orden'))
 
                 with transaction.atomic():
@@ -383,6 +389,8 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                         orden.tipo_trabajo = tipo_trabajo
                         if observaciones_tecnicas:
                             orden.observaciones_tecnicas = observaciones_tecnicas
+                        if proyecto_carga is not None and str(proyecto_carga).strip() != '':
+                            orden.proyecto_carga_administrativa = str(proyecto_carga).strip()[:255]
                         # El estado no se fuerza desde Excel (evita saltarse flujo/validación)
                         if tecnico:
                             _aplicar_tecnico_a_orden(orden, tecnico)
@@ -405,6 +413,12 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                         )
                         if observaciones_tecnicas:
                             orden.observaciones_tecnicas = observaciones_tecnicas
+                        if proyecto_carga:
+                            orden.proyecto_carga_administrativa = str(proyecto_carga).strip()[:255]
+                        elif getattr(cliente, 'proyecto', None):
+                            from web.services.filtros_export import es_sin_proyecto
+                            if not es_sin_proyecto(cliente.proyecto):
+                                orden.proyecto_carga_administrativa = (cliente.proyecto or '')[:255]
                         if tecnico:
                             _aplicar_tecnico_a_orden(orden, tecnico)
                         orden.save()
@@ -461,6 +475,7 @@ def exportar_ordenes_excel(ordenes):
         'Tipo Trabajo',
         'Tecnico Responsable',
         'Estado',
+        'Proyecto / Carga Administrativa',
         'Direccion Cliente',
         'Comuna',
         'Medidor Serie',
@@ -476,6 +491,8 @@ def exportar_ordenes_excel(ordenes):
         'Descripcion Alerta',
     ])
 
+    from ordenes_trabajo.observaciones_html import observaciones_a_texto_plano
+
     for orden in ordenes:
         ws.append([
             orden.cliente.numero_cliente if orden.cliente else '',
@@ -484,12 +501,13 @@ def exportar_ordenes_excel(ordenes):
             orden.get_tipo_trabajo_display(),
             orden.tecnico_responsable.nombre_interno if orden.tecnico_responsable else '',
             orden.get_estado_display(),
+            orden.proyecto_carga_administrativa or '',
             orden.cliente.direccion if orden.cliente else '',
             orden.cliente.comuna if orden.cliente else '',
             orden.medidor.serie if orden.medidor else '',
             orden.simcard.imei if orden.simcard else '',
             orden.modem.serie if orden.modem else '',
-            orden.observaciones_tecnicas or '',
+            observaciones_a_texto_plano(orden.observaciones_tecnicas or ''),
             orden.fecha_creacion.strftime('%d/%m/%Y %H:%M') if orden.fecha_creacion else '',
             orden.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if orden.fecha_asignacion else '',
             orden.fecha_fin_ejecucion.strftime('%d/%m/%Y %H:%M') if orden.fecha_fin_ejecucion else '',
@@ -499,9 +517,8 @@ def exportar_ordenes_excel(ordenes):
             orden.descripcion_alerta_duplicado or '',
         ])
 
-    # Filtro solo en Tipo Trabajo / Técnico / Estado / Dirección / Comuna.
-    # Sin filtro en Nº/Título/Descripción, equipos, fechas, ID y alertas.
-    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=4, filter_to_col=8)
+    # Filtro en Tipo / Técnico / Estado / Proyecto / Dirección / Comuna.
+    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=4, filter_to_col=9)
     return wb
 
 
