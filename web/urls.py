@@ -22,6 +22,9 @@ from cargas.views import (
     cargas_crear_view,
     cargas_detalle_view,
     cargas_generar_pendientes_view,
+    cargas_importar_view,
+    cargas_eliminar_view,
+    cargas_eliminar_masivo_view,
 )
 from ordenes_trabajo.views import (
     ordenes_list_view as ordenes_trabajo_list,
@@ -167,6 +170,9 @@ urlpatterns = [
     path('cargas/listado/', cargas_list_view, name='cargas_list'),
     path('cargas/crear/', cargas_crear_view, name='cargas_crear'),
     path('cargas/generar-pendientes/', cargas_generar_pendientes_view, name='cargas_generar_pendientes'),
+    path('cargas/importar/', cargas_importar_view, name='cargas_importar'),
+    path('cargas/eliminar-masivo/', cargas_eliminar_masivo_view, name='cargas_eliminar_masivo'),
+    path('cargas/<int:pk>/eliminar/', cargas_eliminar_view, name='cargas_eliminar'),
     path('cargas/<int:pk>/', cargas_detalle_view, name='cargas_detalle'),
     path('reportes/', reportes_hub_view, name='reportes_hub'),
     path('reportes/exportar/<slug:slug>/', reportes_export_view, name='reportes_export'),

@@ -1,7 +1,8 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Case, IntegerField, Q, Value, When
+from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -12,6 +13,7 @@ from usuarios.models import Usuario
 from web.decorators import admin_or_administrativo
 from web.services.audit import AuditEvent, register_audit_event
 
+from .import_excel import importar_cargas_excel, resumen_importacion
 from .models import AdjuntoCarga, CargaAdministrativa
 from .services import (
     asignar_carga,
@@ -19,6 +21,8 @@ from .services import (
     completar_carga,
     contadores_cargas,
     crear_carga,
+    eliminar_carga,
+    eliminar_cargas_masivo,
     generar_desde_pendientes,
 )
 
@@ -257,6 +261,7 @@ def cargas_hub_view(request):
     contadores = contadores_cargas(request.user)
     mias = (
         CargaAdministrativa.objects.filter(
+            eliminado=False,
             estado__in=['PENDIENTE', 'EN_PROGRESO'],
             asignado_a=request.user,
         )
@@ -266,6 +271,7 @@ def cargas_hub_view(request):
     )
     sin_asignar = (
         CargaAdministrativa.objects.filter(
+            eliminado=False,
             estado__in=['PENDIENTE', 'EN_PROGRESO'],
             asignado_a__isnull=True,
         )
@@ -301,10 +307,14 @@ def cargas_hub_view(request):
 @admin_or_administrativo
 def cargas_list_view(request):
     qs = (
-        CargaAdministrativa.objects.select_related(
+        CargaAdministrativa.objects.filter(eliminado=False)
+        .select_related(
             'asignado_a', 'creado_por', 'orden', 'cliente',
         )
-        .annotate(_prio=PRIORIDAD_ORDER)
+        .annotate(
+            _prio=PRIORIDAD_ORDER,
+            adjuntos_activos=Count('adjuntos', filter=Q(adjuntos__eliminado=False)),
+        )
         .order_by('-_prio', '-fecha_creacion')
     )
 
@@ -400,6 +410,7 @@ def cargas_detalle_view(request, pk):
             'asignado_a', 'creado_por', 'orden', 'cliente',
         ).prefetch_related('adjuntos'),
         pk=pk,
+        eliminado=False,
     )
 
     if request.method == 'POST':
@@ -576,4 +587,116 @@ def cargas_generar_pendientes_view(request):
             'No hay pendientes nuevos para generar'
             + (f' ({result["omitidas"]} ya tenían carga abierta).' if result['omitidas'] else '.'),
         )
+    return redirect('cargas_list')
+
+
+@login_required
+@admin_or_administrativo
+@require_POST
+def cargas_importar_view(request):
+    """Importación masiva de órdenes de trabajo administrativas desde Excel."""
+    archivo = request.FILES.get('archivo')
+    if not archivo:
+        return JsonResponse({'success': False, 'message': 'No se seleccionó ningún archivo'})
+
+    try:
+        importacion = importar_cargas_excel(archivo, request.user)
+        conteos = resumen_importacion(importacion)
+        errores_resumen = []
+        if importacion.fallidas > 0:
+            from collections import Counter
+            errores = importacion.errores.all()[:100]
+            for motivo, count in Counter(e.motivo for e in errores).most_common(8):
+                errores_resumen.append({'motivo': motivo[:200], 'count': count})
+
+        mensaje = importacion.observaciones or 'Importación finalizada.'
+        # Quitar línea meta interna del mensaje al usuario
+        mensaje = '\n'.join(
+            line for line in mensaje.splitlines() if not line.startswith('[meta]')
+        ).strip()
+
+        return JsonResponse({
+            'success': importacion.estado == 'COMPLETADO',
+            'message': mensaje,
+            'exitosas': importacion.exitosas,
+            'fallidas': conteos['errores'],
+            'duplicados': conteos['duplicados'],
+            'total_filas': importacion.total_filas,
+            'importacion_id': importacion.id,
+            'errores_resumen': errores_resumen,
+            'estado': importacion.estado,
+            'errores_url': (
+                reverse('importacion_errores', kwargs={'pk': importacion.id})
+                if importacion.fallidas else ''
+            ),
+        })
+    except Exception as exc:
+        return JsonResponse({
+            'success': False,
+            'message': str(exc),
+            'exitosas': 0,
+            'fallidas': 0,
+            'duplicados': 0,
+        })
+
+
+@login_required
+@admin_or_administrativo
+@require_POST
+def cargas_eliminar_view(request, pk):
+    """Soft-delete individual de una orden de trabajo administrativa."""
+    carga = get_object_or_404(CargaAdministrativa, pk=pk, eliminado=False)
+    carga_id = carga.pk
+    titulo = carga.titulo
+    n_adjuntos = carga.adjuntos.filter(eliminado=False).count()
+    motivo = (request.POST.get('motivo') or '').strip()
+
+    ok = eliminar_carga(carga, request.user, motivo=motivo)
+    if ok:
+        extra = (
+            f' Se conservaron {n_adjuntos} adjunto(s) asociados.'
+            if n_adjuntos else ''
+        )
+        messages.success(
+            request,
+            f'Orden de trabajo administrativa #{carga_id} («{titulo}») eliminada.{extra}',
+        )
+    else:
+        messages.warning(request, f'La carga #{carga_id} ya estaba eliminada.')
+    return redirect('cargas_list')
+
+
+@login_required
+@admin_or_administrativo
+@require_POST
+def cargas_eliminar_masivo_view(request):
+    """Soft-delete masivo de órdenes de trabajo administrativas."""
+    ids_raw = request.POST.getlist('ids') or request.POST.getlist('carga_ids')
+    if not ids_raw and request.POST.get('ids'):
+        ids_raw = [x.strip() for x in request.POST.get('ids').split(',') if x.strip()]
+
+    ids = []
+    for raw in ids_raw:
+        if str(raw).isdigit():
+            ids.append(int(raw))
+
+    if not ids:
+        messages.error(request, 'No se seleccionaron órdenes para eliminar.')
+        return redirect('cargas_list')
+
+    motivo = (request.POST.get('motivo') or '').strip()
+    result = eliminar_cargas_masivo(ids, request.user, motivo=motivo)
+    if result['eliminadas']:
+        messages.success(
+            request,
+            f'Se eliminaron {result["eliminadas"]} orden(es) de trabajo administrativa(s)'
+            + (f' ({result["omitidas"]} omitidas).' if result['omitidas'] else '.'),
+        )
+    else:
+        messages.warning(
+            request,
+            'No se eliminó ninguna orden'
+            + (f' ({result["omitidas"]} omitidas).' if result['omitidas'] else '.'),
+        )
+    return redirect('cargas_list')
     return redirect('cargas_list')
