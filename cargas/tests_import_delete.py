@@ -194,3 +194,45 @@ class CargasImportDeleteTests(TestCase):
         carga = crear_carga(self.admin, titulo='Idem', tipo='OTRO')
         self.assertTrue(eliminar_carga(carga, self.admin, motivo='prueba'))
         self.assertFalse(eliminar_carga(carga, self.admin, motivo='otra'))
+
+    def test_exportar_excel_con_filtros(self):
+        from .import_excel import exportar_cargas_excel
+
+        c1 = crear_carga(self.admin, titulo='Export Alta', tipo='VERIFICACION', prioridad='ALTA')
+        crear_carga(self.admin, titulo='Export Baja', tipo='OTRO', prioridad='BAJA')
+        crear_carga(self.admin, titulo='Export Sci4', tipo='VERIFICACION_SCI4')
+
+        self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+
+        # Filtrado por tipo
+        response = self.client.get(reverse('cargas_exportar'), {'filtrar': '1', 'tipo': 'VERIFICACION'})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            response['Content-Type'],
+        )
+        wb = openpyxl.load_workbook(BytesIO(response.content))
+        ws = wb.active
+        titulos = [row[1].value for row in ws.iter_rows(min_row=2, values_only=False)]
+        self.assertIn('Export Alta', titulos)
+        self.assertNotIn('Export Baja', titulos)
+        self.assertNotIn('Export Sci4', titulos)
+        self.assertIsNotNone(ws.auto_filter.ref)
+
+        # Todas
+        response_todas = self.client.get(reverse('cargas_exportar'), {'todas': '1'})
+        self.assertEqual(response_todas.status_code, 200)
+        wb2 = openpyxl.load_workbook(BytesIO(response_todas.content))
+        titulos2 = [row[1].value for row in wb2.active.iter_rows(min_row=2, values_only=False)]
+        self.assertIn('Export Alta', titulos2)
+        self.assertIn('Export Baja', titulos2)
+        self.assertIn('Export Sci4', titulos2)
+
+        # Helper directo incluye ID
+        wb3 = exportar_cargas_excel([c1])
+        self.assertEqual(wb3.active.cell(2, 1).value, c1.pk)
+
+    def test_tecnico_no_puede_exportar(self):
+        self.assertTrue(self.client.login(rut=self.tecnico.rut, password=self.password))
+        response = self.client.get(reverse('cargas_exportar'), {'todas': '1'})
+        self.assertEqual(response.status_code, 403)
