@@ -117,6 +117,7 @@ def marcar_sci4_actualizado(
         from cargas.models import CargaAdministrativa
 
         CargaAdministrativa.objects.filter(
+            eliminado=False,
             cliente_id=cliente.pk,
             tipo='VERIFICACION_SCI4',
             estado__in=['PENDIENTE', 'EN_PROGRESO'],
