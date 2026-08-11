@@ -156,9 +156,29 @@
                                 <div class="delco-ac-results list-group shadow-sm d-none"></div>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
+                            <label class="form-label">Proyecto / Carga</label>
+                            <input type="text" name="proyecto_carga" class="form-control" placeholder="Filtrar proyecto…" value="{{ proyecto_filtro }}">
+                        </div>
+                        <div class="col-md-2">
                             <label class="form-label">Buscar</label>
-                            <input type="text" name="buscar" class="form-control" placeholder="Título, descripción..." value="{{ buscar }}">
+                            <input type="text" name="buscar" class="form-control" placeholder="Título, descripción, proyecto…" value="{{ buscar }}">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">Ordenar por</label>
+                            <div class="input-group">
+                                <select name="orden" class="form-select">
+                                    <option value="id" {% if orden_filtro == 'id' %}selected{% endif %}>ID</option>
+                                    <option value="proyecto" {% if orden_filtro == 'proyecto' or orden_filtro == 'proyecto_carga' %}selected{% endif %}>Proyecto / Carga</option>
+                                    <option value="fecha" {% if orden_filtro == 'fecha' or orden_filtro == 'fecha_creacion' %}selected{% endif %}>Fecha</option>
+                                    <option value="estado" {% if orden_filtro == 'estado' %}selected{% endif %}>Estado</option>
+                                    <option value="titulo" {% if orden_filtro == 'titulo' %}selected{% endif %}>Título</option>
+                                </select>
+                                <select name="dir" class="form-select" style="max-width:5.5rem">
+                                    <option value="asc" {% if orden_dir != 'desc' %}selected{% endif %}>Asc</option>
+                                    <option value="desc" {% if orden_dir == 'desc' %}selected{% endif %}>Desc</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="col-md-1 d-flex gap-2">
                             <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i></button>
@@ -183,6 +203,7 @@
                                 {% endif %}
                                 <th>ID</th>
                                 <th>Título</th>
+                                <th class="d-none d-xl-table-cell">Proyecto / Carga</th>
                                 <th class="d-none d-lg-table-cell">Tipo</th>
                                 <th>Estado</th>
                                 <th class="d-none d-md-table-cell">Cliente</th>
@@ -204,6 +225,7 @@
                                     <a href="{% url 'orden_detalle' orden.id %}" class="text-decoration-none fw-bold">#{{ orden.id }}</a>
                                 </td>
                                 <td>{{ orden.titulo }}</td>
+                                <td class="d-none d-xl-table-cell small">{{ orden.proyecto_carga_administrativa|default:"—" }}</td>
                                 <td class="d-none d-lg-table-cell"><span class="badge bg-secondary">{{ orden.get_tipo_trabajo_display }}</span></td>
                                 <td>
                                     {% badge_ot orden.estado orden.get_estado_display %}

@@ -94,6 +94,23 @@
                                 {% if clientes %}(muestra hasta {{ clientes|length }}){% endif %}.
                             </small>
                         </div>
+
+                        <div class="mb-3">
+                            <label class="form-label" for="crearProyectoCarga">Proyecto / Carga Administrativa</label>
+                            <input type="text"
+                                   name="proyecto_carga_administrativa"
+                                   id="crearProyectoCarga"
+                                   class="form-control"
+                                   list="listaProyectosCarga"
+                                   maxlength="255"
+                                   placeholder="Ej: Proyecto Norte, Carga SCi4 marzo…">
+                            <datalist id="listaProyectosCarga">
+                                {% for p in sugerencias_proyecto %}
+                                <option value="{{ p }}">
+                                {% endfor %}
+                            </datalist>
+                            <small class="text-muted">Identifica a qué proyecto o carga administrativa pertenece este trabajo. Si lo dejas vacío y el cliente tiene proyecto, se usará ese valor.</small>
+                        </div>
                         
                         <div class="mb-3">
                             <label class="form-label">Observaciones Iniciales</label>

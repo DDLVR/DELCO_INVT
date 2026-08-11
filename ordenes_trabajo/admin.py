@@ -23,13 +23,13 @@ class OrdenTrabajoAdmin(admin.ModelAdmin):
         'fecha_creacion',
     )
     list_filter = ('estado', 'tipo_trabajo', 'alerta_duplicado', 'fecha_creacion', 'tecnico_responsable')
-    search_fields = ('titulo', 'descripcion', 'cliente__numero_cliente')
+    search_fields = ('titulo', 'descripcion', 'cliente__numero_cliente', 'proyecto_carga_administrativa')
     readonly_fields = ('fecha_creacion', 'fecha_asignacion', 'fecha_inicio_ejecucion', 'fecha_fin_ejecucion', 'fecha_cierre', 'fecha_validacion')
     inlines = [AdjuntoOrdenInline]
     
     fieldsets = (
         ('Información Básica', {
-            'fields': ('titulo', 'descripcion', 'tipo_trabajo', 'cliente')
+            'fields': ('titulo', 'descripcion', 'tipo_trabajo', 'cliente', 'proyecto_carga_administrativa')
         }),
         ('Equipos Utilizados', {
             'fields': ('medidor', 'simcard', 'modem'),
