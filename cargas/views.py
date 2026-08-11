@@ -2,18 +2,20 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Case, Count, IntegerField, Q, Value, When
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import get_valid_filename
 from django.views.decorators.http import require_POST
 
+from io import BytesIO
+
 from usuarios.models import Usuario
 from web.decorators import admin_or_administrativo
 from web.services.audit import AuditEvent, register_audit_event
 
-from .import_excel import importar_cargas_excel, resumen_importacion
+from .import_excel import exportar_cargas_excel, importar_cargas_excel, resumen_importacion
 from .models import AdjuntoCarga, CargaAdministrativa
 from .services import (
     asignar_carga,
@@ -46,6 +48,53 @@ def _administrativos_qs():
         rol__in=['ADMIN', 'ADMINISTRATIVO'],
         is_active=True,
     ).order_by('nombre_interno')
+
+
+def _queryset_cargas_filtrado(request, *, aplicar_filtros: bool = True):
+    """Base de cargas activas; opcionalmente aplica filtros del listado."""
+    qs = (
+        CargaAdministrativa.objects.filter(eliminado=False)
+        .select_related(
+            'asignado_a', 'creado_por', 'orden', 'cliente',
+        )
+        .annotate(
+            _prio=PRIORIDAD_ORDER,
+            adjuntos_activos=Count('adjuntos', filter=Q(adjuntos__eliminado=False)),
+        )
+        .order_by('-_prio', '-fecha_creacion')
+    )
+    if not aplicar_filtros:
+        return qs
+
+    estado = (request.GET.get('estado') or '').strip()
+    tipo = (request.GET.get('tipo') or '').strip()
+    asignado = (request.GET.get('asignado') or '').strip()
+    q = (request.GET.get('q') or '').strip()
+    vista = (request.GET.get('vista') or '').strip()
+
+    if vista == 'mias':
+        qs = qs.filter(asignado_a=request.user, estado__in=['PENDIENTE', 'EN_PROGRESO'])
+    elif vista == 'sin_asignar':
+        qs = qs.filter(asignado_a__isnull=True, estado__in=['PENDIENTE', 'EN_PROGRESO'])
+    elif vista == 'abiertas':
+        qs = qs.filter(estado__in=['PENDIENTE', 'EN_PROGRESO'])
+
+    if estado:
+        qs = qs.filter(estado=estado)
+    if tipo:
+        qs = qs.filter(tipo=tipo)
+    if asignado == '0':
+        qs = qs.filter(asignado_a__isnull=True)
+    elif asignado.isdigit():
+        qs = qs.filter(asignado_a_id=int(asignado))
+    if q:
+        qs = qs.filter(
+            Q(titulo__icontains=q)
+            | Q(descripcion__icontains=q)
+            | Q(cliente__numero_cliente__icontains=q)
+            | Q(orden__titulo__icontains=q)
+        )
+    return qs
 
 
 def _inferir_tipo_adjunto(tipo_post, nombre):
@@ -306,46 +355,13 @@ def cargas_hub_view(request):
 @login_required
 @admin_or_administrativo
 def cargas_list_view(request):
-    qs = (
-        CargaAdministrativa.objects.filter(eliminado=False)
-        .select_related(
-            'asignado_a', 'creado_por', 'orden', 'cliente',
-        )
-        .annotate(
-            _prio=PRIORIDAD_ORDER,
-            adjuntos_activos=Count('adjuntos', filter=Q(adjuntos__eliminado=False)),
-        )
-        .order_by('-_prio', '-fecha_creacion')
-    )
+    qs = _queryset_cargas_filtrado(request, aplicar_filtros=True)
 
     estado = (request.GET.get('estado') or '').strip()
     tipo = (request.GET.get('tipo') or '').strip()
     asignado = (request.GET.get('asignado') or '').strip()
     q = (request.GET.get('q') or '').strip()
     vista = (request.GET.get('vista') or '').strip()
-
-    if vista == 'mias':
-        qs = qs.filter(asignado_a=request.user, estado__in=['PENDIENTE', 'EN_PROGRESO'])
-    elif vista == 'sin_asignar':
-        qs = qs.filter(asignado_a__isnull=True, estado__in=['PENDIENTE', 'EN_PROGRESO'])
-    elif vista == 'abiertas':
-        qs = qs.filter(estado__in=['PENDIENTE', 'EN_PROGRESO'])
-
-    if estado:
-        qs = qs.filter(estado=estado)
-    if tipo:
-        qs = qs.filter(tipo=tipo)
-    if asignado == '0':
-        qs = qs.filter(asignado_a__isnull=True)
-    elif asignado.isdigit():
-        qs = qs.filter(asignado_a_id=int(asignado))
-    if q:
-        qs = qs.filter(
-            Q(titulo__icontains=q)
-            | Q(descripcion__icontains=q)
-            | Q(cliente__numero_cliente__icontains=q)
-            | Q(orden__titulo__icontains=q)
-        )
 
     paginator = Paginator(qs, 25)
     page = paginator.get_page(request.GET.get('page') or 1)
@@ -367,6 +383,34 @@ def cargas_list_view(request):
         'query_string': params.urlencode(),
         'contadores': contadores_cargas(request.user),
     })
+
+
+@login_required
+@admin_or_administrativo
+def cargas_exportar_view(request):
+    """Exporta cargas administrativas (filtradas por defecto; ?todas=1 sin filtros)."""
+    filter_keys = ('estado', 'tipo', 'asignado', 'q', 'vista')
+    tiene_filtros = any((request.GET.get(k) or '').strip() for k in filter_keys)
+    forzar_filtrar = request.GET.get('filtrar') == '1'
+    exportar_todas = request.GET.get('todas') == '1'
+    usar_filtros = (not exportar_todas) and (forzar_filtrar or tiene_filtros)
+
+    qs = _queryset_cargas_filtrado(request, aplicar_filtros=usar_filtros)
+    wb = exportar_cargas_excel(list(qs))
+
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+
+    from web.services.export_filenames import nombre_exportacion_con_fecha
+    filename = nombre_exportacion_con_fecha('cargas_administrativas.xlsx')
+    response = HttpResponse(
+        stream.getvalue(),
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    response['Cache-Control'] = 'no-store'
+    return response
 
 
 @login_required

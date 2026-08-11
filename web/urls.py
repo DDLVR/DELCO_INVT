@@ -23,6 +23,7 @@ from cargas.views import (
     cargas_detalle_view,
     cargas_generar_pendientes_view,
     cargas_importar_view,
+    cargas_exportar_view,
     cargas_eliminar_view,
     cargas_eliminar_masivo_view,
 )
@@ -173,6 +174,7 @@ urlpatterns = [
     path('cargas/crear/', cargas_crear_view, name='cargas_crear'),
     path('cargas/generar-pendientes/', cargas_generar_pendientes_view, name='cargas_generar_pendientes'),
     path('cargas/importar/', cargas_importar_view, name='cargas_importar'),
+    path('cargas/exportar/', cargas_exportar_view, name='cargas_exportar'),
     path('cargas/eliminar-masivo/', cargas_eliminar_masivo_view, name='cargas_eliminar_masivo'),
     path('cargas/<int:pk>/eliminar/', cargas_eliminar_view, name='cargas_eliminar'),
     path('cargas/<int:pk>/', cargas_detalle_view, name='cargas_detalle'),
