@@ -415,3 +415,52 @@ def resumen_importacion(importacion: ImportacionExcel) -> Dict[str, int]:
         else:
             errs += 1
     return {'errores': errs, 'duplicados': dups}
+
+
+def exportar_cargas_excel(cargas):
+    """Genera workbook Excel con las cargas administrativas recibidas."""
+    from importaciones.utils import aplicar_estilo_hoja_exportacion
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Cargas administrativas'
+    ws.append([
+        'ID Carga',
+        'Titulo',
+        'Tipo',
+        'Prioridad',
+        'Estado',
+        'Descripcion',
+        'Asignado',
+        'Cliente',
+        'ID Orden',
+        'URL',
+        'Observaciones',
+        'Creado por',
+        'Fecha creacion',
+        'Fecha asignacion',
+        'Fecha completada',
+    ])
+
+    for carga in cargas:
+        ws.append([
+            carga.id,
+            carga.titulo or '',
+            carga.get_tipo_display(),
+            carga.get_prioridad_display(),
+            carga.get_estado_display(),
+            carga.descripcion or '',
+            carga.asignado_a.nombre_interno if carga.asignado_a_id else '',
+            carga.cliente.numero_cliente if carga.cliente_id else '',
+            carga.orden_id or '',
+            carga.url_referencia or '',
+            carga.observaciones or '',
+            carga.creado_por.nombre_interno if carga.creado_por_id else '',
+            carga.fecha_creacion.strftime('%d/%m/%Y %H:%M') if carga.fecha_creacion else '',
+            carga.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if carga.fecha_asignacion else '',
+            carga.fecha_completada.strftime('%d/%m/%Y %H:%M') if carga.fecha_completada else '',
+        ])
+
+    # Filtro en Tipo / Prioridad / Estado / Asignado / Cliente (cols 3–8).
+    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=3, filter_to_col=8)
+    return wb

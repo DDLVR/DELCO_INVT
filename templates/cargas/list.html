@@ -15,6 +15,26 @@
       <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarCargas">
         <i class="bi bi-file-earmark-excel"></i> Importar Excel
       </button>
+      <div class="btn-group">
+        <a href="{% url 'cargas_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}" class="btn btn-info">
+          <i class="bi bi-download"></i> Exportar filtradas
+        </a>
+        <button type="button" class="btn btn-info dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+          <span class="visually-hidden">Más opciones de exportación</span>
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li>
+            <a class="dropdown-item" href="{% url 'cargas_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}">
+              Exportar filtradas
+            </a>
+          </li>
+          <li>
+            <a class="dropdown-item" href="{% url 'cargas_exportar' %}?todas=1">
+              Exportar todas
+            </a>
+          </li>
+        </ul>
+      </div>
       <a href="{% url 'cargas_crear' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nueva</a>
       <form method="post" action="{% url 'cargas_generar_pendientes' %}">
         {% csrf_token %}
@@ -228,6 +248,7 @@
                         <li>Se validan campos obligatorios y referencias (cliente, OT, asignado).</li>
                         <li>Duplicados (mismo Título + Tipo + Cliente + Orden, o ID existente) no se cargan ni se sobrescriben.</li>
                         <li>Al finalizar verás totales: cargados, errores y duplicados, con detalle por fila.</li>
+                        <li>Puedes <strong>exportar</strong> el listado (filtrado o completo) y reutilizar el Excel como plantilla.</li>
                       </ul>
                     </div>
                   </div>
