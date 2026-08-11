@@ -12,9 +12,16 @@
                 <i class="bi bi-clipboard-check"></i> Orden #{{ orden.id }}
                 {% badge_ot orden.estado orden.get_estado_display %}
             </h1>
-            <a href="{% if volver_url %}{{ volver_url }}{% else %}{% url 'ordenes_list' %}{% endif %}" class="btn btn-secondary">
-                <i class="bi bi-arrow-left"></i> {{ volver_label|default:"Volver" }}
-            </a>
+            <div class="d-flex flex-wrap gap-2">
+                {% if puede_descargar_pdf_completado %}
+                <a href="{% url 'orden_pdf_completado' orden.id %}" class="btn btn-outline-danger">
+                    <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
+                </a>
+                {% endif %}
+                <a href="{% if volver_url %}{{ volver_url }}{% else %}{% url 'ordenes_list' %}{% endif %}" class="btn btn-secondary">
+                    <i class="bi bi-arrow-left"></i> {{ volver_label|default:"Volver" }}
+                </a>
+            </div>
         </div>
     </div>
 
@@ -175,6 +182,31 @@
                         <div class="col-12 mb-3">
                             <label class="text-muted small">Descripción</label>
                             <p class="mb-0">{{ orden.descripcion|default:"-" }}</p>
+                        </div>
+                        <div class="col-12 mb-0">
+                            <label class="text-muted small">Proyecto / Carga Administrativa</label>
+                            {% if puede_editar %}
+                            <form method="post" action="{% url 'orden_detalle' orden.id %}" class="row g-2 align-items-center mt-1">
+                                {% csrf_token %}
+                                {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
+                                <input type="hidden" name="accion" value="guardar_proyecto_carga">
+                                <div class="col-md-8">
+                                    <input type="text"
+                                           name="proyecto_carga_administrativa"
+                                           class="form-control form-control-sm"
+                                           maxlength="255"
+                                           value="{{ orden.proyecto_carga_administrativa }}"
+                                           placeholder="Proyecto o carga administrativa…">
+                                </div>
+                                <div class="col-md-4">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-save"></i> Guardar
+                                    </button>
+                                </div>
+                            </form>
+                            {% else %}
+                            <p class="mb-0">{{ orden.proyecto_carga_administrativa|default:"—" }}</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -547,18 +579,34 @@
                 </div>
                 <div class="card-body">
                     {% if puede_editar_observaciones %}
-                    <form method="post" action="{% url 'orden_detalle' orden.id %}">
+                    <form method="post" action="{% url 'orden_detalle' orden.id %}" id="formObservacionesTecnicas">
                         {% csrf_token %}
                         {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                         <input type="hidden" name="accion" value="guardar_observaciones">
-                        <textarea name="observaciones_tecnicas" class="form-control mb-2" rows="4"
-                                  placeholder="Instrucciones, detalles del trabajo o notas del técnico...">{{ orden.observaciones_tecnicas }}</textarea>
+                        <input type="hidden" name="observaciones_tecnicas" id="observacionesTecnicasInput" value="">
+                        <div class="btn-toolbar mb-2 gap-1" role="toolbar" aria-label="Formato de observaciones">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button type="button" class="btn btn-outline-secondary" id="btnObsBold" title="Negrita">
+                                    <i class="bi bi-type-bold"></i> Negrita
+                                </button>
+                                <button type="button" class="btn btn-outline-secondary" id="btnObsHighlight" title="Resaltar">
+                                    <i class="bi bi-highlighter"></i> Resaltar
+                                </button>
+                            </div>
+                            <small class="text-muted align-self-center ms-1">Selecciona texto y aplica el formato</small>
+                        </div>
+                        <div id="observacionesEditor"
+                             class="form-control delco-obs-editor mb-2"
+                             contenteditable="true"
+                             role="textbox"
+                             aria-multiline="true"
+                             data-placeholder="Instrucciones, detalles del trabajo o notas del técnico...">{% if orden.observaciones_tecnicas %}{{ orden.observaciones_tecnicas|safe }}{% endif %}</div>
                         <button type="submit" class="btn btn-sm btn-primary">
                             <i class="bi bi-save"></i> Guardar observaciones
                         </button>
                     </form>
                     {% elif orden.observaciones_tecnicas %}
-                    <p class="mb-0">{{ orden.observaciones_tecnicas|linebreaksbr }}</p>
+                    <div class="delco-obs-view mb-0">{{ orden.observaciones_tecnicas|safe }}</div>
                     {% else %}
                     <p class="text-muted mb-0"><em>Sin observaciones registradas</em></p>
                     {% endif %}
@@ -1295,6 +1343,53 @@ document.getElementById('formSubirAdjunto')?.addEventListener('submit', function
 });
 
 // (comprobante de cambio: solo subida de PDF; sin campos extra)
+
+// Editor de observaciones: negrita y resaltado parcial
+(function () {
+  var form = document.getElementById('formObservacionesTecnicas');
+  var editor = document.getElementById('observacionesEditor');
+  var hidden = document.getElementById('observacionesTecnicasInput');
+  if (!form || !editor || !hidden) return;
+
+  function syncHidden() {
+    hidden.value = editor.innerHTML;
+  }
+
+  document.getElementById('btnObsBold')?.addEventListener('click', function () {
+    editor.focus();
+    document.execCommand('bold', false, null);
+  });
+  document.getElementById('btnObsHighlight')?.addEventListener('click', function () {
+    editor.focus();
+    // Usar mark vía surround / insertHTML si hay selección
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      document.execCommand('hiliteColor', false, '#fff59d');
+      return;
+    }
+    try {
+      document.execCommand('hiliteColor', false, '#fff59d');
+    } catch (e) {
+      var range = sel.getRangeAt(0);
+      var mark = document.createElement('mark');
+      mark.appendChild(range.extractContents());
+      range.insertNode(mark);
+    }
+  });
+
+  form.addEventListener('submit', function () {
+    // Normalizar span con fondo amarillo a <mark> para el sanitizer del servidor
+    editor.querySelectorAll('span[style]').forEach(function (span) {
+      var style = (span.getAttribute('style') || '').toLowerCase();
+      if (style.indexOf('background') !== -1 && (style.indexOf('fff59d') !== -1 || style.indexOf('yellow') !== -1 || style.indexOf('rgb(255, 245, 157)') !== -1)) {
+        var mark = document.createElement('mark');
+        while (span.firstChild) mark.appendChild(span.firstChild);
+        span.parentNode.replaceChild(mark, span);
+      }
+    });
+    syncHidden();
+  });
+})();
 </script>
 
 {% endblock %}

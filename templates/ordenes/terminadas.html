@@ -163,8 +163,12 @@
                     <input type="text" name="cliente" class="form-control form-control-sm" value="{{ cliente_filtro }}" placeholder="Nº cliente">
                 </div>
                 <div class="col-md-2">
+                    <label class="form-label small mb-1">Proyecto / Carga</label>
+                    <input type="text" name="proyecto_carga" class="form-control form-control-sm" value="{{ proyecto_filtro }}" placeholder="Proyecto…">
+                </div>
+                <div class="col-md-2">
                     <label class="form-label small mb-1">Buscar</label>
-                    <input type="text" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Título / cliente">
+                    <input type="text" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Título / cliente / proyecto">
                 </div>
                 <div class="col-md-2">
                     <label class="form-label small mb-1">Desde</label>
@@ -196,6 +200,7 @@
                         <tr>
                             <th>ID</th>
                             <th>Título</th>
+                            <th class="d-none d-xl-table-cell">Proyecto / Carga</th>
                             <th class="d-none d-md-table-cell">Tipo</th>
                             <th>Estado</th>
                             <th class="d-none d-md-table-cell">Cliente</th>
@@ -210,6 +215,7 @@
                         <tr>
                             <td><a href="{% url 'orden_detalle' orden.id %}?desde=terminadas" class="fw-bold text-decoration-none">#{{ orden.id }}</a></td>
                             <td>{{ orden.titulo }}</td>
+                            <td class="d-none d-xl-table-cell small">{{ orden.proyecto_carga_administrativa|default:"—" }}</td>
                             <td class="d-none d-md-table-cell"><span class="badge bg-secondary">{{ orden.get_tipo_trabajo_display }}</span></td>
                             <td>
                                 {% badge_ot orden.estado orden.get_estado_display %}
@@ -231,8 +237,11 @@
                                 {% endif %}
                             </td>
                             <td class="d-none d-md-table-cell">{{ orden.fecha_fin_ejecucion|date:"d/m/Y H:i"|default:"—" }}</td>
-                            <td>
+                            <td class="text-nowrap">
                                 <a href="{% url 'orden_detalle' orden.id %}?desde=terminadas" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i> Ver</a>
+                                <a href="{% url 'orden_pdf_completado' orden.id %}" class="btn btn-sm btn-outline-danger" title="Descargar PDF del trabajo completado">
+                                    <i class="bi bi-file-earmark-pdf"></i> PDF
+                                </a>
                             </td>
                         </tr>
                         {% empty %}
