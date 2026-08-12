@@ -199,6 +199,7 @@ class CargasImportDeleteTests(TestCase):
 
         c3 = CargaAdministrativa.objects.get(titulo='Validacion formal')
         self.assertEqual(c3.tipo, 'VALIDACION_OT')
+        self.assertIn('cargas-import-v3-tipo-libre', imp.observaciones)
 
     def test_importar_asignado_texto_libre(self):
         """Asignado se guarda como texto libre; no falla si no es usuario del sistema."""
