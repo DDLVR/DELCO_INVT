@@ -1,6 +1,7 @@
 """Importación masiva de cargas / órdenes de trabajo administrativas desde Excel."""
 from __future__ import annotations
 
+import math
 import re
 from typing import Any, Dict, List, Optional
 
@@ -73,6 +74,16 @@ PRIORIDADES_ALIAS = {
     'high': 'ALTA',
 }
 
+# Valores que en Excel se consideran “sin dato” (campos opcionales)
+_VACIOS = frozenset({
+    '', '-', '—', 'n/a', 'na', 'n.a.', 'n.a', 'null', 'none', 'nil',
+    'sin asignar', 's/a', 's/n', 'sn', 'no aplica', 'ninguno', 'ninguna',
+})
+
+
+def _es_vacio(valor: str) -> bool:
+    return _limpiar_header(valor) in _VACIOS
+
 
 def _limpiar_header(valor) -> str:
     if valor is None:
@@ -104,9 +115,15 @@ def _valor_fila(valores: List[Any], indice: Dict[str, int], campo: str) -> str:
     v = valores[i]
     if v is None:
         return ''
-    if isinstance(v, float) and v.is_integer():
-        return str(int(v))
-    return str(v).strip()
+    if isinstance(v, float):
+        if math.isnan(v):
+            return ''
+        if v.is_integer():
+            return str(int(v))
+    texto = str(v).strip()
+    if _es_vacio(texto):
+        return ''
+    return texto
 
 
 def _fila_a_texto(headers: List[Any], valores: List[Any]) -> str:
@@ -148,7 +165,8 @@ def _resolver_prioridad(raw: str) -> str:
 
 
 def _resolver_asignado(raw: str) -> Optional[Usuario]:
-    if not raw:
+    """Opcional: vacío → sin asignar. Solo valida si viene un valor."""
+    if not raw or _es_vacio(raw):
         return None
     texto = raw.strip()
     qs = Usuario.objects.filter(rol__in=['ADMIN', 'ADMINISTRATIVO'], is_active=True)
@@ -160,32 +178,44 @@ def _resolver_asignado(raw: str) -> Optional[Usuario]:
     )
     if not user:
         raise ValueError(
-            f'Asignado «{texto}» no encontrado (debe ser ADMIN o ADMINISTRATIVO activo).'
+            f'Asignado «{texto}» no encontrado (debe ser ADMIN o ADMINISTRATIVO activo). '
+            'Si no quieres asignar, deja la celda vacía.'
         )
     return user
 
 
 def _resolver_cliente(raw: str) -> Optional[Cliente]:
-    if not raw:
+    """Opcional: vacío → sin cliente. Solo valida si viene un valor."""
+    if not raw or _es_vacio(raw):
         return None
     texto = raw.strip()
     cliente = Cliente.objects.filter(numero_cliente__iexact=texto, activo=True).first()
     if not cliente and texto.isdigit():
         cliente = Cliente.objects.filter(pk=int(texto), activo=True).first()
     if not cliente:
-        raise ValueError(f'Cliente «{texto}» no encontrado o inactivo.')
+        raise ValueError(
+            f'Cliente «{texto}» no encontrado o inactivo. '
+            'Si no aplica, deja la celda vacía.'
+        )
     return cliente
 
 
 def _resolver_orden(raw: str) -> Optional[OrdenTrabajo]:
-    if not raw:
+    """Opcional: vacío → sin OT. Solo valida si viene un valor."""
+    if not raw or _es_vacio(raw):
         return None
     texto = raw.strip()
     if not texto.isdigit():
-        raise ValueError(f'ID Orden inválido: «{texto}». Debe ser numérico.')
+        raise ValueError(
+            f'ID Orden inválido: «{texto}». Debe ser numérico, '
+            'o deja la celda vacía si no aplica.'
+        )
     orden = OrdenTrabajo.objects.filter(pk=int(texto), eliminado=False).first()
     if not orden:
-        raise ValueError(f'Orden de trabajo #{texto} no encontrada.')
+        raise ValueError(
+            f'Orden de trabajo #{texto} no encontrada. '
+            'Si no aplica, deja la celda vacía.'
+        )
     return orden
 
 

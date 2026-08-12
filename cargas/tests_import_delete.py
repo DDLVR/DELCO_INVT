@@ -134,6 +134,43 @@ class CargasImportDeleteTests(TestCase):
         self.assertEqual(carga_url.proyecto, 'Listado Beta')
         self.assertNotEqual(carga_url.pk, 99999)
 
+    def test_importar_solo_titulo_sin_asignado_cliente_orden(self):
+        """Asignado, Cliente e ID Orden son opcionales (pueden omitirse o ir vacíos)."""
+        buf = _xlsx_bytes([
+            ['Titulo', 'Proyecto', 'Asignado', 'Cliente', 'ID Orden'],
+            ['Solo titulo A', 'Proyecto X', '', '', ''],
+            ['Solo titulo B', 'Proyecto Y', '-', 'n/a', 'N/A'],
+            ['Solo titulo C', '', '', '', ''],
+        ])
+        # Sin columnas opcionales en absoluto
+        buf_min = _xlsx_bytes([
+            ['Titulo'],
+            ['Minimo uno'],
+            ['Minimo dos'],
+        ])
+        archivo = SimpleUploadedFile(
+            'solo_titulo.xlsx',
+            buf.read(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        imp = importar_cargas_excel(archivo, self.admin)
+        self.assertEqual(imp.exitosas, 3)
+        self.assertEqual(imp.fallidas, 0)
+        a = CargaAdministrativa.objects.get(titulo='Solo titulo A')
+        self.assertIsNone(a.asignado_a_id)
+        self.assertIsNone(a.cliente_id)
+        self.assertIsNone(a.orden_id)
+        self.assertEqual(a.proyecto, 'Proyecto X')
+
+        archivo_min = SimpleUploadedFile(
+            'min.xlsx',
+            buf_min.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        imp2 = importar_cargas_excel(archivo_min, self.admin)
+        self.assertEqual(imp2.exitosas, 2)
+        self.assertEqual(imp2.fallidas, 0)
+
     def test_importar_via_vista_json(self):
         self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
         buf = _xlsx_bytes([
