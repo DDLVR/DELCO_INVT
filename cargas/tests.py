@@ -313,3 +313,48 @@ class CargasAdministrativasTests(TestCase):
 			{'accion': 'borrar_definitivo_adjunto', 'adjunto_id': str(adj.pk)},
 		)
 		self.assertFalse(AdjuntoCarga.objects.filter(pk=adj.pk).exists())
+
+	def test_guardar_observaciones_con_tabla_y_tamaño(self):
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		carga = crear_carga(
+			self.admin_op,
+			titulo='Obs documento',
+			tipo='VERIFICACION',
+			asignado_a=self.admin_op,
+		)
+		html_obs = (
+			'<p><span style="font-size: 18px"><b>Cierre</b></span></p>'
+			'<table><tr><th>Dirección</th><td>Calle 1</td></tr>'
+			'<tr><th>Comuna</th><td>Providencia</td></tr></table>'
+		)
+		response = self.client.post(
+			reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+			{'accion': 'guardar_obs', 'observaciones': html_obs},
+		)
+		self.assertEqual(response.status_code, 302)
+		carga.refresh_from_db()
+		self.assertIn('font-size: 18px', carga.observaciones)
+		self.assertIn('delco-obs-table', carga.observaciones)
+		self.assertIn('Providencia', carga.observaciones)
+		self.assertNotIn('<script', carga.observaciones.lower())
+
+	def test_descargar_pdf_carga(self):
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		carga = crear_carga(
+			self.admin_op,
+			titulo='PDF carga',
+			tipo='VERIFICACION',
+			asignado_a=self.admin_op,
+			descripcion='Descarga PDF',
+		)
+		carga.observaciones = (
+			'<p><b>Resultado</b></p>'
+			'<table><tr><th>Campo</th><td>Valor</td></tr></table>'
+		)
+		carga.save(update_fields=['observaciones'])
+
+		response = self.client.get(reverse('cargas_pdf', kwargs={'pk': carga.pk}))
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response['Content-Type'], 'application/pdf')
+		self.assertTrue(response.content.startswith(b'%PDF'))
+		self.assertIn('attachment', response['Content-Disposition'])

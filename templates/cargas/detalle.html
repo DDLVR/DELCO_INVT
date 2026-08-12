@@ -15,6 +15,9 @@
       {% badge_carga_estado carga.estado carga.get_estado_display %}
       <span class="badge bg-secondary">{{ carga.get_tipo_display }}</span>
       {% badge_prioridad carga.prioridad carga.get_prioridad_display %}
+      <a href="{% url 'cargas_pdf' carga.id %}" class="btn btn-sm btn-outline-danger" title="Descargar PDF con datos de la carga">
+        <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
+      </a>
       <button type="button"
               class="btn btn-sm btn-outline-danger"
               id="btnEliminarCargaDetalle"
@@ -86,24 +89,69 @@
             {% csrf_token %}
             <input type="hidden" name="accion" value="guardar_obs">
             <input type="hidden" name="observaciones" id="observacionesCargaInput" value="">
-            <div class="btn-toolbar mb-2 gap-1" role="toolbar" aria-label="Formato de observaciones">
+            <div class="btn-toolbar delco-obs-toolbar mb-2 flex-wrap gap-1" role="toolbar" aria-label="Formato de observaciones">
               <div class="btn-group btn-group-sm" role="group">
-                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsBold" title="Negrita">
-                  <i class="bi bi-type-bold"></i> Negrita
+                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsBold" title="Negrita (Ctrl+B)">
+                  <i class="bi bi-type-bold"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsItalic" title="Cursiva">
+                  <i class="bi bi-type-italic"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsUnderline" title="Subrayado">
+                  <i class="bi bi-type-underline"></i>
                 </button>
                 <button type="button" class="btn btn-outline-secondary" id="btnCargaObsHighlight" title="Resaltar">
-                  <i class="bi bi-highlighter"></i> Resaltar
+                  <i class="bi bi-highlighter"></i>
                 </button>
               </div>
-              <small class="text-muted align-self-center ms-1">Selecciona texto y aplica el formato</small>
+              <div class="input-group input-group-sm" style="width:auto;">
+                <label class="input-group-text" for="selCargaObsFontSize">Tamaño</label>
+                <select id="selCargaObsFontSize" class="form-select form-select-sm" title="Tamaño de fuente">
+                  <option value="">Normal</option>
+                  <option value="12px">12</option>
+                  <option value="14px">14</option>
+                  <option value="16px">16</option>
+                  <option value="18px">18</option>
+                  <option value="22px">22</option>
+                  <option value="28px">28</option>
+                </select>
+              </div>
+              <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsUl" title="Lista con viñetas">
+                  <i class="bi bi-list-ul"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsOl" title="Lista numerada">
+                  <i class="bi bi-list-ol"></i>
+                </button>
+              </div>
+              <div class="btn-group btn-group-sm" role="group">
+                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsTable" title="Insertar tabla 3×3">
+                  <i class="bi bi-table"></i> Tabla
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsAddRow" title="Agregar fila a la tabla">
+                  + Fila
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCargaObsAddCol" title="Agregar columna a la tabla">
+                  + Col
+                </button>
+              </div>
+              <a href="{% url 'cargas_pdf' carga.id %}" class="btn btn-sm btn-outline-danger" title="Descargar PDF">
+                <i class="bi bi-file-earmark-pdf"></i> PDF
+              </a>
+              <small class="text-muted align-self-center ms-1">Selecciona texto y aplica formato · tablas con cuadrícula</small>
             </div>
             <div id="observacionesCargaEditor"
-                 class="form-control delco-obs-editor mb-2"
+                 class="form-control delco-obs-editor delco-obs-editor--doc mb-2"
                  contenteditable="true"
                  role="textbox"
                  aria-multiline="true"
                  data-placeholder="Notas de avance o resultado…">{% if carga.observaciones %}{{ carga.observaciones|safe }}{% endif %}</div>
-            <button type="submit" class="btn btn-sm btn-outline-primary">Guardar observaciones</button>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <button type="submit" class="btn btn-sm btn-outline-primary">Guardar observaciones</button>
+              <a href="{% url 'cargas_pdf' carga.id %}" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-download"></i> Descargar PDF
+              </a>
+            </div>
             {% if not carga.abierta %}
             <p class="small text-muted mb-0 mt-2">La carga está {{ carga.get_estado_display|lower }}; igual puedes corregir observaciones si falta algo.</p>
             {% endif %}
@@ -266,11 +314,21 @@
                  role="textbox"
                  aria-multiline="true"
                  data-placeholder="Qué se hizo…">{% if carga.observaciones %}{{ carga.observaciones|safe }}{% endif %}</div>
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-2 delco-obs-toolbar">
               <div class="btn-group btn-group-sm" role="group" aria-label="Formato">
-                <button type="button" class="btn btn-outline-secondary" id="btnCompletarObsBold" title="Negrita"><i class="bi bi-type-bold"></i> Negrita</button>
-                <button type="button" class="btn btn-outline-secondary" id="btnCompletarObsHighlight" title="Resaltar"><i class="bi bi-highlighter"></i> Resaltar</button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCompletarObsBold" title="Negrita"><i class="bi bi-type-bold"></i></button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCompletarObsItalic" title="Cursiva"><i class="bi bi-type-italic"></i></button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCompletarObsHighlight" title="Resaltar"><i class="bi bi-highlighter"></i></button>
+                <button type="button" class="btn btn-outline-secondary" id="btnCompletarObsTable" title="Insertar tabla"><i class="bi bi-table"></i></button>
               </div>
+              <select id="selCompletarObsFontSize" class="form-select form-select-sm" title="Tamaño" style="width:auto;">
+                <option value="">Tamaño</option>
+                <option value="12px">12</option>
+                <option value="14px">14</option>
+                <option value="16px">16</option>
+                <option value="18px">18</option>
+                <option value="22px">22</option>
+              </select>
             </div>
             <button type="submit" class="btn btn-success w-100"><i class="bi bi-check2"></i> Completar</button>
           </form>
@@ -361,51 +419,207 @@
     });
   }
 
-  function wireObsEditor(formId, editorId, hiddenId, boldBtnId, highlightBtnId) {
-    var form = document.getElementById(formId);
-    var editor = document.getElementById(editorId);
-    var hidden = document.getElementById(hiddenId);
+  function wrapSelectionWithSpan(editor, styleText) {
+    editor.focus();
+    var sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      document.execCommand('fontSize', false, '4');
+      return;
+    }
+    try {
+      var range = sel.getRangeAt(0);
+      var span = document.createElement('span');
+      span.setAttribute('style', styleText);
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+      sel.removeAllRanges();
+      var after = document.createRange();
+      after.selectNodeContents(span);
+      after.collapse(false);
+      sel.addRange(after);
+    } catch (e) {
+      document.execCommand('fontSize', false, '4');
+    }
+  }
+
+  function insertTableAtCursor(editor, rows, cols) {
+    editor.focus();
+    rows = rows || 3;
+    cols = cols || 3;
+    var table = document.createElement('table');
+    table.className = 'delco-obs-table';
+    var tbody = document.createElement('tbody');
+    for (var r = 0; r < rows; r++) {
+      var tr = document.createElement('tr');
+      for (var c = 0; c < cols; c++) {
+        var cell = document.createElement(r === 0 ? 'th' : 'td');
+        cell.innerHTML = '<br>';
+        tr.appendChild(cell);
+      }
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+
+    var sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editor.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      var range = sel.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(table);
+      var spacer = document.createElement('p');
+      spacer.innerHTML = '<br>';
+      if (table.nextSibling) {
+        table.parentNode.insertBefore(spacer, table.nextSibling);
+      } else {
+        table.parentNode.appendChild(spacer);
+      }
+    } else {
+      editor.appendChild(table);
+      var p = document.createElement('p');
+      p.innerHTML = '<br>';
+      editor.appendChild(p);
+    }
+  }
+
+  function findClosestTable(node, editor) {
+    while (node && node !== editor) {
+      if (node.nodeType === 1 && node.tagName === 'TABLE') return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
+
+  function addTableRow(editor) {
+    editor.focus();
+    var sel = window.getSelection();
+    var node = sel && sel.rangeCount ? sel.getRangeAt(0).commonAncestorContainer : null;
+    var table = findClosestTable(node, editor) || editor.querySelector('table');
+    if (!table) {
+      insertTableAtCursor(editor, 2, 2);
+      return;
+    }
+    var firstRow = table.querySelector('tr');
+    var cols = firstRow ? firstRow.children.length : 2;
+    var tr = document.createElement('tr');
+    for (var i = 0; i < cols; i++) {
+      var td = document.createElement('td');
+      td.innerHTML = '<br>';
+      tr.appendChild(td);
+    }
+    var tbody = table.querySelector('tbody') || table;
+    tbody.appendChild(tr);
+  }
+
+  function addTableCol(editor) {
+    editor.focus();
+    var sel = window.getSelection();
+    var node = sel && sel.rangeCount ? sel.getRangeAt(0).commonAncestorContainer : null;
+    var table = findClosestTable(node, editor) || editor.querySelector('table');
+    if (!table) {
+      insertTableAtCursor(editor, 2, 2);
+      return;
+    }
+    table.querySelectorAll('tr').forEach(function (tr, idx) {
+      var cell = document.createElement(idx === 0 && tr.querySelector('th') ? 'th' : 'td');
+      cell.innerHTML = '<br>';
+      tr.appendChild(cell);
+    });
+  }
+
+  function wireObsEditor(opts) {
+    var form = document.getElementById(opts.formId);
+    var editor = document.getElementById(opts.editorId);
+    var hidden = document.getElementById(opts.hiddenId);
     if (!form || !editor || !hidden) return;
 
     function normalizeMarks() {
       editor.querySelectorAll('span[style]').forEach(function (span) {
         var style = (span.getAttribute('style') || '').toLowerCase();
-        if (style.indexOf('background') !== -1 && (
+        var hasBg = style.indexOf('background') !== -1 && (
           style.indexOf('fff59d') !== -1 ||
           style.indexOf('yellow') !== -1 ||
           style.indexOf('rgb(255, 245, 157)') !== -1
-        )) {
+        );
+        var hasSize = style.indexOf('font-size') !== -1;
+        if (hasBg && !hasSize) {
           var mark = document.createElement('mark');
           while (span.firstChild) mark.appendChild(span.firstChild);
           span.parentNode.replaceChild(mark, span);
         }
       });
-    }
-
-    var boldBtn = document.getElementById(boldBtnId);
-    if (boldBtn) {
-      boldBtn.addEventListener('click', function () {
-        editor.focus();
-        document.execCommand('bold', false, null);
+      editor.querySelectorAll('table').forEach(function (t) {
+        if (!t.classList.contains('delco-obs-table')) {
+          t.classList.add('delco-obs-table');
+        }
+      });
+      // Convertir font size de execCommand a span px
+      editor.querySelectorAll('font[size]').forEach(function (font) {
+        var map = { '1': '10px', '2': '12px', '3': '14px', '4': '16px', '5': '18px', '6': '22px', '7': '28px' };
+        var px = map[font.getAttribute('size')] || '';
+        var span = document.createElement('span');
+        if (px) span.setAttribute('style', 'font-size: ' + px);
+        while (font.firstChild) span.appendChild(font.firstChild);
+        font.parentNode.replaceChild(span, font);
       });
     }
-    var hiBtn = document.getElementById(highlightBtnId);
-    if (hiBtn) {
-      hiBtn.addEventListener('click', function () {
-        editor.focus();
-        var sel = window.getSelection();
-        if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
-          document.execCommand('hiliteColor', false, '#fff59d');
-          return;
-        }
-        try {
-          document.execCommand('hiliteColor', false, '#fff59d');
-        } catch (e) {
-          var range = sel.getRangeAt(0);
-          var mark = document.createElement('mark');
-          mark.appendChild(range.extractContents());
-          range.insertNode(mark);
-        }
+
+    function bindClick(id, fn) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('click', fn);
+    }
+
+    bindClick(opts.boldBtnId, function () {
+      editor.focus();
+      document.execCommand('bold', false, null);
+    });
+    bindClick(opts.italicBtnId, function () {
+      editor.focus();
+      document.execCommand('italic', false, null);
+    });
+    bindClick(opts.underlineBtnId, function () {
+      editor.focus();
+      document.execCommand('underline', false, null);
+    });
+    bindClick(opts.highlightBtnId, function () {
+      editor.focus();
+      var sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+        document.execCommand('hiliteColor', false, '#fff59d');
+        return;
+      }
+      try {
+        document.execCommand('hiliteColor', false, '#fff59d');
+      } catch (e) {
+        var range = sel.getRangeAt(0);
+        var mark = document.createElement('mark');
+        mark.appendChild(range.extractContents());
+        range.insertNode(mark);
+      }
+    });
+    bindClick(opts.ulBtnId, function () {
+      editor.focus();
+      document.execCommand('insertUnorderedList', false, null);
+    });
+    bindClick(opts.olBtnId, function () {
+      editor.focus();
+      document.execCommand('insertOrderedList', false, null);
+    });
+    bindClick(opts.tableBtnId, function () {
+      insertTableAtCursor(editor, 3, 3);
+    });
+    bindClick(opts.addRowBtnId, function () {
+      addTableRow(editor);
+    });
+    bindClick(opts.addColBtnId, function () {
+      addTableCol(editor);
+    });
+
+    var fontSel = opts.fontSizeId ? document.getElementById(opts.fontSizeId) : null;
+    if (fontSel) {
+      fontSel.addEventListener('change', function () {
+        var size = fontSel.value;
+        if (!size) return;
+        wrapSelectionWithSpan(editor, 'font-size: ' + size);
+        fontSel.value = '';
       });
     }
 
@@ -415,20 +629,31 @@
     });
   }
 
-  wireObsEditor(
-    'formObservacionesCarga',
-    'observacionesCargaEditor',
-    'observacionesCargaInput',
-    'btnCargaObsBold',
-    'btnCargaObsHighlight'
-  );
-  wireObsEditor(
-    'formCompletarCarga',
-    'completarCargaObsEditor',
-    'completarCargaObsInput',
-    'btnCompletarObsBold',
-    'btnCompletarObsHighlight'
-  );
+  wireObsEditor({
+    formId: 'formObservacionesCarga',
+    editorId: 'observacionesCargaEditor',
+    hiddenId: 'observacionesCargaInput',
+    boldBtnId: 'btnCargaObsBold',
+    italicBtnId: 'btnCargaObsItalic',
+    underlineBtnId: 'btnCargaObsUnderline',
+    highlightBtnId: 'btnCargaObsHighlight',
+    ulBtnId: 'btnCargaObsUl',
+    olBtnId: 'btnCargaObsOl',
+    tableBtnId: 'btnCargaObsTable',
+    addRowBtnId: 'btnCargaObsAddRow',
+    addColBtnId: 'btnCargaObsAddCol',
+    fontSizeId: 'selCargaObsFontSize'
+  });
+  wireObsEditor({
+    formId: 'formCompletarCarga',
+    editorId: 'completarCargaObsEditor',
+    hiddenId: 'completarCargaObsInput',
+    boldBtnId: 'btnCompletarObsBold',
+    italicBtnId: 'btnCompletarObsItalic',
+    highlightBtnId: 'btnCompletarObsHighlight',
+    tableBtnId: 'btnCompletarObsTable',
+    fontSizeId: 'selCompletarObsFontSize'
+  });
 })();
 </script>
 {% endblock %}
