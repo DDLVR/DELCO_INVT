@@ -135,24 +135,37 @@ def _fila_a_texto(headers: List[Any], valores: List[Any]) -> str:
     return ' | '.join(partes)[:2000]
 
 
-def _resolver_tipo(raw: str) -> str:
-    if not raw:
-        return 'VERIFICACION'
+def _resolver_tipo(raw: str):
+    """
+    Resuelve el tipo de carga.
+    Retorna (codigo, texto_libre_opcional).
+    Si el Excel trae un texto libre (p. ej. «Actualización Ajuste Tarifario»),
+    se guarda como OTRO y se conserva el texto para la descripción.
+    """
+    if not raw or _es_vacio(raw):
+        return 'VERIFICACION', None
+
     codigo = raw.strip().upper().replace(' ', '_')
     validos = {c[0] for c in CargaAdministrativa.TIPO_CHOICES}
     if codigo in validos:
-        return codigo
-    alias = TIPOS_ALIAS.get(_limpiar_header(raw))
+        return codigo, None
+
+    clave = _limpiar_header(raw)
+    alias = TIPOS_ALIAS.get(clave)
     if alias:
-        return alias
-    raise ValueError(
-        f'Tipo no reconocido: «{raw}». '
-        f'Use: {", ".join(sorted(validos))} o su etiqueta.'
-    )
+        return alias, None
+
+    # Etiquetas de display del modelo (p. ej. "Validación de OT")
+    for code, label in CargaAdministrativa.TIPO_CHOICES:
+        if _limpiar_header(label) == clave:
+            return code, None
+
+    # Texto libre del Excel → OTRO (no bloquea la carga masiva)
+    return 'OTRO', raw.strip()
 
 
 def _resolver_prioridad(raw: str) -> str:
-    if not raw:
+    if not raw or _es_vacio(raw):
         return 'MEDIA'
     codigo = raw.strip().upper()
     validos = {p[0] for p in CargaAdministrativa.PRIORIDAD_CHOICES}
@@ -161,7 +174,8 @@ def _resolver_prioridad(raw: str) -> str:
     alias = PRIORIDADES_ALIAS.get(_limpiar_header(raw))
     if alias:
         return alias
-    raise ValueError(f'Prioridad no reconocida: «{raw}». Use BAJA, MEDIA o ALTA.')
+    # Prioridad desconocida: no falla, usa MEDIA
+    return 'MEDIA'
 
 
 def _resolver_asignado(raw: str) -> Optional[Usuario]:
@@ -290,9 +304,12 @@ def importar_cargas_excel(archivo, usuario) -> ImportacionExcel:
                 if not titulo:
                     raise ValueError('Titulo es obligatorio')
 
-                tipo = _resolver_tipo(_valor_fila(valores, indice, 'tipo'))
+                tipo, tipo_libre = _resolver_tipo(_valor_fila(valores, indice, 'tipo'))
                 prioridad = _resolver_prioridad(_valor_fila(valores, indice, 'prioridad'))
                 descripcion = _valor_fila(valores, indice, 'descripcion')
+                if tipo_libre:
+                    nota_tipo = f'Tipo (Excel): {tipo_libre}'
+                    descripcion = f'{nota_tipo}\n{descripcion}' if descripcion else nota_tipo
                 asignado = _resolver_asignado(_valor_fila(valores, indice, 'asignado'))
                 cliente = _resolver_cliente(_valor_fila(valores, indice, 'cliente'))
                 orden = _resolver_orden(_valor_fila(valores, indice, 'orden'))

@@ -229,8 +229,8 @@
                     <div class="accordion-body">
                       <ul class="delco-import-cols mb-0">
                         <li><code>Titulo</code> — <strong>obligatorio</strong>; identifica la carga (el # lo asigna la plataforma)</li>
-                        <li><code>Tipo</code> — opcional (por defecto VERIFICACION)</li>
-                        <li><code>Prioridad</code> — opcional (BAJA, MEDIA, ALTA)</li>
+                        <li><code>Tipo</code> — opcional. Códigos del sistema o texto libre (si no coincide, se guarda como «Otro»)</li>
+                        <li><code>Prioridad</code> — opcional (BAJA, MEDIA, ALTA; si no coincide, MEDIA)</li>
                         <li><code>Descripcion</code> — opcional</li>
                         <li><code>Proyecto</code> (también <code>URL</code>) — opcional; listado de proyecto</li>
                         <li><code>Asignado</code>, <code>Cliente</code>, <code>ID Orden</code> — <strong>opcionales</strong>; déjalos vacíos si no aplican</li>
@@ -252,6 +252,7 @@
                         <li>Duplicados se detectan solo por <strong>Título</strong>; no se sobrescriben.</li>
                         <li><code>Proyecto</code> / <code>URL</code> guarda el listado de proyecto y abre el filtro de OT.</li>
                         <li>Si Completas Asignado/Cliente/ID Orden, deben existir en el sistema; si no, deja la celda vacía.</li>
+                        <li>Tipos como «Actualización Ajuste Tarifario» se aceptan: quedan como <strong>Otro</strong> y el texto se conserva en la descripción.</li>
                       </ul>
                     </div>
                   </div>
