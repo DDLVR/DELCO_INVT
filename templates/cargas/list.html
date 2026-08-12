@@ -129,6 +129,7 @@
             <td><strong>{{ c.id }}</strong></td>
             <td>
               {{ c.titulo|truncatechars:70 }}
+              {% if c.proyecto %}<br><small class="text-muted">Proyecto: {{ c.proyecto }}</small>{% endif %}
               {% if c.cliente %}<br><small class="text-muted">Cliente {{ c.cliente.numero_cliente }}</small>{% endif %}
               {% if c.orden %}<br><small class="text-muted">OT #{{ c.orden_id }}</small>{% endif %}
             </td>
@@ -227,11 +228,12 @@
                   <div id="collapseColsCargas" class="accordion-collapse collapse" data-bs-parent="#accordionFormatoCargasImport">
                     <div class="accordion-body">
                       <ul class="delco-import-cols mb-0">
-                        <li><code>Titulo</code> — obligatorio</li>
+                        <li><code>Titulo</code> — obligatorio; identifica la carga (no se usan IDs al importar)</li>
                         <li><code>Tipo</code> — VALIDACION_OT, VERIFICACION_SCI4, REVISION_MOREAPP, COMUNICACION, VERIFICACION, OTRO</li>
                         <li><code>Prioridad</code> — BAJA, MEDIA, ALTA</li>
-                        <li><code>Descripcion</code>, <code>Asignado</code> (email o nombre interno), <code>Cliente</code>, <code>ID Orden</code>, <code>URL</code></li>
-                        <li><code>ID Carga</code> — si ya existe, se marca como duplicado (no se actualiza)</li>
+                        <li><code>Descripcion</code>, <code>Asignado</code> (email o nombre interno), <code>Cliente</code>, <code>ID Orden</code></li>
+                        <li><code>Proyecto</code> (también <code>URL</code>) — nombre del listado de proyecto; el enlace se genera solo</li>
+                        <li><code>ID Carga</code> — se ignora en la importación (lo asigna la plataforma como correlativo)</li>
                       </ul>
                     </div>
                   </div>
@@ -245,10 +247,11 @@
                   <div id="collapseReglasCargas" class="accordion-collapse collapse" data-bs-parent="#accordionFormatoCargasImport">
                     <div class="accordion-body">
                       <ul class="delco-import-rules mb-0">
+                        <li>El número (#) de cada carga lo genera automáticamente la plataforma.</li>
                         <li>Se validan campos obligatorios y referencias (cliente, OT, asignado).</li>
-                        <li>Duplicados (mismo Título + Tipo + Cliente + Orden, o ID existente) no se cargan ni se sobrescriben.</li>
+                        <li>Duplicados se detectan solo por <strong>Título</strong>; no se sobrescriben.</li>
+                        <li><code>Proyecto</code> / <code>URL</code> guarda el listado de proyecto y abre el filtro de OT.</li>
                         <li>Al finalizar verás totales: cargados, errores y duplicados, con detalle por fila.</li>
-                        <li>Puedes <strong>exportar</strong> el listado (filtrado o completo) y reutilizar el Excel como plantilla.</li>
                       </ul>
                     </div>
                   </div>

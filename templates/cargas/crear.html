@@ -44,8 +44,19 @@
         <textarea name="descripcion" class="form-control" rows="4" placeholder="Qué hay que verificar o validar…"></textarea>
       </div>
       <div class="mb-3">
+        <label class="form-label">Proyecto / listado</label>
+        <input type="text" name="proyecto" class="form-control" maxlength="255"
+               list="listaProyectosCarga" placeholder="Nombre del proyecto…">
+        <datalist id="listaProyectosCarga">
+          {% for p in proyectos_disponibles %}
+          <option value="{{ p }}">
+          {% endfor %}
+        </datalist>
+        <div class="form-text">Si lo indicas, el enlace abrirá el listado de OT filtrado por ese proyecto.</div>
+      </div>
+      <div class="mb-3">
         <label class="form-label">URL de referencia (opcional)</label>
-        <input type="text" name="url_referencia" class="form-control" placeholder="/ordenes/123/">
+        <input type="text" name="url_referencia" class="form-control" placeholder="Se completa sola si hay proyecto">
       </div>
       <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary">Crear carga</button>

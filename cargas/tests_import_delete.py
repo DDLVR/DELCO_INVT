@@ -81,12 +81,18 @@ class CargasImportDeleteTests(TestCase):
             cliente=self.cliente,
         )
         buf = _xlsx_bytes([
-            ['Titulo', 'Tipo', 'Prioridad', 'Cliente', 'Asignado', 'Descripcion'],
-            ['Nueva carga A', 'VERIFICACION', 'ALTA', 'CLI-IMP-001', 'admvo_imp', 'ok'],
-            ['', 'VERIFICACION', 'MEDIA', 'CLI-IMP-001', '', 'sin titulo'],
-            ['Ya existe', 'VERIFICACION', 'MEDIA', 'CLI-IMP-001', '', 'dup db'],
-            ['Nueva carga A', 'VERIFICACION', 'ALTA', 'CLI-IMP-001', '', 'dup file'],
-            ['Otra ok', 'OTRO', 'BAJA', '', 'admvo_imp@delco.cl', 'segunda'],
+            ['Titulo', 'Tipo', 'Prioridad', 'Cliente', 'Asignado', 'Descripcion', 'Proyecto'],
+            ['Nueva carga A', 'VERIFICACION', 'ALTA', 'CLI-IMP-001', 'admvo_imp', 'ok', 'Proyecto Norte'],
+            ['', 'VERIFICACION', 'MEDIA', 'CLI-IMP-001', '', 'sin titulo', ''],
+            ['Ya existe', 'VERIFICACION', 'MEDIA', 'CLI-IMP-001', '', 'dup db', ''],
+            ['Nueva carga A', 'VERIFICACION', 'ALTA', 'CLI-IMP-001', '', 'dup file', ''],
+            ['Otra ok', 'OTRO', 'BAJA', '', 'admvo_imp@delco.cl', 'segunda', 'Proyecto Sur'],
+            ['Con ID ignorado', 'OTRO', 'MEDIA', '', '', 'id no importa', 'Alpha'],
+        ])
+        # Columna ID Carga presente: debe ignorarse (no error ni bloqueo)
+        buf2 = _xlsx_bytes([
+            ['ID Carga', 'Titulo', 'URL'],
+            ['99999', 'Desde URL como proyecto', 'Listado Beta'],
         ])
         archivo = SimpleUploadedFile(
             'cargas.xlsx',
@@ -96,26 +102,37 @@ class CargasImportDeleteTests(TestCase):
         importacion = importar_cargas_excel(archivo, self.admin)
         conteos = resumen_importacion(importacion)
 
-        self.assertEqual(importacion.total_filas, 5)
-        self.assertEqual(importacion.exitosas, 2)
+        self.assertEqual(importacion.total_filas, 6)
+        self.assertEqual(importacion.exitosas, 3)
         self.assertEqual(conteos['errores'], 1)
         self.assertEqual(conteos['duplicados'], 2)
-        self.assertIn('Registros cargados correctamente: 2', importacion.observaciones)
-        self.assertTrue(
-            CargaAdministrativa.objects.filter(
-                eliminado=False, titulo='Nueva carga A', tipo='VERIFICACION'
-            ).exists()
+        self.assertIn('Registros cargados correctamente: 3', importacion.observaciones)
+        carga_a = CargaAdministrativa.objects.get(
+            eliminado=False, titulo='Nueva carga A', tipo='VERIFICACION'
         )
+        self.assertEqual(carga_a.proyecto, 'Proyecto Norte')
+        self.assertIn('proyecto=', carga_a.url_referencia)
         self.assertTrue(
             CargaAdministrativa.objects.filter(eliminado=False, titulo='Otra ok').exists()
         )
         # No se creó una segunda "Ya existe"
         self.assertEqual(
             CargaAdministrativa.objects.filter(
-                eliminado=False, titulo__iexact='Ya existe', tipo='VERIFICACION'
+                eliminado=False, titulo__iexact='Ya existe'
             ).count(),
             1,
         )
+
+        archivo_id = SimpleUploadedFile(
+            'cargas_id.xlsx',
+            buf2.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        imp2 = importar_cargas_excel(archivo_id, self.admin)
+        self.assertEqual(imp2.exitosas, 1)
+        carga_url = CargaAdministrativa.objects.get(titulo='Desde URL como proyecto')
+        self.assertEqual(carga_url.proyecto, 'Listado Beta')
+        self.assertNotEqual(carga_url.pk, 99999)
 
     def test_importar_via_vista_json(self):
         self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
