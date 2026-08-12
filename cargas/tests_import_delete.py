@@ -200,23 +200,35 @@ class CargasImportDeleteTests(TestCase):
         c3 = CargaAdministrativa.objects.get(titulo='Validacion formal')
         self.assertEqual(c3.tipo, 'VALIDACION_OT')
 
-    def test_importar_asignado_por_nombre_interno_sin_username(self):
-        """Usuario no tiene username; la búsqueda no debe fallar por ese campo."""
+    def test_importar_asignado_texto_libre(self):
+        """Asignado se guarda como texto libre; no falla si no es usuario del sistema."""
         buf = _xlsx_bytes([
             ['Titulo', 'Asignado'],
-            ['Con asignado', 'admvo_imp'],
-            ['Sin asignado', ''],
+            ['Libre 1', 'Juan Pérez Oficina'],
+            ['Libre 2', 'admvo_imp'],
+            ['Libre 3', ''],
         ])
         archivo = SimpleUploadedFile(
-            'asignado.xlsx',
+            'asignado_libre.xlsx',
             buf.getvalue(),
             content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         )
         imp = importar_cargas_excel(archivo, self.admin)
-        self.assertEqual(imp.exitosas, 2)
+        self.assertEqual(imp.exitosas, 3)
         self.assertEqual(imp.fallidas, 0)
-        carga = CargaAdministrativa.objects.get(titulo='Con asignado')
-        self.assertEqual(carga.asignado_a_id, self.admin_op.pk)
+
+        c1 = CargaAdministrativa.objects.get(titulo='Libre 1')
+        self.assertEqual(c1.asignado_texto, 'Juan Pérez Oficina')
+        self.assertIsNone(c1.asignado_a_id)
+        self.assertEqual(c1.asignado_display, 'Juan Pérez Oficina')
+
+        c2 = CargaAdministrativa.objects.get(titulo='Libre 2')
+        self.assertEqual(c2.asignado_texto, 'admvo_imp')
+        self.assertEqual(c2.asignado_a_id, self.admin_op.pk)
+
+        c3 = CargaAdministrativa.objects.get(titulo='Libre 3')
+        self.assertEqual(c3.asignado_texto, '')
+        self.assertIsNone(c3.asignado_a_id)
 
     def test_importar_via_vista_json(self):
         self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))

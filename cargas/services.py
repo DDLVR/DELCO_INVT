@@ -47,6 +47,7 @@ def crear_carga(
     descripcion: str = '',
     prioridad: str = 'MEDIA',
     asignado_a=None,
+    asignado_texto: str = '',
     orden=None,
     cliente=None,
     proyecto: str = '',
@@ -60,6 +61,7 @@ def crear_carga(
         prioridad = 'MEDIA'
 
     proyecto = (proyecto or '').strip()[:255]
+    asignado_texto = (asignado_texto or '').strip()[:255]
     url = (url_referencia or '').strip()
     if not url and proyecto:
         url = url_listado_proyecto(proyecto)
@@ -71,12 +73,13 @@ def crear_carga(
         prioridad=prioridad,
         creado_por=usuario,
         asignado_a=asignado_a,
+        asignado_texto=asignado_texto,
         orden=orden,
         cliente=cliente,
         proyecto=proyecto,
         url_referencia=url[:500],
     )
-    if asignado_a:
+    if asignado_a or asignado_texto:
         carga.fecha_asignacion = timezone.now()
     carga.save()
     _audit(
@@ -93,10 +96,13 @@ def crear_carga(
 def asignar_carga(carga: CargaAdministrativa, usuario_destino, actor) -> CargaAdministrativa:
     anterior = getattr(carga.asignado_a, 'id', '') or ''
     carga.asignado_a = usuario_destino
+    carga.asignado_texto = (usuario_destino.nombre_interno or '')[:255]
     carga.fecha_asignacion = timezone.now()
     if carga.estado == 'PENDIENTE':
         carga.estado = 'EN_PROGRESO'
-    carga.save(update_fields=['asignado_a', 'fecha_asignacion', 'estado', 'fecha_actualizacion'])
+    carga.save(update_fields=[
+        'asignado_a', 'asignado_texto', 'fecha_asignacion', 'estado', 'fecha_actualizacion',
+    ])
     _audit(
         actor,
         carga,

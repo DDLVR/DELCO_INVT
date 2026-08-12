@@ -45,7 +45,13 @@ class CargaAdministrativa(models.Model):
         blank=True,
         related_name='cargas_asignadas',
         limit_choices_to={'rol__in': ['ADMIN', 'ADMINISTRATIVO'], 'is_active': True},
-        help_text='Administrativo responsable de la carga',
+        help_text='Administrativo responsable de la carga (usuario del sistema)',
+    )
+    asignado_texto = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        help_text='Nombre libre del responsable (p. ej. desde Excel); no requiere usuario del sistema',
     )
     creado_por = models.ForeignKey(
         Usuario,
@@ -121,6 +127,13 @@ class CargaAdministrativa(models.Model):
     @property
     def abierta(self) -> bool:
         return self.estado in ('PENDIENTE', 'EN_PROGRESO')
+
+    @property
+    def asignado_display(self) -> str:
+        """Texto a mostrar como responsable (usuario del sistema o texto libre)."""
+        if self.asignado_a_id:
+            return self.asignado_a.nombre_interno or str(self.asignado_a)
+        return (self.asignado_texto or '').strip()
 
 
 class AdjuntoCarga(models.Model):
