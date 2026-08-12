@@ -40,8 +40,11 @@
             <dd class="col-sm-9">{{ carga.creado_por.nombre_interno }} · {{ carga.fecha_creacion|format_fecha_hora }}</dd>
             <dt class="col-sm-3">Asignada a</dt>
             <dd class="col-sm-9">
-              {% if carga.asignado_a %}{{ carga.asignado_a.nombre_interno }}{% else %}<span class="text-muted">Sin asignar</span>{% endif %}
+              {% if carga.asignado_display %}{{ carga.asignado_display }}{% else %}<span class="text-muted">Sin asignar</span>{% endif %}
               {% if carga.fecha_asignacion %} · {{ carga.fecha_asignacion|date:"d/m/Y H:i" }}{% endif %}
+              {% if carga.asignado_texto and not carga.asignado_a_id %}
+              <br><small class="text-muted">Texto libre (importación)</small>
+              {% endif %}
             </dd>
             {% if carga.fecha_completada %}
             <dt class="col-sm-3">Completada</dt>

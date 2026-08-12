@@ -331,7 +331,7 @@
                 </span>
               </td>
               <td class="small">{{ carga.titulo|truncatechars:60 }}</td>
-              <td class="small">{{ carga.asignado_a.nombre_interno|default:"—" }}</td>
+              <td class="small">{% if carga.asignado_display %}{{ carga.asignado_display }}{% else %}—{% endif %}</td>
               <td class="small delco-obs-view" style="max-width:220px;">{% if carga.observaciones %}{{ carga.observaciones|safe|truncatechars_html:180 }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
               <td>
                 <div class="d-flex flex-wrap gap-1 align-items-center">

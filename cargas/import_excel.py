@@ -178,24 +178,24 @@ def _resolver_prioridad(raw: str) -> str:
     return 'MEDIA'
 
 
-def _resolver_asignado(raw: str) -> Optional[Usuario]:
-    """Opcional: vacío → sin asignar. Solo valida si viene un valor."""
+def _texto_asignado(raw: str) -> str:
+    """Asignado es texto libre del Excel (opcional). No exige usuario del sistema."""
     if not raw or _es_vacio(raw):
+        return ''
+    return raw.strip()[:255]
+
+
+def _intentar_usuario_asignado(texto: str) -> Optional[Usuario]:
+    """Si el texto coincide con un ADMIN/ADMINISTRATIVO, enlaza el usuario (opcional)."""
+    if not texto:
         return None
-    texto = raw.strip()
     qs = Usuario.objects.filter(rol__in=['ADMIN', 'ADMINISTRATIVO'], is_active=True)
-    user = (
+    return (
         qs.filter(email__iexact=texto).first()
         or qs.filter(nombre_interno__iexact=texto).first()
         or qs.filter(rut__iexact=texto).first()
         or qs.filter(nombre__iexact=texto).first()
     )
-    if not user:
-        raise ValueError(
-            f'Asignado «{texto}» no encontrado (debe ser ADMIN o ADMINISTRATIVO activo). '
-            'Usa email, nombre interno o RUT. Si no quieres asignar, deja la celda vacía.'
-        )
-    return user
 
 
 def _resolver_cliente(raw: str) -> Optional[Cliente]:
@@ -310,7 +310,8 @@ def importar_cargas_excel(archivo, usuario) -> ImportacionExcel:
                 if tipo_libre:
                     nota_tipo = f'Tipo (Excel): {tipo_libre}'
                     descripcion = f'{nota_tipo}\n{descripcion}' if descripcion else nota_tipo
-                asignado = _resolver_asignado(_valor_fila(valores, indice, 'asignado'))
+                asignado_texto = _texto_asignado(_valor_fila(valores, indice, 'asignado'))
+                asignado_usuario = _intentar_usuario_asignado(asignado_texto)
                 cliente = _resolver_cliente(_valor_fila(valores, indice, 'cliente'))
                 orden = _resolver_orden(_valor_fila(valores, indice, 'orden'))
                 proyecto = _valor_fila(valores, indice, 'proyecto')
@@ -352,7 +353,8 @@ def importar_cargas_excel(archivo, usuario) -> ImportacionExcel:
                         tipo=tipo,
                         descripcion=descripcion,
                         prioridad=prioridad,
-                        asignado_a=asignado,
+                        asignado_a=asignado_usuario,
+                        asignado_texto=asignado_texto,
                         orden=orden,
                         cliente=cliente,
                         proyecto=proyecto,
@@ -459,7 +461,7 @@ def exportar_cargas_excel(cargas):
             carga.get_prioridad_display(),
             carga.get_estado_display(),
             carga.descripcion or '',
-            carga.asignado_a.nombre_interno if carga.asignado_a_id else '',
+            carga.asignado_a.nombre_interno if carga.asignado_a_id else (carga.asignado_texto or ''),
             carga.cliente.numero_cliente if carga.cliente_id else '',
             carga.orden_id or '',
             carga.proyecto or '',

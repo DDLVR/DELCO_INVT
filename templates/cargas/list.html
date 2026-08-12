@@ -140,7 +140,7 @@
             <td>
               {% badge_carga_estado c.estado c.get_estado_display %}
             </td>
-            <td class="small d-none d-lg-table-cell">{% if c.asignado_a %}{{ c.asignado_a.nombre_interno }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+            <td class="small d-none d-lg-table-cell">{% if c.asignado_display %}{{ c.asignado_display }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
             <td class="small d-none d-md-table-cell">{{ c.fecha_creacion|format_fecha_hora }}</td>
             <td class="text-end text-nowrap">
               <a href="{% url 'cargas_detalle' c.id %}" class="btn btn-sm btn-outline-primary">Abrir</a>
@@ -233,7 +233,8 @@
                         <li><code>Prioridad</code> — opcional (BAJA, MEDIA, ALTA; si no coincide, MEDIA)</li>
                         <li><code>Descripcion</code> — opcional</li>
                         <li><code>Proyecto</code> (también <code>URL</code>) — opcional; listado de proyecto</li>
-                        <li><code>Asignado</code>, <code>Cliente</code>, <code>ID Orden</code> — <strong>opcionales</strong>; déjalos vacíos si no aplican</li>
+                        <li><code>Asignado</code> — <strong>texto libre</strong> (opcional); no exige usuario del sistema</li>
+                        <li><code>Cliente</code>, <code>ID Orden</code> — <strong>opcionales</strong>; déjalos vacíos si no aplican</li>
                       </ul>
                     </div>
                   </div>
@@ -248,10 +249,8 @@
                     <div class="accordion-body">
                       <ul class="delco-import-rules mb-0">
                         <li>Solo <strong>Titulo</strong> es obligatorio. Asignado, Cliente e ID Orden son opcionales.</li>
-                        <li>El número (#) de cada carga lo genera automáticamente la plataforma.</li>
-                        <li>Duplicados se detectan solo por <strong>Título</strong>; no se sobrescriben.</li>
-                        <li><code>Proyecto</code> / <code>URL</code> guarda el listado de proyecto y abre el filtro de OT.</li>
-                        <li>Si Completas Asignado/Cliente/ID Orden, deben existir en el sistema; si no, deja la celda vacía.</li>
+                        <li><code>Asignado</code> se guarda tal cual del Excel (texto libre). Si coincide con un usuario del sistema, también se enlaza.</li>
+                        <li>Si Completas Cliente/ID Orden, deben existir en el sistema; si no, deja la celda vacía.</li>
                         <li>Tipos como «Actualización Ajuste Tarifario» se aceptan: quedan como <strong>Otro</strong> y el texto se conserva en la descripción.</li>
                       </ul>
                     </div>
