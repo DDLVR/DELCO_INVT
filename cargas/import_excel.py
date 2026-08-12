@@ -1,8 +1,9 @@
 """Importación masiva de cargas / órdenes de trabajo administrativas desde Excel."""
 from __future__ import annotations
 
+import math
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import openpyxl
 from django.db import transaction
@@ -29,8 +30,12 @@ COLUMNAS = {
         'num cliente', 'id cliente',
     },
     'orden': {'orden', 'id orden', 'ot', 'orden trabajo', 'id ot'},
-    'url': {'url', 'url referencia', 'referencia', 'enlace'},
-    'id_carga': {'id carga', 'id', 'id carga administrativa'},
+    # "URL" / "Proyecto" = nombre del proyecto (listado); el ID lo genera la plataforma
+    'proyecto': {
+        'proyecto', 'listado proyecto', 'listado de proyecto',
+        'proyecto carga', 'proyecto / carga', 'url', 'url referencia',
+        'referencia', 'enlace',
+    },
 }
 
 TIPOS_ALIAS = {
@@ -69,6 +74,16 @@ PRIORIDADES_ALIAS = {
     'high': 'ALTA',
 }
 
+# Valores que en Excel se consideran “sin dato” (campos opcionales)
+_VACIOS = frozenset({
+    '', '-', '—', 'n/a', 'na', 'n.a.', 'n.a', 'null', 'none', 'nil',
+    'sin asignar', 's/a', 's/n', 'sn', 'no aplica', 'ninguno', 'ninguna',
+})
+
+
+def _es_vacio(valor: str) -> bool:
+    return _limpiar_header(valor) in _VACIOS
+
 
 def _limpiar_header(valor) -> str:
     if valor is None:
@@ -100,9 +115,15 @@ def _valor_fila(valores: List[Any], indice: Dict[str, int], campo: str) -> str:
     v = valores[i]
     if v is None:
         return ''
-    if isinstance(v, float) and v.is_integer():
-        return str(int(v))
-    return str(v).strip()
+    if isinstance(v, float):
+        if math.isnan(v):
+            return ''
+        if v.is_integer():
+            return str(int(v))
+    texto = str(v).strip()
+    if _es_vacio(texto):
+        return ''
+    return texto
 
 
 def _fila_a_texto(headers: List[Any], valores: List[Any]) -> str:
@@ -144,7 +165,8 @@ def _resolver_prioridad(raw: str) -> str:
 
 
 def _resolver_asignado(raw: str) -> Optional[Usuario]:
-    if not raw:
+    """Opcional: vacío → sin asignar. Solo valida si viene un valor."""
+    if not raw or _es_vacio(raw):
         return None
     texto = raw.strip()
     qs = Usuario.objects.filter(rol__in=['ADMIN', 'ADMINISTRATIVO'], is_active=True)
@@ -156,70 +178,69 @@ def _resolver_asignado(raw: str) -> Optional[Usuario]:
     )
     if not user:
         raise ValueError(
-            f'Asignado «{texto}» no encontrado (debe ser ADMIN o ADMINISTRATIVO activo).'
+            f'Asignado «{texto}» no encontrado (debe ser ADMIN o ADMINISTRATIVO activo). '
+            'Si no quieres asignar, deja la celda vacía.'
         )
     return user
 
 
 def _resolver_cliente(raw: str) -> Optional[Cliente]:
-    if not raw:
+    """Opcional: vacío → sin cliente. Solo valida si viene un valor."""
+    if not raw or _es_vacio(raw):
         return None
     texto = raw.strip()
     cliente = Cliente.objects.filter(numero_cliente__iexact=texto, activo=True).first()
     if not cliente and texto.isdigit():
         cliente = Cliente.objects.filter(pk=int(texto), activo=True).first()
     if not cliente:
-        raise ValueError(f'Cliente «{texto}» no encontrado o inactivo.')
+        raise ValueError(
+            f'Cliente «{texto}» no encontrado o inactivo. '
+            'Si no aplica, deja la celda vacía.'
+        )
     return cliente
 
 
 def _resolver_orden(raw: str) -> Optional[OrdenTrabajo]:
-    if not raw:
+    """Opcional: vacío → sin OT. Solo valida si viene un valor."""
+    if not raw or _es_vacio(raw):
         return None
     texto = raw.strip()
     if not texto.isdigit():
-        raise ValueError(f'ID Orden inválido: «{texto}». Debe ser numérico.')
+        raise ValueError(
+            f'ID Orden inválido: «{texto}». Debe ser numérico, '
+            'o deja la celda vacía si no aplica.'
+        )
     orden = OrdenTrabajo.objects.filter(pk=int(texto), eliminado=False).first()
     if not orden:
-        raise ValueError(f'Orden de trabajo #{texto} no encontrada.')
+        raise ValueError(
+            f'Orden de trabajo #{texto} no encontrada. '
+            'Si no aplica, deja la celda vacía.'
+        )
     return orden
 
 
-def _clave_duplicado(
-    titulo: str,
-    tipo: str,
-    cliente_id: Optional[int],
-    orden_id: Optional[int],
-) -> Tuple[str, str, Optional[int], Optional[int]]:
-    return (titulo.strip().casefold(), tipo, cliente_id, orden_id)
+def _clave_duplicado(titulo: str) -> str:
+    """La identificación de duplicados es solo por título (único distintivo)."""
+    return (titulo or '').strip().casefold()
 
 
-def _buscar_duplicado_db(
-    titulo: str,
-    tipo: str,
-    cliente_id: Optional[int],
-    orden_id: Optional[int],
-) -> Optional[CargaAdministrativa]:
-    qs = CargaAdministrativa.objects.filter(
-        eliminado=False,
-        titulo__iexact=titulo.strip(),
-        tipo=tipo,
+def _buscar_duplicado_db(titulo: str) -> Optional[CargaAdministrativa]:
+    return (
+        CargaAdministrativa.objects.filter(
+            eliminado=False,
+            titulo__iexact=(titulo or '').strip(),
+        )
+        .order_by('-fecha_creacion')
+        .first()
     )
-    if cliente_id:
-        qs = qs.filter(cliente_id=cliente_id)
-    else:
-        qs = qs.filter(cliente_id__isnull=True)
-    if orden_id:
-        qs = qs.filter(orden_id=orden_id)
-    else:
-        qs = qs.filter(orden_id__isnull=True)
-    return qs.order_by('-fecha_creacion').first()
 
 
 def importar_cargas_excel(archivo, usuario) -> ImportacionExcel:
     """
     Crea cargas administrativas desde Excel.
-    No sobrescribe registros existentes: los duplicados se reportan y se omiten.
+    El ID (# correlativo) lo genera automáticamente la plataforma.
+    Duplicados se detectan solo por Título (no se sobrescriben).
+    La columna Proyecto/URL guarda el listado de proyecto asociado.
     """
     importacion = ImportacionExcel.objects.create(
         tipo='CARGAS_ADMINISTRATIVAS',
@@ -275,54 +296,23 @@ def importar_cargas_excel(archivo, usuario) -> ImportacionExcel:
                 asignado = _resolver_asignado(_valor_fila(valores, indice, 'asignado'))
                 cliente = _resolver_cliente(_valor_fila(valores, indice, 'cliente'))
                 orden = _resolver_orden(_valor_fila(valores, indice, 'orden'))
-                url_referencia = _valor_fila(valores, indice, 'url')
-                id_carga_raw = _valor_fila(valores, indice, 'id_carga')
+                proyecto = _valor_fila(valores, indice, 'proyecto')
 
-                if id_carga_raw:
-                    if not id_carga_raw.isdigit():
-                        raise ValueError(f'ID Carga inválido: «{id_carga_raw}»')
-                    existente_id = CargaAdministrativa.objects.filter(
-                        pk=int(id_carga_raw),
-                        eliminado=False,
-                    ).first()
-                    if existente_id:
-                        duplicados += 1
-                        ImportacionExcelError.objects.create(
-                            importacion=importacion,
-                            numero_fila=idx,
-                            motivo=(
-                                f'Duplicado: ya existe la carga administrativa #{existente_id.pk}. '
-                                'La carga masiva no sobrescribe registros existentes.'
-                            ),
-                            data_cruda=_fila_a_texto(headers, valores),
-                        )
-                        continue
-
-                clave = _clave_duplicado(
-                    titulo,
-                    tipo,
-                    cliente.pk if cliente else None,
-                    orden.pk if orden else None,
-                )
+                clave = _clave_duplicado(titulo)
                 if clave in claves_archivo:
                     duplicados += 1
                     ImportacionExcelError.objects.create(
                         importacion=importacion,
                         numero_fila=idx,
                         motivo=(
-                            'Duplicado en el archivo: misma combinación de '
-                            'Título + Tipo + Cliente + Orden que otra fila.'
+                            'Duplicado en el archivo: ya hay otra fila con el mismo Título. '
+                            'El título identifica de forma única cada carga administrativa.'
                         ),
                         data_cruda=_fila_a_texto(headers, valores),
                     )
                     continue
 
-                existente = _buscar_duplicado_db(
-                    titulo,
-                    tipo,
-                    cliente.pk if cliente else None,
-                    orden.pk if orden else None,
-                )
+                existente = _buscar_duplicado_db(titulo)
                 if existente:
                     duplicados += 1
                     ImportacionExcelError.objects.create(
@@ -330,9 +320,9 @@ def importar_cargas_excel(archivo, usuario) -> ImportacionExcel:
                         numero_fila=idx,
                         motivo=(
                             f'Duplicado: ya existe la carga #{existente.pk} '
-                            f'con el mismo título, tipo y referencias '
+                            f'con el mismo título «{existente.titulo}» '
                             f'(estado {existente.get_estado_display()}). '
-                            'No se sobrescribe.'
+                            'No se sobrescribe. El ID lo asigna la plataforma.'
                         ),
                         data_cruda=_fila_a_texto(headers, valores),
                     )
@@ -348,7 +338,7 @@ def importar_cargas_excel(archivo, usuario) -> ImportacionExcel:
                         asignado_a=asignado,
                         orden=orden,
                         cliente=cliente,
-                        url_referencia=url_referencia,
+                        proyecto=proyecto,
                     )
                 claves_archivo.add(clave)
                 exitosas += 1
@@ -425,6 +415,7 @@ def exportar_cargas_excel(cargas):
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = 'Cargas administrativas'
+    # ID Carga es solo informativo (correlativo de la plataforma); no se usa al reimportar.
     ws.append([
         'ID Carga',
         'Titulo',
@@ -435,7 +426,7 @@ def exportar_cargas_excel(cargas):
         'Asignado',
         'Cliente',
         'ID Orden',
-        'URL',
+        'Proyecto',
         'Observaciones',
         'Creado por',
         'Fecha creacion',
@@ -454,7 +445,7 @@ def exportar_cargas_excel(cargas):
             carga.asignado_a.nombre_interno if carga.asignado_a_id else '',
             carga.cliente.numero_cliente if carga.cliente_id else '',
             carga.orden_id or '',
-            carga.url_referencia or '',
+            carga.proyecto or '',
             observaciones_a_texto_plano(carga.observaciones or ''),
             carga.creado_por.nombre_interno if carga.creado_por_id else '',
             carga.fecha_creacion.strftime('%d/%m/%Y %H:%M') if carga.fecha_creacion else '',
@@ -462,6 +453,6 @@ def exportar_cargas_excel(cargas):
             carga.fecha_completada.strftime('%d/%m/%Y %H:%M') if carga.fecha_completada else '',
         ])
 
-    # Filtro en Tipo / Prioridad / Estado / Asignado / Cliente (cols 3–8).
-    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=3, filter_to_col=8)
+    # Filtro en Tipo / Prioridad / Estado / Asignado / Cliente / Proyecto (cols 3–10).
+    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=3, filter_to_col=10)
     return wb

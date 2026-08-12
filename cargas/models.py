@@ -67,10 +67,17 @@ class CargaAdministrativa(models.Model):
         blank=True,
         related_name='cargas_admin',
     )
+    proyecto = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+        db_index=True,
+        help_text='Proyecto / listado asociado a esta carga administrativa',
+    )
     url_referencia = models.CharField(
         max_length=500,
         blank=True,
-        help_text='Enlace directo a la pantalla de trabajo',
+        help_text='Enlace directo a la pantalla de trabajo (p. ej. listado filtrado por proyecto)',
     )
 
     observaciones = models.TextField(
@@ -104,6 +111,7 @@ class CargaAdministrativa(models.Model):
             models.Index(fields=['tipo', 'estado']),
             models.Index(fields=['orden']),
             models.Index(fields=['cliente']),
+            models.Index(fields=['proyecto']),
             models.Index(fields=['eliminado', 'estado']),
         ]
 

@@ -29,6 +29,16 @@ def _audit(usuario, carga, action, field_name='', old_value='', new_value='', re
     )
 
 
+def url_listado_proyecto(proyecto: str) -> str:
+    """URL del listado de OT filtrado por proyecto/carga administrativa."""
+    from urllib.parse import urlencode
+
+    proyecto = (proyecto or '').strip()
+    if not proyecto:
+        return ''
+    return reverse('ordenes_list') + '?' + urlencode({'proyecto': proyecto})
+
+
 def crear_carga(
     usuario,
     *,
@@ -39,6 +49,7 @@ def crear_carga(
     asignado_a=None,
     orden=None,
     cliente=None,
+    proyecto: str = '',
     url_referencia: str = '',
 ) -> CargaAdministrativa:
     tipos = {c[0] for c in CargaAdministrativa.TIPO_CHOICES}
@@ -47,6 +58,11 @@ def crear_carga(
         tipo = 'OTRO'
     if prioridad not in prioridades:
         prioridad = 'MEDIA'
+
+    proyecto = (proyecto or '').strip()[:255]
+    url = (url_referencia or '').strip()
+    if not url and proyecto:
+        url = url_listado_proyecto(proyecto)
 
     carga = CargaAdministrativa(
         titulo=titulo[:200],
@@ -57,7 +73,8 @@ def crear_carga(
         asignado_a=asignado_a,
         orden=orden,
         cliente=cliente,
-        url_referencia=(url_referencia or '')[:500],
+        proyecto=proyecto,
+        url_referencia=url[:500],
     )
     if asignado_a:
         carga.fecha_asignacion = timezone.now()
@@ -68,7 +85,7 @@ def crear_carga(
         'CARGA_CREATE',
         field_name='titulo',
         new_value=carga.titulo,
-        reason=f'Tipo {tipo}',
+        reason=f'Tipo {tipo}' + (f' · Proyecto {proyecto}' if proyecto else ''),
     )
     return carga
 
