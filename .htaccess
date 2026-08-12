@@ -1,244 +1,62 @@
-# ═════════════════════════════════════════════════════════════════
-# ⚠️  DELCO INVT - .HTACCESS (VERSIÓN SIMPLIFICADA)
-# 
-# IMPORTANTE: Este archivo es EJEMPLO y puede no ser 100% compatible
-# con tu servidor Hostingplus + Passenger.
-#
-# VER: HTACCESS_REAL_PARA_TU_SERVIDOR.md para la versión correcta
-# para tu ambiente específico.
-# ═════════════════════════════════════════════════════════════════
+# =============================================================================
+# DELCO INVT — .htaccess SOLO de la app Django (inventario)
+# =============================================================================
+# DÓNDE: carpeta de la Python App (junto a passenger_wsgi.py)
+#        Ej: ~/delcochile_inventario/
+# NO pegar esto en public_html (rompe delcochile.cl / Site.pro).
+# =============================================================================
 
-# NOTA: RewriteEngine puede interferir con Passenger en Hostingplus
-# Descomenta solo si lo necesitas
-# RewriteEngine On
+Options -Indexes
 
-# ═════════════════════════════════════════════════════════════════
-# 1. CONFIGURACIÓN DE EXPIRACIÓN (mod_expires)
-# ═════════════════════════════════════════════════════════════════
+# Bloquear acceso HTTP a secretos y código fuente
+<FilesMatch "(?i)^(\.env|\.env\..*|\.git|\.gitignore|\.htpasswd|passenger_wsgi\.py|manage\.py|requirements\.txt|db\.sqlite3|.*\.sqlite3|.*\.py|.*\.pyc|.*\.log|.*\.bak|.*\.sql|.*\.pem|.*\.key|web\.config)$">
+	<IfModule mod_authz_core.c>
+		Require all denied
+	</IfModule>
+	<IfModule !mod_authz_core.c>
+		Order allow,deny
+		Deny from all
+	</IfModule>
+</FilesMatch>
 
-<IfModule mod_expires.c>
-    ExpiresActive On
-    ExpiresDefault "access plus 0 minutes"
-    
-    # HTML: No cachear (siempre fresco)
-    ExpiresByType text/html "access plus 0 minutes"
-    
-    # CSS y JavaScript: 1 mes
-    ExpiresByType text/css "access plus 1 month"
-    ExpiresByType text/plain "access plus 1 month"
-    ExpiresByType application/javascript "access plus 1 month"
-    ExpiresByType text/javascript "access plus 1 month"
-    ExpiresByType application/x-javascript "access plus 1 month"
-    
-    # Imágenes: 3 meses
-    ExpiresByType image/jpeg "access plus 3 months"
-    ExpiresByType image/gif "access plus 3 months"
-    ExpiresByType image/png "access plus 3 months"
-    ExpiresByType image/webp "access plus 3 months"
-    ExpiresByType image/svg+xml "access plus 3 months"
-    ExpiresByType image/x-icon "access plus 3 months"
-    ExpiresByType image/vnd.microsoft.icon "access plus 3 months"
-    
-    # Fuentes: 1 año
-    ExpiresByType font/truetype "access plus 1 year"
-    ExpiresByType font/ttf "access plus 1 year"
-    ExpiresByType font/otf "access plus 1 year"
-    ExpiresByType font/woff "access plus 1 year"
-    ExpiresByType font/woff2 "access plus 1 year"
-    ExpiresByType application/font-woff "access plus 1 year"
-    
-    # JSON y API: 1 hora
-    ExpiresByType application/json "access plus 1 hour"
-    ExpiresByType application/xml "access plus 1 hour"
-</IfModule>
-
-# ═════════════════════════════════════════════════════════════════
-# 2. HEADERS DE CACHE-CONTROL (mod_headers)
-# ═════════════════════════════════════════════════════════════════
+# No bloquear URLs de la app (media, registros, etc.): solo rutas de entorno
+RedirectMatch 404 (?i)/(?:\.git|venv|venv38|\.venv|__pycache__)(/|$)
 
 <IfModule mod_headers.c>
-    
-    # Imágenes: Cache público largo plazo (3 meses)
-    <FilesMatch "\.(jpg|jpeg|png|gif|webp|ico|svg)$">
-        Header set Cache-Control "public, max-age=7776000, immutable"
-        Header set Vary "Accept-Encoding"
-    </FilesMatch>
-    
-    # CSS y JavaScript: Cache público (1 mes)
-    <FilesMatch "\.(css|js)$">
-        Header set Cache-Control "public, max-age=2592000, immutable"
-        Header set Vary "Accept-Encoding"
-    </FilesMatch>
-    
-    # Fuentes web: Cache público muy largo (1 año)
-    <FilesMatch "\.(woff|woff2|ttf|eot|otf)$">
-        Header set Cache-Control "public, max-age=31536000, immutable"
-        Header set Vary "Accept-Encoding"
-    </FilesMatch>
-    
-    # HTML: Sin cache (validar siempre)
-    <FilesMatch "\.html$">
-        Header set Cache-Control "public, max-age=0, must-revalidate"
-        Header set Pragma "public"
-        Header set Vary "Accept-Encoding"
-    </FilesMatch>
-    
-    # JSON y XML (API): Cache corto (1 hora)
-    <FilesMatch "\.(json|xml)$">
-        Header set Cache-Control "public, max-age=3600, must-revalidate"
-        Header set Vary "Accept-Encoding"
-    </FilesMatch>
-    
-    # Respuestas dinámicas (por defecto no cachear)
-    # Django manejará esto via middleware
-    Header set Vary "Accept-Encoding, Cookie"
-    Header set X-Content-Type-Options "nosniff"
-    Header set X-Frame-Options "SAMEORIGIN"
-    
+	Header always set X-Content-Type-Options "nosniff"
+	Header always set X-Frame-Options "SAMEORIGIN"
+	Header always set Referrer-Policy "strict-origin-when-cross-origin"
+	Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+	Header unset X-Powered-By
 </IfModule>
 
-# ═════════════════════════════════════════════════════════════════
-# 3. COMPRESIÓN GZIP (mod_deflate)
-# ═════════════════════════════════════════════════════════════════
+<IfModule mod_expires.c>
+	ExpiresActive On
+	ExpiresDefault "access plus 0 minutes"
+	ExpiresByType text/css "access plus 1 month"
+	ExpiresByType application/javascript "access plus 1 month"
+	ExpiresByType text/javascript "access plus 1 month"
+	ExpiresByType image/jpeg "access plus 3 months"
+	ExpiresByType image/png "access plus 3 months"
+	ExpiresByType image/gif "access plus 3 months"
+	ExpiresByType image/webp "access plus 3 months"
+	ExpiresByType image/svg+xml "access plus 3 months"
+	ExpiresByType font/woff2 "access plus 1 year"
+	ExpiresByType font/woff "access plus 1 year"
+</IfModule>
+
+<IfModule mod_headers.c>
+	<FilesMatch "\.(css|js)$">
+		Header set Cache-Control "public, max-age=2592000"
+	</FilesMatch>
+	<FilesMatch "\.(jpg|jpeg|png|gif|webp|ico|svg|woff2?)$">
+		Header set Cache-Control "public, max-age=7776000"
+	</FilesMatch>
+</IfModule>
 
 <IfModule mod_deflate.c>
-    
-    # Comprimir HTML
-    AddOutputFilterByType DEFLATE text/html
-    AddOutputFilterByType DEFLATE text/plain
-    
-    # Comprimir CSS y JavaScript
-    AddOutputFilterByType DEFLATE text/css
-    AddOutputFilterByType DEFLATE text/javascript
-    AddOutputFilterByType DEFLATE application/javascript
-    AddOutputFilterByType DEFLATE application/x-javascript
-    
-    # Comprimir XML y JSON
-    AddOutputFilterByType DEFLATE text/xml
-    AddOutputFilterByType DEFLATE application/xml
-    AddOutputFilterByType DEFLATE application/xhtml+xml
-    AddOutputFilterByType DEFLATE application/rss+xml
-    AddOutputFilterByType DEFLATE application/json
-    
-    # Comprimir SVG
-    AddOutputFilterByType DEFLATE image/svg+xml
-    
-    # Comprimir fuentes
-    AddOutputFilterByType DEFLATE application/x-font
-    AddOutputFilterByType DEFLATE application/x-font-truetype
-    AddOutputFilterByType DEFLATE application/x-font-ttf
-    AddOutputFilterByType DEFLATE application/x-font-otf
-    AddOutputFilterByType DEFLATE application/x-font-woff
-    AddOutputFilterByType DEFLATE application/x-font-woff2
-    AddOutputFilterByType DEFLATE font/opentype
-    AddOutputFilterByType DEFLATE font/ttf
-    AddOutputFilterByType DEFLATE font/eot
-    AddOutputFilterByType DEFLATE font/woff
-    AddOutputFilterByType DEFLATE font/woff2
-    
-    # Configuración específica
-    SetOutputFilter DEFLATE
-    AddOutputFilterByType DEFLATE text/plain
-    AddOutputFilterByType DEFLATE text/html
-    AddOutputFilterByType DEFLATE application/xhtml+xml
-    
-    # No comprimir estos tipos (ya comprimidos)
-    BrowserMatch ^Mozilla/4 gzip-only-text/html
-    BrowserMatch ^Mozilla/4\.0[678] no-gzip
-    BrowserMatch \bMSIE !no-gzip !gzip-only-text/html
-    
-    # Agregar Vary header para proxies
-    Header append Vary Accept-Encoding
-    
+	AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript application/javascript application/json image/svg+xml
 </IfModule>
 
-# ═════════════════════════════════════════════════════════════════
-# 4. SEGURIDAD Y HEADERS DE RESPUESTA
-# ═════════════════════════════════════════════════════════════════
-
-# Prevenir el acceso a archivos sensibles
-<FilesMatch "^\.ht">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-    <IfModule !mod_authz_core.c>
-        Order allow,deny
-        Deny from all
-    </IfModule>
-</FilesMatch>
-
-# Proteger archivos de configuración de Django
-<FilesMatch "\.(env|ini|cfg|conf|secret)$">
-    <IfModule mod_authz_core.c>
-        Require all denied
-    </IfModule>
-    <IfModule !mod_authz_core.c>
-        Order allow,deny
-        Deny from all
-    </IfModule>
-</FilesMatch>
-
-# ═════════════════════════════════════════════════════════════════
-# 5. CONFIGURACIÓN POR INTERVALOS DE TIEMPO
-# ═════════════════════════════════════════════════════════════════
-
-# Este sistema permite cachear por intervalos sin refresco forzado
-# El navegador validará con el servidor cada vez que expire el intervalo
-
-<IfModule mod_expires.c>
-    
-    # INTERVALO 1: Assets críticos (CSS, JS principales) - 1 semana
-    <FilesMatch "bootstrap|app\.css|app\.js">
-        ExpiresDefault "access plus 1 week"
-    </FilesMatch>
-    
-    # INTERVALO 2: Imágenes estáticas - 3 meses
-    <DirectoryMatch "/static/img">
-        ExpiresDefault "access plus 3 months"
-    </DirectoryMatch>
-    
-    # INTERVALO 3: Contenido dinámico (JSON API) - 1 hora
-    <FilesMatch "\.json$">
-        ExpiresDefault "access plus 1 hour"
-    </FilesMatch>
-    
-    # INTERVALO 4: Fuentes - Nunca expiran
-    <DirectoryMatch "/fonts|/static/fonts">
-        ExpiresDefault "access plus 1 year"
-    </DirectoryMatch>
-    
-</IfModule>
-
-# ═════════════════════════════════════════════════════════════════
-# 6. ETAGS Y VALIDACIÓN (para cache condicional)
-# ═════════════════════════════════════════════════════════════════
-
-<IfModule mod_headers.c>
-    # Habilitar ETags (validación de cache)
-    # El navegador puede revalidar archivos sin descargar
-    FileETag All
-    
-    # Agregar Last-Modified header
-    Header set Last-Modified "expr=%{TIME_RFC822}"
-    
-</IfModule>
-
-# ═════════════════════════════════════════════════════════════════
-# 7. INFORMACIÓN Y DEBUGGING
-# ═════════════════════════════════════════════════════════════════
-
-# Agregar información de cache en headers (solo desarrollo)
-# Comentar en producción por razones de seguridad
-<IfModule mod_headers.c>
-    # Header set X-Cache-Status "HIT|MISS"
-    # Header set X-Cache-Time "%D"
-</IfModule>
-
-# ═════════════════════════════════════════════════════════════════
-# FIN DE CONFIGURACIÓN
-# ═════════════════════════════════════════════════════════════════
-
-# Para verificar que el .htaccess está funcionando:
-# 1. curl -i http://tudominio.com/static/css/app.css | grep Cache-Control
-# 2. Verificar headers en Chrome DevTools (Network > Headers)
-# 3. Usar https://www.webpagetest.org para auditoría completa
+# No activar RewriteEngine agresivo aquí: puede interferir con Passenger.
+# El enrutamiento de delcochile.cl / inventario va en public_html.
