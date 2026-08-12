@@ -44,6 +44,23 @@ class ObservacionesHtmlTests(TestCase):
 		self.assertIn('<mark>', html)
 		self.assertIn('res', html)
 
+	def test_permite_tabla_y_font_size(self):
+		html = sanitizar_observaciones_html(
+			'<p><span style="font-size: 18px">Grande</span></p>'
+			'<table><tr><th>A</th><td>B</td></tr></table>'
+		)
+		self.assertIn('font-size: 18px', html)
+		self.assertIn('delco-obs-table', html)
+		self.assertIn('<th>', html)
+		self.assertIn('<td>', html)
+
+	def test_bloquea_javascript_en_estilo(self):
+		html = sanitizar_observaciones_html(
+			'<span style="font-size: 14px; background-image: url(javascript:alert(1))">x</span>'
+		)
+		self.assertNotIn('javascript', html.lower())
+		self.assertIn('font-size: 14px', html)
+
 	def test_reportlab_markup(self):
 		out = observaciones_a_reportlab('<b>ok</b> <mark>hi</mark>')
 		self.assertIn('<b>', out)
@@ -54,6 +71,19 @@ class ObservacionesHtmlTests(TestCase):
 			observaciones_a_texto_plano('<b>Hola</b><br>mundo'),
 			'Hola\nmundo',
 		)
+
+	def test_flowables_incluye_tabla(self):
+		from reportlab.lib.styles import getSampleStyleSheet
+		from ordenes_trabajo.observaciones_html import observaciones_a_flowables
+
+		styles = getSampleStyleSheet()
+		flow = observaciones_a_flowables(
+			'<p>Intro</p><table><tr><th>Campo</th><td>Valor</td></tr></table>',
+			styles,
+		)
+		self.assertTrue(len(flow) >= 1)
+		tipos = [type(f).__name__ for f in flow]
+		self.assertIn('Table', tipos)
 
 
 @override_settings(MEDIA_ROOT='/tmp/delco_test_media')

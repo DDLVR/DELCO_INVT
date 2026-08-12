@@ -1488,13 +1488,20 @@ td.cliente-numero-duplicado strong {
   --bs-table-bg-state: rgba(13, 110, 253, 0.12);
 }
 
-/* Observaciones técnicas con formato (negrita / resaltado) */
+/* Observaciones con formato tipo documento (negrita / resaltado / tablas / tamaños) */
 .delco-obs-editor {
-  min-height: 110px;
-  max-height: 320px;
+  min-height: 180px;
+  max-height: 520px;
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  line-height: 1.45;
+}
+
+.delco-obs-editor.delco-obs-editor--doc {
+  min-height: 280px;
+  max-height: 640px;
+  font-size: 14px;
 }
 
 .delco-obs-editor:empty:before {
@@ -1515,4 +1522,56 @@ td.cliente-numero-duplicado strong {
   white-space: pre-wrap;
   word-break: break-word;
   line-height: 1.45;
+}
+
+.delco-obs-editor table.delco-obs-table,
+.delco-obs-view table.delco-obs-table,
+.delco-obs-editor table,
+.delco-obs-view table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 0.6rem 0;
+  table-layout: fixed;
+}
+
+.delco-obs-editor table.delco-obs-table th,
+.delco-obs-editor table.delco-obs-table td,
+.delco-obs-view table.delco-obs-table th,
+.delco-obs-view table.delco-obs-table td,
+.delco-obs-editor table th,
+.delco-obs-editor table td,
+.delco-obs-view table th,
+.delco-obs-view table td {
+  border: 1px solid #6c757d;
+  padding: 0.35rem 0.5rem;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.delco-obs-editor table.delco-obs-table th,
+.delco-obs-view table.delco-obs-table th,
+.delco-obs-editor table th,
+.delco-obs-view table th {
+  background: rgba(13, 110, 253, 0.08);
+  font-weight: 600;
+}
+
+.delco-obs-toolbar .form-select-sm {
+  width: auto;
+  min-width: 5.5rem;
+}
+
+[data-bs-theme="dark"] .delco-obs-editor table.delco-obs-table th,
+[data-bs-theme="dark"] .delco-obs-editor table.delco-obs-table td,
+[data-bs-theme="dark"] .delco-obs-view table.delco-obs-table th,
+[data-bs-theme="dark"] .delco-obs-view table.delco-obs-table td,
+[data-bs-theme="dark"] .delco-obs-editor table th,
+[data-bs-theme="dark"] .delco-obs-editor table td {
+  border-color: #adb5bd;
+}
+
+[data-bs-theme="dark"] .delco-obs-editor table.delco-obs-table th,
+[data-bs-theme="dark"] .delco-obs-view table.delco-obs-table th {
+  background: rgba(13, 110, 253, 0.22);
 }
