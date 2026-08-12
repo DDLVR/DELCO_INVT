@@ -188,12 +188,12 @@ def _resolver_asignado(raw: str) -> Optional[Usuario]:
         qs.filter(email__iexact=texto).first()
         or qs.filter(nombre_interno__iexact=texto).first()
         or qs.filter(rut__iexact=texto).first()
-        or qs.filter(username__iexact=texto).first()
+        or qs.filter(nombre__iexact=texto).first()
     )
     if not user:
         raise ValueError(
             f'Asignado «{texto}» no encontrado (debe ser ADMIN o ADMINISTRATIVO activo). '
-            'Si no quieres asignar, deja la celda vacía.'
+            'Usa email, nombre interno o RUT. Si no quieres asignar, deja la celda vacía.'
         )
     return user
 

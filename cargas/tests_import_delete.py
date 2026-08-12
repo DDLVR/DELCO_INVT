@@ -200,6 +200,24 @@ class CargasImportDeleteTests(TestCase):
         c3 = CargaAdministrativa.objects.get(titulo='Validacion formal')
         self.assertEqual(c3.tipo, 'VALIDACION_OT')
 
+    def test_importar_asignado_por_nombre_interno_sin_username(self):
+        """Usuario no tiene username; la búsqueda no debe fallar por ese campo."""
+        buf = _xlsx_bytes([
+            ['Titulo', 'Asignado'],
+            ['Con asignado', 'admvo_imp'],
+            ['Sin asignado', ''],
+        ])
+        archivo = SimpleUploadedFile(
+            'asignado.xlsx',
+            buf.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        imp = importar_cargas_excel(archivo, self.admin)
+        self.assertEqual(imp.exitosas, 2)
+        self.assertEqual(imp.fallidas, 0)
+        carga = CargaAdministrativa.objects.get(titulo='Con asignado')
+        self.assertEqual(carga.asignado_a_id, self.admin_op.pk)
+
     def test_importar_via_vista_json(self):
         self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
         buf = _xlsx_bytes([
