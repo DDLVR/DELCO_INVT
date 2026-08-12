@@ -91,6 +91,7 @@ def _queryset_cargas_filtrado(request, *, aplicar_filtros: bool = True):
         qs = qs.filter(
             Q(titulo__icontains=q)
             | Q(descripcion__icontains=q)
+            | Q(proyecto__icontains=q)
             | Q(cliente__numero_cliente__icontains=q)
             | Q(orden__titulo__icontains=q)
         )
@@ -434,15 +435,38 @@ def cargas_crear_view(request):
             descripcion=(request.POST.get('descripcion') or '').strip(),
             prioridad=(request.POST.get('prioridad') or 'MEDIA').strip(),
             asignado_a=asignado,
+            proyecto=(request.POST.get('proyecto') or '').strip(),
             url_referencia=(request.POST.get('url_referencia') or '').strip(),
         )
         messages.success(request, f'Carga #{carga.pk} creada.')
         return redirect('cargas_detalle', pk=carga.pk)
 
+    proyectos_disponibles = list(
+        CargaAdministrativa.objects.filter(eliminado=False)
+        .exclude(proyecto='')
+        .values_list('proyecto', flat=True)
+        .distinct()
+        .order_by('proyecto')[:80]
+    )
+    # Complementar con proyectos usados en OT
+    from ordenes_trabajo.models import OrdenTrabajo
+    ot_proyectos = (
+        OrdenTrabajo.objects.filter(eliminado=False)
+        .exclude(proyecto_carga_administrativa='')
+        .values_list('proyecto_carga_administrativa', flat=True)
+        .distinct()
+        .order_by('proyecto_carga_administrativa')[:80]
+    )
+    for p in ot_proyectos:
+        if p and p not in proyectos_disponibles:
+            proyectos_disponibles.append(p)
+    proyectos_disponibles = sorted(set(proyectos_disponibles))
+
     return render(request, 'cargas/crear.html', {
         'tipos': CargaAdministrativa.TIPO_CHOICES,
         'prioridades': CargaAdministrativa.PRIORIDAD_CHOICES,
         'administrativos': _administrativos_qs(),
+        'proyectos_disponibles': proyectos_disponibles,
     })
 
 

@@ -129,6 +129,7 @@
             <td><strong>{{ c.id }}</strong></td>
             <td>
               {{ c.titulo|truncatechars:70 }}
+              {% if c.proyecto %}<br><small class="text-muted">Proyecto: {{ c.proyecto }}</small>{% endif %}
               {% if c.cliente %}<br><small class="text-muted">Cliente {{ c.cliente.numero_cliente }}</small>{% endif %}
               {% if c.orden %}<br><small class="text-muted">OT #{{ c.orden_id }}</small>{% endif %}
             </td>
@@ -227,11 +228,12 @@
                   <div id="collapseColsCargas" class="accordion-collapse collapse" data-bs-parent="#accordionFormatoCargasImport">
                     <div class="accordion-body">
                       <ul class="delco-import-cols mb-0">
-                        <li><code>Titulo</code> — obligatorio</li>
-                        <li><code>Tipo</code> — VALIDACION_OT, VERIFICACION_SCI4, REVISION_MOREAPP, COMUNICACION, VERIFICACION, OTRO</li>
-                        <li><code>Prioridad</code> — BAJA, MEDIA, ALTA</li>
-                        <li><code>Descripcion</code>, <code>Asignado</code> (email o nombre interno), <code>Cliente</code>, <code>ID Orden</code>, <code>URL</code></li>
-                        <li><code>ID Carga</code> — si ya existe, se marca como duplicado (no se actualiza)</li>
+                        <li><code>Titulo</code> — <strong>obligatorio</strong>; identifica la carga (el # lo asigna la plataforma)</li>
+                        <li><code>Tipo</code> — opcional (por defecto VERIFICACION)</li>
+                        <li><code>Prioridad</code> — opcional (BAJA, MEDIA, ALTA)</li>
+                        <li><code>Descripcion</code> — opcional</li>
+                        <li><code>Proyecto</code> (también <code>URL</code>) — opcional; listado de proyecto</li>
+                        <li><code>Asignado</code>, <code>Cliente</code>, <code>ID Orden</code> — <strong>opcionales</strong>; déjalos vacíos si no aplican</li>
                       </ul>
                     </div>
                   </div>
@@ -245,10 +247,11 @@
                   <div id="collapseReglasCargas" class="accordion-collapse collapse" data-bs-parent="#accordionFormatoCargasImport">
                     <div class="accordion-body">
                       <ul class="delco-import-rules mb-0">
-                        <li>Se validan campos obligatorios y referencias (cliente, OT, asignado).</li>
-                        <li>Duplicados (mismo Título + Tipo + Cliente + Orden, o ID existente) no se cargan ni se sobrescriben.</li>
-                        <li>Al finalizar verás totales: cargados, errores y duplicados, con detalle por fila.</li>
-                        <li>Puedes <strong>exportar</strong> el listado (filtrado o completo) y reutilizar el Excel como plantilla.</li>
+                        <li>Solo <strong>Titulo</strong> es obligatorio. Asignado, Cliente e ID Orden son opcionales.</li>
+                        <li>El número (#) de cada carga lo genera automáticamente la plataforma.</li>
+                        <li>Duplicados se detectan solo por <strong>Título</strong>; no se sobrescriben.</li>
+                        <li><code>Proyecto</code> / <code>URL</code> guarda el listado de proyecto y abre el filtro de OT.</li>
+                        <li>Si Completas Asignado/Cliente/ID Orden, deben existir en el sistema; si no, deja la celda vacía.</li>
                       </ul>
                     </div>
                   </div>

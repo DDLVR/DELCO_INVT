@@ -54,11 +54,21 @@
               {% if carga.cliente.customer_name %} — {{ carga.cliente.customer_name }}{% endif %}
             </dd>
             {% endif %}
+            {% if carga.proyecto %}
+            <dt class="col-sm-3">Proyecto</dt>
+            <dd class="col-sm-9">
+              {% if carga.url_referencia %}
+              <a href="{{ carga.url_referencia }}">{{ carga.proyecto }}</a>
+              {% else %}
+              {{ carga.proyecto }}
+              {% endif %}
+            </dd>
+            {% endif %}
             {% if carga.orden %}
             <dt class="col-sm-3">Orden</dt>
             <dd class="col-sm-9"><a href="{% url 'orden_detalle' carga.orden_id %}">OT #{{ carga.orden_id }} — {{ carga.orden.titulo }}</a></dd>
             {% endif %}
-            {% if carga.url_referencia %}
+            {% if carga.url_referencia and not carga.proyecto %}
             <dt class="col-sm-3">Referencia</dt>
             <dd class="col-sm-9"><a href="{{ carga.url_referencia }}">Abrir pantalla de trabajo</a></dd>
             {% endif %}
