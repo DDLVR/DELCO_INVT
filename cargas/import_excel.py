@@ -63,7 +63,16 @@ TIPOS_ALIAS = {
     'verificacion administrativa': 'VERIFICACION',
     'verificación administrativa': 'VERIFICACION',
     'otro': 'OTRO',
+    # Textos libres frecuentes del Excel administrativo → OTRO
+    'actualizacion ajuste tarifario': 'OTRO',
+    'actualización ajuste tarifario': 'OTRO',
+    'ajuste tarifario': 'OTRO',
+    'actualizacion': 'OTRO',
+    'actualización': 'OTRO',
 }
+
+# Marca para verificar en el resumen de importación que corre el código nuevo
+IMPORT_CARGAS_LOGIC_VERSION = 'cargas-import-v3-tipo-libre'
 
 PRIORIDADES_ALIAS = {
     'baja': 'BAJA',
@@ -139,29 +148,36 @@ def _resolver_tipo(raw: str):
     """
     Resuelve el tipo de carga.
     Retorna (codigo, texto_libre_opcional).
-    Si el Excel trae un texto libre (p. ej. «Actualización Ajuste Tarifario»),
-    se guarda como OTRO y se conserva el texto para la descripción.
+    NUNCA lanza excepción: textos libres (p. ej. «Actualización Ajuste Tarifario»)
+    se guardan como OTRO y el valor original va a la descripción.
     """
-    if not raw or _es_vacio(raw):
-        return 'VERIFICACION', None
+    try:
+        if not raw or _es_vacio(raw):
+            return 'VERIFICACION', None
 
-    codigo = raw.strip().upper().replace(' ', '_')
-    validos = {c[0] for c in CargaAdministrativa.TIPO_CHOICES}
-    if codigo in validos:
-        return codigo, None
+        texto = str(raw).strip()
+        codigo = texto.upper().replace(' ', '_')
+        validos = {c[0] for c in CargaAdministrativa.TIPO_CHOICES}
+        if codigo in validos:
+            return codigo, None
 
-    clave = _limpiar_header(raw)
-    alias = TIPOS_ALIAS.get(clave)
-    if alias:
-        return alias, None
+        clave = _limpiar_header(texto)
+        alias = TIPOS_ALIAS.get(clave)
+        if alias:
+            # Si el alias es OTRO por texto libre conocido, conservar el texto original
+            if alias == 'OTRO' and clave not in {'otro'}:
+                return 'OTRO', texto
+            return alias, None
 
-    # Etiquetas de display del modelo (p. ej. "Validación de OT")
-    for code, label in CargaAdministrativa.TIPO_CHOICES:
-        if _limpiar_header(label) == clave:
-            return code, None
+        for code, label in CargaAdministrativa.TIPO_CHOICES:
+            if _limpiar_header(label) == clave:
+                return code, None
 
-    # Texto libre del Excel → OTRO (no bloquea la carga masiva)
-    return 'OTRO', raw.strip()
+        return 'OTRO', texto
+    except Exception:
+        # Último recurso: nunca bloquear la fila por el tipo
+        fallback = str(raw).strip() if raw is not None else ''
+        return 'OTRO', fallback or None
 
 
 def _resolver_prioridad(raw: str) -> str:
@@ -304,7 +320,14 @@ def importar_cargas_excel(archivo, usuario) -> ImportacionExcel:
                 if not titulo:
                     raise ValueError('Titulo es obligatorio')
 
-                tipo, tipo_libre = _resolver_tipo(_valor_fila(valores, indice, 'tipo'))
+                tipo_raw = _valor_fila(valores, indice, 'tipo')
+                try:
+                    tipo, tipo_libre = _resolver_tipo(tipo_raw)
+                except Exception:
+                    tipo, tipo_libre = 'OTRO', (tipo_raw or None)
+                # Compatibilidad si por algún motivo quedó una versión vieja que devolvía solo str
+                if not isinstance(tipo, str):
+                    tipo, tipo_libre = 'OTRO', tipo_raw or None
                 prioridad = _resolver_prioridad(_valor_fila(valores, indice, 'prioridad'))
                 descripcion = _valor_fila(valores, indice, 'descripcion')
                 if tipo_libre:
@@ -378,13 +401,17 @@ def importar_cargas_excel(archivo, usuario) -> ImportacionExcel:
             else ('ERROR' if contador == 0 else 'COMPLETADO')
         )
         if contador == 0:
-            importacion.observaciones = 'No se encontraron filas con datos para importar.'
+            importacion.observaciones = (
+                f'No se encontraron filas con datos para importar. '
+                f'[{IMPORT_CARGAS_LOGIC_VERSION}]'
+            )
         else:
             importacion.observaciones = (
                 f'Total de registros encontrados: {contador}. '
                 f'Registros cargados correctamente: {exitosas}. '
                 f'Registros con errores: {errores}. '
-                f'Registros duplicados: {duplicados}.'
+                f'Registros duplicados: {duplicados}. '
+                f'[{IMPORT_CARGAS_LOGIC_VERSION}]'
             )
         # Metadatos extra para la respuesta JSON (parseables)
         importacion.observaciones += f'\n[meta] errores={errores};duplicados={duplicados}'
