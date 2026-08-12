@@ -171,6 +171,35 @@ class CargasImportDeleteTests(TestCase):
         self.assertEqual(imp2.exitosas, 2)
         self.assertEqual(imp2.fallidas, 0)
 
+    def test_importar_tipo_texto_libre_no_falla(self):
+        """Tipos del Excel que no son códigos del sistema se guardan como OTRO."""
+        buf = _xlsx_bytes([
+            ['Titulo', 'Tipo', 'Descripcion'],
+            ['Ajuste 1', 'Actualización Ajuste Tarifario', 'Detalle del ajuste'],
+            ['Ajuste 2', 'Actualización Ajuste Tarifario', ''],
+            ['Validacion formal', 'Validación de OT', 'usa etiqueta'],
+        ])
+        archivo = SimpleUploadedFile(
+            'tipos_libres.xlsx',
+            buf.getvalue(),
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        )
+        imp = importar_cargas_excel(archivo, self.admin)
+        self.assertEqual(imp.exitosas, 3)
+        self.assertEqual(imp.fallidas, 0)
+
+        c1 = CargaAdministrativa.objects.get(titulo='Ajuste 1')
+        self.assertEqual(c1.tipo, 'OTRO')
+        self.assertIn('Actualización Ajuste Tarifario', c1.descripcion)
+        self.assertIn('Detalle del ajuste', c1.descripcion)
+
+        c2 = CargaAdministrativa.objects.get(titulo='Ajuste 2')
+        self.assertEqual(c2.tipo, 'OTRO')
+        self.assertIn('Actualización Ajuste Tarifario', c2.descripcion)
+
+        c3 = CargaAdministrativa.objects.get(titulo='Validacion formal')
+        self.assertEqual(c3.tipo, 'VALIDACION_OT')
+
     def test_importar_via_vista_json(self):
         self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
         buf = _xlsx_bytes([
