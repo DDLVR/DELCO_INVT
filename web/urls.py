@@ -26,6 +26,7 @@ from cargas.views import (
     cargas_exportar_view,
     cargas_eliminar_view,
     cargas_eliminar_masivo_view,
+    cargas_pdf_view,
 )
 from ordenes_trabajo.views import (
     ordenes_list_view as ordenes_trabajo_list,
@@ -177,6 +178,7 @@ urlpatterns = [
     path('cargas/exportar/', cargas_exportar_view, name='cargas_exportar'),
     path('cargas/eliminar-masivo/', cargas_eliminar_masivo_view, name='cargas_eliminar_masivo'),
     path('cargas/<int:pk>/eliminar/', cargas_eliminar_view, name='cargas_eliminar'),
+    path('cargas/<int:pk>/pdf/', cargas_pdf_view, name='cargas_pdf'),
     path('cargas/<int:pk>/', cargas_detalle_view, name='cargas_detalle'),
     path('reportes/', reportes_hub_view, name='reportes_hub'),
     path('reportes/exportar/<slug:slug>/', reportes_export_view, name='reportes_export'),

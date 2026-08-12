@@ -776,3 +776,24 @@ def cargas_eliminar_masivo_view(request):
         )
     return redirect('cargas_list')
     return redirect('cargas_list')
+
+
+@login_required
+@admin_or_administrativo
+def cargas_pdf_view(request, pk):
+    """Descarga PDF con datos e observaciones de la carga administrativa."""
+    from .pdf_carga import generar_pdf_carga_administrativa, nombre_archivo_pdf_carga
+
+    carga = get_object_or_404(
+        CargaAdministrativa.objects.select_related(
+            'asignado_a', 'creado_por', 'orden', 'cliente',
+        ).prefetch_related('adjuntos'),
+        pk=pk,
+        eliminado=False,
+    )
+    pdf_bytes = generar_pdf_carga_administrativa(carga)
+    response = HttpResponse(pdf_bytes, content_type='application/pdf')
+    response['Content-Disposition'] = 'attachment; filename="{}"'.format(
+        nombre_archivo_pdf_carga(carga)
+    )
+    return response
