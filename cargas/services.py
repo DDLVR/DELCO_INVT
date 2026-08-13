@@ -82,6 +82,14 @@ def crear_carga(
     if asignado_a or asignado_texto:
         carga.fecha_asignacion = timezone.now()
     carga.save()
+    if cliente and proyecto:
+        from clientes.proyecto_historial import asignar_proyecto_al_crear_ot
+        asignar_proyecto_al_crear_ot(
+            cliente,
+            proyecto,
+            usuario=usuario,
+            motivo=f'Carga administrativa #{carga.pk}',
+        )
     _audit(
         usuario,
         carga,

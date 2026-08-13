@@ -228,17 +228,29 @@ def _resolver_tecnico(texto: str) -> Optional[Usuario]:
     return None
 
 
-def _obtener_o_crear_cliente(numero_cliente: str, valores, indice) -> Cliente:
-    """Resuelve cliente existente. No crea fichas por tipo en Excel."""
-    cliente = Cliente.objects.filter(numero_cliente=numero_cliente, activo=True).first()
+def _obtener_cliente_existente(numero_cliente: str) -> Cliente:
+    """
+    Busca un cliente existente. NO crea clientes nuevos.
+    La carga masiva de OT exige que el cliente ya exista en BD.
+    """
+    numero = (str(numero_cliente).strip() if numero_cliente is not None else '')
+    if not numero:
+        raise ValueError('Numero Cliente es obligatorio')
+
+    cliente = Cliente.objects.filter(numero_cliente=numero, activo=True).first()
     if not cliente:
-        cliente = Cliente.objects.filter(numero_cliente__iexact=numero_cliente, activo=True).first()
-    if cliente:
-        return cliente
-    raise ValueError(
-        f'Cliente "{numero_cliente}" no existe en el padrón activo. '
-        f'Revisa el número o créalo antes de importar la OT.'
-    )
+        cliente = Cliente.objects.filter(numero_cliente__iexact=numero, activo=True).first()
+    if not cliente:
+        raise ValueError(
+            f'El cliente «{numero}» no existe en la base de datos. '
+            'La orden no se importó: cree el cliente antes o corrija el número.'
+        )
+    return cliente
+
+
+def _obtener_o_crear_cliente(numero_cliente: str, valores=None, indice=None) -> Cliente:
+    """Compatibilidad: ya no crea clientes; delega en _obtener_cliente_existente."""
+    return _obtener_cliente_existente(numero_cliente)
 
 
 def _aplicar_tecnico_a_orden(orden: OrdenTrabajo, tecnico: Optional[Usuario]) -> None:
@@ -338,12 +350,12 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                 f'Columnas detectadas: {", ".join(str(h) for h in headers if h)}'
             )
 
-        contador = 0
-        exitosas = 0
-        fallidas = 0
-        alertas = 0
-        creadas = 0
-        actualizadas = 0
+        # ── Validación previa: leer todas las filas y verificar clientes ──
+        filas_trabajo = []
+        errores_previos = []
+        clientes_vistos = {}
+        clientes_ok = set()
+        clientes_faltantes = set()
 
         for idx, row in enumerate(ws.iter_rows(min_row=2, values_only=False), start=2):
             valores = [cell.value for cell in row]
@@ -354,13 +366,84 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
             if numero_cliente_raw and _limpiar_header(numero_cliente_raw) in COLUMNAS_ORDEN['numero_cliente']:
                 continue
 
+            numero = (numero_cliente_raw or '').strip() if numero_cliente_raw is not None else ''
+            if not numero:
+                errores_previos.append({
+                    'fila': idx,
+                    'motivo': 'Numero Cliente es obligatorio',
+                    'data': _fila_a_texto(headers, valores),
+                    'numero': '',
+                })
+                continue
+
+            if numero not in clientes_vistos:
+                try:
+                    clientes_vistos[numero] = _obtener_cliente_existente(numero)
+                    clientes_ok.add(numero)
+                except ValueError as exc:
+                    clientes_vistos[numero] = None
+                    clientes_faltantes.add(numero)
+                    errores_previos.append({
+                        'fila': idx,
+                        'motivo': str(exc),
+                        'data': _fila_a_texto(headers, valores),
+                        'numero': numero,
+                    })
+                    continue
+            elif clientes_vistos[numero] is None:
+                clientes_faltantes.add(numero)
+                errores_previos.append({
+                    'fila': idx,
+                    'motivo': (
+                        f'El cliente «{numero}» no existe en la base de datos. '
+                        'La orden no se importó: cree el cliente antes o corrija el número.'
+                    ),
+                    'data': _fila_a_texto(headers, valores),
+                    'numero': numero,
+                })
+                continue
+
+            filas_trabajo.append((idx, valores, numero))
+
+        if clientes_faltantes or any(e['motivo'].startswith('Numero Cliente') for e in errores_previos):
+            # No insertar ninguna OT si hay clientes inexistentes u obligatoriedad fallida
+            for err in errores_previos:
+                ImportacionExcelError.objects.create(
+                    importacion=importacion,
+                    numero_fila=err['fila'],
+                    motivo=err['motivo'],
+                    data_cruda=err['data'],
+                )
+            importacion.total_filas = len(filas_trabajo) + len(errores_previos)
+            importacion.exitosas = 0
+            importacion.fallidas = len(errores_previos)
+            importacion.estado = 'ERROR'
+            lista_faltantes = ', '.join(sorted(clientes_faltantes)[:20])
+            extra = f' (+{len(clientes_faltantes) - 20} más)' if len(clientes_faltantes) > 20 else ''
+            importacion.observaciones = (
+                f'Validación previa fallida. No se importó ninguna orden. '
+                f'Total filas revisadas: {importacion.total_filas}. '
+                f'Clientes encontrados: {len(clientes_ok)}. '
+                f'Clientes inexistentes: {len(clientes_faltantes)}'
+                + (f' ({lista_faltantes}{extra}).' if clientes_faltantes else '.')
+                + ' Corrija el Excel o cree los clientes antes de reintentar.'
+            )
+            importacion.save()
+            return importacion
+
+        contador = 0
+        exitosas = 0
+        fallidas = 0
+        alertas = 0
+        creadas = 0
+        actualizadas = 0
+
+        from clientes.proyecto_historial import asignar_proyecto_al_crear_ot
+
+        for idx, valores, numero_cliente in filas_trabajo:
             contador += 1
             try:
-                numero_cliente = numero_cliente_raw
-                if not numero_cliente:
-                    raise ValueError('Numero Cliente es obligatorio')
-
-                cliente = _obtener_o_crear_cliente(numero_cliente, valores, indice)
+                cliente = clientes_vistos[numero_cliente]
 
                 titulo = _valor_fila(valores, indice, 'titulo') or f'Trabajo — {numero_cliente}'
                 descripcion = _valor_fila(valores, indice, 'descripcion')
@@ -424,6 +507,16 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                         orden.save()
                         creadas += 1
 
+                    # Proyecto va al CLIENTE (no solo a la OT)
+                    proyecto_para_cliente = (orden.proyecto_carga_administrativa or '').strip()
+                    if proyecto_para_cliente:
+                        asignar_proyecto_al_crear_ot(
+                            cliente,
+                            proyecto_para_cliente,
+                            usuario=usuario,
+                            motivo=f'Importación OT #{orden.pk}',
+                        )
+
                     aplicar_alerta_duplicado(orden)
                     if orden.alerta_duplicado:
                         alertas += 1
@@ -450,7 +543,8 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
             importacion.observaciones = (
                 f'Se procesaron {exitosas} de {contador} filas '
                 f'(creadas: {creadas}, actualizadas: {actualizadas}). '
-                f'Alertas duplicidad: {alertas}. Fallidas: {fallidas}.'
+                f'Alertas duplicidad: {alertas}. Fallidas: {fallidas}. '
+                f'Clientes resueltos en validación previa: {len(clientes_ok)}.'
             )
         importacion.save()
     except Exception as exc:
