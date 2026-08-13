@@ -71,6 +71,7 @@ def _queryset_cargas_filtrado(request, *, aplicar_filtros: bool = True):
     asignado = (request.GET.get('asignado') or '').strip()
     q = (request.GET.get('q') or '').strip()
     vista = (request.GET.get('vista') or '').strip()
+    proyecto = (request.GET.get('proyecto') or '').strip()
 
     if vista == 'mias':
         qs = qs.filter(asignado_a=request.user, estado__in=['PENDIENTE', 'EN_PROGRESO'])
@@ -87,6 +88,8 @@ def _queryset_cargas_filtrado(request, *, aplicar_filtros: bool = True):
         qs = qs.filter(asignado_a__isnull=True)
     elif asignado.isdigit():
         qs = qs.filter(asignado_a_id=int(asignado))
+    if proyecto:
+        qs = qs.filter(proyecto__iexact=proyecto)
     if q:
         qs = qs.filter(
             Q(titulo__icontains=q)
@@ -353,6 +356,25 @@ def cargas_hub_view(request):
     })
 
 
+def _proyectos_disponibles_cargas():
+    """Nombres de proyecto usados en cargas (+ catálogo si existe)."""
+    nombres = list(
+        CargaAdministrativa.objects.filter(eliminado=False)
+        .exclude(proyecto='')
+        .values_list('proyecto', flat=True)
+        .distinct()
+        .order_by('proyecto')[:120]
+    )
+    try:
+        from catalogos.models import Proyecto
+        for n in Proyecto.objects.filter(activo=True).values_list('nombre', flat=True)[:80]:
+            if n and n not in nombres:
+                nombres.append(n)
+    except Exception:
+        pass
+    return sorted({(n or '').strip() for n in nombres if (n or '').strip()}, key=lambda x: x.casefold())
+
+
 @login_required
 @admin_or_administrativo
 def cargas_list_view(request):
@@ -363,6 +385,7 @@ def cargas_list_view(request):
     asignado = (request.GET.get('asignado') or '').strip()
     q = (request.GET.get('q') or '').strip()
     vista = (request.GET.get('vista') or '').strip()
+    proyecto = (request.GET.get('proyecto') or '').strip()
 
     paginator = Paginator(qs, 25)
     page = paginator.get_page(request.GET.get('page') or 1)
@@ -376,9 +399,11 @@ def cargas_list_view(request):
         'estados': CargaAdministrativa.ESTADO_CHOICES,
         'tipos': CargaAdministrativa.TIPO_CHOICES,
         'administrativos': _administrativos_qs(),
+        'proyectos_disponibles': _proyectos_disponibles_cargas(),
         'estado_filtro': estado,
         'tipo_filtro': tipo,
         'asignado_filtro': asignado,
+        'proyecto_filtro': proyecto,
         'vista': vista,
         'q': q,
         'query_string': params.urlencode(),
@@ -390,7 +415,7 @@ def cargas_list_view(request):
 @admin_or_administrativo
 def cargas_exportar_view(request):
     """Exporta cargas administrativas (filtradas por defecto; ?todas=1 sin filtros)."""
-    filter_keys = ('estado', 'tipo', 'asignado', 'q', 'vista')
+    filter_keys = ('estado', 'tipo', 'asignado', 'q', 'vista', 'proyecto')
     tiene_filtros = any((request.GET.get(k) or '').strip() for k in filter_keys)
     forzar_filtrar = request.GET.get('filtrar') == '1'
     exportar_todas = request.GET.get('todas') == '1'
