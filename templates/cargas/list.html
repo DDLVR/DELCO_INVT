@@ -44,10 +44,10 @@
   </div>
 
   <div class="d-flex flex-wrap gap-2 mb-3">
-    <a href="{% url 'cargas_list' %}?vista=abiertas" class="btn btn-sm {% if vista == 'abiertas' %}btn-primary{% else %}btn-outline-primary{% endif %}">Abiertas</a>
-    <a href="{% url 'cargas_list' %}?vista=mias" class="btn btn-sm {% if vista == 'mias' %}btn-primary{% else %}btn-outline-primary{% endif %}">Mías</a>
-    <a href="{% url 'cargas_list' %}?vista=sin_asignar" class="btn btn-sm {% if vista == 'sin_asignar' %}btn-primary{% else %}btn-outline-primary{% endif %}">Sin asignar</a>
-    <a href="{% url 'cargas_list' %}" class="btn btn-sm {% if not vista %}btn-primary{% else %}btn-outline-primary{% endif %}">Todas</a>
+    <a href="{% url 'cargas_list' %}?vista=abiertas{% if proyecto_filtro %}&proyecto={{ proyecto_filtro|urlencode }}{% endif %}" class="btn btn-sm {% if vista == 'abiertas' %}btn-primary{% else %}btn-outline-primary{% endif %}">Abiertas</a>
+    <a href="{% url 'cargas_list' %}?vista=mias{% if proyecto_filtro %}&proyecto={{ proyecto_filtro|urlencode }}{% endif %}" class="btn btn-sm {% if vista == 'mias' %}btn-primary{% else %}btn-outline-primary{% endif %}">Mías</a>
+    <a href="{% url 'cargas_list' %}?vista=sin_asignar{% if proyecto_filtro %}&proyecto={{ proyecto_filtro|urlencode }}{% endif %}" class="btn btn-sm {% if vista == 'sin_asignar' %}btn-primary{% else %}btn-outline-primary{% endif %}">Sin asignar</a>
+    <a href="{% url 'cargas_list' %}{% if proyecto_filtro %}?proyecto={{ proyecto_filtro|urlencode }}{% endif %}" class="btn btn-sm {% if not vista %}btn-primary{% else %}btn-outline-primary{% endif %}">Todas</a>
   </div>
 
   <div class="card delco-panel-card mb-3">
@@ -55,12 +55,23 @@
       <strong class="small"><i class="bi bi-funnel"></i> Filtros</strong>
     </div>
     <div class="card-body py-2">
-  <form method="get" class="row g-2">
+  <form method="get" class="row g-2 align-items-end">
     {% if vista %}<input type="hidden" name="vista" value="{{ vista }}">{% endif %}
-    <div class="col-md-3">
-      <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Buscar…">
+    <div class="col-md-3 col-lg-2">
+      <label class="form-label small text-muted mb-0">Buscar</label>
+      <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Título, cliente…">
     </div>
-    <div class="col-md-2">
+    <div class="col-md-3 col-lg-3">
+      <label class="form-label small text-muted mb-0">Proyecto</label>
+      <select name="proyecto" class="form-select" id="filtroProyectoCargas">
+        <option value="">Todos los proyectos</option>
+        {% for p in proyectos_disponibles %}
+        <option value="{{ p }}" {% if proyecto_filtro == p %}selected{% endif %}>{{ p }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-md-2 col-lg-2">
+      <label class="form-label small text-muted mb-0">Estado</label>
       <select name="estado" class="form-select">
         <option value="">Estado</option>
         {% for codigo, nombre in estados %}
@@ -68,7 +79,8 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2">
+    <div class="col-md-2 col-lg-2">
+      <label class="form-label small text-muted mb-0">Tipo</label>
       <select name="tipo" class="form-select">
         <option value="">Tipo</option>
         {% for codigo, nombre in tipos %}
@@ -76,7 +88,8 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2 col-lg-2">
+      <label class="form-label small text-muted mb-0">Asignado</label>
       <select name="asignado" class="form-select">
         <option value="">Asignado a</option>
         <option value="0" {% if asignado_filtro == '0' %}selected{% endif %}>Sin asignar</option>
@@ -85,9 +98,16 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2">
-      <button class="btn btn-outline-primary w-100" type="submit">Filtrar</button>
+    <div class="col-md-2 col-lg-1">
+      <button class="btn btn-primary w-100" type="submit"><i class="bi bi-funnel"></i> Filtrar</button>
     </div>
+    {% if proyecto_filtro or estado_filtro or tipo_filtro or asignado_filtro or q %}
+    <div class="col-12">
+      <a href="{% url 'cargas_list' %}{% if vista %}?vista={{ vista }}{% endif %}" class="btn btn-sm btn-outline-secondary">
+        Limpiar filtros{% if proyecto_filtro %} · proyecto: {{ proyecto_filtro }}{% endif %}
+      </a>
+    </div>
+    {% endif %}
   </form>
     </div>
   </div>
@@ -111,6 +131,7 @@
             </th>
             <th>#</th>
             <th>Título</th>
+            <th>Proyecto</th>
             <th class="d-none d-md-table-cell">Tipo</th>
             <th>Prioridad</th>
             <th>Estado</th>
@@ -129,9 +150,17 @@
             <td><strong>{{ c.id }}</strong></td>
             <td>
               {{ c.titulo|truncatechars:70 }}
-              {% if c.proyecto %}<br><small class="text-muted">Proyecto: {{ c.proyecto }}</small>{% endif %}
               {% if c.cliente %}<br><small class="text-muted">Cliente {{ c.cliente.numero_cliente }}</small>{% endif %}
               {% if c.orden %}<br><small class="text-muted">OT #{{ c.orden_id }}</small>{% endif %}
+            </td>
+            <td>
+              {% if c.proyecto %}
+              <a href="?proyecto={{ c.proyecto|urlencode }}{% if vista %}&vista={{ vista }}{% endif %}"
+                 class="badge bg-primary text-decoration-none"
+                 title="Filtrar por este proyecto">{{ c.proyecto }}</a>
+              {% else %}
+              <span class="text-muted">—</span>
+              {% endif %}
             </td>
             <td class="small d-none d-md-table-cell">{{ c.get_tipo_display }}</td>
             <td>
@@ -155,7 +184,7 @@
             </td>
           </tr>
           {% empty %}
-          {% include "partials/empty_row.html" with colspan=9 message="No hay cargas con esos filtros. Usa “Generar desde pendientes”, importa un Excel o crea una nueva." %}
+          {% include "partials/empty_row.html" with colspan=10 message="No hay cargas con esos filtros. Usa “Generar desde pendientes”, importa un Excel o crea una nueva." %}
           {% endfor %}
         </tbody>
       </table>
