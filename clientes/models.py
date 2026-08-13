@@ -89,7 +89,16 @@ class Cliente(models.Model):
         max_length=255,
         blank=True,
         null=True,
-        help_text='Proyecto asociado al cliente'
+        help_text='Proyecto asociado al cliente (texto legado; se sincroniza con proyecto_asignado)'
+    )
+
+    proyecto_asignado = models.ForeignKey(
+        'catalogos.Proyecto',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='clientes',
+        help_text='Proyecto del catálogo. El cliente no tiene proyecto hasta que se crea una OT/carga.',
     )
 
     meter_manufacturer_id = models.CharField(

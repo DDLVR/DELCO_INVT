@@ -32,3 +32,28 @@ class CatalogoDiagnostico(models.Model):
 
     def __str__(self):
         return f'{self.get_categoria_display()}: {self.origen}'
+
+
+class Proyecto(models.Model):
+    """
+    Catálogo de proyectos.
+    El cliente no nace con proyecto: se asocia al crear una OT / carga administrativa.
+    El texto legado Cliente.proyecto se conserva; la FK proyecto_asignado apunta aquí.
+    """
+
+    nombre = models.CharField(max_length=255, unique=True)
+    activo = models.BooleanField(default=True, db_index=True)
+    descripcion = models.TextField(blank=True, default='')
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Proyecto'
+        verbose_name_plural = 'Proyectos'
+        ordering = ['nombre']
+        indexes = [
+            models.Index(fields=['activo', 'nombre']),
+        ]
+
+    def __str__(self):
+        return self.nombre

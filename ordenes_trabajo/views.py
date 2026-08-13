@@ -459,6 +459,14 @@ def orden_crear_view(request):
             
             orden.creada_por = request.user
             orden.save()
+            if orden.cliente_id and orden.proyecto_carga_administrativa:
+                from clientes.proyecto_historial import asignar_proyecto_al_crear_ot
+                asignar_proyecto_al_crear_ot(
+                    orden.cliente,
+                    orden.proyecto_carga_administrativa,
+                    usuario=request.user,
+                    motivo=f'Creación OT #{orden.pk}',
+                )
             register_audit_event(
                 AuditEvent(
                     actor_id=getattr(request.user, 'id', None),
@@ -550,6 +558,14 @@ def orden_detalle_view(request, pk):
         anterior = orden.proyecto_carga_administrativa or ''
         orden.proyecto_carga_administrativa = valor
         orden.save(update_fields=['proyecto_carga_administrativa'])
+        if orden.cliente_id and valor:
+            from clientes.proyecto_historial import asignar_proyecto_al_crear_ot
+            asignar_proyecto_al_crear_ot(
+                orden.cliente,
+                valor,
+                usuario=usuario,
+                motivo=f'Actualización proyecto desde OT #{orden.pk}',
+            )
         register_audit_event(
             AuditEvent(
                 actor_id=getattr(usuario, 'id', None),
