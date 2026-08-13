@@ -18,6 +18,10 @@ _ALLOWED_TAGS = frozenset({
 })
 _VOID_TAGS = frozenset({'br'})
 _TABLE_TAGS = frozenset({'table', 'thead', 'tbody', 'tr', 'th', 'td'})
+_TABLE_BORDER_CLASSES = frozenset({
+    'delco-obs-table--medium',
+    'delco-obs-table--thick',
+})
 
 _FONT_SIZE_MAP = {
     '1': '10px',
@@ -125,7 +129,15 @@ class _ObsSanitizer(HTMLParser):
 
         if tag == 'table':
             self._stack.append('table')
-            self._parts.append('<table class="delco-obs-table">')
+            classes = ['delco-obs-table']
+            for name, value in attrs:
+                if (name or '').lower() != 'class':
+                    continue
+                for token in (value or '').split():
+                    token_l = token.lower()
+                    if token_l in _TABLE_BORDER_CLASSES and token_l not in classes:
+                        classes.append(token_l)
+            self._parts.append(f'<table class="{" ".join(classes)}">')
             return
 
         if tag in ('th', 'td'):
@@ -260,7 +272,7 @@ def observaciones_a_reportlab(texto: str) -> str:
 
 def _extraer_tablas_y_bloques(html_safe: str) -> List[Tuple[str, object]]:
     """
-    Separa el HTML en bloques ('html', fragmento) y ('table', matrix).
+    Separa el HTML en bloques ('html', fragmento) y ('table', dict con rows/border).
     """
     blocks: List[Tuple[str, object]] = []
     pos = 0
@@ -269,6 +281,14 @@ def _extraer_tablas_y_bloques(html_safe: str) -> List[Tuple[str, object]]:
         if before:
             blocks.append(('html', before))
         table_html = match.group(0)
+        border = 'normal'
+        class_m = re.search(r'<table[^>]*\bclass=["\']([^"\']*)["\']', table_html, flags=re.I)
+        if class_m:
+            tokens = class_m.group(1).lower().split()
+            if 'delco-obs-table--thick' in tokens:
+                border = 'thick'
+            elif 'delco-obs-table--medium' in tokens:
+                border = 'medium'
         rows = []
         for tr in re.finditer(r'<tr[\s\S]*?</tr>', table_html, flags=re.I):
             cells = re.findall(r'<t[hd][^>]*>([\s\S]*?)</t[hd]>', tr.group(0), flags=re.I)
@@ -279,7 +299,7 @@ def _extraer_tablas_y_bloques(html_safe: str) -> List[Tuple[str, object]]:
             if row:
                 rows.append(row)
         if rows:
-            blocks.append(('table', rows))
+            blocks.append(('table', {'rows': rows, 'border': border}))
         pos = match.end()
     after = html_safe[pos:].strip()
     if after:
@@ -306,6 +326,11 @@ def observaciones_a_flowables(texto: str, styles) -> list:
         leading=13,
         spaceAfter=6,
     )
+    border_widths = {
+        'normal': 0.6,
+        'medium': 1.25,
+        'thick': 2.2,
+    }
     flowables = []
     for kind, payload in _extraer_tablas_y_bloques(safe):
         if kind == 'html':
@@ -318,14 +343,19 @@ def observaciones_a_flowables(texto: str, styles) -> list:
                 except Exception:
                     flowables.append(Paragraph(html.escape(observaciones_a_texto_plano(payload)), body))
         elif kind == 'table' and payload:
+            rows = payload.get('rows') if isinstance(payload, dict) else payload
+            border = payload.get('border', 'normal') if isinstance(payload, dict) else 'normal'
+            if not rows:
+                continue
             # Normalizar columnas
-            max_cols = max(len(r) for r in payload)
-            data = [r + [''] * (max_cols - len(r)) for r in payload]
+            max_cols = max(len(r) for r in rows)
+            data = [r + [''] * (max_cols - len(r)) for r in rows]
             # Celdas como Paragraphs para wrap
             data_p = [[Paragraph(html.escape(c or '—'), body) for c in row] for row in data]
+            grid_w = border_widths.get(border, 0.6)
             tbl = Table(data_p, hAlign='LEFT', colWidths=None)
             tbl.setStyle(TableStyle([
-                ('GRID', (0, 0), (-1, -1), 0.6, colors.HexColor('#333333')),
+                ('GRID', (0, 0), (-1, -1), grid_w, colors.HexColor('#222222')),
                 ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#f0f0f0')),
                 ('VALIGN', (0, 0), (-1, -1), 'TOP'),
                 ('LEFTPADDING', (0, 0), (-1, -1), 4),

@@ -54,6 +54,19 @@ class ObservacionesHtmlTests(TestCase):
 		self.assertIn('<th>', html)
 		self.assertIn('<td>', html)
 
+	def test_conserva_borde_grueso_de_tabla(self):
+		html = sanitizar_observaciones_html(
+			'<table class="delco-obs-table delco-obs-table--thick evil-class">'
+			'<tr><th>Campo</th><td>Valor</td></tr></table>'
+		)
+		self.assertIn('delco-obs-table--thick', html)
+		self.assertNotIn('evil-class', html)
+		medio = sanitizar_observaciones_html(
+			'<table class="delco-obs-table--medium"><tr><td>x</td></tr></table>'
+		)
+		self.assertIn('delco-obs-table--medium', medio)
+		self.assertIn('delco-obs-table', medio)
+
 	def test_bloquea_javascript_en_estilo(self):
 		html = sanitizar_observaciones_html(
 			'<span style="font-size: 14px; background-image: url(javascript:alert(1))">x</span>'
@@ -84,6 +97,27 @@ class ObservacionesHtmlTests(TestCase):
 		self.assertTrue(len(flow) >= 1)
 		tipos = [type(f).__name__ for f in flow]
 		self.assertIn('Table', tipos)
+
+	def test_flowables_tabla_borde_grueso(self):
+		from reportlab.lib.styles import getSampleStyleSheet
+		from ordenes_trabajo.observaciones_html import (
+			_extraer_tablas_y_bloques,
+			observaciones_a_flowables,
+			sanitizar_observaciones_html,
+		)
+
+		safe = sanitizar_observaciones_html(
+			'<table class="delco-obs-table delco-obs-table--thick">'
+			'<tr><th>A</th><td>B</td></tr></table>'
+		)
+		blocks = _extraer_tablas_y_bloques(safe)
+		table_blocks = [p for k, p in blocks if k == 'table']
+		self.assertEqual(len(table_blocks), 1)
+		self.assertEqual(table_blocks[0]['border'], 'thick')
+
+		styles = getSampleStyleSheet()
+		flow = observaciones_a_flowables(safe, styles)
+		self.assertTrue(any(type(f).__name__ == 'Table' for f in flow))
 
 
 @override_settings(MEDIA_ROOT='/tmp/delco_test_media')
