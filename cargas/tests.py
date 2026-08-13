@@ -64,7 +64,7 @@ class CargasAdministrativasTests(TestCase):
 		response = self.client.post(
 			reverse('cargas_crear'),
 			{
-				'titulo': 'Revisar OT demo',
+				'cliente_id': str(self.cliente.pk),
 				'tipo': 'VALIDACION_OT',
 				'prioridad': 'ALTA',
 				'descripcion': 'Probar módulo',
@@ -72,7 +72,8 @@ class CargasAdministrativasTests(TestCase):
 			},
 		)
 		self.assertEqual(response.status_code, 302)
-		carga = CargaAdministrativa.objects.get(titulo='Revisar OT demo')
+		carga = CargaAdministrativa.objects.get(cliente=self.cliente, creado_por=self.admin_op)
+		self.assertEqual(carga.titulo, self.cliente.numero_cliente)
 		self.assertEqual(carga.asignado_a_id, self.admin_op.pk)
 		self.assertEqual(carga.estado, 'PENDIENTE')
 
@@ -358,6 +359,35 @@ class CargasAdministrativasTests(TestCase):
 		self.assertEqual(response['Content-Type'], 'application/pdf')
 		self.assertTrue(response.content.startswith(b'%PDF'))
 
+	def test_crear_requiere_cliente_existente(self):
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		antes = CargaAdministrativa.objects.count()
+		response = self.client.post(
+			reverse('cargas_crear'),
+			{'titulo': 'SIN-CLIENTE', 'tipo': 'OTRO', 'prioridad': 'BAJA'},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+			HTTP_ACCEPT='application/json',
+		)
+		self.assertEqual(response.status_code, 400)
+		data = response.json()
+		self.assertFalse(data.get('success'))
+		self.assertEqual(CargaAdministrativa.objects.count(), antes)
+
+	def test_get_crear_abre_popup_en_listado(self):
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		response = self.client.get(reverse('cargas_crear'))
+		self.assertEqual(response.status_code, 302)
+		self.assertIn('nueva=1', response.url)
+
+	def test_listado_muestra_modal_nueva_y_columna_id(self):
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		response = self.client.get(reverse('cargas_list'), {'nueva': '1'})
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'modalNuevaCarga')
+		self.assertContains(response, 'Crear cliente')
+		self.assertContains(response, '>ID</th>')
+		self.assertTrue(response.context.get('abrir_modal_nueva'))
+
 	def test_listado_filtra_por_proyecto(self):
 		crear_carga(
 			self.admin,
@@ -381,6 +411,5 @@ class CargasAdministrativasTests(TestCase):
 		self.assertNotContains(resp, 'Otra carga')
 		self.assertContains(resp, 'name="proyecto"')
 		self.assertContains(resp, 'Todos los proyectos')
-		# Columna dedicada Proyecto en la tabla
 		content = resp.content.decode()
 		self.assertIn('>Proyecto</th>', content)

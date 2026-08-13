@@ -1,15 +1,22 @@
 {% extends 'base.html' %}
 {% load custom_filters %}
 
-{% block title %}Carga #{{ carga.id }}{% endblock %}
+{% block title %}ID {{ carga.id }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-3">
   <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
     <div>
       <a href="{% url 'cargas_list' %}" class="small text-decoration-none">&larr; Volver al listado</a>
-      <h1 class="h3 mb-1">Carga #{{ carga.id }}</h1>
-      <p class="mb-0">{{ carga.titulo }}</p>
+      <h1 class="h3 mb-1">ID {{ carga.id }}</h1>
+      <p class="mb-0">
+        {% if carga.cliente %}
+        Cliente <a href="{% url 'cliente_historial' carga.cliente_id %}">{{ carga.cliente.numero_cliente }}</a>
+        {% if carga.cliente.customer_name %} — {{ carga.cliente.customer_name }}{% endif %}
+        {% else %}
+        {{ carga.titulo }}
+        {% endif %}
+      </p>
     </div>
     <div class="d-flex flex-wrap gap-2 align-items-center">
       {% badge_carga_estado carga.estado carga.get_estado_display %}

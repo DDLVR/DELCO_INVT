@@ -35,7 +35,9 @@
           </li>
         </ul>
       </div>
-      <a href="{% url 'cargas_crear' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nueva</a>
+      <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevaCarga">
+        <i class="bi bi-plus-lg"></i> Nueva
+      </button>
       <form method="post" action="{% url 'cargas_generar_pendientes' %}">
         {% csrf_token %}
         <button type="submit" class="btn btn-warning text-dark"><i class="bi bi-lightning"></i> Generar desde pendientes</button>
@@ -129,8 +131,8 @@
             <th style="width:2rem;">
               <input type="checkbox" class="form-check-input" id="checkAllCargas" title="Seleccionar todas">
             </th>
-            <th>#</th>
-            <th>Título</th>
+            <th>ID</th>
+            <th>Título (Nº cliente)</th>
             <th>Proyecto</th>
             <th class="d-none d-md-table-cell">Tipo</th>
             <th>Prioridad</th>
@@ -460,6 +462,139 @@
       }).catch(function() {});
     });
   }
+})();
+</script>
+
+{% include "cargas/partials/modal_nueva_carga.html" %}
+
+<script>
+(function () {
+  window.delcoCargaOnPickCliente = function (item) {
+    var titulo = document.getElementById('nuevaCargaTitulo');
+    var hint = document.getElementById('nuevaCargaClienteHint');
+    var btnCrear = document.getElementById('btnCrearClienteDesdeCarga');
+    var numero = (item && (item.numero_cliente || item.label)) || '';
+    if (titulo) titulo.value = (item && item.numero_cliente) ? item.numero_cliente : '';
+    if (hint) {
+      hint.textContent = item
+        ? ('Cliente seleccionado: ' + (item.numero_cliente || '') + (item.customer_name ? ' · ' + item.customer_name : ''))
+        : 'Selecciona un cliente de la base de datos.';
+      hint.className = 'small text-success';
+    }
+    if (btnCrear) btnCrear.classList.add('d-none');
+  };
+
+  var searchInput = document.getElementById('nuevaCargaClienteSearch');
+  var btnCrear = document.getElementById('btnCrearClienteDesdeCarga');
+  var form = document.getElementById('formNuevaCarga');
+  var feedback = document.getElementById('nuevaCargaFeedback');
+  var clienteId = document.getElementById('nuevaCargaClienteId');
+  var titulo = document.getElementById('nuevaCargaTitulo');
+  var crearUrlBase = "{% url 'cliente_crear' %}";
+
+  function showCrearClienteBtn(q) {
+    if (!btnCrear) return;
+    var query = (q || '').trim();
+    if (!query) {
+      btnCrear.classList.add('d-none');
+      return;
+    }
+    btnCrear.href = crearUrlBase + '?numero_cliente=' + encodeURIComponent(query);
+    btnCrear.classList.remove('d-none');
+  }
+
+  if (searchInput) {
+    searchInput.addEventListener('input', function () {
+      if (clienteId) clienteId.value = '';
+      if (titulo) titulo.value = '';
+      if (feedback) feedback.className = 'alert d-none mt-3 mb-0';
+      var hint = document.getElementById('nuevaCargaClienteHint');
+      if (hint) {
+        hint.textContent = 'Selecciona un cliente de la base de datos.';
+        hint.className = 'small text-muted';
+      }
+      var q = (searchInput.value || '').trim();
+      if (q.length >= 2) showCrearClienteBtn(q);
+      else if (btnCrear) btnCrear.classList.add('d-none');
+    });
+
+    // Si el autocomplete muestra "Sin resultados", el botón ya está visible por input.
+    searchInput.addEventListener('delco-ac-pick', function (ev) {
+      window.delcoCargaOnPickCliente(ev.detail || {});
+    });
+  }
+
+  // Observar resultados vacíos del autocomplete para enfatizar el botón crear
+  var resultsBox = document.querySelector('#modalNuevaCarga .delco-ac-results');
+  if (resultsBox && typeof MutationObserver !== 'undefined') {
+    var obs = new MutationObserver(function () {
+      var empty = resultsBox.textContent && resultsBox.textContent.indexOf('Sin resultados') !== -1;
+      var q = (searchInput && searchInput.value || '').trim();
+      if (empty && q.length >= 2 && !clienteId.value) showCrearClienteBtn(q);
+    });
+    obs.observe(resultsBox, { childList: true, subtree: true });
+  }
+
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!clienteId || !clienteId.value) {
+        if (feedback) {
+          feedback.className = 'alert alert-warning mt-3 mb-0';
+          feedback.textContent = 'Debes seleccionar un cliente de la lista. Si no existe, usa «Crear cliente».';
+        }
+        showCrearClienteBtn(searchInput && searchInput.value);
+        return;
+      }
+      var btn = document.getElementById('btnSubmitNuevaCarga');
+      if (btn) {
+        btn.disabled = true;
+        btn.dataset.originalText = btn.innerHTML;
+        btn.innerHTML = 'Creando…';
+      }
+      var fd = new FormData(form);
+      fetch(form.action, {
+        method: 'POST',
+        body: fd,
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+      })
+        .then(function (r) { return r.json().then(function (data) { return { ok: r.ok, data: data }; }); })
+        .then(function (res) {
+          if (res.ok && res.data && res.data.success) {
+            if (window.showToast) showToast(res.data.message || 'Creada.', 'success');
+            window.location.href = res.data.redirect || "{% url 'cargas_list' %}";
+            return;
+          }
+          var msg = (res.data && res.data.message) || 'No se pudo crear.';
+          if (feedback) {
+            feedback.className = 'alert alert-danger mt-3 mb-0';
+            feedback.textContent = msg;
+          }
+          if (window.showToast) showToast(msg, 'danger');
+        })
+        .catch(function () {
+          if (feedback) {
+            feedback.className = 'alert alert-danger mt-3 mb-0';
+            feedback.textContent = 'Error de conexión.';
+          }
+        })
+        .finally(function () {
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = btn.dataset.originalText || 'Crear';
+          }
+        });
+    });
+  }
+
+  {% if abrir_modal_nueva %}
+  document.addEventListener('DOMContentLoaded', function () {
+    var el = document.getElementById('modalNuevaCarga');
+    if (el && typeof bootstrap !== 'undefined') {
+      bootstrap.Modal.getOrCreateInstance(el).show();
+    }
+  });
+  {% endif %}
 })();
 </script>
 {% endblock %}
