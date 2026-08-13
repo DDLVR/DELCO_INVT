@@ -142,10 +142,19 @@
                   + Col
                 </button>
               </div>
+              <div class="input-group input-group-sm" style="width:auto;">
+                <label class="input-group-text" for="selCargaObsTableBorder">Borde</label>
+                <select id="selCargaObsTableBorder" class="form-select form-select-sm" title="Grosor de líneas de la tabla">
+                  <option value="">Grosor…</option>
+                  <option value="normal">Fino</option>
+                  <option value="medium">Medio</option>
+                  <option value="thick">Grueso</option>
+                </select>
+              </div>
               <a href="{% url 'cargas_pdf' carga.id %}" class="btn btn-sm btn-outline-danger" title="Descargar PDF">
                 <i class="bi bi-file-earmark-pdf"></i> PDF
               </a>
-              <small class="text-muted align-self-center ms-1">Selecciona texto y aplica formato · tablas con cuadrícula</small>
+              <small class="text-muted align-self-center ms-1">Selecciona texto · tablas con cuadrícula y borde</small>
             </div>
             <div id="observacionesCargaEditor"
                  class="form-control delco-obs-editor delco-obs-editor--doc mb-2"
@@ -335,6 +344,12 @@
                 <option value="16px">16</option>
                 <option value="18px">18</option>
                 <option value="22px">22</option>
+              </select>
+              <select id="selCompletarObsTableBorder" class="form-select form-select-sm" title="Grosor de borde" style="width:auto;">
+                <option value="">Borde…</option>
+                <option value="normal">Fino</option>
+                <option value="medium">Medio</option>
+                <option value="thick">Grueso</option>
               </select>
             </div>
             <button type="submit" class="btn btn-success w-100"><i class="bi bi-check2"></i> Completar</button>
@@ -532,6 +547,25 @@
     });
   }
 
+  function setTableBorderWeight(editor, weight) {
+    editor.focus();
+    var sel = window.getSelection();
+    var node = sel && sel.rangeCount ? sel.getRangeAt(0).commonAncestorContainer : null;
+    var table = findClosestTable(node, editor) || editor.querySelector('table.delco-obs-table') || editor.querySelector('table');
+    if (!table) {
+      insertTableAtCursor(editor, 3, 3);
+      table = editor.querySelector('table');
+    }
+    if (!table) return;
+    table.classList.add('delco-obs-table');
+    table.classList.remove('delco-obs-table--medium', 'delco-obs-table--thick');
+    if (weight === 'medium') {
+      table.classList.add('delco-obs-table--medium');
+    } else if (weight === 'thick') {
+      table.classList.add('delco-obs-table--thick');
+    }
+  }
+
   function wireObsEditor(opts) {
     var form = document.getElementById(opts.formId);
     var editor = document.getElementById(opts.editorId);
@@ -557,6 +591,12 @@
         if (!t.classList.contains('delco-obs-table')) {
           t.classList.add('delco-obs-table');
         }
+        // Solo conservar clases de borde conocidas
+        var keepMedium = t.classList.contains('delco-obs-table--medium');
+        var keepThick = t.classList.contains('delco-obs-table--thick');
+        t.className = 'delco-obs-table';
+        if (keepThick) t.classList.add('delco-obs-table--thick');
+        else if (keepMedium) t.classList.add('delco-obs-table--medium');
       });
       // Convertir font size de execCommand a span px
       editor.querySelectorAll('font[size]').forEach(function (font) {
@@ -630,6 +670,16 @@
       });
     }
 
+    var borderSel = opts.tableBorderId ? document.getElementById(opts.tableBorderId) : null;
+    if (borderSel) {
+      borderSel.addEventListener('change', function () {
+        var weight = borderSel.value;
+        if (!weight) return;
+        setTableBorderWeight(editor, weight);
+        borderSel.value = '';
+      });
+    }
+
     form.addEventListener('submit', function () {
       normalizeMarks();
       hidden.value = editor.innerHTML;
@@ -649,7 +699,8 @@
     tableBtnId: 'btnCargaObsTable',
     addRowBtnId: 'btnCargaObsAddRow',
     addColBtnId: 'btnCargaObsAddCol',
-    fontSizeId: 'selCargaObsFontSize'
+    fontSizeId: 'selCargaObsFontSize',
+    tableBorderId: 'selCargaObsTableBorder'
   });
   wireObsEditor({
     formId: 'formCompletarCarga',
@@ -659,7 +710,8 @@
     italicBtnId: 'btnCompletarObsItalic',
     highlightBtnId: 'btnCompletarObsHighlight',
     tableBtnId: 'btnCompletarObsTable',
-    fontSizeId: 'selCompletarObsFontSize'
+    fontSizeId: 'selCompletarObsFontSize',
+    tableBorderId: 'selCompletarObsTableBorder'
   });
 })();
 </script>
