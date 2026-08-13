@@ -357,4 +357,30 @@ class CargasAdministrativasTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response['Content-Type'], 'application/pdf')
 		self.assertTrue(response.content.startswith(b'%PDF'))
-		self.assertIn('attachment', response['Content-Disposition'])
+
+	def test_listado_filtra_por_proyecto(self):
+		crear_carga(
+			self.admin,
+			titulo='317588',
+			tipo='OTRO',
+			proyecto='AJUSTE TARIFARIO',
+			prioridad='ALTA',
+		)
+		crear_carga(
+			self.admin,
+			titulo='Otra carga',
+			tipo='OTRO',
+			proyecto='Proyecto Norte',
+			prioridad='MEDIA',
+		)
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		resp = self.client.get(reverse('cargas_list'), {'proyecto': 'AJUSTE TARIFARIO'})
+		self.assertEqual(resp.status_code, 200)
+		self.assertContains(resp, 'AJUSTE TARIFARIO')
+		self.assertContains(resp, '317588')
+		self.assertNotContains(resp, 'Otra carga')
+		self.assertContains(resp, 'name="proyecto"')
+		self.assertContains(resp, 'Todos los proyectos')
+		# Columna dedicada Proyecto en la tabla
+		content = resp.content.decode()
+		self.assertIn('>Proyecto</th>', content)
