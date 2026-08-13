@@ -57,13 +57,13 @@
       <strong class="small"><i class="bi bi-funnel"></i> Filtros</strong>
     </div>
     <div class="card-body py-2">
-  <form method="get" class="row g-2 align-items-end">
+  <form method="get" class="row g-2 align-items-end delco-form-row">
     {% if vista %}<input type="hidden" name="vista" value="{{ vista }}">{% endif %}
-    <div class="col-md-3 col-lg-2">
+    <div class="col-12 col-sm-6 col-md-3 col-lg-2">
       <label class="form-label small text-muted mb-0">Buscar</label>
       <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Título, cliente…">
     </div>
-    <div class="col-md-3 col-lg-3">
+    <div class="col-12 col-sm-6 col-md-3 col-lg-3">
       <label class="form-label small text-muted mb-0">Proyecto</label>
       <select name="proyecto" class="form-select" id="filtroProyectoCargas">
         <option value="">Todos los proyectos</option>
@@ -72,7 +72,7 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2 col-lg-2">
+    <div class="col-6 col-md-2 col-lg-2">
       <label class="form-label small text-muted mb-0">Estado</label>
       <select name="estado" class="form-select">
         <option value="">Estado</option>
@@ -81,7 +81,7 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2 col-lg-2">
+    <div class="col-6 col-md-2 col-lg-2">
       <label class="form-label small text-muted mb-0">Tipo</label>
       <select name="tipo" class="form-select">
         <option value="">Tipo</option>
@@ -90,7 +90,7 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2 col-lg-2">
+    <div class="col-12 col-sm-6 col-md-2 col-lg-2">
       <label class="form-label small text-muted mb-0">Asignado</label>
       <select name="asignado" class="form-select">
         <option value="">Asignado a</option>
@@ -100,7 +100,7 @@
         {% endfor %}
       </select>
     </div>
-    <div class="col-md-2 col-lg-1">
+    <div class="col-12 col-sm-6 col-md-2 col-lg-1">
       <button class="btn btn-primary w-100" type="submit"><i class="bi bi-funnel"></i> Filtrar</button>
     </div>
     {% if proyecto_filtro or estado_filtro or tipo_filtro or asignado_filtro or q %}
