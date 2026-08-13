@@ -50,7 +50,7 @@ def generar_pdf_carga_administrativa(carga) -> bytes:
         rightMargin=1.6 * cm,
         topMargin=1.4 * cm,
         bottomMargin=1.4 * cm,
-        title='Carga #{} — {}'.format(carga.id, (carga.titulo or '')[:60]),
+        title='ID {} — {}'.format(carga.id, (carga.titulo or '')[:60]),
     )
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
@@ -95,7 +95,7 @@ def generar_pdf_carga_administrativa(carga) -> bytes:
     story = []
     story.append(Paragraph('DELCO — Carga administrativa', title_style))
     story.append(Paragraph(
-        'Carga #{} · {} · {}'.format(
+        'ID {} · {} · {}'.format(
             carga.id,
             carga.get_estado_display(),
             carga.get_tipo_display(),
@@ -108,8 +108,8 @@ def generar_pdf_carga_administrativa(carga) -> bytes:
     creado = carga.creado_por.nombre_interno if carga.creado_por_id else '—'
 
     filas = [
-        [Paragraph('Identificación', label_style), Paragraph('Carga #{}'.format(carga.id), value_style)],
-        [Paragraph('Título', label_style), Paragraph(_esc(carga.titulo), value_style)],
+        [Paragraph('Identificación', label_style), Paragraph('ID {}'.format(carga.id), value_style)],
+        [Paragraph('Título (Nº cliente)', label_style), Paragraph(_esc(carga.titulo), value_style)],
         [Paragraph('Estado', label_style), Paragraph(_esc(carga.get_estado_display()), value_style)],
         [Paragraph('Tipo', label_style), Paragraph(_esc(carga.get_tipo_display()), value_style)],
         [Paragraph('Prioridad', label_style), Paragraph(_esc(carga.get_prioridad_display()), value_style)],
@@ -200,8 +200,8 @@ def generar_pdf_carga_administrativa(carga) -> bytes:
 def _pdf_minimo(carga) -> bytes:
     lines = [
         'DELCO - Carga administrativa',
-        'Carga #{}'.format(carga.id),
-        'Titulo: {}'.format(carga.titulo or ''),
+        'ID {}'.format(carga.id),
+        'Titulo (N cliente): {}'.format(carga.titulo or ''),
         'Estado: {}'.format(carga.get_estado_display()),
         'Tipo: {}'.format(carga.get_tipo_display()),
         'Asignado: {}'.format(getattr(carga, 'asignado_display', None) or ''),

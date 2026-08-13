@@ -30,7 +30,8 @@
             <div class="row">
               <div class="col-md-4 mb-3">
                 <label class="form-label fw-semibold">Numero de Cliente <span class="text-danger">*</span></label>
-                <input type="text" name="numero_cliente" class="form-control" required placeholder="Ej: 283448">
+                <input type="text" name="numero_cliente" class="form-control" required placeholder="Ej: 283448"
+                       value="{{ request.GET.numero_cliente|default:'' }}">
               </div>
               <div class="col-md-4 mb-3">
                 <label class="form-label fw-semibold">Sector <span class="text-danger">*</span></label>

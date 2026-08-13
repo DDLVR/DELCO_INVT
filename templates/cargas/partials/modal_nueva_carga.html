@@ -1,0 +1,91 @@
+{# Modal: nueva carga administrativa (popup). Título = Nº cliente. #}
+<div class="modal fade" id="modalNuevaCarga" tabindex="-1" aria-labelledby="modalNuevaCargaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalNuevaCargaLabel">
+          <i class="bi bi-plus-circle me-1"></i> Nueva OT administrativa
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form method="post" action="{% url 'cargas_crear' %}" id="formNuevaCarga">
+        {% csrf_token %}
+        <input type="hidden" name="cliente_id" id="nuevaCargaClienteId" value="">
+        <input type="hidden" name="titulo" id="nuevaCargaTitulo" value="">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Cliente (título = Nº cliente) <span class="text-danger">*</span></label>
+            <div class="delco-ac"
+                 data-ac-url="{{ delco_api.buscar_clientes|default:'/api/buscar-clientes/' }}"
+                 data-ac-hidden="#nuevaCargaClienteId"
+                 data-ac-min="2"
+                 data-ac-on-pick="delcoCargaOnPickCliente">
+              <input type="text" class="form-control delco-ac-input" id="nuevaCargaClienteSearch"
+                     placeholder="Buscar por Nº, nombre, comuna o dirección…" autocomplete="off" required>
+              <div class="delco-ac-results list-group shadow-sm d-none"></div>
+            </div>
+            <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+              <small class="text-muted" id="nuevaCargaClienteHint">Selecciona un cliente de la base de datos.</small>
+              <a href="{% url 'cliente_crear' %}"
+                 id="btnCrearClienteDesdeCarga"
+                 class="btn btn-sm btn-outline-success d-none"
+                 target="_blank" rel="noopener">
+                <i class="bi bi-person-plus"></i> Crear cliente
+              </a>
+            </div>
+          </div>
+
+          <div class="row g-2 mb-3">
+            <div class="col-md-6">
+              <label class="form-label">Tipo</label>
+              <select name="tipo" class="form-select">
+                {% for codigo, nombre in tipos %}
+                <option value="{{ codigo }}">{{ nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Prioridad</label>
+              <select name="prioridad" class="form-select">
+                {% for codigo, nombre in prioridades %}
+                <option value="{{ codigo }}" {% if codigo == 'MEDIA' %}selected{% endif %}>{{ nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Asignar a</label>
+            <select name="asignado_a" class="form-select">
+              <option value="">Sin asignar</option>
+              {% for u in administrativos %}
+              <option value="{{ u.id }}" {% if u.id == user.id %}selected{% endif %}>{{ u.nombre_interno }} ({{ u.get_rol_display }})</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Descripción</label>
+            <textarea name="descripcion" class="form-control" rows="3" placeholder="Qué hay que verificar o validar…"></textarea>
+          </div>
+
+          <div class="mb-0">
+            <label class="form-label">Proyecto / listado</label>
+            <input type="text" name="proyecto" class="form-control" maxlength="255"
+                   list="listaProyectosCargaModal" placeholder="Nombre del proyecto…">
+            <datalist id="listaProyectosCargaModal">
+              {% for p in proyectos_disponibles %}
+              <option value="{{ p }}">
+              {% endfor %}
+            </datalist>
+          </div>
+          <div id="nuevaCargaFeedback" class="alert d-none mt-3 mb-0" role="alert"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btnSubmitNuevaCarga">Crear</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

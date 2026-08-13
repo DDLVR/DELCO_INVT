@@ -398,6 +398,7 @@ def cargas_list_view(request):
         'cargas': page.object_list,
         'estados': CargaAdministrativa.ESTADO_CHOICES,
         'tipos': CargaAdministrativa.TIPO_CHOICES,
+        'prioridades': CargaAdministrativa.PRIORIDAD_CHOICES,
         'administrativos': _administrativos_qs(),
         'proyectos_disponibles': _proyectos_disponibles_cargas(),
         'estado_filtro': estado,
@@ -408,6 +409,7 @@ def cargas_list_view(request):
         'q': q,
         'query_string': params.urlencode(),
         'contadores': contadores_cargas(request.user),
+        'abrir_modal_nueva': (request.GET.get('nueva') or '') == '1',
     })
 
 
@@ -442,57 +444,74 @@ def cargas_exportar_view(request):
 @login_required
 @admin_or_administrativo
 def cargas_crear_view(request):
-    if request.method == 'POST':
-        titulo = (request.POST.get('titulo') or '').strip()
-        if not titulo:
-            messages.error(request, 'El título es obligatorio.')
-            return redirect('cargas_crear')
+    """
+    Crear OT administrativa.
+    - GET: redirige al listado abriendo el popup (?nueva=1).
+    - POST: título = número de cliente (obligatorio desde padrón); no inventa título libre.
+    """
+    from clientes.models import Cliente
 
-        asignado_id = (request.POST.get('asignado_a') or '').strip()
-        asignado = None
-        if asignado_id.isdigit():
-            asignado = _administrativos_qs().filter(pk=int(asignado_id)).first()
-
-        carga = crear_carga(
-            request.user,
-            titulo=titulo,
-            tipo=(request.POST.get('tipo') or 'VERIFICACION').strip(),
-            descripcion=(request.POST.get('descripcion') or '').strip(),
-            prioridad=(request.POST.get('prioridad') or 'MEDIA').strip(),
-            asignado_a=asignado,
-            proyecto=(request.POST.get('proyecto') or '').strip(),
-            url_referencia=(request.POST.get('url_referencia') or '').strip(),
+    def _quiere_json():
+        return (
+            request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            or 'application/json' in (request.headers.get('Accept') or '')
         )
-        messages.success(request, f'Carga #{carga.pk} creada.')
-        return redirect('cargas_detalle', pk=carga.pk)
 
-    proyectos_disponibles = list(
-        CargaAdministrativa.objects.filter(eliminado=False)
-        .exclude(proyecto='')
-        .values_list('proyecto', flat=True)
-        .distinct()
-        .order_by('proyecto')[:80]
-    )
-    # Complementar con proyectos usados en OT
-    from ordenes_trabajo.models import OrdenTrabajo
-    ot_proyectos = (
-        OrdenTrabajo.objects.filter(eliminado=False)
-        .exclude(proyecto_carga_administrativa='')
-        .values_list('proyecto_carga_administrativa', flat=True)
-        .distinct()
-        .order_by('proyecto_carga_administrativa')[:80]
-    )
-    for p in ot_proyectos:
-        if p and p not in proyectos_disponibles:
-            proyectos_disponibles.append(p)
-    proyectos_disponibles = sorted(set(proyectos_disponibles))
+    if request.method != 'POST':
+        return redirect(reverse('cargas_list') + '?nueva=1')
 
-    return render(request, 'cargas/crear.html', {
-        'tipos': CargaAdministrativa.TIPO_CHOICES,
-        'prioridades': CargaAdministrativa.PRIORIDAD_CHOICES,
-        'administrativos': _administrativos_qs(),
-        'proyectos_disponibles': proyectos_disponibles,
-    })
+    cliente_id = (request.POST.get('cliente_id') or '').strip()
+    cliente = None
+    if cliente_id.isdigit():
+        cliente = Cliente.objects.filter(pk=int(cliente_id), activo=True).first()
+
+    if not cliente:
+        # Fallback: título enviado como nº cliente (compat)
+        numero = (request.POST.get('titulo') or request.POST.get('numero_cliente') or '').strip()
+        if numero:
+            cliente = Cliente.objects.filter(numero_cliente__iexact=numero, activo=True).first()
+
+    if not cliente:
+        msg = 'Debes seleccionar un cliente existente de la base de datos. Si no aparece, créalo primero.'
+        if _quiere_json():
+            return JsonResponse({'success': False, 'message': msg}, status=400)
+        messages.error(request, msg)
+        return redirect(reverse('cargas_list') + '?nueva=1')
+
+    titulo = (cliente.numero_cliente or '').strip()
+    if not titulo:
+        msg = 'El cliente seleccionado no tiene número de cliente válido.'
+        if _quiere_json():
+            return JsonResponse({'success': False, 'message': msg}, status=400)
+        messages.error(request, msg)
+        return redirect(reverse('cargas_list') + '?nueva=1')
+
+    asignado_id = (request.POST.get('asignado_a') or '').strip()
+    asignado = None
+    if asignado_id.isdigit():
+        asignado = _administrativos_qs().filter(pk=int(asignado_id)).first()
+
+    carga = crear_carga(
+        request.user,
+        titulo=titulo[:200],
+        tipo=(request.POST.get('tipo') or 'VERIFICACION').strip(),
+        descripcion=(request.POST.get('descripcion') or '').strip(),
+        prioridad=(request.POST.get('prioridad') or 'MEDIA').strip(),
+        asignado_a=asignado,
+        cliente=cliente,
+        proyecto=(request.POST.get('proyecto') or '').strip(),
+        url_referencia=(request.POST.get('url_referencia') or '').strip(),
+    )
+    ok_msg = f'ID {carga.pk} creada · cliente {titulo}.'
+    if _quiere_json():
+        return JsonResponse({
+            'success': True,
+            'message': ok_msg,
+            'id': carga.pk,
+            'redirect': reverse('cargas_detalle', kwargs={'pk': carga.pk}),
+        })
+    messages.success(request, ok_msg)
+    return redirect('cargas_detalle', pk=carga.pk)
 
 
 @login_required

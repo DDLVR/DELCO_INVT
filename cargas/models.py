@@ -122,7 +122,7 @@ class CargaAdministrativa(models.Model):
         ]
 
     def __str__(self):
-        return f'Carga #{self.pk} — {self.titulo}'
+        return f'ID {self.pk} — {self.titulo}'
 
     @property
     def abierta(self) -> bool:
