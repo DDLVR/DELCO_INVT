@@ -3909,6 +3909,8 @@ def cliente_historial_view(request, pk):
 
     from cargas.models import CargaAdministrativa, AdjuntoCarga
     from django.db.models import Prefetch
+    from inventario.models import Medidor, SimCard, Modem
+
     cargas_admin = list(
         CargaAdministrativa.objects.filter(
             eliminado=False,
@@ -3926,6 +3928,72 @@ def cliente_historial_view(request, pk):
         .order_by('-fecha_creacion')[:50]
     )
 
+    medidores_asociados = list(
+        Medidor.objects.filter(cliente=cliente, eliminado=False)
+        .select_related('estado_inventario', 'ubicacion_actual', 'en_custodia_de')
+        .order_by('serie')[:100]
+    )
+    simcards_asociadas = list(
+        SimCard.objects.filter(cliente=cliente, eliminado=False)
+        .select_related('estado_inventario', 'ubicacion_actual')
+        .order_by('imei')[:100]
+    )
+    modems_asociados = list(
+        Modem.objects.filter(cliente=cliente, eliminado=False)
+        .select_related('estado_inventario', 'ubicacion_actual')
+        .order_by('serie')[:100]
+    )
+    equipos_asociados = []
+    for m in medidores_asociados:
+        ubic = m.ubicacion_actual
+        equipos_asociados.append({
+            'tipo': 'Medidor',
+            'marca': m.marca or '—',
+            'modelo': m.tipo_medidor or '—',
+            'identificador': m.serie,
+            'estado': m.estado_inventario.nombre if m.estado_inventario_id else '—',
+            'ubicacion': (
+                (ubic.direccion or ubic.nombre) if ubic else '—'
+            ),
+            'proyecto': m.proyecto or '—',
+        })
+    for s in simcards_asociadas:
+        ubic = s.ubicacion_actual
+        equipos_asociados.append({
+            'tipo': 'SIM',
+            'marca': s.operador or '—',
+            'modelo': '—',
+            'identificador': s.imei or s.abonado or f'SIM-{s.pk}',
+            'estado': s.estado_inventario.nombre if s.estado_inventario_id else '—',
+            'ubicacion': (ubic.direccion or ubic.nombre) if ubic else '—',
+            'proyecto': s.proyecto or '—',
+        })
+    for mo in modems_asociados:
+        ubic = mo.ubicacion_actual
+        equipos_asociados.append({
+            'tipo': 'Módem',
+            'marca': mo.marca or '—',
+            'modelo': mo.modelo or '—',
+            'identificador': mo.serie,
+            'estado': mo.estado_inventario.nombre if mo.estado_inventario_id else '—',
+            'ubicacion': (ubic.direccion or ubic.nombre) if ubic else '—',
+            'proyecto': mo.proyecto or '—',
+        })
+
+    from catalogos.models import Proyecto as ProyectoCatalogo
+    proyectos_disponibles = sorted({
+        (p or '').strip()
+        for p in list(
+            Cliente.objects.filter(activo=True)
+            .exclude(proyecto__isnull=True)
+            .exclude(proyecto='')
+            .values_list('proyecto', flat=True)
+        ) + list(
+            ProyectoCatalogo.objects.filter(activo=True).values_list('nombre', flat=True)
+        )
+        if (p or '').strip() and not es_sin_proyecto(p)
+    }, key=lambda x: x.casefold())
+
     context = {
         'cliente': cliente,
         'ordenes': ordenes,
@@ -3939,16 +4007,10 @@ def cliente_historial_view(request, pk):
         'auditoria': auditoria,
         'cargas_admin': cargas_admin,
         'proyectos_historial': proyectos_historial,
+        'equipos_asociados': equipos_asociados,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'estado_restriccion_choices': _cliente_estado_restriccion_choices(),
-        'proyectos_disponibles': sorted({
-            (p or '').strip()
-            for p in Cliente.objects.filter(activo=True)
-            .exclude(proyecto__isnull=True)
-            .exclude(proyecto='')
-            .values_list('proyecto', flat=True)
-            if (p or '').strip() and not es_sin_proyecto(p)
-        }, key=lambda x: x.casefold()),
+        'proyectos_disponibles': proyectos_disponibles,
     }
     return render(request, 'clientes/historial.html', context)
 

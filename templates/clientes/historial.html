@@ -243,6 +243,50 @@
   </div>
   {% endif %}
 
+  {# ── Equipos asociados (mismo cliente, distintas ubicaciones/series) ── #}
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-header bg-body d-flex justify-content-between align-items-center">
+      <strong><i class="bi bi-cpu me-1"></i> Equipos asociados</strong>
+      <span class="text-muted small">Un cliente puede tener varios medidores/SIM/módems sin duplicar la ficha</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover table-sm mb-0 align-middle">
+          <thead class="table-delco">
+            <tr>
+              <th>Tipo</th>
+              <th>Marca</th>
+              <th>Modelo / tipo</th>
+              <th>Número / ID</th>
+              <th>Ubicación</th>
+              <th>Proyecto equipo</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for eq in equipos_asociados %}
+            <tr>
+              <td><span class="badge bg-secondary">{{ eq.tipo }}</span></td>
+              <td>{{ eq.marca }}</td>
+              <td>{{ eq.modelo }}</td>
+              <td><strong>{{ eq.identificador }}</strong></td>
+              <td class="small">{{ eq.ubicacion }}</td>
+              <td class="small">{{ eq.proyecto }}</td>
+              <td>{{ eq.estado }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="7" class="text-center text-muted py-3">
+                Sin equipos vinculados por FK. Si hay serie en la ficha, asóciala desde Inventario al mismo cliente.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   {# ── Órdenes de trabajo ── #}
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-body d-flex justify-content-between align-items-center">
@@ -255,6 +299,7 @@
           <thead class="table-delco">
             <tr>
               <th>OT</th>
+              <th>Proyecto</th>
               <th>Estado</th>
               <th>Tipo</th>
               <th>Técnico</th>
@@ -267,6 +312,15 @@
             {% for orden in ordenes %}
             <tr>
               <td><strong>#{{ orden.id }}</strong></td>
+              <td class="small">
+                {% if orden.proyecto_carga_administrativa %}
+                  {{ orden.proyecto_carga_administrativa }}
+                {% elif cliente.proyecto and not cliente.proyecto|es_sin_proyecto %}
+                  {{ cliente.proyecto }}
+                {% else %}
+                  <span class="text-muted">—</span>
+                {% endif %}
+              </td>
               <td>
                 {% badge_ot orden.estado orden.get_estado_display %}
               </td>
@@ -284,7 +338,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="7" class="text-center text-muted py-4">Este cliente no tiene órdenes de trabajo registradas.</td>
+              <td colspan="8" class="text-center text-muted py-4">Este cliente no tiene órdenes de trabajo registradas.</td>
             </tr>
             {% endfor %}
           </tbody>
