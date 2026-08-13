@@ -1575,3 +1575,182 @@ td.cliente-numero-duplicado strong {
 [data-bs-theme="dark"] .delco-obs-view table.delco-obs-table th {
   background: rgba(13, 110, 253, 0.22);
 }
+
+/* --- Adjuntos / evidencias: tarjetas y subida responsive --- */
+.delco-adjunto-card {
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+  padding: 0.65rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.delco-adjunto-thumb-wrap {
+  display: block;
+  width: 100%;
+  height: 140px;
+  border-radius: 0.35rem;
+  overflow: hidden;
+  background: var(--bs-secondary-bg);
+  margin-bottom: 0.5rem;
+  text-decoration: none;
+}
+
+.delco-adjunto-thumb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--bs-secondary-bg);
+}
+
+.delco-adjunto-pdf {
+  height: 140px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  text-decoration: none;
+  border-radius: 0.35rem;
+  background: var(--bs-secondary-bg);
+  margin-bottom: 0.5rem;
+  color: inherit;
+}
+
+.delco-adjunto-pdf:hover {
+  color: inherit;
+  opacity: 0.9;
+}
+
+.delco-adjunto-meta {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.delco-adjunto-meta .delco-adjunto-name {
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.delco-adjunto-meta .delco-adjunto-sub {
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color);
+  word-break: break-word;
+}
+
+.delco-adjunto-card details {
+  margin-top: 0.5rem;
+}
+
+.delco-adjunto-card details > summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.delco-adjunto-card .form-control,
+.delco-adjunto-card .form-select,
+.delco-upload-form .form-control,
+.delco-upload-form .form-select {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Inputs file nativos desbordan en columnas estrechas */
+input[type="file"].form-control,
+.form-control[type="file"] {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.delco-upload-form {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.5rem;
+  padding: 0.85rem;
+  background: var(--bs-tertiary-bg);
+}
+
+.delco-upload-form .row > [class*="col"] {
+  min-width: 0;
+}
+
+.delco-file-actions {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+@media (min-width: 576px) {
+  .delco-file-actions {
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .delco-file-actions > .form-control {
+    flex: 1 1 auto;
+  }
+  .delco-file-actions > .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+}
+
+.delco-papelera-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  padding: 0.5rem 0;
+}
+
+.delco-papelera-item .delco-papelera-name {
+  min-width: 0;
+  flex: 1 1 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Toolbar de observaciones: compacta en móvil */
+@media (max-width: 575.98px) {
+  .delco-obs-toolbar > small {
+    display: none;
+  }
+
+  .delco-obs-toolbar .btn-group .btn {
+    padding-left: 0.45rem;
+    padding-right: 0.45rem;
+  }
+
+  .delco-obs-toolbar .input-group {
+    max-width: 100%;
+  }
+
+  .delco-adjunto-thumb-wrap,
+  .delco-adjunto-pdf {
+    height: 160px;
+  }
+}
+
+/* Filtros / formularios en filas: evita overflow horizontal */
+.delco-form-row > [class*="col"] {
+  min-width: 0;
+}
+
+.modal-dialog .delco-ac {
+  max-width: 100%;
+}
+
+.modal-dialog .delco-ac-input {
+  max-width: 100%;
+}

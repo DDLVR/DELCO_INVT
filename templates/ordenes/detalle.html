@@ -620,21 +620,23 @@
                 </div>
                 <div class="card-body">
                     {% if puede_editar or es_tecnico_responsable %}
-                    <form id="formSubirAdjunto" method="post" enctype="multipart/form-data" class="mb-3">
+                    <form id="formSubirAdjunto" method="post" enctype="multipart/form-data" class="mb-3 delco-upload-form">
                         {% csrf_token %}
-                        <div class="row g-2">
-                            <div class="col-md-4">
-                                <select name="tipo" class="form-select">
+                        <div class="row g-2 delco-form-row align-items-end">
+                            <div class="col-12 col-md-4">
+                                <label class="form-label small mb-0">Tipo</label>
+                                <select name="tipo" class="form-select form-select-sm">
                                     <option value="FOTO">📷 Fotografía</option>
                                     <option value="PDF">📄 PDF</option>
                                     <option value="OTRO">📎 Otro</option>
                                 </select>
                             </div>
-                            <div class="col-md-6">
-                                <input type="file" name="archivo" class="form-control" accept="image/*,.pdf,.jpg,.jpeg,.png,.webp,.gif" required>
+                            <div class="col-12 col-md-5">
+                                <label class="form-label small mb-0">Archivo</label>
+                                <input type="file" name="archivo" class="form-control form-control-sm" accept="image/*,.pdf,.jpg,.jpeg,.png,.webp,.gif" required>
                             </div>
-                            <div class="col-md-2">
-                                <button type="submit" class="btn btn-primary w-100">
+                            <div class="col-12 col-md-3">
+                                <button type="submit" class="btn btn-sm btn-primary w-100">
                                     <i class="bi bi-upload"></i> Subir
                                 </button>
                             </div>
@@ -645,37 +647,34 @@
                     {% if adjuntos %}
                         <div class="row g-3">
                             {% for adjunto in adjuntos %}
-                            <div class="col-sm-6 col-lg-4">
-                                <div class="card h-100 delco-panel-card border overflow-hidden">
+                            <div class="col-12 col-sm-6 col-lg-4">
+                                <div class="delco-adjunto-card">
                                     {% if adjunto.es_imagen and adjunto.url_vista %}
-                                    <a href="{{ adjunto.url_vista }}" target="_blank" rel="noopener" class="d-block bg-dark bg-opacity-10 text-center" title="Ver imagen completa">
+                                    <a href="{{ adjunto.url_vista }}" target="_blank" rel="noopener" class="delco-adjunto-thumb-wrap" title="Ver imagen completa">
                                         <img src="{{ adjunto.url_vista }}"
                                              alt="{{ adjunto.nombre_archivo }}"
-                                             class="w-100"
-                                             style="height:180px;object-fit:cover;display:block;"
+                                             class="delco-adjunto-thumb"
                                              loading="lazy"
-                                             onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=\'p-4 text-muted small\'>No se pudo cargar la imagen</div>');">
+                                             onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=\'p-3 text-muted small text-center\'>No se pudo cargar la imagen</div>');">
                                     </a>
                                     {% else %}
-                                    <div class="d-flex align-items-center justify-content-center bg-light" style="height:120px;">
+                                    <div class="delco-adjunto-pdf">
                                         {% if adjunto.tipo == 'PDF' or adjunto.tipo == 'FPT' %}
-                                        <i class="bi bi-file-earmark-pdf text-danger" style="font-size:2.5rem;"></i>
+                                        <i class="bi bi-file-earmark-pdf text-danger fs-1"></i>
                                         {% else %}
-                                        <i class="bi bi-file-earmark text-secondary" style="font-size:2.5rem;"></i>
+                                        <i class="bi bi-file-earmark text-secondary fs-1"></i>
                                         {% endif %}
                                     </div>
                                     {% endif %}
-                                    <div class="card-body py-2">
-                                        <p class="mb-1">
-                                            <strong>{{ adjunto.get_tipo_display }}</strong>
-                                        </p>
-                                        <p class="mb-1 small text-muted text-truncate" title="{{ adjunto.nombre_archivo }}">{{ adjunto.nombre_archivo }}</p>
-                                        <p class="mb-2 small text-muted">
+                                    <div class="delco-adjunto-meta">
+                                        <div class="fw-semibold small mb-1">{{ adjunto.get_tipo_display }}</div>
+                                        <div class="delco-adjunto-name" title="{{ adjunto.nombre_archivo }}">{{ adjunto.nombre_archivo }}</div>
+                                        <div class="delco-adjunto-sub mb-2">
                                             {{ adjunto.fecha_hora|date:"d/m/Y H:i" }}
                                             {% if adjunto.subido_por %}
                                             · {% firstof adjunto.subido_por.nombre_interno adjunto.subido_por.get_full_name adjunto.subido_por.rut %}
                                             {% endif %}
-                                        </p>
+                                        </div>
                                         {% if adjunto.url_vista %}
                                         <a href="{{ adjunto.url_vista }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary">
                                             {% if adjunto.es_imagen %}
@@ -752,7 +751,7 @@
                     {% endif %}
 
                     {% if puede_subir_respaldo_moreapp %}
-                    <div class="border rounded p-3 bg-light">
+                    <div class="delco-upload-form">
                         <p class="small mb-2 fw-semibold">
                             <i class="bi bi-cloud-upload"></i> Subir respaldo PDF de MoreApp
                         </p>
@@ -763,18 +762,18 @@
                         <form id="formSubirRespaldoMoreapp" enctype="multipart/form-data">
                             {% csrf_token %}
                             <input type="hidden" name="como_respaldo_moreapp" value="1">
-                            <div class="input-group input-group-sm">
-                                <input type="file" class="form-control" name="archivo" accept=".pdf,application/pdf" required>
-                                <button type="submit" class="btn btn-primary">Subir respaldo</button>
+                            <div class="delco-file-actions">
+                                <input type="file" class="form-control form-control-sm" name="archivo" accept=".pdf,application/pdf" required>
+                                <button type="submit" class="btn btn-primary btn-sm">Subir respaldo</button>
                             </div>
                         </form>
                         <hr class="my-3">
                         <p class="small mb-2 text-muted">También puede subir otro informe PDF del cliente (carga manual):</p>
                         <form id="formSubirInforme" enctype="multipart/form-data">
                             {% csrf_token %}
-                            <div class="input-group input-group-sm">
-                                <input type="file" class="form-control" name="archivo" accept=".pdf,application/pdf" required>
-                                <button type="submit" class="btn btn-outline-primary">Subir PDF</button>
+                            <div class="delco-file-actions">
+                                <input type="file" class="form-control form-control-sm" name="archivo" accept=".pdf,application/pdf" required>
+                                <button type="submit" class="btn btn-outline-primary btn-sm">Subir PDF</button>
                             </div>
                         </form>
                     </div>
@@ -823,7 +822,7 @@
                     {% endif %}
 
                     {% if puede_crear_comprobante %}
-                    <div class="border rounded p-3 bg-light">
+                    <div class="delco-upload-form">
                         <p class="small fw-semibold mb-2"><i class="bi bi-cloud-upload"></i> Subir PDF de cambio de medidor</p>
                         <form method="post" action="{% url 'orden_crear_comprobante_cambio' orden.id %}" enctype="multipart/form-data" id="formComprobanteCambio">
                             {% csrf_token %}

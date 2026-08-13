@@ -175,26 +175,32 @@
           {% if adjuntos %}
           <div class="row g-3 mb-3">
             {% for a in adjuntos %}
-            <div class="col-6 col-md-4 col-lg-3">
-              <div class="border rounded p-2 h-100 bg-light">
+            <div class="col-12 col-sm-6 col-xl-4">
+              <div class="delco-adjunto-card">
                 {% if a.es_imagen and a.url_vista %}
-                <a href="{{ a.url_vista }}" target="_blank" rel="noopener">
-                  <img src="{{ a.url_vista }}" alt="{{ a.nombre_archivo }}" class="img-fluid rounded mb-2" style="max-height:140px;width:100%;object-fit:cover;">
+                <a href="{{ a.url_vista }}" target="_blank" rel="noopener" class="delco-adjunto-thumb-wrap" title="Ver imagen completa">
+                  <img src="{{ a.url_vista }}"
+                       alt="{{ a.nombre_archivo }}"
+                       class="delco-adjunto-thumb"
+                       loading="lazy"
+                       onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=\'p-3 text-muted small text-center\'>No se pudo cargar la imagen</div>');">
                 </a>
                 {% else %}
-                <a href="{{ a.url_vista }}" target="_blank" rel="noopener" class="d-flex flex-column align-items-center justify-content-center text-decoration-none py-3 mb-2">
+                <a href="{{ a.url_vista }}" target="_blank" rel="noopener" class="delco-adjunto-pdf">
                   <i class="bi bi-file-earmark-pdf fs-1 text-danger"></i>
                   <span class="small text-muted">{{ a.get_tipo_display }}</span>
                 </a>
                 {% endif %}
-                <div class="small text-truncate" title="{{ a.nombre_archivo }}">{{ a.nombre_archivo }}</div>
-                <div class="text-muted" style="font-size:0.75rem;">
-                  {{ a.get_tipo_display }}
-                  {% if a.fecha_hora %} · {{ a.fecha_hora|date:"d/m/Y H:i" }}{% endif %}
+                <div class="delco-adjunto-meta">
+                  <div class="delco-adjunto-name" title="{{ a.nombre_archivo }}">{{ a.nombre_archivo }}</div>
+                  <div class="delco-adjunto-sub">
+                    {{ a.get_tipo_display }}
+                    {% if a.fecha_hora %} · {{ a.fecha_hora|date:"d/m/Y H:i" }}{% endif %}
+                  </div>
                 </div>
                 {% if puede_gestionar_adjuntos %}
                 <details class="mt-2">
-                  <summary class="small text-primary" style="cursor:pointer;">Editar / papelera</summary>
+                  <summary class="small text-primary">Editar / papelera</summary>
                   <form method="post" enctype="multipart/form-data" class="mt-2">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="reemplazar_adjunto">
@@ -227,11 +233,11 @@
           <p class="text-muted small mb-3">Sin adjuntos. Puedes subir capturas del sistema o el PDF MoreApp.</p>
           {% endif %}
 
-          <form method="post" enctype="multipart/form-data" class="border rounded p-3 bg-body-tertiary">
+          <form method="post" enctype="multipart/form-data" class="delco-upload-form">
             {% csrf_token %}
             <input type="hidden" name="accion" value="subir_adjunto">
-            <div class="row g-2 align-items-end">
-              <div class="col-md-4">
+            <div class="row g-2 align-items-end delco-form-row">
+              <div class="col-12 col-md-4">
                 <label class="form-label small mb-0">Tipo</label>
                 <select name="tipo" class="form-select form-select-sm">
                   {% for value, label in tipos_adjunto %}
@@ -239,11 +245,11 @@
                   {% endfor %}
                 </select>
               </div>
-              <div class="col-md-5">
+              <div class="col-12 col-md-5">
                 <label class="form-label small mb-0">Archivo</label>
                 <input type="file" name="archivo" class="form-control form-control-sm" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.pdf,image/*,application/pdf" required>
               </div>
-              <div class="col-md-3">
+              <div class="col-12 col-md-3">
                 <button type="submit" class="btn btn-sm btn-primary w-100">
                   <i class="bi bi-upload"></i> Subir
                 </button>
@@ -257,13 +263,13 @@
             <p class="small fw-semibold mb-2"><i class="bi bi-recycle"></i> Papelera ({{ adjuntos_papelera|length }})</p>
             <ul class="list-unstyled mb-0 small">
               {% for a in adjuntos_papelera %}
-              <li class="d-flex flex-wrap align-items-center justify-content-between gap-2 border-bottom py-2">
-                <span>
+              <li class="delco-papelera-item">
+                <span class="delco-papelera-name" title="{{ a.nombre_archivo }}">
                   <strong>{{ a.nombre_archivo }}</strong>
                   <span class="text-muted"> · {{ a.get_tipo_display }}</span>
                   {% if a.fecha_eliminacion %} · {{ a.fecha_eliminacion|date:"d/m/Y H:i" }}{% endif %}
                 </span>
-                <span class="d-flex gap-1">
+                <span class="d-flex flex-wrap gap-1">
                   <form method="post">
                     {% csrf_token %}
                     <input type="hidden" name="accion" value="recuperar_adjunto">

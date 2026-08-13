@@ -150,25 +150,31 @@
       {% if moreapp_fotos %}
       <div class="row g-3">
         {% for foto in moreapp_fotos %}
-        <div class="col-6 col-md-4 col-lg-3">
-          <div class="border rounded h-100 p-2">
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+          <div class="delco-adjunto-card">
             {% if foto.disponible and foto.media_url %}
-            <a href="{{ foto.media_url }}" target="_blank" rel="noopener" class="d-block mb-2">
-              <img src="{{ foto.media_url }}" alt="{{ foto.label }}" class="img-fluid rounded" style="max-height:140px;object-fit:cover;width:100%;">
+            <a href="{{ foto.media_url }}" target="_blank" rel="noopener" class="delco-adjunto-thumb-wrap">
+              <img src="{{ foto.media_url }}"
+                   alt="{{ foto.label }}"
+                   class="delco-adjunto-thumb"
+                   loading="lazy"
+                   onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=\'p-3 text-muted small text-center\'>No se pudo cargar</div>');">
             </a>
             {% elif foto.disponible and foto.url %}
-            <a href="{{ foto.url }}" target="_blank" rel="noopener" class="d-block mb-2 btn btn-sm btn-outline-primary w-100">
+            <a href="{{ foto.url }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-primary w-100 mb-2">
               Abrir foto
             </a>
             {% else %}
-            <div class="bg-light rounded d-flex align-items-center justify-content-center mb-2" style="height:100px;">
+            <div class="delco-adjunto-pdf">
               <span class="small text-muted text-center px-2">Referencia MoreApp<br>(archivo no en carpeta)</span>
             </div>
             {% endif %}
-            <div class="small fw-semibold">{{ foto.label }}</div>
-            {% if foto.nombre_archivo %}
-            <div class="small text-muted text-truncate" title="{{ foto.nombre_archivo }}">{{ foto.nombre_archivo }}</div>
-            {% endif %}
+            <div class="delco-adjunto-meta">
+              <div class="small fw-semibold">{{ foto.label }}</div>
+              {% if foto.nombre_archivo %}
+              <div class="delco-adjunto-name" title="{{ foto.nombre_archivo }}">{{ foto.nombre_archivo }}</div>
+              {% endif %}
+            </div>
           </div>
         </div>
         {% endfor %}
