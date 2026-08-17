@@ -6,7 +6,7 @@ import json
 import os
 import re
 import unicodedata
-from datetime import timedelta
+from datetime import date, datetime, time, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -54,15 +54,20 @@ for codigo, etiqueta in OrdenTrabajo.ESTADO_CHOICES:
     clave = ''.join(c for c in clave if unicodedata.category(c) != 'Mn')
     ESTADO_MAP[clave] = codigo
 
-# Columnas reconocidas al importar (compatible con el Excel que genera exportar_ordenes_excel)
+# Plantilla asignación de trabajo (técnicos) + columnas extra (proyecto y fechas).
+# Los alias antiguos se conservan para no romper Excel exportados antes.
 COLUMNAS_ORDEN = {
     'numero_cliente': (
         'numero_cliente', 'numero cliente', 'n cliente', 'n° cliente',
         'nº cliente', 'id cliente', 'nro cliente', 'nro. cliente',
+        'cliente',
     ),
+    'solicitud': ('solicitud', 'n solicitud', 'nro solicitud', 'numero solicitud', 'nº solicitud'),
     'titulo': ('titulo', 'título', 'titulo trabajo', 'asunto'),
     'descripcion': ('descripcion', 'descripción', 'detalle'),
-    'tipo_trabajo': ('tipo_trabajo', 'tipo trabajo', 'tipo', 'actividad', 'trabajo'),
+    'tipo_trabajo': (
+        'tipo_trabajo', 'tipo trabajo', 'tipo', 'actividad', 'trabajo',
+    ),
     'tecnico': (
         'tecnico', 'técnico', 'responsable', 'tecnico responsable',
         'tecnico_responsable', 'técnico responsable', 'asignado a',
@@ -77,7 +82,16 @@ COLUMNAS_ORDEN = {
     'id_orden': ('id orden', 'id_orden'),
     'direccion_cliente': ('direccion cliente', 'direccion_cliente', 'direccion'),
     'comuna': ('comuna',),
-    'fecha_trabajo': ('fecha', 'fecha trabajo', 'fecha asignacion', 'fecha asignación'),
+    'nombre_cliente': ('nombre', 'nombre cliente', 'customer name', 'customer_name'),
+    'medidor': ('medidor', 'serie medidor', 'medidor serie'),
+    'marca': ('marca', 'marca medidor'),
+    'ip': ('ip',),
+    'puerto': ('puerto', 'port'),
+    'modem': ('modem', 'serie modem', 'modem serie'),
+    'fecha_trabajo': (
+        'fecha', 'fecha trabajo', 'fecha asignacion', 'fecha asignación',
+        'fecha_asignacion',
+    ),
 }
 
 
@@ -138,6 +152,13 @@ def _valor_fila(valores, indice, campo, default=''):
     return _normalizar_texto(valores[pos])
 
 
+def _valor_fila_raw(valores, indice, campo, default=None):
+    pos = indice.get(campo)
+    if pos is None or pos >= len(valores):
+        return default
+    return valores[pos]
+
+
 def _resolver_tipo_trabajo(texto: str) -> str:
     clave = _normalizar_texto(texto).upper()
     if not clave:
@@ -168,6 +189,110 @@ def _parse_id_orden(valor) -> Optional[int]:
         return int(float(texto))
     except (ValueError, TypeError):
         return None
+
+
+def _parse_fecha_excel(valor) -> Optional[datetime]:
+    """Convierte celda Excel (datetime, date o texto dd/mm/aaaa) a datetime aware."""
+    if valor is None or valor == '':
+        return None
+    dt = None
+    if isinstance(valor, datetime):
+        dt = valor
+    elif isinstance(valor, date):
+        dt = datetime.combine(valor, time.min)
+    else:
+        texto = _normalizar_texto(valor)
+        if not texto:
+            return None
+        for fmt in ('%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M', '%d/%m/%Y', '%Y-%m-%d %H:%M:%S', '%Y-%m-%d'):
+            try:
+                dt = datetime.strptime(texto, fmt)
+                break
+            except ValueError:
+                continue
+    if dt is None:
+        return None
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.get_current_timezone())
+    return dt
+
+
+def _buscar_medidor_por_serie(serie: str):
+    from inventario.models import Medidor
+
+    clave = _normalizar_texto(serie)
+    if not clave:
+        return None
+    return Medidor.objects.filter(serie__iexact=clave, eliminado=False).first()
+
+
+def _buscar_modem_por_serie(serie: str):
+    from inventario.models import Modem
+
+    clave = _normalizar_texto(serie)
+    if not clave:
+        return None
+    return Modem.objects.filter(serie__iexact=clave, eliminado=False).first()
+
+
+def _rellenar_cliente_si_vacio(cliente: Cliente, campos: Dict[str, str]) -> None:
+    """Completa datos del cliente solo si el campo está vacío (no pisa lo existente)."""
+    update = []
+    mapping = (
+        ('customer_name', 'customer_name', 255),
+        ('direccion', 'direccion', 255),
+        ('installation_address', 'installation_address', 255),
+        ('comuna', 'comuna', 100),
+        ('ip', 'ip', 45),
+        ('puerto', 'puerto', 50),
+        ('modem', 'modem', 255),
+        ('meter_serial_n_1', 'meter_serial_n_1', 100),
+        ('meter_manufacturer_id', 'meter_manufacturer_id', 255),
+    )
+    for attr, key, maxlen in mapping:
+        nuevo = (campos.get(key) or '').strip()
+        if not nuevo:
+            continue
+        actual = getattr(cliente, attr, None)
+        if actual is None or str(actual).strip() == '':
+            setattr(cliente, attr, nuevo[:maxlen])
+            update.append(attr)
+    if update:
+        cliente.save(update_fields=update)
+
+
+def _componer_descripcion_asignacion(
+    descripcion: str,
+    solicitud: str,
+    nombre: str,
+    direccion: str,
+    comuna: str,
+    medidor: str,
+    marca: str,
+    ip: str,
+    puerto: str,
+    modem: str,
+) -> str:
+    if (descripcion or '').strip():
+        return descripcion
+    lineas = []
+    if solicitud:
+        lineas.append(f'Solicitud: {solicitud}')
+    if nombre:
+        lineas.append(f'Nombre: {nombre}')
+    if direccion:
+        lineas.append(f'Dirección: {direccion}')
+    if comuna:
+        lineas.append(f'Comuna: {comuna}')
+    if medidor:
+        lineas.append(f'Medidor: {medidor}')
+    if marca:
+        lineas.append(f'Marca: {marca}')
+    if ip or puerto:
+        lineas.append('IP / Puerto: {} / {}'.format(ip or '—', puerto or '—'))
+    if modem:
+        lineas.append(f'Módem: {modem}')
+    return '\n'.join(lineas)
 
 
 def _extraer_correlativo_moreapp(observaciones: str) -> Optional[str]:
@@ -253,13 +378,15 @@ def _obtener_o_crear_cliente(numero_cliente: str, valores=None, indice=None) -> 
     return _obtener_cliente_existente(numero_cliente)
 
 
-def _aplicar_tecnico_a_orden(orden: OrdenTrabajo, tecnico: Optional[Usuario]) -> None:
+def _aplicar_tecnico_a_orden(orden: OrdenTrabajo, tecnico: Optional[Usuario], fecha_asignacion=None) -> None:
     if tecnico:
         orden.tecnico_responsable = tecnico
         if orden.estado == 'CREADA':
             orden.estado = 'ASIGNADA'
-            if not orden.fecha_asignacion:
-                orden.fecha_asignacion = timezone.now()
+        if fecha_asignacion and not orden.fecha_asignacion:
+            orden.fecha_asignacion = fecha_asignacion
+        elif not orden.fecha_asignacion:
+            orden.fecha_asignacion = timezone.now()
 
 
 def _fila_a_texto(headers, valores):
@@ -346,7 +473,7 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
 
         if 'numero_cliente' not in indice:
             raise ValueError(
-                'El Excel debe incluir la columna "Numero Cliente" (o "Cliente"). '
+                'El Excel debe incluir la columna "CLIENTE" (Nº cliente). '
                 f'Columnas detectadas: {", ".join(str(h) for h in headers if h)}'
             )
 
@@ -445,8 +572,32 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
             try:
                 cliente = clientes_vistos[numero_cliente]
 
-                titulo = _valor_fila(valores, indice, 'titulo') or f'Trabajo — {numero_cliente}'
-                descripcion = _valor_fila(valores, indice, 'descripcion')
+                solicitud = _valor_fila(valores, indice, 'solicitud')
+                titulo = (
+                    _valor_fila(valores, indice, 'titulo')
+                    or solicitud
+                    or f'Trabajo — {numero_cliente}'
+                )
+                nombre_cliente = _valor_fila(valores, indice, 'nombre_cliente')
+                direccion = _valor_fila(valores, indice, 'direccion_cliente')
+                comuna = _valor_fila(valores, indice, 'comuna')
+                serie_medidor = _valor_fila(valores, indice, 'medidor')
+                marca = _valor_fila(valores, indice, 'marca')
+                ip = _valor_fila(valores, indice, 'ip')
+                puerto = _valor_fila(valores, indice, 'puerto')
+                serie_modem = _valor_fila(valores, indice, 'modem')
+                descripcion = _componer_descripcion_asignacion(
+                    _valor_fila(valores, indice, 'descripcion'),
+                    solicitud,
+                    nombre_cliente,
+                    direccion,
+                    comuna,
+                    serie_medidor,
+                    marca,
+                    ip,
+                    puerto,
+                    serie_modem,
+                )
                 tipo_trabajo = _resolver_tipo_trabajo(_valor_fila(valores, indice, 'tipo_trabajo'))
                 tecnico_nombre = _valor_fila(valores, indice, 'tecnico')
                 tecnico = _resolver_tecnico(tecnico_nombre)
@@ -454,6 +605,23 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                 observaciones_tecnicas = _valor_fila(valores, indice, 'observaciones_tecnicas')
                 proyecto_carga = _valor_fila(valores, indice, 'proyecto_carga_administrativa')
                 orden_id = _parse_id_orden(_valor_fila(valores, indice, 'id_orden'))
+                fecha_asignacion_excel = _parse_fecha_excel(
+                    _valor_fila_raw(valores, indice, 'fecha_trabajo')
+                )
+                medidor_obj = _buscar_medidor_por_serie(serie_medidor)
+                modem_obj = _buscar_modem_por_serie(serie_modem)
+
+                _rellenar_cliente_si_vacio(cliente, {
+                    'customer_name': nombre_cliente,
+                    'direccion': direccion,
+                    'installation_address': direccion,
+                    'comuna': comuna,
+                    'ip': ip,
+                    'puerto': puerto,
+                    'modem': serie_modem,
+                    'meter_serial_n_1': serie_medidor,
+                    'meter_manufacturer_id': marca,
+                })
 
                 with transaction.atomic():
                     orden = None
@@ -475,8 +643,14 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                         if proyecto_carga is not None and str(proyecto_carga).strip() != '':
                             orden.proyecto_carga_administrativa = str(proyecto_carga).strip()[:255]
                         # El estado no se fuerza desde Excel (evita saltarse flujo/validación)
+                        if medidor_obj:
+                            orden.medidor = medidor_obj
+                        if modem_obj:
+                            orden.modem = modem_obj
                         if tecnico:
-                            _aplicar_tecnico_a_orden(orden, tecnico)
+                            _aplicar_tecnico_a_orden(orden, tecnico, fecha_asignacion_excel)
+                        elif fecha_asignacion_excel and not orden.fecha_asignacion:
+                            orden.fecha_asignacion = fecha_asignacion_excel
                         elif not tecnico_nombre:
                             pass
                         orden.save()
@@ -502,8 +676,14 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                             from web.services.filtros_export import es_sin_proyecto
                             if not es_sin_proyecto(cliente.proyecto):
                                 orden.proyecto_carga_administrativa = (cliente.proyecto or '')[:255]
+                        if medidor_obj:
+                            orden.medidor = medidor_obj
+                        if modem_obj:
+                            orden.modem = modem_obj
                         if tecnico:
-                            _aplicar_tecnico_a_orden(orden, tecnico)
+                            _aplicar_tecnico_a_orden(orden, tecnico, fecha_asignacion_excel)
+                        elif fecha_asignacion_excel:
+                            orden.fecha_asignacion = fecha_asignacion_excel
                         orden.save()
                         creadas += 1
 
@@ -556,63 +736,59 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
 
 
 def exportar_ordenes_excel(ordenes):
-    """Genera workbook Excel con las órdenes recibidas."""
+    """Genera workbook Excel en formato Plantilla Asignación de Trabajo (técnicos)."""
     from importaciones.utils import aplicar_estilo_hoja_exportacion
 
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = 'Ordenes de Trabajo'
+    ws.title = 'Asignacion Trabajo'
     ws.append([
-        'Numero Cliente',
-        'Titulo',
-        'Descripcion',
-        'Tipo Trabajo',
-        'Tecnico Responsable',
-        'Estado',
-        'Proyecto / Carga Administrativa',
-        'Direccion Cliente',
-        'Comuna',
-        'Medidor Serie',
-        'SIM IMEI',
-        'Modem Serie',
-        'Observaciones Tecnicas',
+        'SOLICITUD',
+        'CLIENTE',
+        'MEDIDOR',
+        'MARCA',
+        'NOMBRE',
+        'DIRECCION',
+        'COMUNA',
+        'TECNICO',
+        'TRABAJO',
+        'IP',
+        'PUERTO',
+        'MODEM',
+        'FECHA',
+        'PROYECTO',
         'Fecha Creacion',
         'Fecha Asignacion',
-        'Fecha Fin Ejecucion',
-        'Creada Por',
-        'ID Orden',
-        'Alerta Duplicado',
-        'Descripcion Alerta',
     ])
 
-    from ordenes_trabajo.observaciones_html import observaciones_a_texto_plano
-
     for orden in ordenes:
+        cliente = orden.cliente
+        medidor = orden.medidor
+        modem = orden.modem
         ws.append([
-            orden.cliente.numero_cliente if orden.cliente else '',
             orden.titulo or '',
-            orden.descripcion or '',
-            orden.get_tipo_trabajo_display(),
+            cliente.numero_cliente if cliente else '',
+            medidor.serie if medidor else (getattr(cliente, 'meter_serial_n_1', None) or ''),
+            (medidor.marca if medidor and getattr(medidor, 'marca', None) else '')
+            or (getattr(cliente, 'meter_manufacturer_id', None) or ''),
+            (getattr(cliente, 'customer_name', None) or '') if cliente else '',
+            (cliente.direccion if cliente else '') or (getattr(cliente, 'installation_address', None) or ''),
+            cliente.comuna if cliente else '',
             orden.tecnico_responsable.nombre_interno if orden.tecnico_responsable else '',
-            orden.get_estado_display(),
-            orden.proyecto_carga_administrativa or '',
-            orden.cliente.direccion if orden.cliente else '',
-            orden.cliente.comuna if orden.cliente else '',
-            orden.medidor.serie if orden.medidor else '',
-            orden.simcard.imei if orden.simcard else '',
-            orden.modem.serie if orden.modem else '',
-            observaciones_a_texto_plano(orden.observaciones_tecnicas or ''),
+            orden.get_tipo_trabajo_display(),
+            (getattr(cliente, 'ip', None) or (getattr(modem, 'ip', None) if modem else '')) or '',
+            (getattr(cliente, 'puerto', None) or (getattr(modem, 'puerto', None) if modem else '')) or '',
+            (modem.serie if modem else '') or (getattr(cliente, 'modem', None) or ''),
+            orden.fecha_asignacion.strftime('%d/%m/%Y') if orden.fecha_asignacion else (
+                orden.fecha_creacion.strftime('%d/%m/%Y') if orden.fecha_creacion else ''
+            ),
+            orden.proyecto_carga_administrativa or (getattr(cliente, 'proyecto', None) or ''),
             orden.fecha_creacion.strftime('%d/%m/%Y %H:%M') if orden.fecha_creacion else '',
             orden.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if orden.fecha_asignacion else '',
-            orden.fecha_fin_ejecucion.strftime('%d/%m/%Y %H:%M') if orden.fecha_fin_ejecucion else '',
-            orden.creada_por.nombre_interno if orden.creada_por else '',
-            orden.id,
-            'SI' if orden.alerta_duplicado else 'NO',
-            orden.descripcion_alerta_duplicado or '',
         ])
 
-    # Filtro en Tipo / Técnico / Estado / Proyecto / Dirección / Comuna.
-    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=4, filter_to_col=9)
+    # Filtro en Técnico / Trabajo / Proyecto
+    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=8, filter_to_col=14)
     return wb
 
 
