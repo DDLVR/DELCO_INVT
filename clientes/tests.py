@@ -233,7 +233,89 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertIn('name="customer_name"', html)
 		self.assertIn('name="ip"', html)
 		self.assertIn('name="modem"', html)
+		self.assertIn('name="direccion"', html)
+		self.assertIn('name="city"', html)
+		self.assertIn('name="empresa"', html)
+		self.assertIn('name="referencia"', html)
+		self.assertIn('name="estado_telemetria"', html)
+		self.assertIn('name="estado_stb"', html)
+		self.assertIn('name="sim_operador"', html)
+		self.assertIn('name="sim_iccid"', html)
+		self.assertIn('name="sim_abonado"', html)
+		self.assertIn('name="sim_estado"', html)
+		self.assertIn('name="ultimo_acceso"', html)
+		self.assertIn('name="fecha_registro"', html)
+		self.assertIn('name="trabajo"', html)
+		self.assertIn('name="note"', html)
 		self.assertIn('class="form-control form-control-sm ficha-edit"', html)
+
+	def test_edicion_guarda_campos_extendidos_de_ficha(self):
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-EXT-EDIT',
+			direccion='Dir Vieja',
+			comuna='Santiago',
+			customer_name='Antes',
+			meter_serial_n_1=self.medidor.serie,
+			medidor_actual=self.medidor,
+			ip='10.0.0.1',
+			activo=True,
+		)
+		response = self.client.post(
+			reverse('cliente_editar', kwargs={'pk': cliente.pk}),
+			{
+				'numero_cliente': cliente.numero_cliente,
+				'sector': 'SUR',
+				'tipo_suministro': 'ELECTRICO',
+				'comuna': 'Maipu',
+				'customer_name': 'Despues',
+				'installation_address': 'Inst Nueva',
+				'direccion': 'Dir Nueva',
+				'city': 'Santiago',
+				'empresa': 'Delco',
+				'referencia': 'Puerta azul',
+				'proyecto': '',
+				'meter_manufacturer_id': 'TEST',
+				'meter_serial_n_1': self.medidor.serie,
+				'ip': '10.0.0.1',
+				'puerto': '502',
+				'modem': 'MOD-X',
+				'estado_telemetria': 'SIN_COMUNICACION',
+				'estado_stb': 'PENDIENTE',
+				'sim_operador': 'Entel',
+				'sim_iccid': '890123',
+				'sim_abonado': '56911112222',
+				'sim_estado': 'OPERATIVA',
+				'estado_restriccion': '',
+				'justificacion_restriccion': '',
+				'ultimo_acceso': '2026-08-01',
+				'ultimo_perfil_carga': 'OK',
+				'ultimo_perfil_instrumentacion': 'OK',
+				'ultimo_reset': '2026-07-01',
+				'ultimo_registro_facturacion': '2026-07-15',
+				'fecha_registro': '2026-01-10',
+				'trabajo': 'Revision',
+				'note': 'Nota ficha',
+				'ajax': '1',
+			},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+			HTTP_ACCEPT='application/json',
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertTrue(data['success'])
+		cliente.refresh_from_db()
+		self.assertEqual(cliente.direccion, 'Dir Nueva')
+		self.assertEqual(cliente.city, 'Santiago')
+		self.assertEqual(cliente.empresa, 'Delco')
+		self.assertEqual(cliente.referencia, 'Puerta azul')
+		self.assertEqual(cliente.estado_telemetria, 'SIN_COMUNICACION')
+		self.assertEqual(cliente.estado_stb, 'PENDIENTE')
+		self.assertEqual(cliente.sim_operador, 'Entel')
+		self.assertEqual(cliente.sim_iccid, '890123')
+		self.assertEqual(cliente.sim_estado, 'OPERATIVA')
+		self.assertEqual(cliente.trabajo, 'Revision')
+		self.assertEqual(cliente.note, 'Nota ficha')
+		self.assertEqual(str(cliente.fecha_registro), '2026-01-10')
 
 	def test_get_editar_redirige_al_historial(self):
 		cliente = Cliente.objects.create(

@@ -138,6 +138,31 @@ def _cliente_estado_restriccion_choices():
     return list(_ESTADO_RESTRICCION_CHOICES_FALLBACK)
 
 
+def _cliente_choice_codes(field_name, fallback=()):
+    try:
+        field = Cliente._meta.get_field(field_name)
+        if getattr(field, 'choices', None):
+            return {str(c) for c, _ in field.choices if c != ''}
+    except Exception:
+        pass
+    return {str(c) for c, _ in fallback if c != ''}
+
+
+def _parse_fecha_registro_cliente(raw):
+    """Acepta YYYY-MM-DD o DD/MM/YYYY; vacío → None."""
+    from datetime import datetime
+
+    text = (raw or '').strip()
+    if not text:
+        return None
+    for fmt in ('%Y-%m-%d', '%d/%m/%Y', '%d-%m-%Y'):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return False  # inválida
+
+
 def _ordenes_trabajo_habilitadas():
     return getattr(settings, 'ORDENES_TRABAJO_HABILITADAS', True)
 
@@ -3438,16 +3463,34 @@ def cliente_editar_view(request, pk):
                 'comuna': cliente.comuna or '',
                 'customer_name': cliente.customer_name or '',
                 'installation_address': cliente.installation_address or '',
+                'direccion': cliente.direccion or '',
+                'city': cliente.city or '',
+                'empresa': cliente.empresa or '',
+                'referencia': cliente.referencia or '',
                 'proyecto': '' if es_sin_proyecto(cliente.proyecto) else (cliente.proyecto or ''),
                 'meter_manufacturer_id': cliente.meter_manufacturer_id or '',
                 'meter_serial_n_1': cliente.meter_serial_n_1 or '',
                 'ip': cliente.ip or '',
                 'puerto': cliente.puerto or '',
                 'modem': cliente.modem or '',
+                'estado_telemetria': cliente.estado_telemetria or '',
+                'estado_stb': cliente.estado_stb or '',
                 'estado_sci4': cliente.estado_sci4 or '',
                 'estado_sci4_display': cliente.get_estado_sci4_display(),
+                'sim_operador': cliente.sim_operador or '',
+                'sim_iccid': cliente.sim_iccid or '',
+                'sim_abonado': cliente.sim_abonado or '',
+                'sim_estado': cliente.sim_estado or '',
                 'estado_restriccion': cliente.estado_restriccion or '',
                 'justificacion_restriccion': cliente.justificacion_restriccion or '',
+                'ultimo_acceso': cliente.ultimo_acceso or '',
+                'ultimo_perfil_carga': cliente.ultimo_perfil_carga or '',
+                'ultimo_perfil_instrumentacion': cliente.ultimo_perfil_instrumentacion or '',
+                'ultimo_reset': cliente.ultimo_reset or '',
+                'ultimo_registro_facturacion': cliente.ultimo_registro_facturacion or '',
+                'fecha_registro': cliente.fecha_registro.isoformat() if cliente.fecha_registro else '',
+                'trabajo': cliente.trabajo or '',
+                'note': cliente.note or '',
             },
         })
 
@@ -3458,19 +3501,60 @@ def cliente_editar_view(request, pk):
         comuna = request.POST.get('comuna', '').strip()
         customer_name = request.POST.get('customer_name', '').strip()
         installation_address = request.POST.get('installation_address', '').strip()
+        direccion = request.POST.get('direccion', '').strip()
+        city = request.POST.get('city', '').strip()
+        empresa = request.POST.get('empresa', '').strip()
+        referencia = request.POST.get('referencia', '').strip()
         proyecto = request.POST.get('proyecto', '').strip()
         meter_manufacturer_id = request.POST.get('meter_manufacturer_id', '').strip()
         meter_serial_n_1 = request.POST.get('meter_serial_n_1', '').strip()
         ip = request.POST.get('ip', '').strip()
         puerto = request.POST.get('puerto', '').strip()
         modem = request.POST.get('modem', '').strip()
+        estado_telemetria = (request.POST.get('estado_telemetria') or '').strip().upper()
+        estado_stb = (request.POST.get('estado_stb') or '').strip().upper()
+        sim_operador = request.POST.get('sim_operador', '').strip()
+        sim_iccid = request.POST.get('sim_iccid', '').strip()
+        sim_abonado = request.POST.get('sim_abonado', '').strip()
+        sim_estado = (request.POST.get('sim_estado') or '').strip().upper()
         estado_restriccion = (request.POST.get('estado_restriccion') or '').strip().upper()
         justificacion_restriccion = (request.POST.get('justificacion_restriccion') or '').strip()
+        ultimo_acceso = request.POST.get('ultimo_acceso', '').strip()
+        ultimo_perfil_carga = request.POST.get('ultimo_perfil_carga', '').strip()
+        ultimo_perfil_instrumentacion = request.POST.get('ultimo_perfil_instrumentacion', '').strip()
+        ultimo_reset = request.POST.get('ultimo_reset', '').strip()
+        ultimo_registro_facturacion = request.POST.get('ultimo_registro_facturacion', '').strip()
+        trabajo = request.POST.get('trabajo', '').strip()
+        note = request.POST.get('note', '').strip()
+        fecha_registro_raw = request.POST.get('fecha_registro', '').strip()
         next_url = (request.POST.get('next') or '').strip()
 
         codigos_ok = {c for c, _ in _cliente_estado_restriccion_choices()}
         if estado_restriccion and estado_restriccion not in codigos_ok:
             estado_restriccion = ''
+
+        telemetria_ok = _cliente_choice_codes(
+            'estado_telemetria',
+            getattr(Cliente, 'ESTADO_TELEMETRIA_CHOICES', ()),
+        )
+        if estado_telemetria not in telemetria_ok:
+            estado_telemetria = cliente.estado_telemetria or 'OPERATIVO'
+
+        stb_ok = _cliente_choice_codes(
+            'estado_stb',
+            getattr(Cliente, 'ESTADO_SISTEMA_EXTERNO_CHOICES', ()),
+        )
+        if estado_stb not in stb_ok:
+            estado_stb = cliente.estado_stb or 'SIN_REGISTRO'
+
+        sim_ok = _cliente_choice_codes(
+            'sim_estado',
+            getattr(Cliente, 'ESTADO_SIM_CHOICES', ()),
+        )
+        if sim_estado and sim_estado not in sim_ok:
+            sim_estado = ''
+
+        fecha_registro = _parse_fecha_registro_cliente(fecha_registro_raw)
 
         before_values = {
             'numero_cliente': cliente.numero_cliente,
@@ -3479,19 +3563,39 @@ def cliente_editar_view(request, pk):
             'comuna': cliente.comuna,
             'customer_name': cliente.customer_name,
             'installation_address': cliente.installation_address,
+            'direccion': cliente.direccion,
+            'city': cliente.city,
+            'empresa': cliente.empresa,
+            'referencia': cliente.referencia,
             'meter_manufacturer_id': cliente.meter_manufacturer_id,
             'proyecto': cliente.proyecto,
             'meter_serial_n_1': cliente.meter_serial_n_1,
             'ip': cliente.ip,
             'puerto': cliente.puerto,
             'modem': cliente.modem,
+            'estado_telemetria': cliente.estado_telemetria or '',
+            'estado_stb': cliente.estado_stb or '',
+            'sim_operador': cliente.sim_operador,
+            'sim_iccid': cliente.sim_iccid,
+            'sim_abonado': cliente.sim_abonado,
+            'sim_estado': cliente.sim_estado or '',
             'medidor_actual_id': cliente.medidor_actual_id,
             'estado_restriccion': cliente.estado_restriccion or '',
             'justificacion_restriccion': cliente.justificacion_restriccion or '',
+            'ultimo_acceso': cliente.ultimo_acceso,
+            'ultimo_perfil_carga': cliente.ultimo_perfil_carga,
+            'ultimo_perfil_instrumentacion': cliente.ultimo_perfil_instrumentacion,
+            'ultimo_reset': cliente.ultimo_reset,
+            'ultimo_registro_facturacion': cliente.ultimo_registro_facturacion,
+            'fecha_registro': cliente.fecha_registro.isoformat() if cliente.fecha_registro else '',
+            'trabajo': cliente.trabajo,
+            'note': cliente.note,
         }
 
         # Si no envían número de cliente en edición, se conserva el actual.
         numero_cliente_final = numero_cliente or cliente.numero_cliente
+        comuna_final = comuna or cliente.comuna or ''
+        direccion_final = direccion or installation_address or cliente.direccion or ''
 
         def _responder_error(mensaje):
             if _quiere_json():
@@ -3500,6 +3604,9 @@ def cliente_editar_view(request, pk):
             if next_url and next_url.startswith('/'):
                 return redirect(next_url)
             return redirect('clientes_list')
+
+        if fecha_registro is False:
+            return _responder_error('Fecha registro inválida. Usa formato AAAA-MM-DD o DD/MM/AAAA.')
 
         restriccion_issues = validate_restriccion_con_justificacion(
             estado_restriccion,
@@ -3548,9 +3655,13 @@ def cliente_editar_view(request, pk):
         cliente.numero_cliente = numero_cliente_final
         cliente.sector = sector or None
         cliente.tipo_suministro = tipo_suministro or None
-        cliente.comuna = comuna or None
+        cliente.comuna = comuna_final
         cliente.customer_name = customer_name or None
         cliente.installation_address = installation_address or None
+        cliente.direccion = direccion_final
+        cliente.city = city or None
+        cliente.empresa = empresa or None
+        cliente.referencia = referencia or None
         cliente.meter_manufacturer_id = meter_manufacturer_id or None
         # proyecto se actualiza vía historial (no sobrescribir aquí)
         cliente.meter_serial_n_1 = meter_serial_n_1 or None
@@ -3558,8 +3669,22 @@ def cliente_editar_view(request, pk):
         cliente.ip = ip or None
         cliente.puerto = puerto or None
         cliente.modem = modem or None
+        cliente.estado_telemetria = estado_telemetria
+        cliente.estado_stb = estado_stb
+        cliente.sim_operador = sim_operador or None
+        cliente.sim_iccid = sim_iccid or None
+        cliente.sim_abonado = sim_abonado or None
+        cliente.sim_estado = sim_estado or None
         cliente.estado_restriccion = estado_restriccion
         cliente.justificacion_restriccion = justificacion_restriccion if estado_restriccion else ''
+        cliente.ultimo_acceso = ultimo_acceso or None
+        cliente.ultimo_perfil_carga = ultimo_perfil_carga or None
+        cliente.ultimo_perfil_instrumentacion = ultimo_perfil_instrumentacion or None
+        cliente.ultimo_reset = ultimo_reset or None
+        cliente.ultimo_registro_facturacion = ultimo_registro_facturacion or None
+        cliente.fecha_registro = fecha_registro
+        cliente.trabajo = trabajo or None
+        cliente.note = note or None
         cliente.save()
 
         from clientes.proyecto_historial import registrar_cambio_proyecto
@@ -3578,15 +3703,33 @@ def cliente_editar_view(request, pk):
             'comuna': cliente.comuna,
             'customer_name': cliente.customer_name,
             'installation_address': cliente.installation_address,
+            'direccion': cliente.direccion,
+            'city': cliente.city,
+            'empresa': cliente.empresa,
+            'referencia': cliente.referencia,
             'meter_manufacturer_id': cliente.meter_manufacturer_id,
             'proyecto': cliente.proyecto,
             'meter_serial_n_1': cliente.meter_serial_n_1,
             'ip': cliente.ip,
             'puerto': cliente.puerto,
             'modem': cliente.modem,
+            'estado_telemetria': cliente.estado_telemetria or '',
+            'estado_stb': cliente.estado_stb or '',
+            'sim_operador': cliente.sim_operador,
+            'sim_iccid': cliente.sim_iccid,
+            'sim_abonado': cliente.sim_abonado,
+            'sim_estado': cliente.sim_estado or '',
             'medidor_actual_id': cliente.medidor_actual_id,
             'estado_restriccion': cliente.estado_restriccion or '',
             'justificacion_restriccion': cliente.justificacion_restriccion or '',
+            'ultimo_acceso': cliente.ultimo_acceso,
+            'ultimo_perfil_carga': cliente.ultimo_perfil_carga,
+            'ultimo_perfil_instrumentacion': cliente.ultimo_perfil_instrumentacion,
+            'ultimo_reset': cliente.ultimo_reset,
+            'ultimo_registro_facturacion': cliente.ultimo_registro_facturacion,
+            'fecha_registro': cliente.fecha_registro.isoformat() if cliente.fecha_registro else '',
+            'trabajo': cliente.trabajo,
+            'note': cliente.note,
         }
         for field_name, old_value in before_values.items():
             new_value = after_values.get(field_name)
@@ -4014,6 +4157,9 @@ def cliente_historial_view(request, pk):
         'equipos_asociados': equipos_asociados,
         'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
         'estado_restriccion_choices': _cliente_estado_restriccion_choices(),
+        'estado_telemetria_choices': list(getattr(Cliente, 'ESTADO_TELEMETRIA_CHOICES', [])),
+        'estado_sim_choices': [('', 'Sin estado')] + list(getattr(Cliente, 'ESTADO_SIM_CHOICES', [])),
+        'estado_stb_choices': list(getattr(Cliente, 'ESTADO_SISTEMA_EXTERNO_CHOICES', [])),
         'proyectos_disponibles': proyectos_disponibles,
     }
     return render(request, 'clientes/historial.html', context)

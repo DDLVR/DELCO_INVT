@@ -132,9 +132,19 @@
               {% endif %}
             </dd>
             <dt class="col-sm-4">Dirección base</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.direccion|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.direccion|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="direccion" value="{{ cliente.direccion|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Ciudad</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.city|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.city|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="city" value="{{ cliente.city|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Proyecto actual</dt>
             <dd class="col-sm-8">
               <span class="ficha-view">
@@ -171,9 +181,19 @@
               {% endif %}
             </dd>
             <dt class="col-sm-4">Empresa</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.empresa|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.empresa|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="empresa" value="{{ cliente.empresa|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Referencia</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.referencia|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.referencia|default:"—" }}</span>
+              {% if puede_editar %}
+              <textarea class="form-control form-control-sm ficha-edit" name="referencia" rows="2">{{ cliente.referencia|default:'' }}</textarea>
+              {% endif %}
+            </dd>
           </dl>
         </div>
       </div>
@@ -206,10 +226,26 @@
               {% endif %}
             </dd>
             <dt class="col-sm-4">Telemetría</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.get_estado_telemetria_display }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.get_estado_telemetria_display }}</span>
+              {% if puede_editar %}
+              <select class="form-select form-select-sm ficha-edit" name="estado_telemetria">
+                {% for codigo, nombre in estado_telemetria_choices %}
+                <option value="{{ codigo }}" {% if cliente.estado_telemetria == codigo %}selected{% endif %}>{{ nombre }}</option>
+                {% endfor %}
+              </select>
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">STB</dt>
             <dd class="col-sm-8">
-              <span class="ficha-readonly">{% badge_estado_externo cliente.estado_stb cliente.get_estado_stb_display sistema="STB" %}</span>
+              <span class="ficha-view">{% badge_estado_externo cliente.estado_stb cliente.get_estado_stb_display sistema="STB" %}</span>
+              {% if puede_editar %}
+              <select class="form-select form-select-sm ficha-edit" name="estado_stb">
+                {% for codigo, nombre in estado_stb_choices %}
+                <option value="{{ codigo }}" {% if cliente.estado_stb == codigo %}selected{% endif %}>{{ nombre }}</option>
+                {% endfor %}
+              </select>
+              {% endif %}
             </dd>
             <dt class="col-sm-4">SCi4</dt>
             <dd class="col-sm-8">
@@ -235,13 +271,37 @@
               </span>
             </dd>
             <dt class="col-sm-4">SIM operador</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.sim_operador|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.sim_operador|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="sim_operador" value="{{ cliente.sim_operador|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">SIM ICCID</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.sim_iccid|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.sim_iccid|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="sim_iccid" value="{{ cliente.sim_iccid|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">SIM abonado</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.sim_abonado|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.sim_abonado|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="sim_abonado" value="{{ cliente.sim_abonado|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Estado SIM</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{% if cliente.sim_estado %}{{ cliente.get_sim_estado_display }}{% else %}—{% endif %}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{% if cliente.sim_estado %}{{ cliente.get_sim_estado_display }}{% else %}—{% endif %}</span>
+              {% if puede_editar %}
+              <select class="form-select form-select-sm ficha-edit" name="sim_estado">
+                {% for codigo, nombre in estado_sim_choices %}
+                <option value="{{ codigo }}" {% if cliente.sim_estado == codigo %}selected{% endif %}>{{ nombre }}</option>
+                {% endfor %}
+              </select>
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Restricción</dt>
             <dd class="col-sm-8">
               <span class="ficha-view">
@@ -267,21 +327,61 @@
               {% endif %}
             </dd>
             <dt class="col-sm-4">Último acceso</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.ultimo_acceso|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.ultimo_acceso|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="ultimo_acceso" value="{{ cliente.ultimo_acceso|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Último perfil carga</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.ultimo_perfil_carga|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.ultimo_perfil_carga|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="ultimo_perfil_carga" value="{{ cliente.ultimo_perfil_carga|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Último perfil instr.</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.ultimo_perfil_instrumentacion|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.ultimo_perfil_instrumentacion|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="ultimo_perfil_instrumentacion" value="{{ cliente.ultimo_perfil_instrumentacion|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Último reset</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.ultimo_reset|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.ultimo_reset|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="ultimo_reset" value="{{ cliente.ultimo_reset|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Último reg. facturación</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.ultimo_registro_facturacion|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.ultimo_registro_facturacion|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="ultimo_registro_facturacion" value="{{ cliente.ultimo_registro_facturacion|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Fecha registro</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.fecha_registro|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{% if cliente.fecha_registro %}{{ cliente.fecha_registro|date:"d/m/Y" }}{% else %}—{% endif %}</span>
+              {% if puede_editar %}
+              <input type="date" class="form-control form-control-sm ficha-edit" name="fecha_registro" value="{% if cliente.fecha_registro %}{{ cliente.fecha_registro|date:'Y-m-d' }}{% endif %}">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Trabajo</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.trabajo|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.trabajo|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="trabajo" value="{{ cliente.trabajo|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Nota</dt>
-            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.note|default:"—" }}</span></dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.note|default:"—" }}</span>
+              {% if puede_editar %}
+              <textarea class="form-control form-control-sm ficha-edit" name="note" rows="2">{{ cliente.note|default:'' }}</textarea>
+              {% endif %}
+            </dd>
             <dt class="col-sm-4">Creado / actualizado</dt>
             <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.fecha_creacion|date:"d/m/Y H:i" }} · {{ cliente.fecha_actualizacion|date:"d/m/Y H:i" }}</span></dd>
           </dl>
