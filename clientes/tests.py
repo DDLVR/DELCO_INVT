@@ -248,6 +248,9 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertIn('name="trabajo"', html)
 		self.assertIn('name="note"', html)
 		self.assertIn('class="form-control form-control-sm ficha-edit"', html)
+		self.assertIn('id="documentosCliente"', html)
+		self.assertIn('Documentos del cliente', html)
+		self.assertIn('name="accion" value="subir_adjunto"', html)
 
 	def test_edicion_guarda_campos_extendidos_de_ficha(self):
 		cliente = Cliente.objects.create(
@@ -351,6 +354,171 @@ class ClienteFlujoViewTests(TestCase):
 		response = self.client.get(reverse('cliente_editar', kwargs={'pk': cliente.pk}))
 		self.assertEqual(response.status_code, 302)
 		self.assertEqual(response.url, reverse('cliente_historial', kwargs={'pk': cliente.pk}))
+
+
+@override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
+class ClienteAdjuntoHistorialTests(TestCase):
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='55555555-5',
+			email='adjunto_admin@delco.cl',
+			password=self.password,
+			nombre='Adj',
+			apellido='Admin',
+			nombre_interno='adj_admin',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.admin_op = Usuario.objects.create_user(
+			rut='66666666-6',
+			email='adjunto_op@delco.cl',
+			password=self.password,
+			nombre='Adj',
+			apellido='Op',
+			nombre_interno='adj_op',
+			rol='ADMINISTRATIVO',
+			is_active=True,
+		)
+		self.medidor = Medidor.objects.create(
+			serie='MED-ADJ-1001',
+			marca='TEST',
+			tipo_medidor='DIRECTO',
+		)
+		self.cliente = Cliente.objects.create(
+			numero_cliente='CLI-ADJ-1001',
+			direccion='Dir Adj',
+			comuna='Santiago',
+			meter_serial_n_1=self.medidor.serie,
+			medidor_actual=self.medidor,
+			activo=True,
+		)
+		self.client = Client()
+		self.png = (
+			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+			b'\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00'
+			b'\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+		)
+
+	def test_subir_foto_y_pdf_quedan_en_historial_y_auditoria(self):
+		from web.models import AuditLog
+
+		from .models import ClienteAdjunto
+
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		url = reverse('cliente_historial', kwargs={'pk': self.cliente.pk})
+
+		response = self.client.post(
+			url,
+			{
+				'accion': 'subir_adjunto',
+				'tipo': 'FOTO',
+				'archivo': SimpleUploadedFile('foto_cliente.png', self.png, content_type='image/png'),
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(ClienteAdjunto.objects.filter(cliente=self.cliente, eliminado=False).count(), 1)
+
+		pdf = SimpleUploadedFile(
+			'doc_cliente.pdf',
+			b'%PDF-1.4\n%demo\n',
+			content_type='application/pdf',
+		)
+		response = self.client.post(
+			url,
+			{'accion': 'subir_adjunto', 'tipo': 'PDF', 'archivo': pdf},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(ClienteAdjunto.objects.filter(cliente=self.cliente, eliminado=False).count(), 2)
+
+		hist = self.client.get(url)
+		self.assertEqual(hist.status_code, 200)
+		html = hist.content.decode()
+		self.assertIn('foto_cliente.png', html)
+		self.assertIn('doc_cliente.pdf', html)
+		self.assertIn('Documentos del cliente', html)
+
+		logs = AuditLog.objects.filter(
+			entity='Cliente',
+			entity_id=str(self.cliente.pk),
+			action='CLIENT_ADJUNTO',
+		)
+		self.assertEqual(logs.count(), 2)
+		nombres = set(logs.values_list('new_value', flat=True))
+		self.assertIn('foto_cliente.png', nombres)
+		self.assertIn('doc_cliente.pdf', nombres)
+		self.assertContains(hist, 'Cliente — Adjunto subido')
+
+	def test_reemplazar_papelera_recuperar_y_borrar_definitivo(self):
+		from web.models import AuditLog
+
+		from .models import ClienteAdjunto
+
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		url = reverse('cliente_historial', kwargs={'pk': self.cliente.pk})
+
+		self.client.post(
+			url,
+			{
+				'accion': 'subir_adjunto',
+				'tipo': 'FOTO',
+				'archivo': SimpleUploadedFile('malo.png', self.png, content_type='image/png'),
+			},
+		)
+		adj = ClienteAdjunto.objects.get(cliente=self.cliente, eliminado=False)
+		self.assertEqual(adj.nombre_archivo, 'malo.png')
+
+		response = self.client.post(
+			url,
+			{
+				'accion': 'reemplazar_adjunto',
+				'adjunto_id': str(adj.pk),
+				'tipo': 'FOTO',
+				'archivo': SimpleUploadedFile('bueno.png', self.png, content_type='image/png'),
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		adj.refresh_from_db()
+		self.assertEqual(adj.nombre_archivo, 'bueno.png')
+		self.assertTrue(
+			AuditLog.objects.filter(
+				entity='Cliente',
+				entity_id=str(self.cliente.pk),
+				action='CLIENT_ADJUNTO_REPLACE',
+			).exists()
+		)
+
+		response = self.client.post(
+			url,
+			{'accion': 'papelera_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		self.assertEqual(response.status_code, 302)
+		adj.refresh_from_db()
+		self.assertTrue(adj.eliminado)
+
+		response = self.client.post(
+			url,
+			{'accion': 'recuperar_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		self.assertEqual(response.status_code, 302)
+		adj.refresh_from_db()
+		self.assertFalse(adj.eliminado)
+
+		self.client.post(url, {'accion': 'papelera_adjunto', 'adjunto_id': str(adj.pk)})
+		response = self.client.post(
+			url,
+			{'accion': 'borrar_definitivo_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertFalse(ClienteAdjunto.objects.filter(pk=adj.pk).exists())
+		self.assertTrue(
+			AuditLog.objects.filter(
+				entity='Cliente',
+				entity_id=str(self.cliente.pk),
+				action='CLIENT_ADJUNTO_PURGE',
+			).exists()
+		)
 
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])

@@ -10,6 +10,11 @@ ACCION_LABELS = {
     'CLIENT_UPDATE': 'Cliente — Actualización',
     'CLIENT_IMPORT': 'Cliente — Importación',
     'CLIENT_SOFT_DELETE': 'Cliente — Eliminación',
+    'CLIENT_ADJUNTO': 'Cliente — Adjunto subido',
+    'CLIENT_ADJUNTO_REPLACE': 'Cliente — Adjunto reemplazado',
+    'CLIENT_ADJUNTO_TRASH': 'Cliente — Adjunto a papelera',
+    'CLIENT_ADJUNTO_RESTORE': 'Cliente — Adjunto recuperado',
+    'CLIENT_ADJUNTO_PURGE': 'Cliente — Adjunto borrado definitivo',
     'OT_CREATE': 'Orden de trabajo — Creación',
     'OT_STATE_CHANGE': 'Orden de trabajo — Cambio de estado',
     'OT_REASSIGN_TECH': 'Orden de trabajo — Reasignación de técnico',
@@ -28,6 +33,7 @@ ENTIDAD_LABELS = {
     'OrdenTrabajo': 'Orden de trabajo',
     'CargaAdministrativa': 'Orden de trabajo administrativa',
     'AdjuntoCarga': 'Adjunto de carga administrativa',
+    'ClienteAdjunto': 'Adjunto de cliente',
     'IntegracionMoreApp': 'MoreApp',
     'Medidor': 'Medidor',
     'SimCard': 'SIM Card',
@@ -78,6 +84,7 @@ CAMPO_LABELS = {
     'ultimo_registro_facturacion': 'Último registro facturación',
     'trabajo': 'Trabajo',
     'note': 'Nota',
+    'archivo': 'Archivo adjunto',
     'medidor_actual_id': 'Medidor actual',
 }
 

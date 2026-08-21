@@ -434,6 +434,140 @@
     </div>
   </div>
 
+  {# ── Documentos / adjuntos del cliente ── #}
+  <div class="card border-0 shadow-sm mb-4" id="documentosCliente">
+    <div class="card-header bg-body d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <strong><i class="bi bi-paperclip me-1"></i> Documentos del cliente</strong>
+      <span class="badge bg-secondary">{{ adjuntos_cliente|length }}</span>
+    </div>
+    <div class="card-body">
+      {% if adjuntos_cliente %}
+      <div class="row g-3 mb-3">
+        {% for a in adjuntos_cliente %}
+        <div class="col-12 col-sm-6 col-xl-4">
+          <div class="delco-adjunto-card">
+            {% if a.es_imagen and a.url_vista %}
+            <a href="{{ a.url_vista }}" target="_blank" rel="noopener" class="delco-adjunto-thumb-wrap" title="Ver imagen completa">
+              <img src="{{ a.url_vista }}"
+                   alt="{{ a.nombre_archivo }}"
+                   class="delco-adjunto-thumb"
+                   loading="lazy"
+                   onerror="this.style.display='none'; this.parentElement.insertAdjacentHTML('beforeend','<div class=\'p-3 text-muted small text-center\'>No se pudo cargar la imagen</div>');">
+            </a>
+            {% else %}
+            <a href="{{ a.url_vista }}" target="_blank" rel="noopener" class="delco-adjunto-pdf">
+              <i class="bi bi-file-earmark-pdf fs-1 text-danger"></i>
+              <span class="small text-muted">{{ a.get_tipo_display }}</span>
+            </a>
+            {% endif %}
+            <div class="delco-adjunto-meta">
+              <div class="delco-adjunto-name" title="{{ a.nombre_archivo }}">{{ a.nombre_archivo }}</div>
+              <div class="delco-adjunto-sub">
+                {{ a.get_tipo_display }}
+                {% if a.fecha_hora %} · {{ a.fecha_hora|date:"d/m/Y H:i" }}{% endif %}
+                {% if a.subido_por %} · {{ a.subido_por.nombre_interno|default:a.subido_por.email }}{% endif %}
+              </div>
+            </div>
+            {% if puede_gestionar_adjuntos %}
+            <details class="mt-2">
+              <summary class="small text-primary">Editar / papelera</summary>
+              <form method="post" enctype="multipart/form-data" class="mt-2">
+                {% csrf_token %}
+                <input type="hidden" name="accion" value="reemplazar_adjunto">
+                <input type="hidden" name="adjunto_id" value="{{ a.id }}">
+                <select name="tipo" class="form-select form-select-sm mb-1">
+                  {% for value, label in tipos_adjunto_cliente %}
+                  <option value="{{ value }}" {% if a.tipo == value %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+                <input type="file" name="archivo" class="form-control form-control-sm mb-1" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.pdf,image/*,application/pdf" required>
+                <button type="submit" class="btn btn-sm btn-outline-primary w-100 mb-1">
+                  <i class="bi bi-arrow-repeat"></i> Reemplazar archivo
+                </button>
+              </form>
+              <form method="post" onsubmit="return confirm('¿Enviar este adjunto a la papelera? Podrás recuperarlo después.');">
+                {% csrf_token %}
+                <input type="hidden" name="accion" value="papelera_adjunto">
+                <input type="hidden" name="adjunto_id" value="{{ a.id }}">
+                <button type="submit" class="btn btn-sm btn-outline-warning w-100">
+                  <i class="bi bi-trash"></i> A papelera
+                </button>
+              </form>
+            </details>
+            {% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-muted small mb-3">Sin documentos. Puedes subir fotos o PDF asociados a este cliente (contratos, capturas, etc.).</p>
+      {% endif %}
+
+      {% if puede_gestionar_adjuntos %}
+      <form method="post" enctype="multipart/form-data" class="delco-upload-form">
+        {% csrf_token %}
+        <input type="hidden" name="accion" value="subir_adjunto">
+        <div class="row g-2 align-items-end delco-form-row">
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-0">Tipo</label>
+            <select name="tipo" class="form-select form-select-sm">
+              {% for value, label in tipos_adjunto_cliente %}
+              <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12 col-md-5">
+            <label class="form-label small mb-0">Archivo</label>
+            <input type="file" name="archivo" class="form-control form-control-sm" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.pdf,image/*,application/pdf" required>
+          </div>
+          <div class="col-12 col-md-3">
+            <button type="submit" class="btn btn-sm btn-primary w-100">
+              <i class="bi bi-upload"></i> Subir
+            </button>
+          </div>
+        </div>
+        <p class="small text-muted mb-0 mt-2">Imágenes o PDF hasta 15 MB. Cada subida, reemplazo o papelera queda registrada en «Cambios de datos de la ficha».</p>
+      </form>
+      {% endif %}
+
+      {% if adjuntos_papelera %}
+      <div class="border rounded p-3 mt-3 bg-warning-subtle">
+        <p class="small fw-semibold mb-2"><i class="bi bi-recycle"></i> Papelera ({{ adjuntos_papelera|length }})</p>
+        <ul class="list-unstyled mb-0 small">
+          {% for a in adjuntos_papelera %}
+          <li class="delco-papelera-item">
+            <span class="delco-papelera-name" title="{{ a.nombre_archivo }}">
+              <strong>{{ a.nombre_archivo }}</strong>
+              <span class="text-muted"> · {{ a.get_tipo_display }}</span>
+              {% if a.fecha_eliminacion %} · {{ a.fecha_eliminacion|date:"d/m/Y H:i" }}{% endif %}
+            </span>
+            <span class="d-flex flex-wrap gap-1">
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="accion" value="recuperar_adjunto">
+                <input type="hidden" name="adjunto_id" value="{{ a.id }}">
+                <button type="submit" class="btn btn-sm btn-success">Recuperar</button>
+              </form>
+              {% if puede_borrar_definitivo_adjunto %}
+              <form method="post" onsubmit="return confirm('¿Borrar DEFINITIVAMENTE «{{ a.nombre_archivo }}»? No se podrá recuperar.');">
+                {% csrf_token %}
+                <input type="hidden" name="accion" value="borrar_definitivo_adjunto">
+                <input type="hidden" name="adjunto_id" value="{{ a.id }}">
+                <button type="submit" class="btn btn-sm btn-danger">Borrar definitivo</button>
+              </form>
+              {% endif %}
+            </span>
+          </li>
+          {% endfor %}
+        </ul>
+        {% if not puede_borrar_definitivo_adjunto %}
+        <p class="small text-muted mb-0 mt-2">El borrado definitivo del sistema lo realiza un administrador.</p>
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
   {% if fichas_mismo_numero %}
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-body text-danger"><strong>Otras fichas con el mismo Nº cliente</strong></div>
@@ -701,7 +835,7 @@
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-body d-flex flex-wrap justify-content-between align-items-center gap-2">
       <strong><i class="bi bi-journal-text me-1"></i> Cambios de datos de la ficha</strong>
-      <span class="text-muted small">Quién editó qué campo y cuándo (auditoría del cliente)</span>
+      <span class="text-muted small">Quién editó qué campo, subió documentos y cuándo (auditoría del cliente)</span>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">

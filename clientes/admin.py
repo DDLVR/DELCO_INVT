@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Cliente, ClienteProyectoHistorial
+from .models import Cliente, ClienteAdjunto, ClienteProyectoHistorial
 
 
 @admin.register(Cliente)
@@ -39,3 +39,12 @@ class ClienteProyectoHistorialAdmin(admin.ModelAdmin):
     list_filter = ('vigente',)
     search_fields = ('proyecto', 'cliente__numero_cliente', 'motivo')
     raw_id_fields = ('cliente', 'cambiado_por')
+
+
+@admin.register(ClienteAdjunto)
+class ClienteAdjuntoAdmin(admin.ModelAdmin):
+    list_display = ('nombre_archivo', 'cliente', 'tipo', 'fecha_hora', 'eliminado', 'subido_por')
+    list_filter = ('tipo', 'eliminado')
+    search_fields = ('nombre_archivo', 'cliente__numero_cliente')
+    raw_id_fields = ('cliente', 'subido_por', 'eliminado_por')
+    readonly_fields = ('fecha_hora', 'fecha_eliminacion')

@@ -3828,13 +3828,31 @@ def cliente_historial_view(request, pk):
     )
     from web.models import AuditLog
     from web.services.filtros_export import es_sin_proyecto
-    from clientes.models import ClienteProyectoHistorial
+    from clientes.adjuntos import procesar_accion_adjunto
+    from clientes.models import ClienteAdjunto, ClienteProyectoHistorial
     from clientes.proyecto_historial import (
         asegurar_historial_inicial,
         estado_proyecto_ui,
     )
 
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
+
+    if request.method == 'POST':
+        puede_gestionar = request.user.rol in ['ADMIN', 'ADMINISTRATIVO']
+        accion = (request.POST.get('accion') or '').strip()
+        from clientes.adjuntos import ACCIONES_ADJUNTO
+        if accion in ACCIONES_ADJUNTO:
+            if not puede_gestionar:
+                messages.error(request, 'No tienes permiso para gestionar adjuntos del cliente.')
+            else:
+                handled, ok, mensaje = procesar_accion_adjunto(cliente, request)
+                if handled:
+                    if ok:
+                        messages.success(request, mensaje)
+                    else:
+                        messages.error(request, mensaje)
+            return redirect('cliente_historial', pk=pk)
+
     asegurar_historial_inicial(cliente)
     proyectos_historial = list(
         ClienteProyectoHistorial.objects.filter(cliente=cliente)
@@ -4135,6 +4153,18 @@ def cliente_historial_view(request, pk):
         if (p or '').strip() and not es_sin_proyecto(p)
     }, key=lambda x: x.casefold())
 
+    puede_editar = request.user.rol in ['ADMIN', 'ADMINISTRATIVO']
+    adjuntos_cliente = list(
+        ClienteAdjunto.objects.filter(cliente=cliente, eliminado=False)
+        .select_related('subido_por')
+        .order_by('-fecha_hora')
+    )
+    adjuntos_papelera = list(
+        ClienteAdjunto.objects.filter(cliente=cliente, eliminado=True)
+        .select_related('eliminado_por')
+        .order_by('-fecha_eliminacion', '-id')
+    ) if puede_editar else []
+
     context = {
         'cliente': cliente,
         'ordenes': ordenes,
@@ -4149,7 +4179,12 @@ def cliente_historial_view(request, pk):
         'cargas_admin': cargas_admin,
         'proyectos_historial': proyectos_historial,
         'equipos_asociados': equipos_asociados,
-        'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
+        'adjuntos_cliente': adjuntos_cliente,
+        'adjuntos_papelera': adjuntos_papelera,
+        'tipos_adjunto_cliente': ClienteAdjunto.TIPO_CHOICES,
+        'puede_editar': puede_editar,
+        'puede_gestionar_adjuntos': puede_editar,
+        'puede_borrar_definitivo_adjunto': request.user.rol == 'ADMIN',
         'estado_restriccion_choices': _cliente_estado_restriccion_choices(),
         'estado_telemetria_choices': list(getattr(Cliente, 'ESTADO_TELEMETRIA_CHOICES', [])),
         'estado_sim_choices': [('', 'Sin estado')] + list(getattr(Cliente, 'ESTADO_SIM_CHOICES', [])),
