@@ -3410,7 +3410,11 @@ def cliente_crear_view(request):
 @login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
 def cliente_editar_view(request, pk):
-    """Editar cliente (roles ADMIN y ADMINISTRATIVO). Soporta modal AJAX sin salir del listado."""
+    """Editar cliente (roles ADMIN y ADMINISTRATIVO).
+
+    La UI de edición vive en el historial (casillas inline). Este endpoint
+    recibe el POST AJAX y sigue aceptando GET JSON para datos de la ficha.
+    """
     from web.services.filtros_export import es_sin_proyecto
 
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
@@ -3563,7 +3567,7 @@ def cliente_editar_view(request, pk):
             cliente,
             proyecto,
             usuario=request.user,
-            motivo='Edición desde gestión de clientes',
+            motivo='Edición desde historial del cliente',
             actualizar_campo=True,
         )
 
@@ -3596,7 +3600,7 @@ def cliente_editar_view(request, pk):
                         field_name=field_name,
                         old_value=old_value,
                         new_value=new_value,
-                        reason='Edición desde gestión de clientes',
+                        reason='Edición desde historial del cliente',
                     )
                 )
 
@@ -3633,8 +3637,8 @@ def cliente_editar_view(request, pk):
             return redirect(next_url)
         return redirect('clientes_list')
 
-    # GET HTML clásico: redirige al listado (edición es modal)
-    return redirect('clientes_list')
+    # GET HTML: la edición es inline en el historial
+    return redirect('cliente_historial', pk=pk)
 
 
 @login_required

@@ -16,14 +16,21 @@
         {% if cliente.comuna %} · {{ cliente.comuna }}{% endif %}
       </p>
     </div>
-    <div class="d-flex gap-2 flex-wrap">
+    <div class="d-flex gap-2 flex-wrap align-items-center">
       {% if puede_editar %}
-      <button type="button"
-              class="btn btn-info btn-sm"
-              data-bs-toggle="modal"
-              data-bs-target="#modalEditarClienteHistorial">
-        ✏️ Editar
-      </button>
+      <div class="ficha-actions-view">
+        <button type="button" class="btn btn-info btn-sm" id="btnEditarFichaCliente">
+          <i class="bi bi-pencil"></i> Editar ficha
+        </button>
+      </div>
+      <div class="ficha-actions-edit d-none">
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="btnCancelarFichaCliente">
+          Cancelar
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" id="btnGuardarFichaCliente">
+          <i class="bi bi-check2"></i> Guardar cambios
+        </button>
+      </div>
       {% endif %}
       <a href="{% url 'clientes_list' %}" class="btn btn-secondary btn-sm">
         <i class="bi bi-arrow-left"></i> Volver al listado
@@ -64,103 +71,219 @@
     </div>
   </div>
 
-  <div class="row g-3 mb-4">
-    {# ── Ficha del cliente ── #}
+  <div class="row g-3 mb-4" id="fichaCliente" data-editing="0">
     <div class="col-12">
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
         <h2 class="h5 mb-0"><i class="bi bi-person-vcard me-1"></i> Ficha del cliente</h2>
-        <span class="text-muted small">Datos actuales de la ficha · los cambios quedan en Auditoría más abajo</span>
+        <span class="text-muted small ficha-hint-view">Datos actuales de la ficha · los cambios quedan en Auditoría más abajo</span>
+        <span class="text-muted small ficha-hint-edit d-none">Modifica los campos y guarda. Cancelar descarta los cambios no guardados.</span>
       </div>
+      <div id="fichaClienteAlerta" class="alert alert-danger d-none py-2" role="alert"></div>
+      {% if puede_editar %}
+      <input type="hidden" id="fichaClienteCsrf" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+      {% endif %}
     </div>
+
     <div class="col-lg-6">
-      <div class="card border-0 shadow-sm h-100">
+      <div class="card border-0 shadow-sm h-100 delco-ficha-card">
         <div class="card-header bg-body"><strong>Datos principales</strong></div>
         <div class="card-body">
-          <dl class="row mb-0 small">
-            <dt class="col-sm-4">Nº Cliente</dt><dd class="col-sm-8">{{ cliente.numero_cliente }}</dd>
-            <dt class="col-sm-4">Nombre</dt><dd class="col-sm-8">{{ cliente.customer_name|default:"—" }}</dd>
-            <dt class="col-sm-4">Comuna</dt><dd class="col-sm-8">{{ cliente.comuna|default:"—" }}</dd>
-            <dt class="col-sm-4">Sector</dt><dd class="col-sm-8">{{ cliente.sector|default:"—" }}</dd>
-            <dt class="col-sm-4">Tipo suministro</dt><dd class="col-sm-8">{{ cliente.tipo_suministro|default:"—" }}</dd>
-            <dt class="col-sm-4">Dirección instalación</dt><dd class="col-sm-8">{% firstof cliente.installation_address "—" %}</dd>
-            <dt class="col-sm-4">Dirección base</dt><dd class="col-sm-8">{{ cliente.direccion|default:"—" }}</dd>
-            <dt class="col-sm-4">Ciudad</dt><dd class="col-sm-8">{{ cliente.city|default:"—" }}</dd>
-            <dt class="col-sm-4">Proyecto actual</dt>
+          <dl class="row mb-0 small delco-ficha-dl">
+            <dt class="col-sm-4">Nº Cliente</dt>
             <dd class="col-sm-8">
-              {% if cliente.proyecto and not cliente.proyecto|es_sin_proyecto %}
-                <span class="badge bg-primary delco-badge-proyecto-ficha">{{ cliente.proyecto }}</span>
-              {% else %}
-                <span class="text-muted">Sin proyecto</span>
+              <span class="ficha-view">{{ cliente.numero_cliente }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="numero_cliente" value="{{ cliente.numero_cliente|default:'' }}" autocomplete="off">
               {% endif %}
             </dd>
-            <dt class="col-sm-4">Marca medidor</dt><dd class="col-sm-8">{{ cliente.meter_manufacturer_id|default:"—" }}</dd>
-            <dt class="col-sm-4">Serie medidor</dt><dd class="col-sm-8">{{ cliente.meter_serial_n_1|default:"—" }}</dd>
-            <dt class="col-sm-4">Empresa</dt><dd class="col-sm-8">{{ cliente.empresa|default:"—" }}</dd>
-            <dt class="col-sm-4">Referencia</dt><dd class="col-sm-8">{{ cliente.referencia|default:"—" }}</dd>
+            <dt class="col-sm-4">Nombre</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.customer_name|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="customer_name" value="{{ cliente.customer_name|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Comuna</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.comuna|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="comuna" value="{{ cliente.comuna|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Sector</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.sector|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="sector" value="{{ cliente.sector|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Tipo suministro</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.tipo_suministro|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="tipo_suministro" value="{{ cliente.tipo_suministro|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Dirección instalación</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{% firstof cliente.installation_address "—" %}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="installation_address" value="{{ cliente.installation_address|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Dirección base</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.direccion|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Ciudad</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.city|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Proyecto actual</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">
+                {% if cliente.proyecto and not cliente.proyecto|es_sin_proyecto %}
+                  <span class="badge bg-primary delco-badge-proyecto-ficha">{{ cliente.proyecto }}</span>
+                {% else %}
+                  <span class="text-muted">Sin proyecto</span>
+                {% endif %}
+              </span>
+              {% if puede_editar %}
+              <select class="form-select form-select-sm ficha-edit" name="proyecto" id="fichaEditarProyecto">
+                <option value="" {% if not cliente.proyecto or cliente.proyecto|es_sin_proyecto %}selected{% endif %}>Sin proyecto</option>
+                {% for proyecto in proyectos_disponibles %}
+                <option value="{{ proyecto }}" {% if cliente.proyecto == proyecto %}selected{% endif %}>{{ proyecto }}</option>
+                {% endfor %}
+                {% if cliente.proyecto and not cliente.proyecto|es_sin_proyecto and cliente.proyecto not in proyectos_disponibles %}
+                <option value="{{ cliente.proyecto }}" selected>{{ cliente.proyecto }}</option>
+                {% endif %}
+              </select>
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Marca medidor</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.meter_manufacturer_id|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="meter_manufacturer_id" value="{{ cliente.meter_manufacturer_id|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Serie medidor</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.meter_serial_n_1|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="meter_serial_n_1" value="{{ cliente.meter_serial_n_1|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Empresa</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.empresa|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Referencia</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.referencia|default:"—" }}</span></dd>
           </dl>
         </div>
       </div>
     </div>
 
-    {# ── Datos operativos no visibles en listado ── #}
     <div class="col-lg-6">
-      <div class="card border-0 shadow-sm h-100">
+      <div class="card border-0 shadow-sm h-100 delco-ficha-card">
         <div class="card-header bg-body"><strong>Datos operativos / conexión</strong></div>
         <div class="card-body">
-          <dl class="row mb-0 small">
-            <dt class="col-sm-4">IP</dt><dd class="col-sm-8">{{ cliente.ip|default:"—" }}</dd>
-            <dt class="col-sm-4">Puerto</dt><dd class="col-sm-8">{{ cliente.puerto|default:"—" }}</dd>
-            <dt class="col-sm-4">Módem</dt><dd class="col-sm-8">{{ cliente.modem|default:"—" }}</dd>
-            <dt class="col-sm-4">Telemetría</dt><dd class="col-sm-8">{{ cliente.get_estado_telemetria_display }}</dd>
+          <dl class="row mb-0 small delco-ficha-dl">
+            <dt class="col-sm-4">IP</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.ip|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="ip" value="{{ cliente.ip|default:'' }}" placeholder="Ej: 10.1.1.1" autocomplete="off">
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Puerto</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.puerto|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="puerto" value="{{ cliente.puerto|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Módem</dt>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.modem|default:"—" }}</span>
+              {% if puede_editar %}
+              <input type="text" class="form-control form-control-sm ficha-edit" name="modem" value="{{ cliente.modem|default:'' }}" autocomplete="off">
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Telemetría</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.get_estado_telemetria_display }}</span></dd>
             <dt class="col-sm-4">STB</dt>
             <dd class="col-sm-8">
-              {% badge_estado_externo cliente.estado_stb cliente.get_estado_stb_display sistema="STB" %}
+              <span class="ficha-readonly">{% badge_estado_externo cliente.estado_stb cliente.get_estado_stb_display sistema="STB" %}</span>
             </dd>
             <dt class="col-sm-4">SCi4</dt>
             <dd class="col-sm-8">
-              {% badge_estado_externo cliente.estado_sci4 cliente.get_estado_sci4_display sistema="SCi4" %}
-              {% if cliente.estado_sci4 == 'PENDIENTE' and puede_editar %}
-                <form method="post" action="{% url 'cliente_marcar_sci4_actualizado' cliente.id %}" class="d-inline ms-2">
-                  {% csrf_token %}
-                  <input type="hidden" name="motivo" value="Validación externa en SCi4 confirmada desde ficha">
-                  <button type="submit" class="btn btn-sm btn-outline-success">
-                    <i class="bi bi-check2-circle"></i> Marcar actualizado en SCi4
-                  </button>
-                </form>
-              {% elif cliente.estado_sci4 != 'ACTUALIZADO' and puede_editar %}
-                <form method="post" action="{% url 'cliente_marcar_sci4_actualizado' cliente.id %}" class="d-inline ms-2">
-                  {% csrf_token %}
-                  <input type="hidden" name="motivo" value="Registro confirmado en SCi4 desde ficha">
-                  <button type="submit" class="btn btn-sm btn-outline-success">
-                    <i class="bi bi-check2-circle"></i> Marcar actualizado en SCi4
-                  </button>
-                </form>
-              {% endif %}
+              <span class="ficha-readonly">
+                {% badge_estado_externo cliente.estado_sci4 cliente.get_estado_sci4_display sistema="SCi4" %}
+                {% if cliente.estado_sci4 == 'PENDIENTE' and puede_editar %}
+                  <form method="post" action="{% url 'cliente_marcar_sci4_actualizado' cliente.id %}" class="d-inline ms-2 ficha-sci4-action">
+                    {% csrf_token %}
+                    <input type="hidden" name="motivo" value="Validación externa en SCi4 confirmada desde ficha">
+                    <button type="submit" class="btn btn-sm btn-outline-success">
+                      <i class="bi bi-check2-circle"></i> Marcar actualizado en SCi4
+                    </button>
+                  </form>
+                {% elif cliente.estado_sci4 != 'ACTUALIZADO' and puede_editar %}
+                  <form method="post" action="{% url 'cliente_marcar_sci4_actualizado' cliente.id %}" class="d-inline ms-2 ficha-sci4-action">
+                    {% csrf_token %}
+                    <input type="hidden" name="motivo" value="Registro confirmado en SCi4 desde ficha">
+                    <button type="submit" class="btn btn-sm btn-outline-success">
+                      <i class="bi bi-check2-circle"></i> Marcar actualizado en SCi4
+                    </button>
+                  </form>
+                {% endif %}
+              </span>
             </dd>
-            <dt class="col-sm-4">SIM operador</dt><dd class="col-sm-8">{{ cliente.sim_operador|default:"—" }}</dd>
-            <dt class="col-sm-4">SIM ICCID</dt><dd class="col-sm-8">{{ cliente.sim_iccid|default:"—" }}</dd>
-            <dt class="col-sm-4">SIM abonado</dt><dd class="col-sm-8">{{ cliente.sim_abonado|default:"—" }}</dd>
-            <dt class="col-sm-4">Estado SIM</dt><dd class="col-sm-8">{% if cliente.sim_estado %}{{ cliente.get_sim_estado_display }}{% else %}—{% endif %}</dd>
+            <dt class="col-sm-4">SIM operador</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.sim_operador|default:"—" }}</span></dd>
+            <dt class="col-sm-4">SIM ICCID</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.sim_iccid|default:"—" }}</span></dd>
+            <dt class="col-sm-4">SIM abonado</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.sim_abonado|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Estado SIM</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{% if cliente.sim_estado %}{{ cliente.get_sim_estado_display }}{% else %}—{% endif %}</span></dd>
             <dt class="col-sm-4">Restricción</dt>
             <dd class="col-sm-8">
-              {% if cliente.estado_restriccion %}
-                <span class="badge text-bg-warning">{{ cliente.get_estado_restriccion_display }}</span>
-              {% else %}
-                —
+              <span class="ficha-view">
+                {% if cliente.estado_restriccion %}
+                  <span class="badge text-bg-warning">{{ cliente.get_estado_restriccion_display }}</span>
+                {% else %}
+                  —
+                {% endif %}
+              </span>
+              {% if puede_editar %}
+              <select class="form-select form-select-sm ficha-edit" name="estado_restriccion" id="fichaEditarEstadoRestriccion">
+                {% for codigo, nombre in estado_restriccion_choices %}
+                <option value="{{ codigo }}" {% if cliente.estado_restriccion == codigo %}selected{% endif %}>{{ nombre }}</option>
+                {% endfor %}
+              </select>
               {% endif %}
             </dd>
             <dt class="col-sm-4">Justificación</dt>
-            <dd class="col-sm-8">{{ cliente.justificacion_restriccion|default:"—" }}</dd>
-            <dt class="col-sm-4">Último acceso</dt><dd class="col-sm-8">{{ cliente.ultimo_acceso|default:"—" }}</dd>
-            <dt class="col-sm-4">Último perfil carga</dt><dd class="col-sm-8">{{ cliente.ultimo_perfil_carga|default:"—" }}</dd>
-            <dt class="col-sm-4">Último perfil instr.</dt><dd class="col-sm-8">{{ cliente.ultimo_perfil_instrumentacion|default:"—" }}</dd>
-            <dt class="col-sm-4">Último reset</dt><dd class="col-sm-8">{{ cliente.ultimo_reset|default:"—" }}</dd>
-            <dt class="col-sm-4">Último reg. facturación</dt><dd class="col-sm-8">{{ cliente.ultimo_registro_facturacion|default:"—" }}</dd>
-            <dt class="col-sm-4">Fecha registro</dt><dd class="col-sm-8">{{ cliente.fecha_registro|default:"—" }}</dd>
-            <dt class="col-sm-4">Trabajo</dt><dd class="col-sm-8">{{ cliente.trabajo|default:"—" }}</dd>
-            <dt class="col-sm-4">Nota</dt><dd class="col-sm-8">{{ cliente.note|default:"—" }}</dd>
+            <dd class="col-sm-8">
+              <span class="ficha-view">{{ cliente.justificacion_restriccion|default:"—" }}</span>
+              {% if puede_editar %}
+              <textarea class="form-control form-control-sm ficha-edit" name="justificacion_restriccion" rows="2" placeholder="Obligatoria si hay restricción">{{ cliente.justificacion_restriccion|default:'' }}</textarea>
+              {% endif %}
+            </dd>
+            <dt class="col-sm-4">Último acceso</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.ultimo_acceso|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Último perfil carga</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.ultimo_perfil_carga|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Último perfil instr.</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.ultimo_perfil_instrumentacion|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Último reset</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.ultimo_reset|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Último reg. facturación</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.ultimo_registro_facturacion|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Fecha registro</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.fecha_registro|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Trabajo</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.trabajo|default:"—" }}</span></dd>
+            <dt class="col-sm-4">Nota</dt>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.note|default:"—" }}</span></dd>
             <dt class="col-sm-4">Creado / actualizado</dt>
-            <dd class="col-sm-8">{{ cliente.fecha_creacion|date:"d/m/Y H:i" }} · {{ cliente.fecha_actualizacion|date:"d/m/Y H:i" }}</dd>
+            <dd class="col-sm-8"><span class="ficha-readonly">{{ cliente.fecha_creacion|date:"d/m/Y H:i" }} · {{ cliente.fecha_actualizacion|date:"d/m/Y H:i" }}</span></dd>
           </dl>
         </div>
       </div>
@@ -201,7 +324,7 @@
             {% empty %}
             <tr>
               <td colspan="4" class="text-center text-muted py-3">
-                Sin historial de proyectos aún. Al cambiar el proyecto desde Editar quedará registrado aquí.
+                Sin historial de proyectos aún. Al cambiar el proyecto al editar la ficha quedará registrado aquí.
               </td>
             </tr>
             {% endfor %}
@@ -523,111 +646,94 @@
   </div>
 </div>
 
-{% if puede_editar %}
-<div class="modal fade" id="modalEditarClienteHistorial" tabindex="-1" aria-labelledby="modalEditarClienteHistorialLabel" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="modalEditarClienteHistorialLabel">✏️ Editar cliente {{ cliente.numero_cliente }}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
-      </div>
-      <form id="formEditarClienteHistorial">
-        {% csrf_token %}
-        <input type="hidden" name="ajax" value="1">
-        <input type="hidden" name="next" value="{% url 'cliente_historial' cliente.id %}">
-        <div class="modal-body">
-          <div id="editarClienteHistorialAlerta" class="alert alert-danger d-none" role="alert"></div>
-          <p class="text-muted small mb-3">Al cancelar o guardar permanecerás en el historial de este cliente.</p>
-          <div class="row g-3">
-            <div class="col-md-4">
-              <label class="form-label fw-semibold" for="histEditarNumeroCliente">Número de Cliente</label>
-              <input type="text" class="form-control" id="histEditarNumeroCliente" name="numero_cliente" value="{{ cliente.numero_cliente|default:'' }}">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold" for="histEditarSector">Sector</label>
-              <input type="text" class="form-control" id="histEditarSector" name="sector" value="{{ cliente.sector|default:'' }}">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold" for="histEditarTipoSuministro">Tipo de Suministro</label>
-              <input type="text" class="form-control" id="histEditarTipoSuministro" name="tipo_suministro" value="{{ cliente.tipo_suministro|default:'' }}">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold" for="histEditarComuna">Comuna</label>
-              <input type="text" class="form-control" id="histEditarComuna" name="comuna" value="{{ cliente.comuna|default:'' }}">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold" for="histEditarCustomerName">Nombre Cliente</label>
-              <input type="text" class="form-control" id="histEditarCustomerName" name="customer_name" value="{{ cliente.customer_name|default:'' }}">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold" for="histEditarInstallationAddress">Dirección Instalación</label>
-              <input type="text" class="form-control" id="histEditarInstallationAddress" name="installation_address" value="{{ cliente.installation_address|default:'' }}">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold" for="histEditarMeterManufacturer">Marca Medidor</label>
-              <input type="text" class="form-control" id="histEditarMeterManufacturer" name="meter_manufacturer_id" value="{{ cliente.meter_manufacturer_id|default:'' }}">
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold" for="histEditarProyecto">Proyecto</label>
-              <select class="form-select" id="histEditarProyecto" name="proyecto">
-                <option value="" {% if not cliente.proyecto or cliente.proyecto|es_sin_proyecto %}selected{% endif %}>Sin proyecto</option>
-                {% for proyecto in proyectos_disponibles %}
-                <option value="{{ proyecto }}" {% if cliente.proyecto == proyecto %}selected{% endif %}>{{ proyecto }}</option>
-                {% endfor %}
-                {% if cliente.proyecto and not cliente.proyecto|es_sin_proyecto and cliente.proyecto not in proyectos_disponibles %}
-                <option value="{{ cliente.proyecto }}" selected>{{ cliente.proyecto }}</option>
-                {% endif %}
-              </select>
-              <small class="text-muted">Solo proyectos ya registrados en el sistema.</small>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold" for="histEditarMeterSerial">Serie Medidor</label>
-              <input type="text" class="form-control" id="histEditarMeterSerial" name="meter_serial_n_1" value="{{ cliente.meter_serial_n_1|default:'' }}">
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold" for="histEditarEstadoRestriccion">Restricción / estado visita-IP</label>
-              <select class="form-select" id="histEditarEstadoRestriccion" name="estado_restriccion">
-                {% for codigo, nombre in estado_restriccion_choices %}
-                <option value="{{ codigo }}" {% if cliente.estado_restriccion == codigo %}selected{% endif %}>{{ nombre }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold" for="histEditarJustificacionRestriccion">Justificación</label>
-              <textarea class="form-control" id="histEditarJustificacionRestriccion" name="justificacion_restriccion" rows="2" placeholder="Obligatoria si hay restricción">{{ cliente.justificacion_restriccion|default:'' }}</textarea>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary" id="btnGuardarEditarClienteHistorial">✓ Guardar cambios</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
-{% endif %}
 {% endblock %}
 
 {% block extra_js %}
 {% if puede_editar %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-  var form = document.getElementById('formEditarClienteHistorial');
-  var modalEl = document.getElementById('modalEditarClienteHistorial');
-  if (!form || !modalEl) return;
+  var ficha = document.getElementById('fichaCliente');
+  var btnEditar = document.getElementById('btnEditarFichaCliente');
+  var btnCancelar = document.getElementById('btnCancelarFichaCliente');
+  var btnGuardar = document.getElementById('btnGuardarFichaCliente');
+  var alerta = document.getElementById('fichaClienteAlerta');
+  var csrfInput = document.getElementById('fichaClienteCsrf');
+  if (!ficha || !btnEditar || !btnGuardar) return;
 
-  var alerta = document.getElementById('editarClienteHistorialAlerta');
-  var btnGuardar = document.getElementById('btnGuardarEditarClienteHistorial');
   var clienteId = {{ cliente.id }};
+  var snapshot = {};
 
-  form.addEventListener('submit', function(event) {
-    event.preventDefault();
-    var formData = new FormData(form);
-    if (btnGuardar) {
-      btnGuardar.disabled = true;
-      btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
+  function camposEditables() {
+    return ficha.querySelectorAll('.ficha-edit');
+  }
+
+  function tomarSnapshot() {
+    snapshot = {};
+    camposEditables().forEach(function(el) {
+      if (!el.name) return;
+      snapshot[el.name] = el.value;
+    });
+  }
+
+  function restaurarSnapshot() {
+    camposEditables().forEach(function(el) {
+      if (!el.name || !(el.name in snapshot)) return;
+      el.value = snapshot[el.name];
+    });
+  }
+
+  function setEditing(on) {
+    ficha.classList.toggle('is-editing', !!on);
+    ficha.setAttribute('data-editing', on ? '1' : '0');
+    document.querySelectorAll('.ficha-actions-view').forEach(function(el) {
+      el.classList.toggle('d-none', !!on);
+    });
+    document.querySelectorAll('.ficha-actions-edit').forEach(function(el) {
+      el.classList.toggle('d-none', !on);
+    });
+    document.querySelectorAll('.ficha-hint-view').forEach(function(el) {
+      el.classList.toggle('d-none', !!on);
+    });
+    document.querySelectorAll('.ficha-hint-edit').forEach(function(el) {
+      el.classList.toggle('d-none', !on);
+    });
+    if (alerta) {
+      alerta.classList.add('d-none');
+      alerta.textContent = '';
     }
+    if (on) {
+      var first = ficha.querySelector('.ficha-edit');
+      if (first) first.focus();
+      ficha.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  tomarSnapshot();
+
+  btnEditar.addEventListener('click', function() {
+    tomarSnapshot();
+    setEditing(true);
+  });
+
+  if (btnCancelar) {
+    btnCancelar.addEventListener('click', function() {
+      restaurarSnapshot();
+      setEditing(false);
+    });
+  }
+
+  btnGuardar.addEventListener('click', function() {
+    var formData = new FormData();
+    formData.append('ajax', '1');
+    formData.append('next', window.location.pathname);
+    if (csrfInput) formData.append('csrfmiddlewaretoken', csrfInput.value);
+    camposEditables().forEach(function(el) {
+      if (!el.name) return;
+      formData.append(el.name, el.value);
+    });
+
+    btnGuardar.disabled = true;
+    btnGuardar.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
     if (alerta) alerta.classList.add('d-none');
 
     fetch('/clientes/' + clienteId + '/editar/', {
@@ -646,11 +752,11 @@ document.addEventListener('DOMContentLoaded', function() {
     .then(function(result) {
       if (result.data && result.data.success) {
         if (window.showToast) showToast(result.data.message || 'Cliente actualizado.', 'success');
-        var modalInstance = bootstrap.Modal.getInstance(modalEl);
-        if (modalInstance) modalInstance.hide();
         setTimeout(function() {
-          window.location.reload();
-        }, 400);
+          var url = new URL(window.location.href);
+          url.searchParams.delete('editar');
+          window.location.href = url.pathname + (url.search || '');
+        }, 350);
       } else {
         var msg = (result.data && result.data.message) || 'No se pudo guardar el cliente.';
         if (alerta) {
@@ -658,10 +764,8 @@ document.addEventListener('DOMContentLoaded', function() {
           alerta.classList.remove('d-none');
         }
         if (window.showToast) showToast(msg, 'danger');
-        if (btnGuardar) {
-          btnGuardar.disabled = false;
-          btnGuardar.innerHTML = '✓ Guardar cambios';
-        }
+        btnGuardar.disabled = false;
+        btnGuardar.innerHTML = '<i class="bi bi-check2"></i> Guardar cambios';
       }
     })
     .catch(function() {
@@ -671,12 +775,18 @@ document.addEventListener('DOMContentLoaded', function() {
         alerta.classList.remove('d-none');
       }
       if (window.showToast) showToast(msg, 'danger');
-      if (btnGuardar) {
-        btnGuardar.disabled = false;
-        btnGuardar.innerHTML = '✓ Guardar cambios';
-      }
+      btnGuardar.disabled = false;
+      btnGuardar.innerHTML = '<i class="bi bi-check2"></i> Guardar cambios';
     });
   });
+
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('editar') === '1') {
+    setEditing(true);
+    params.delete('editar');
+    var qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? ('?' + qs) : ''));
+  }
 });
 </script>
 {% endif %}

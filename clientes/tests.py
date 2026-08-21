@@ -197,6 +197,57 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertNotIn(f'data-serie="{self.medidor.serie}"', html)
 		self.assertIn(f'data-serie="{self.medidor_alt.serie}"', html)
 
+	def test_listado_editar_apunta_al_historial_sin_modal(self):
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-EDIT-UI',
+			direccion='Dir',
+			comuna='Santiago',
+			meter_serial_n_1=self.medidor.serie,
+			medidor_actual=self.medidor,
+			activo=True,
+		)
+		response = self.client.get(reverse('clientes_list'))
+		self.assertEqual(response.status_code, 200)
+		html = response.content.decode()
+		self.assertNotIn('modalEditarCliente', html)
+		self.assertNotIn('btn-editar-cliente', html)
+		self.assertIn(f'/clientes/{cliente.pk}/historial/?editar=1', html)
+
+	def test_historial_tiene_edicion_inline_sin_modal(self):
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-HIST-UI',
+			direccion='Dir',
+			comuna='Santiago',
+			customer_name='Cliente Historial',
+			meter_serial_n_1=self.medidor.serie,
+			medidor_actual=self.medidor,
+			ip='10.20.30.40',
+			activo=True,
+		)
+		response = self.client.get(reverse('cliente_historial', kwargs={'pk': cliente.pk}))
+		self.assertEqual(response.status_code, 200)
+		html = response.content.decode()
+		self.assertNotIn('modalEditarClienteHistorial', html)
+		self.assertIn('id="fichaCliente"', html)
+		self.assertIn('id="btnEditarFichaCliente"', html)
+		self.assertIn('name="customer_name"', html)
+		self.assertIn('name="ip"', html)
+		self.assertIn('name="modem"', html)
+		self.assertIn('class="form-control form-control-sm ficha-edit"', html)
+
+	def test_get_editar_redirige_al_historial(self):
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-REDIR',
+			direccion='Dir',
+			comuna='Santiago',
+			meter_serial_n_1=self.medidor_alt.serie,
+			medidor_actual=self.medidor_alt,
+			activo=True,
+		)
+		response = self.client.get(reverse('cliente_editar', kwargs={'pk': cliente.pk}))
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response.url, reverse('cliente_historial', kwargs={'pk': cliente.pk}))
+
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
 class ClienteImportarViewTests(TestCase):
