@@ -233,6 +233,23 @@ class OrdenesBasicasWorkflowTests(TestCase):
 		buffer.name = 'ordenes_test.xlsx'
 		return buffer
 
+	def _excel_plantilla_asignacion(self, rows):
+		wb = openpyxl.Workbook()
+		ws = wb.active
+		ws.title = 'Hoja1'
+		ws.append([
+			'SOLICITUD', 'CLIENTE', 'MEDIDOR', 'MARCA', 'NOMBRE',
+			'DIRECCION', 'COMUNA', 'TECNICO', 'TRABAJO', 'IP', 'PUERTO',
+			'MODEM', 'FECHA',
+		])
+		for row in rows:
+			ws.append(row)
+		buffer = BytesIO()
+		wb.save(buffer)
+		buffer.seek(0)
+		buffer.name = 'plantilla_asignacion.xlsx'
+		return buffer
+
 	def test_creacion_orden_asigna_estado_inicial_correcto(self):
 		response = self.client.post(reverse('orden_crear'), {
 			'titulo': 'OT Base',
@@ -328,6 +345,52 @@ class OrdenesBasicasWorkflowTests(TestCase):
 		self.assertGreaterEqual(importacion.fallidas, 1)
 		self.assertFalse(OrdenTrabajo.objects.filter(titulo='OT Fantasma').exists())
 		self.assertFalse(Cliente.objects.filter(numero_cliente='CLI-INEXISTENTE').exists())
+
+	def test_importacion_plantilla_asignacion_trabajo(self):
+		from datetime import date
+		from ordenes_trabajo.utils import exportar_ordenes_excel
+
+		archivo = self._excel_plantilla_asignacion([
+			[
+				'SOL-4401',
+				'CLI-OT-001',
+				'SER-OT-001',
+				'TEST',
+				'Cliente OT',
+				'ANTONIO BELLET 197',
+				'PROVIDENCIA',
+				'tecnico_ot',
+				'CAMBIO',
+				'10.117.23.47',
+				'4060',
+				'',
+				date(2026, 8, 13),
+			],
+		])
+		importacion = importar_ordenes_excel(archivo, self.admin)
+		self.assertEqual(importacion.estado, 'COMPLETADO', importacion.observaciones)
+		self.assertEqual(importacion.exitosas, 1)
+		orden = OrdenTrabajo.objects.get(titulo='SOL-4401')
+		self.assertEqual(orden.tipo_trabajo, 'CAMBIO')
+		self.assertEqual(orden.tecnico_responsable, self.tecnico)
+		self.assertEqual(orden.estado, 'ASIGNADA')
+		self.assertEqual(orden.medidor_id, self.medidor.id)
+		self.assertIsNotNone(orden.fecha_asignacion)
+		self.assertEqual(orden.fecha_asignacion.date(), date(2026, 8, 13))
+		self.assertIn('PROVIDENCIA', orden.descripcion)
+
+		wb = exportar_ordenes_excel([orden])
+		headers = [c.value for c in wb.active[1]]
+		self.assertEqual(headers[0], 'SOLICITUD')
+		self.assertEqual(headers[1], 'CLIENTE')
+		self.assertIn('PROYECTO', headers)
+		self.assertIn('Fecha Creacion', headers)
+		self.assertIn('Fecha Asignacion', headers)
+		self.assertNotIn('SIM IMEI', headers)
+		fila = [c.value for c in wb.active[2]]
+		self.assertEqual(fila[0], 'SOL-4401')
+		self.assertEqual(fila[1], 'CLI-OT-001')
+		self.assertEqual(fila[2], 'SER-OT-001')
 
 	def test_tecnico_ve_solo_sus_ordenes_en_listado(self):
 		orden_1 = OrdenTrabajo.objects.create(

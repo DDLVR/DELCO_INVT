@@ -1,5 +1,7 @@
 from django.db import models
 
+from config.storage import evidencia_upload_to, evidencias_storage
+
 
 # PDF punto 4 — disponible como constante de módulo (views/validators)
 ESTADO_RESTRICCION_CHOICES = [
@@ -381,3 +383,74 @@ class ClienteProyectoHistorial(models.Model):
     def __str__(self):
         estado = 'vigente' if self.vigente else 'cerrado'
         return f'{self.cliente_id} · {self.proyecto} ({estado})'
+
+
+class ClienteAdjunto(models.Model):
+    """Fotos, PDF u otros archivos asociados a la ficha del cliente."""
+
+    TIPO_CHOICES = [
+        ('FOTO', 'Fotografía / captura de pantalla'),
+        ('PDF', 'PDF'),
+        ('OTRO', 'Otro'),
+    ]
+
+    cliente = models.ForeignKey(
+        Cliente,
+        on_delete=models.CASCADE,
+        related_name='adjuntos',
+    )
+    tipo = models.CharField(max_length=20, choices=TIPO_CHOICES, default='FOTO')
+    nombre_archivo = models.CharField(max_length=255)
+    archivo = models.FileField(
+        upload_to=evidencia_upload_to,
+        storage=evidencias_storage,
+        help_text='Archivo en Registros/Evidencias/adjuntos_clientes',
+    )
+    subido_por = models.ForeignKey(
+        'usuarios.Usuario',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adjuntos_cliente_subidos',
+    )
+    fecha_hora = models.DateTimeField(auto_now_add=True)
+    hash_archivo = models.CharField(max_length=64, blank=True)
+
+    eliminado = models.BooleanField(default=False, db_index=True)
+    fecha_eliminacion = models.DateTimeField(null=True, blank=True)
+    eliminado_por = models.ForeignKey(
+        'usuarios.Usuario',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='adjuntos_cliente_eliminados',
+    )
+
+    class Meta:
+        ordering = ['-fecha_hora']
+        verbose_name = 'Adjunto de cliente'
+        verbose_name_plural = 'Adjuntos de clientes'
+        indexes = [
+            models.Index(fields=['cliente']),
+            models.Index(fields=['tipo']),
+            models.Index(fields=['cliente', 'eliminado']),
+        ]
+
+    def __str__(self):
+        return f'{self.nombre_archivo} — Cliente #{self.cliente_id}'
+
+    @property
+    def es_imagen(self) -> bool:
+        nombre = (self.nombre_archivo or '').lower()
+        if self.archivo and getattr(self.archivo, 'name', None):
+            nombre = self.archivo.name.lower()
+        return nombre.endswith(('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp'))
+
+    @property
+    def url_vista(self) -> str:
+        if self.archivo:
+            try:
+                return self.archivo.url
+            except ValueError:
+                pass
+        return ''
