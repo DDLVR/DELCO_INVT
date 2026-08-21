@@ -112,13 +112,14 @@ class CargaAdministrativa(models.Model):
         verbose_name = 'Carga administrativa'
         verbose_name_plural = 'Cargas administrativas'
         indexes = [
-            models.Index(fields=['estado', '-fecha_creacion']),
-            models.Index(fields=['asignado_a', 'estado']),
-            models.Index(fields=['tipo', 'estado']),
-            models.Index(fields=['orden']),
-            models.Index(fields=['cliente']),
-            models.Index(fields=['proyecto']),
-            models.Index(fields=['eliminado', 'estado']),
+            # Nombres fijos = migraciones 0001/0004/0005 (evita RenameIndex en hosting).
+            models.Index(fields=['estado', '-fecha_creacion'], name='cargas_carg_estado_a11caf_idx'),
+            models.Index(fields=['asignado_a', 'estado'], name='cargas_carg_asignad_d0830e_idx'),
+            models.Index(fields=['tipo', 'estado'], name='cargas_carg_tipo_6d921f_idx'),
+            models.Index(fields=['orden'], name='cargas_carg_orden_i_bc80ad_idx'),
+            models.Index(fields=['cliente'], name='cargas_carg_cliente_fbbdd2_idx'),
+            models.Index(fields=['proyecto'], name='cargas_carg_proyec_7a1b2c_idx'),
+            models.Index(fields=['eliminado', 'estado'], name='cargas_carg_elimin_4f9a2c_idx'),
         ]
 
     def __str__(self):
@@ -184,9 +185,10 @@ class AdjuntoCarga(models.Model):
         verbose_name = 'Adjunto de carga'
         verbose_name_plural = 'Adjuntos de cargas'
         indexes = [
-            models.Index(fields=['carga']),
-            models.Index(fields=['tipo']),
-            models.Index(fields=['carga', 'eliminado']),
+            # Nombres fijos = migraciones 0002/0003 (evita RenameIndex en hosting).
+            models.Index(fields=['carga'], name='cargas_adju_carga_i_3ae21d_idx'),
+            models.Index(fields=['tipo'], name='cargas_adju_tipo_4b80da_idx'),
+            models.Index(fields=['carga', 'eliminado'], name='cargas_adju_carga_i_5c6c74_idx'),
         ]
 
     def __str__(self):
