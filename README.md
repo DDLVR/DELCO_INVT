@@ -197,8 +197,16 @@ Migraciones recientes a tener en cuenta (si el servidor aún no las tiene):
 - `cargas.0002` — adjuntos de carga (fotos / PDF MoreApp)  
 - `cargas.0003` — papelera / soft-delete de adjuntos  
 
-4. Reiniciar la app Passenger / Python App en el panel del hosting  
-5. Verificar login y rutas nuevas (`/cargas/`, `/ordenes/terminadas/`, comprobantes, adjuntos en carga, historial cliente)
+4. **Actualizar estáticos** (WhiteNoise sirve `staticfiles/`, no `static/`):
+
+```bash
+python manage.py collectstatic --noinput
+```
+
+Si se omite, el HTML nuevo (git pull) se ve con CSS viejo: el modal «Importar clientes» muestra el botón nativo «Elegir archivo» en vez del dropzone.
+
+5. Reiniciar la app Passenger / Python App (`touch tmp/restart.txt` o Restart en el panel). El arranque copia `static/css` → `staticfiles/css` por si faltó collectstatic. En el navegador: recarga forzada (Ctrl+F5).
+6. Verificar login y rutas nuevas (`/cargas/`, `/ordenes/terminadas/`, comprobantes, adjuntos en carga, historial cliente)
 
 > La app `cargas` se importa en `web/urls.py` de forma fija: el deploy debe incluir la app y su migración o el sitio no arranca.
 

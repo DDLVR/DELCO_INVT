@@ -38,3 +38,21 @@ def delco_api_urls(request):
             'clientes_modificar_masivo': _safe_reverse('clientes_modificar_masivo'),
         }
     }
+
+
+def _mtime_version(rel_path: str) -> str:
+    """Versión corta basada en mtime para romper caché del navegador/CDN."""
+    from django.conf import settings
+
+    try:
+        path = settings.BASE_DIR / 'static' / rel_path
+        if path.is_file():
+            return str(int(path.stat().st_mtime))
+    except Exception:
+        pass
+    return '1'
+
+
+def delco_static_version(request):
+    """Expone delco_css_v para ?v= en app.css (producción no re-collectstatic)."""
+    return {'delco_css_v': _mtime_version('css/app.css')}
