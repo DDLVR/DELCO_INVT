@@ -3731,21 +3731,15 @@ def cliente_editar_view(request, pk):
             'trabajo': cliente.trabajo,
             'note': cliente.note,
         }
-        for field_name, old_value in before_values.items():
-            new_value = after_values.get(field_name)
-            if old_value != new_value:
-                register_audit_event(
-                    AuditEvent(
-                        actor_id=getattr(request.user, 'id', None),
-                        action='CLIENT_UPDATE',
-                        entity='Cliente',
-                        entity_id=str(cliente.id),
-                        field_name=field_name,
-                        old_value=old_value,
-                        new_value=new_value,
-                        reason='Edición desde historial del cliente',
-                    )
-                )
+        audit_field_changes(
+            actor_id=getattr(request.user, 'id', None),
+            action='CLIENT_UPDATE',
+            entity='Cliente',
+            entity_id=str(cliente.id),
+            before=before_values,
+            after=after_values,
+            reason='Edición desde historial del cliente',
+        )
 
         from clientes.sci4 import aplicar_pendiente_si_cambio_critico
         sci4_marcado, campos_sci4 = aplicar_pendiente_si_cambio_critico(
@@ -4267,6 +4261,12 @@ def clientes_modificar_masivo_view(request):
     from clientes.proyecto_historial import registrar_cambio_proyecto
 
     for cliente in Cliente.objects.filter(pk__in=ids, activo=True):
+        before_values = {
+            'sector': cliente.sector,
+            'comuna': cliente.comuna,
+            'tipo_suministro': cliente.tipo_suministro,
+            'proyecto': cliente.proyecto,
+        }
         changed = False
         if sector and (cliente.sector or '') != sector:
             cliente.sector = sector
@@ -4278,9 +4278,7 @@ def clientes_modificar_masivo_view(request):
             cliente.tipo_suministro = tipo_suministro
             changed = True
 
-        proyecto_cambio = False
         if proyecto and (cliente.proyecto or '') != proyecto:
-            before_proy = cliente.proyecto
             proyecto_cambio = registrar_cambio_proyecto(
                 cliente,
                 proyecto,
@@ -4290,18 +4288,6 @@ def clientes_modificar_masivo_view(request):
             )
             if proyecto_cambio:
                 changed = True
-                register_audit_event(
-                    AuditEvent(
-                        actor_id=getattr(request.user, 'id', None),
-                        action='CLIENT_UPDATE',
-                        entity='Cliente',
-                        entity_id=str(cliente.id),
-                        field_name='proyecto',
-                        old_value=before_proy,
-                        new_value=cliente.proyecto,
-                        reason='Cambio de proyecto (edición masiva)',
-                    )
-                )
 
         if changed:
             # Si solo cambió proyecto, registrar_cambio_proyecto ya guardó.
@@ -4315,6 +4301,21 @@ def clientes_modificar_masivo_view(request):
                 if tipo_suministro:
                     update_fields.append('tipo_suministro')
                 cliente.save(update_fields=update_fields)
+            after_values = {
+                'sector': cliente.sector,
+                'comuna': cliente.comuna,
+                'tipo_suministro': cliente.tipo_suministro,
+                'proyecto': cliente.proyecto,
+            }
+            audit_field_changes(
+                actor_id=getattr(request.user, 'id', None),
+                action='CLIENT_UPDATE',
+                entity='Cliente',
+                entity_id=str(cliente.id),
+                before=before_values,
+                after=after_values,
+                reason='Edición masiva desde listado de clientes',
+            )
             actualizados += 1
         else:
             omitidos += 1

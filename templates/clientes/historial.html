@@ -75,8 +75,8 @@
     <div class="col-12">
       <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-1">
         <h2 class="h5 mb-0"><i class="bi bi-person-vcard me-1"></i> Ficha del cliente</h2>
-        <span class="text-muted small ficha-hint-view">Datos actuales de la ficha · los cambios quedan en Auditoría más abajo</span>
-        <span class="text-muted small ficha-hint-edit d-none">Modifica los campos y guarda. Cancelar descarta los cambios no guardados.</span>
+        <span class="text-muted small ficha-hint-view">Datos actuales de la ficha · cada cambio queda en «Cambios de datos de la ficha»</span>
+        <span class="text-muted small ficha-hint-edit d-none">Modifica los campos y guarda. Cada campo modificado se registra en el historial de auditoría de este cliente.</span>
       </div>
       <div id="fichaClienteAlerta" class="alert alert-danger d-none py-2" role="alert"></div>
       {% if puede_editar %}
@@ -736,7 +736,9 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="7" class="text-center text-muted py-3">Sin eventos de auditoría para esta ficha.</td>
+              <td colspan="7" class="text-center text-muted py-3">
+                Aún no hay cambios registrados. Al editar y guardar la ficha, cada campo modificado aparecerá aquí con usuario, fecha y valores.
+              </td>
             </tr>
             {% endfor %}
           </tbody>

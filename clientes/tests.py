@@ -317,6 +317,28 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertEqual(cliente.note, 'Nota ficha')
 		self.assertEqual(str(cliente.fecha_registro), '2026-01-10')
 
+		from web.models import AuditLog
+		from web.services.audit_labels import label_campo
+
+		logs = AuditLog.objects.filter(
+			entity='Cliente',
+			entity_id=str(cliente.pk),
+			action='CLIENT_UPDATE',
+		)
+		self.assertTrue(logs.exists())
+		campos = set(logs.values_list('field_name', flat=True))
+		for esperado in ('direccion', 'empresa', 'note', 'estado_telemetria', 'sim_iccid', 'trabajo'):
+			self.assertIn(esperado, campos)
+		self.assertEqual(label_campo('direccion'), 'Dirección base')
+		self.assertEqual(label_campo('sim_iccid'), 'SIM ICCID')
+
+		hist = self.client.get(reverse('cliente_historial', kwargs={'pk': cliente.pk}))
+		self.assertEqual(hist.status_code, 200)
+		html = hist.content.decode()
+		self.assertIn('Cambios de datos de la ficha', html)
+		self.assertIn('Dirección base', html)
+		self.assertIn('Dir Nueva', html)
+
 	def test_get_editar_redirige_al_historial(self):
 		cliente = Cliente.objects.create(
 			numero_cliente='CLI-REDIR',
