@@ -197,6 +197,329 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertNotIn(f'data-serie="{self.medidor.serie}"', html)
 		self.assertIn(f'data-serie="{self.medidor_alt.serie}"', html)
 
+	def test_listado_editar_apunta_al_historial_sin_modal(self):
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-EDIT-UI',
+			direccion='Dir',
+			comuna='Santiago',
+			meter_serial_n_1=self.medidor.serie,
+			medidor_actual=self.medidor,
+			activo=True,
+		)
+		response = self.client.get(reverse('clientes_list'))
+		self.assertEqual(response.status_code, 200)
+		html = response.content.decode()
+		self.assertNotIn('modalEditarCliente', html)
+		self.assertNotIn('btn-editar-cliente', html)
+		self.assertIn(f'/clientes/{cliente.pk}/historial/?editar=1', html)
+
+	def test_historial_tiene_edicion_inline_sin_modal(self):
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-HIST-UI',
+			direccion='Dir',
+			comuna='Santiago',
+			customer_name='Cliente Historial',
+			meter_serial_n_1=self.medidor.serie,
+			medidor_actual=self.medidor,
+			ip='10.20.30.40',
+			activo=True,
+		)
+		response = self.client.get(reverse('cliente_historial', kwargs={'pk': cliente.pk}))
+		self.assertEqual(response.status_code, 200)
+		html = response.content.decode()
+		self.assertNotIn('modalEditarClienteHistorial', html)
+		self.assertIn('id="fichaCliente"', html)
+		self.assertIn('id="btnEditarFichaCliente"', html)
+		self.assertIn('name="customer_name"', html)
+		self.assertIn('name="ip"', html)
+		self.assertIn('name="modem"', html)
+		self.assertIn('name="direccion"', html)
+		self.assertIn('name="city"', html)
+		self.assertIn('name="empresa"', html)
+		self.assertIn('name="referencia"', html)
+		self.assertIn('name="estado_telemetria"', html)
+		self.assertIn('name="estado_stb"', html)
+		self.assertIn('name="sim_operador"', html)
+		self.assertIn('name="sim_iccid"', html)
+		self.assertIn('name="sim_abonado"', html)
+		self.assertIn('name="sim_estado"', html)
+		self.assertIn('name="ultimo_acceso"', html)
+		self.assertIn('name="fecha_registro"', html)
+		self.assertIn('name="trabajo"', html)
+		self.assertIn('name="note"', html)
+		self.assertIn('class="form-control form-control-sm ficha-edit"', html)
+		self.assertIn('id="documentosCliente"', html)
+		self.assertIn('Documentos del cliente', html)
+		self.assertIn('name="accion" value="subir_adjunto"', html)
+
+	def test_edicion_guarda_campos_extendidos_de_ficha(self):
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-EXT-EDIT',
+			direccion='Dir Vieja',
+			comuna='Santiago',
+			customer_name='Antes',
+			meter_serial_n_1=self.medidor.serie,
+			medidor_actual=self.medidor,
+			ip='10.0.0.1',
+			activo=True,
+		)
+		response = self.client.post(
+			reverse('cliente_editar', kwargs={'pk': cliente.pk}),
+			{
+				'numero_cliente': cliente.numero_cliente,
+				'sector': 'SUR',
+				'tipo_suministro': 'ELECTRICO',
+				'comuna': 'Maipu',
+				'customer_name': 'Despues',
+				'installation_address': 'Inst Nueva',
+				'direccion': 'Dir Nueva',
+				'city': 'Santiago',
+				'empresa': 'Delco',
+				'referencia': 'Puerta azul',
+				'proyecto': '',
+				'meter_manufacturer_id': 'TEST',
+				'meter_serial_n_1': self.medidor.serie,
+				'ip': '10.0.0.1',
+				'puerto': '502',
+				'modem': 'MOD-X',
+				'estado_telemetria': 'SIN_COMUNICACION',
+				'estado_stb': 'PENDIENTE',
+				'sim_operador': 'Entel',
+				'sim_iccid': '890123',
+				'sim_abonado': '56911112222',
+				'sim_estado': 'OPERATIVA',
+				'estado_restriccion': '',
+				'justificacion_restriccion': '',
+				'ultimo_acceso': '2026-08-01',
+				'ultimo_perfil_carga': 'OK',
+				'ultimo_perfil_instrumentacion': 'OK',
+				'ultimo_reset': '2026-07-01',
+				'ultimo_registro_facturacion': '2026-07-15',
+				'fecha_registro': '2026-01-10',
+				'trabajo': 'Revision',
+				'note': 'Nota ficha',
+				'ajax': '1',
+			},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+			HTTP_ACCEPT='application/json',
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertTrue(data['success'])
+		cliente.refresh_from_db()
+		self.assertEqual(cliente.direccion, 'Dir Nueva')
+		self.assertEqual(cliente.city, 'Santiago')
+		self.assertEqual(cliente.empresa, 'Delco')
+		self.assertEqual(cliente.referencia, 'Puerta azul')
+		self.assertEqual(cliente.estado_telemetria, 'SIN_COMUNICACION')
+		self.assertEqual(cliente.estado_stb, 'PENDIENTE')
+		self.assertEqual(cliente.sim_operador, 'Entel')
+		self.assertEqual(cliente.sim_iccid, '890123')
+		self.assertEqual(cliente.sim_estado, 'OPERATIVA')
+		self.assertEqual(cliente.trabajo, 'Revision')
+		self.assertEqual(cliente.note, 'Nota ficha')
+		self.assertEqual(str(cliente.fecha_registro), '2026-01-10')
+
+		from web.models import AuditLog
+		from web.services.audit_labels import label_campo
+
+		logs = AuditLog.objects.filter(
+			entity='Cliente',
+			entity_id=str(cliente.pk),
+			action='CLIENT_UPDATE',
+		)
+		self.assertTrue(logs.exists())
+		campos = set(logs.values_list('field_name', flat=True))
+		for esperado in ('direccion', 'empresa', 'note', 'estado_telemetria', 'sim_iccid', 'trabajo'):
+			self.assertIn(esperado, campos)
+		self.assertEqual(label_campo('direccion'), 'Dirección base')
+		self.assertEqual(label_campo('sim_iccid'), 'SIM ICCID')
+
+		hist = self.client.get(reverse('cliente_historial', kwargs={'pk': cliente.pk}))
+		self.assertEqual(hist.status_code, 200)
+		html = hist.content.decode()
+		self.assertIn('Cambios de datos de la ficha', html)
+		self.assertIn('Dirección base', html)
+		self.assertIn('Dir Nueva', html)
+
+	def test_get_editar_redirige_al_historial(self):
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-REDIR',
+			direccion='Dir',
+			comuna='Santiago',
+			meter_serial_n_1=self.medidor_alt.serie,
+			medidor_actual=self.medidor_alt,
+			activo=True,
+		)
+		response = self.client.get(reverse('cliente_editar', kwargs={'pk': cliente.pk}))
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response.url, reverse('cliente_historial', kwargs={'pk': cliente.pk}))
+
+
+@override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
+class ClienteAdjuntoHistorialTests(TestCase):
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='55555555-5',
+			email='adjunto_admin@delco.cl',
+			password=self.password,
+			nombre='Adj',
+			apellido='Admin',
+			nombre_interno='adj_admin',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.admin_op = Usuario.objects.create_user(
+			rut='66666666-6',
+			email='adjunto_op@delco.cl',
+			password=self.password,
+			nombre='Adj',
+			apellido='Op',
+			nombre_interno='adj_op',
+			rol='ADMINISTRATIVO',
+			is_active=True,
+		)
+		self.medidor = Medidor.objects.create(
+			serie='MED-ADJ-1001',
+			marca='TEST',
+			tipo_medidor='DIRECTO',
+		)
+		self.cliente = Cliente.objects.create(
+			numero_cliente='CLI-ADJ-1001',
+			direccion='Dir Adj',
+			comuna='Santiago',
+			meter_serial_n_1=self.medidor.serie,
+			medidor_actual=self.medidor,
+			activo=True,
+		)
+		self.client = Client()
+		self.png = (
+			b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01'
+			b'\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00'
+			b'\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+		)
+
+	def test_subir_foto_y_pdf_quedan_en_historial_y_auditoria(self):
+		from web.models import AuditLog
+
+		from .models import ClienteAdjunto
+
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		url = reverse('cliente_historial', kwargs={'pk': self.cliente.pk})
+
+		response = self.client.post(
+			url,
+			{
+				'accion': 'subir_adjunto',
+				'tipo': 'FOTO',
+				'archivo': SimpleUploadedFile('foto_cliente.png', self.png, content_type='image/png'),
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(ClienteAdjunto.objects.filter(cliente=self.cliente, eliminado=False).count(), 1)
+
+		pdf = SimpleUploadedFile(
+			'doc_cliente.pdf',
+			b'%PDF-1.4\n%demo\n',
+			content_type='application/pdf',
+		)
+		response = self.client.post(
+			url,
+			{'accion': 'subir_adjunto', 'tipo': 'PDF', 'archivo': pdf},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(ClienteAdjunto.objects.filter(cliente=self.cliente, eliminado=False).count(), 2)
+
+		hist = self.client.get(url)
+		self.assertEqual(hist.status_code, 200)
+		html = hist.content.decode()
+		self.assertIn('foto_cliente.png', html)
+		self.assertIn('doc_cliente.pdf', html)
+		self.assertIn('Documentos del cliente', html)
+
+		logs = AuditLog.objects.filter(
+			entity='Cliente',
+			entity_id=str(self.cliente.pk),
+			action='CLIENT_ADJUNTO',
+		)
+		self.assertEqual(logs.count(), 2)
+		nombres = set(logs.values_list('new_value', flat=True))
+		self.assertIn('foto_cliente.png', nombres)
+		self.assertIn('doc_cliente.pdf', nombres)
+		self.assertContains(hist, 'Cliente — Adjunto subido')
+
+	def test_reemplazar_papelera_recuperar_y_borrar_definitivo(self):
+		from web.models import AuditLog
+
+		from .models import ClienteAdjunto
+
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		url = reverse('cliente_historial', kwargs={'pk': self.cliente.pk})
+
+		self.client.post(
+			url,
+			{
+				'accion': 'subir_adjunto',
+				'tipo': 'FOTO',
+				'archivo': SimpleUploadedFile('malo.png', self.png, content_type='image/png'),
+			},
+		)
+		adj = ClienteAdjunto.objects.get(cliente=self.cliente, eliminado=False)
+		self.assertEqual(adj.nombre_archivo, 'malo.png')
+
+		response = self.client.post(
+			url,
+			{
+				'accion': 'reemplazar_adjunto',
+				'adjunto_id': str(adj.pk),
+				'tipo': 'FOTO',
+				'archivo': SimpleUploadedFile('bueno.png', self.png, content_type='image/png'),
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		adj.refresh_from_db()
+		self.assertEqual(adj.nombre_archivo, 'bueno.png')
+		self.assertTrue(
+			AuditLog.objects.filter(
+				entity='Cliente',
+				entity_id=str(self.cliente.pk),
+				action='CLIENT_ADJUNTO_REPLACE',
+			).exists()
+		)
+
+		response = self.client.post(
+			url,
+			{'accion': 'papelera_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		self.assertEqual(response.status_code, 302)
+		adj.refresh_from_db()
+		self.assertTrue(adj.eliminado)
+
+		response = self.client.post(
+			url,
+			{'accion': 'recuperar_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		self.assertEqual(response.status_code, 302)
+		adj.refresh_from_db()
+		self.assertFalse(adj.eliminado)
+
+		self.client.post(url, {'accion': 'papelera_adjunto', 'adjunto_id': str(adj.pk)})
+		response = self.client.post(
+			url,
+			{'accion': 'borrar_definitivo_adjunto', 'adjunto_id': str(adj.pk)},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.assertFalse(ClienteAdjunto.objects.filter(pk=adj.pk).exists())
+		self.assertTrue(
+			AuditLog.objects.filter(
+				entity='Cliente',
+				entity_id=str(self.cliente.pk),
+				action='CLIENT_ADJUNTO_PURGE',
+			).exists()
+		)
+
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
 class ClienteImportarViewTests(TestCase):

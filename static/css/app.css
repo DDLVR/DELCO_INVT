@@ -1403,6 +1403,36 @@ td.cliente-numero-duplicado strong {
   color: var(--bs-body-color);
 }
 
+#fichaCliente:not(.is-editing) .ficha-edit {
+  display: none !important;
+}
+
+#fichaCliente.is-editing .ficha-view {
+  display: none !important;
+}
+
+#fichaCliente.is-editing .ficha-sci4-action {
+  display: none !important;
+}
+
+#fichaCliente.is-editing .delco-ficha-card {
+  outline: 2px solid rgba(18, 75, 121, 0.35);
+  outline-offset: 0;
+}
+
+#fichaCliente.is-editing .delco-ficha-dl > dd {
+  margin-bottom: 0.45rem;
+}
+
+#fichaCliente .ficha-edit {
+  max-width: 100%;
+}
+
+#fichaCliente textarea.ficha-edit {
+  min-height: 2.6rem;
+}
+
+
 /* Autocomplete DELCO */
 .delco-ac {
   position: relative;
