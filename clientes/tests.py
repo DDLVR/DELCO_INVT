@@ -251,6 +251,9 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertIn('id="documentosCliente"', html)
 		self.assertIn('Documentos del cliente', html)
 		self.assertIn('name="accion" value="subir_adjunto"', html)
+		self.assertIn('id="formSubirAdjuntosCliente"', html)
+		self.assertIn('multiple', html)
+		self.assertIn('modalEstadoAdjuntosCliente', html)
 
 	def test_edicion_guarda_campos_extendidos_de_ficha(self):
 		cliente = Cliente.objects.create(
@@ -354,6 +357,43 @@ class ClienteFlujoViewTests(TestCase):
 		response = self.client.get(reverse('cliente_editar', kwargs={'pk': cliente.pk}))
 		self.assertEqual(response.status_code, 302)
 		self.assertEqual(response.url, reverse('cliente_historial', kwargs={'pk': cliente.pk}))
+
+	def test_edicion_guarda_aunque_serie_no_este_en_inventario(self):
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-SERIE-HUERFANA',
+			direccion='Dir Vieja',
+			comuna='Santiago',
+			customer_name='Antes',
+			meter_serial_n_1='SERIE-SIN-STOCK-999',
+			medidor_actual=None,
+			activo=True,
+		)
+		response = self.client.post(
+			reverse('cliente_editar', kwargs={'pk': cliente.pk}),
+			{
+				'numero_cliente': cliente.numero_cliente,
+				'customer_name': 'Despues',
+				'comuna': 'Maipu',
+				'direccion': 'Dir Nueva',
+				'meter_serial_n_1': 'SERIE-SIN-STOCK-999',
+				'proyecto': '',
+				'estado_telemetria': 'OPERATIVO',
+				'estado_stb': 'SIN_REGISTRO',
+				'ajax': '1',
+			},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+			HTTP_ACCEPT='application/json',
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertTrue(data['success'])
+		cliente.refresh_from_db()
+		self.assertEqual(cliente.customer_name, 'Despues')
+		self.assertEqual(cliente.comuna, 'Maipu')
+		self.assertEqual(cliente.direccion, 'Dir Nueva')
+		self.assertEqual(cliente.meter_serial_n_1, 'SERIE-SIN-STOCK-999')
+		self.assertIsNone(cliente.medidor_actual_id)
+		self.assertIn('no está en inventario', data['message'])
 
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
@@ -519,6 +559,42 @@ class ClienteAdjuntoHistorialTests(TestCase):
 				action='CLIENT_ADJUNTO_PURGE',
 			).exists()
 		)
+
+	def test_subir_varios_archivos_ajax_devuelve_estado_por_archivo(self):
+		from .models import ClienteAdjunto
+
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		url = reverse('cliente_historial', kwargs={'pk': self.cliente.pk})
+		response = self.client.post(
+			url,
+			{
+				'accion': 'subir_adjunto',
+				'tipo': 'FOTO',
+				'ajax': '1',
+				'archivo': [
+					SimpleUploadedFile('uno.png', self.png, content_type='image/png'),
+					SimpleUploadedFile('dos.png', self.png, content_type='image/png'),
+					SimpleUploadedFile(
+						'tres.pdf',
+						b'%PDF-1.4\n%demo\n',
+						content_type='application/pdf',
+					),
+				],
+			},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+			HTTP_ACCEPT='application/json',
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertTrue(data['success'])
+		self.assertEqual(len(data['resultados']), 3)
+		self.assertTrue(all(r['ok'] for r in data['resultados']))
+		self.assertEqual(
+			ClienteAdjunto.objects.filter(cliente=self.cliente, eliminado=False).count(),
+			3,
+		)
+		nombres = {r['nombre'] for r in data['resultados']}
+		self.assertEqual(nombres, {'uno.png', 'dos.png', 'tres.pdf'})
 
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])

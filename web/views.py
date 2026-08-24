@@ -3633,24 +3633,31 @@ def cliente_editar_view(request, pk):
             )
 
         medidor_obj = None
+        aviso_medidor = ''
         if meter_serial_n_1:
             medidor_obj = Medidor.objects.filter(
                 serie__iexact=meter_serial_n_1,
                 eliminado=False,
             ).first()
-            if not medidor_obj:
-                return _responder_error(
-                    f'No existe un medidor con serie {meter_serial_n_1} en inventario.'
+            if medidor_obj:
+                if Cliente.objects.filter(
+                    medidor_actual=medidor_obj,
+                    activo=True,
+                ).exclude(pk=pk).exists():
+                    return _responder_error(
+                        f'El medidor {meter_serial_n_1} ya está asignado a otro cliente activo.'
+                    )
+                if not meter_manufacturer_id and medidor_obj.marca:
+                    meter_manufacturer_id = medidor_obj.marca
+            else:
+                # Serie informativa sin stock en inventario: no bloquear el resto de la ficha.
+                aviso_medidor = (
+                    f'La serie {meter_serial_n_1} no está en inventario; '
+                    'se guardó en la ficha sin vincular medidor.'
                 )
-            if Cliente.objects.filter(
-                medidor_actual=medidor_obj,
-                activo=True,
-            ).exclude(pk=pk).exists():
-                return _responder_error(
-                    f'El medidor {meter_serial_n_1} ya está asignado a otro cliente activo.'
-                )
-            if not meter_manufacturer_id and medidor_obj.marca:
-                meter_manufacturer_id = medidor_obj.marca
+        elif cliente.medidor_actual_id:
+            # Quitaron la serie: desvincular medidor
+            medidor_obj = None
 
         cliente.numero_cliente = numero_cliente_final
         cliente.sector = sector or None
@@ -3751,6 +3758,8 @@ def cliente_editar_view(request, pk):
         cliente.refresh_from_db(fields=['estado_sci4'])
 
         mensaje_ok = f'Cliente {numero_cliente_final} actualizado correctamente.'
+        if aviso_medidor:
+            mensaje_ok += f' {aviso_medidor}'
         if sci4_marcado:
             mensaje_ok += (
                 ' Quedó marcado como pendiente de actualización en SCi4 '
@@ -3767,6 +3776,7 @@ def cliente_editar_view(request, pk):
                 'cliente_id': cliente.id,
                 'sci4_pendiente': cliente.estado_sci4 == 'PENDIENTE',
                 'sci4_marcado': sci4_marcado,
+                'aviso_medidor': aviso_medidor,
             })
 
         messages.success(request, mensaje_ok)
@@ -3842,15 +3852,31 @@ def cliente_historial_view(request, pk):
         accion = (request.POST.get('accion') or '').strip()
         from clientes.adjuntos import ACCIONES_ADJUNTO
         if accion in ACCIONES_ADJUNTO:
+            quiere_json = (
+                request.POST.get('ajax') == '1'
+                or 'application/json' in (request.headers.get('Accept') or '').lower()
+                or (request.headers.get('X-Requested-With') or '') == 'XMLHttpRequest'
+            )
             if not puede_gestionar:
-                messages.error(request, 'No tienes permiso para gestionar adjuntos del cliente.')
-            else:
-                handled, ok, mensaje = procesar_accion_adjunto(cliente, request)
-                if handled:
-                    if ok:
-                        messages.success(request, mensaje)
-                    else:
-                        messages.error(request, mensaje)
+                mensaje = 'No tienes permiso para gestionar adjuntos del cliente.'
+                if quiere_json:
+                    return JsonResponse({'success': False, 'message': mensaje, 'resultados': []}, status=403)
+                messages.error(request, mensaje)
+                return redirect('cliente_historial', pk=pk)
+
+            handled, ok, mensaje, resultados = procesar_accion_adjunto(cliente, request)
+            if handled:
+                if quiere_json:
+                    return JsonResponse({
+                        'success': bool(ok),
+                        'message': mensaje,
+                        'resultados': resultados or [],
+                        'parcial': bool(ok) and any(not r.get('ok') for r in (resultados or [])),
+                    }, status=200 if ok else 400)
+                if ok:
+                    messages.success(request, mensaje)
+                else:
+                    messages.error(request, mensaje)
             return redirect('cliente_historial', pk=pk)
 
     asegurar_historial_inicial(cliente)
