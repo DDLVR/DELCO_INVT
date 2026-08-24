@@ -39,6 +39,11 @@ from .utils import (
 )
 from usuarios.models import Usuario
 from django.urls import reverse
+from ordenes_trabajo.asignacion import (
+    usuarios_asignables_ot,
+    get_usuario_asignable,
+    etiqueta_asignable,
+)
 
 
 def _redirect_orden_detalle(request, pk):
@@ -172,7 +177,7 @@ def ordenes_list_view(request):
     # Conservar orden del queryset filtrado (incluye orden=proyecto_carga, etc.)
     page_obj = Paginator(ordenes_qs, per_page).get_page(request.GET.get('page') or 1)
 
-    tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
+    tecnicos = usuarios_asignables_ot()
     # Solo clientes con OT (cap) — no cargar todo el padrón en el filtro
     clientes = Cliente.objects.filter(
         pk__in=OrdenTrabajo.objects.exclude(cliente_id=None).values('cliente_id')
@@ -190,7 +195,7 @@ def ordenes_list_view(request):
     if tecnico_filtro and str(tecnico_filtro).isdigit():
         t = Usuario.objects.filter(pk=int(tecnico_filtro)).first()
         if t:
-            tecnico_filtro_label = t.nombre_interno or str(t.pk)
+            tecnico_filtro_label = etiqueta_asignable(t)
 
     query_params = request.GET.copy()
     query_params.pop('page', None)
@@ -345,12 +350,12 @@ def ordenes_terminadas_view(request):
 
     page_obj = Paginator(qs, per_page).get_page(request.GET.get('page') or 1)
 
-    tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
+    tecnicos = usuarios_asignables_ot()
     tecnico_filtro_label = ''
     if tecnico_filtro and tecnico_filtro.isdigit():
         t = Usuario.objects.filter(pk=int(tecnico_filtro)).first()
         if t:
-            tecnico_filtro_label = t.nombre_interno or str(t.pk)
+            tecnico_filtro_label = etiqueta_asignable(t)
 
     cliente_filtro_label = ''
     if cliente_filtro:
@@ -448,10 +453,14 @@ def orden_crear_view(request):
                     proyecto_carga = (cliente.proyecto or '').strip()
             orden.proyecto_carga_administrativa = proyecto_carga[:255]
             
-            # Técnico responsable (opcional — sin técnico queda CREADA)
+            # Técnico / administrativo responsable (opcional — sin responsable queda CREADA)
             tecnico_id = request.POST.get('tecnico_responsable', '').strip()
             if tecnico_id:
-                orden.tecnico_responsable = Usuario.objects.get(id=tecnico_id)
+                try:
+                    orden.tecnico_responsable = get_usuario_asignable(tecnico_id)
+                except (Usuario.DoesNotExist, ValueError, TypeError):
+                    messages.error(request, 'Responsable no válido (debe ser técnico o administrativo activo).')
+                    return redirect('orden_crear')
                 orden.estado = 'ASIGNADA'
                 orden.fecha_asignacion = timezone.now()
             else:
@@ -497,7 +506,7 @@ def orden_crear_view(request):
             messages.error(request, f'Error al crear orden: {str(e)}')
     
     # GET - Mostrar formulario (tope: evita renderizar miles de clientes en el select)
-    tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
+    tecnicos = usuarios_asignables_ot()
     clientes = Cliente.objects.filter(activo=True).exclude(numero_cliente='0').order_by('numero_cliente')[:500]
     proyectos_sugeridos = (
         OrdenTrabajo.objects.exclude(proyecto_carga_administrativa='')
@@ -599,9 +608,9 @@ def orden_detalle_view(request, pk):
             return _redirect_orden_detalle(request, pk)
 
         try:
-            nuevo_tecnico = Usuario.objects.get(pk=int(tecnico_id), rol='TECNICO', is_active=True)
+            nuevo_tecnico = get_usuario_asignable(tecnico_id)
         except (Usuario.DoesNotExist, ValueError, TypeError):
-            messages.error(request, 'Técnico no válido')
+            messages.error(request, 'Responsable no válido (técnico o administrativo activo).')
             return _redirect_orden_detalle(request, pk)
 
         tecnico_anterior = orden.tecnico_responsable
@@ -688,7 +697,7 @@ def orden_detalle_view(request, pk):
             .order_by('-fecha_creacion')[:30]
         )
 
-    tecnicos = Usuario.objects.filter(rol='TECNICO', is_active=True).order_by('nombre_interno')
+    tecnicos = usuarios_asignables_ot()
     registros_validacion = (
         orden.registros_validacion.select_related('realizado_por').order_by('-fecha')[:50]
     )
@@ -1248,7 +1257,13 @@ def ordenes_modificar_masivo_view(request):
             orden.tipo_trabajo = nuevo_tipo
             cambios.append('tipo_trabajo')
         if tecnico_id:
-            orden.tecnico_responsable = Usuario.objects.get(pk=int(tecnico_id), rol='TECNICO')
+            try:
+                orden.tecnico_responsable = get_usuario_asignable(tecnico_id)
+            except (Usuario.DoesNotExist, ValueError, TypeError):
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Responsable no válido (técnico o administrativo activo).',
+                })
             if orden.estado == 'CREADA':
                 orden.estado = 'ASIGNADA'
                 orden.fecha_asignacion = timezone.now()
