@@ -105,11 +105,12 @@ class OrdenTrabajo(models.Model):
     )
 
     # Asignación de personal (opcional al crear/importar; se asigna después)
+    # Técnicos de campo y administrativos pueden figurar como responsables.
     tecnico_responsable = models.ForeignKey(
         Usuario,
         on_delete=models.PROTECT,
         related_name='ordenes_responsable',
-        limit_choices_to={'rol': 'TECNICO'},
+        limit_choices_to={'rol__in': ['TECNICO', 'ADMINISTRATIVO']},
         null=True,
         blank=True,
     )

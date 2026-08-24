@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Error del servidor{% endblock %}
+{% block content %}
+<div class="container py-5" style="max-width: 640px;">
+  <h1 class="h3 mb-3">No se pudo completar la operación</h1>
+  <p class="text-muted">
+    Ocurrió un error interno al guardar o consultar datos.
+    Por seguridad no se muestra el detalle técnico completo aquí.
+  </p>
+  <div class="alert alert-warning">
+    <strong>Código de referencia:</strong> {{ error_id }}
+  </div>
+  {% if mostrar_hint and debug_hint %}
+  <div class="alert alert-secondary small">
+    <strong>Pista (solo staff):</strong> {{ debug_hint }}
+  </div>
+  {% endif %}
+  <p class="mb-4">Indica este código a soporte o revisa <code>logs/django_errors.log</code> en el servidor.</p>
+  <a class="btn btn-primary" href="/">Volver al inicio</a>
+</div>
+{% endblock %}

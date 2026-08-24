@@ -155,7 +155,7 @@
                     <input type="hidden" name="tecnico" id="filtroTecnicoTermId" value="{{ tecnico_filtro }}">
                     <input type="text" class="form-control form-control-sm" id="filtroTecnicoTermLabel"
                            value="{{ tecnico_filtro_label }}" placeholder="Buscar técnico…" autocomplete="off"
-                           data-ac-url="{{ delco_api.buscar_tecnicos }}" data-ac-hidden="#filtroTecnicoTermId">
+                           data-ac-url="{{ delco_api.buscar_tecnicos }}?ambito=ot" data-ac-hidden="#filtroTecnicoTermId">
                 </div>
                 {% endif %}
                 <div class="col-md-2">

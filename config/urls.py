@@ -7,6 +7,8 @@ from django.conf import settings
 
 from web.protected_media import serve_evidencias, serve_media
 
+handler500 = 'web.error_handling.server_error_view'
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('web.urls')),

@@ -1280,3 +1280,101 @@ class ComprobanteCambioMedidorTests(TestCase):
 			1,
 		)
 		self.assertEqual(reverse('comprobantes_cambio_list'), '/ordenes/comprobantes-cambio/')
+
+
+class AsignacionAdministrativoOTTests(TestCase):
+	"""Los administrativos deben poder figurar como responsables de OT."""
+
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='11112222-3',
+			email='admin_asig_admvo@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Asig',
+			nombre_interno='admin_asig_admvo',
+			rol='ADMIN',
+			is_active=True,
+			is_staff=True,
+		)
+		self.administrativo = Usuario.objects.create_user(
+			rut='22223333-4',
+			email='admvo_asig@delco.cl',
+			password=self.password,
+			nombre='Admvo',
+			apellido='Asig',
+			nombre_interno='admvo_asig_ot',
+			rol='ADMINISTRATIVO',
+			is_active=True,
+			is_staff=True,
+		)
+		self.tecnico = Usuario.objects.create_user(
+			rut='33334444-5',
+			email='tec_asig_admvo@delco.cl',
+			password=self.password,
+			nombre='Tec',
+			apellido='Asig',
+			nombre_interno='tec_asig_admvo',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.orden = OrdenTrabajo.objects.create(
+			titulo='OT para administrativo',
+			tipo_trabajo='INSTALACION',
+			creada_por=self.admin,
+			estado='CREADA',
+		)
+		self.client = Client()
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+
+	def test_lista_crear_incluye_administrativo(self):
+		response = self.client.get(reverse('orden_crear'))
+		self.assertEqual(response.status_code, 200)
+		ids = {u.pk for u in response.context['tecnicos']}
+		self.assertIn(self.tecnico.pk, ids)
+		self.assertIn(self.administrativo.pk, ids)
+
+	def test_api_buscar_tecnicos_ambito_ot_incluye_administrativo(self):
+		response = self.client.get(
+			reverse('api_buscar_tecnicos'),
+			{'q': 'admvo_asig', 'ambito': 'ot'},
+		)
+		self.assertEqual(response.status_code, 200)
+		payload = response.json()
+		ids = {r['id'] for r in payload.get('results', [])}
+		self.assertIn(self.administrativo.pk, ids)
+
+	def test_api_buscar_tecnicos_sin_ambito_excluye_administrativo(self):
+		response = self.client.get(
+			reverse('api_buscar_tecnicos'),
+			{'q': 'admvo_asig'},
+		)
+		self.assertEqual(response.status_code, 200)
+		payload = response.json()
+		ids = {r['id'] for r in payload.get('results', [])}
+		self.assertNotIn(self.administrativo.pk, ids)
+
+	def test_reasignar_a_administrativo(self):
+		response = self.client.post(
+			reverse('orden_detalle', kwargs={'pk': self.orden.pk}),
+			{
+				'accion': 'reasignar_tecnico',
+				'tecnico_responsable': str(self.administrativo.pk),
+				'motivo_reasignacion': 'Asignación a oficina administrativa',
+			},
+		)
+		self.assertEqual(response.status_code, 302)
+		self.orden.refresh_from_db()
+		self.assertEqual(self.orden.tecnico_responsable_id, self.administrativo.pk)
+		self.assertEqual(self.orden.estado, 'REASIGNADA')
+
+	def test_asignar_masivo_a_administrativo(self):
+		from ordenes_trabajo.utils import asignar_ordenes_masivo
+
+		resultado = asignar_ordenes_masivo([self.orden.pk], self.administrativo.pk, self.admin)
+		self.assertEqual(resultado['actualizadas'], 1)
+		self.orden.refresh_from_db()
+		self.assertEqual(self.orden.tecnico_responsable_id, self.administrativo.pk)
+		self.assertEqual(self.orden.estado, 'ASIGNADA')
+		self.assertIn('Administrativo', resultado['tecnico'])

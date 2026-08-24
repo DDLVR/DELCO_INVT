@@ -889,7 +889,9 @@ def vincular_informe_cliente_a_orden(
 
 
 def asignar_ordenes_masivo(ids, tecnico_id, usuario) -> Dict[str, Any]:
-    tecnico = Usuario.objects.get(pk=tecnico_id, rol='TECNICO', is_active=True)
+    from ordenes_trabajo.asignacion import get_usuario_asignable, etiqueta_asignable
+
+    tecnico = get_usuario_asignable(tecnico_id)
     ordenes = OrdenTrabajo.objects.filter(pk__in=ids, eliminado=False)
     actualizadas = 0
     alertas = 0
@@ -907,7 +909,7 @@ def asignar_ordenes_masivo(ids, tecnico_id, usuario) -> Dict[str, Any]:
     return {
         'actualizadas': actualizadas,
         'alertas_duplicado': alertas,
-        'tecnico': tecnico.nombre_interno,
+        'tecnico': etiqueta_asignable(tecnico),
     }
 
 

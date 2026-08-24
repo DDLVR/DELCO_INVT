@@ -135,10 +135,10 @@
                             <label class="form-label">Técnico</label>
                             <input type="hidden" name="tecnico" id="filtroTecnicoId" value="{{ tecnico_filtro|default:'' }}">
                             <div class="delco-ac"
-                                 data-ac-url="{{ delco_api.buscar_tecnicos }}"
+                                 data-ac-url="{{ delco_api.buscar_tecnicos }}?ambito=ot"
                                  data-ac-hidden="#filtroTecnicoId"
                                  data-ac-min="2">
-                                <input type="text" class="form-control delco-ac-input" placeholder="Buscar técnico..."
+                                <input type="text" class="form-control delco-ac-input" placeholder="Buscar técnico o administrativo..."
                                        value="{{ tecnico_filtro_label|default:'' }}" autocomplete="off">
                                 <div class="delco-ac-results list-group shadow-sm d-none"></div>
                             </div>
@@ -501,11 +501,11 @@
                         </select>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Técnico responsable</label>
+                        <label class="form-label">Técnico / administrativo responsable</label>
                         <select name="tecnico_responsable" class="form-select">
                             <option value="">Sin cambio</option>
                             {% for tecnico in tecnicos %}
-                            <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}</option>
+                            <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}{% if tecnico.rol == 'ADMINISTRATIVO' %} (Administrativo){% endif %}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -533,16 +533,16 @@
                 <div class="modal-body">
                     <p id="bulkAsignarResumen" class="mb-1 fw-semibold"></p>
                     <div class="mb-3">
-                        <label class="form-label">Técnico que hará el trabajo *</label>
+                        <label class="form-label">Responsable que hará el trabajo *</label>
                         <select name="tecnico_responsable" class="form-select" required>
-                            <option value="">Elige un técnico</option>
+                            <option value="">Elige un técnico o administrativo</option>
                             {% for tecnico in tecnicos %}
-                            <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}</option>
+                            <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}{% if tecnico.rol == 'ADMINISTRATIVO' %} (Administrativo){% endif %}</option>
                             {% endfor %}
                         </select>
                     </div>
                     <div class="alert alert-info small mb-0">
-                        Las órdenes pasarán a estado <strong>Asignada</strong> y quedarán listas para el técnico.
+                        Las órdenes pasarán a estado <strong>Asignada</strong> y quedarán listas para el responsable.
                     </div>
                 </div>
                 <div class="modal-footer">
