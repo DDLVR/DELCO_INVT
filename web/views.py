@@ -3440,6 +3440,7 @@ def cliente_editar_view(request, pk):
     La UI de edición vive en el historial (casillas inline). Este endpoint
     recibe el POST AJAX y sigue aceptando GET JSON para datos de la ficha.
     """
+    from django.db import DatabaseError, IntegrityError
     from web.services.filtros_export import es_sin_proyecto
 
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
@@ -3692,16 +3693,39 @@ def cliente_editar_view(request, pk):
         cliente.fecha_registro = fecha_registro
         cliente.trabajo = trabajo or None
         cliente.note = note or None
-        cliente.save()
+        try:
+            cliente.save()
+        except IntegrityError as exc:
+            logger.exception('IntegrityError al guardar cliente pk=%s', pk)
+            msg = (
+                'No se pudo guardar: hay un conflicto de datos en la base '
+                '(por ejemplo medidor ya asignado a otro cliente). '
+                f'Detalle: {exc}'
+            )
+            return _responder_error(msg)
+        except DatabaseError as exc:
+            logger.exception('DatabaseError al guardar cliente pk=%s', pk)
+            return _responder_error(
+                'No se pudo guardar por un error de base de datos. '
+                'Revisa el registro de errores del servidor o contacta a soporte. '
+                f'({exc.__class__.__name__})'
+            )
 
         from clientes.proyecto_historial import registrar_cambio_proyecto
-        registrar_cambio_proyecto(
-            cliente,
-            proyecto,
-            usuario=request.user,
-            motivo='Edición desde historial del cliente',
-            actualizar_campo=True,
-        )
+        try:
+            registrar_cambio_proyecto(
+                cliente,
+                proyecto,
+                usuario=request.user,
+                motivo='Edición desde historial del cliente',
+                actualizar_campo=True,
+            )
+        except (IntegrityError, DatabaseError) as exc:
+            logger.exception('Error al actualizar proyecto del cliente pk=%s', pk)
+            return _responder_error(
+                'La ficha se guardó, pero falló el historial de proyecto. '
+                f'Revisa e intenta de nuevo. ({exc.__class__.__name__})'
+            )
 
         after_values = {
             'numero_cliente': cliente.numero_cliente,
@@ -5369,34 +5393,51 @@ def api_buscar_clientes(request):
 
 @login_required
 def api_buscar_tecnicos(request):
-    """API para buscar técnicos activos por nombre interno o nombre completo."""
+    """API para buscar personal asignable por nombre interno o nombre completo.
+
+    Query params:
+      q: texto (mín. 2)
+      ambito=ot: incluye ADMINISTRATIVO además de TECNICO (asignación de OT).
+                 Sin este param solo TECNICO (inventario / custodia).
+    """
     from usuarios.models import Usuario
+    from ordenes_trabajo.asignacion import ROLES_ASIGNABLES_OT, etiqueta_asignable
 
     query = request.GET.get('q', '').strip()
     if not query or len(query) < 2:
         return JsonResponse({'results': []})
 
+    ambito = (request.GET.get('ambito') or '').strip().lower()
+    if ambito in {'ot', 'orden', 'ordenes'}:
+        roles = ROLES_ASIGNABLES_OT
+    else:
+        roles = ('TECNICO',)
+
     try:
         qs = (
-            Usuario.objects.filter(rol='TECNICO', is_active=True)
+            Usuario.objects.filter(rol__in=roles, is_active=True)
             .filter(
                 Q(nombre_interno__icontains=query)
                 | Q(nombre__icontains=query)
                 | Q(apellido__icontains=query)
                 | Q(email__icontains=query)
             )
-            .order_by('nombre_interno')[:20]
+            .order_by('rol', 'nombre_interno')[:20]
         )
         results = []
         for u in qs:
             completo = ' '.join(filter(None, [getattr(u, 'nombre', ''), getattr(u, 'apellido', '')])).strip()
-            label = u.nombre_interno or completo or str(u.pk)
-            if completo and completo.casefold() != (u.nombre_interno or '').casefold():
-                label = f'{u.nombre_interno} · {completo}'
+            label = etiqueta_asignable(u) if ambito in {'ot', 'orden', 'ordenes'} else (
+                u.nombre_interno or completo or str(u.pk)
+            )
+            if ambito not in {'ot', 'orden', 'ordenes'}:
+                if completo and completo.casefold() != (u.nombre_interno or '').casefold():
+                    label = f'{u.nombre_interno} · {completo}'
             results.append({
                 'id': u.pk,
                 'nombre_interno': u.nombre_interno or '',
                 'nombre_completo': completo,
+                'rol': u.rol,
                 'label': label,
             })
         return JsonResponse({'results': results})

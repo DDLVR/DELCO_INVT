@@ -238,11 +238,11 @@
                                 {% if desde_terminadas %}<input type="hidden" name="desde" value="terminadas">{% endif %}
                                 <input type="hidden" name="accion" value="reasignar_tecnico">
                                 <select name="tecnico_responsable" class="form-select form-select-sm mb-2" required>
-                                    <option value="">— Seleccionar técnico —</option>
+                                    <option value="">— Seleccionar responsable —</option>
                                     {% for tec in tecnicos %}
                                     <option value="{{ tec.id }}"
                                         {% if orden.tecnico_responsable_id == tec.id %}selected{% endif %}>
-                                        {{ tec.nombre_interno }}
+                                        {{ tec.nombre_interno }}{% if tec.rol == 'ADMINISTRATIVO' %} (Administrativo){% endif %}
                                     </option>
                                     {% endfor %}
                                 </select>
