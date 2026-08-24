@@ -191,7 +191,7 @@
                        autocomplete="off">
                 <div class="delco-ac-results list-group shadow-sm d-none"></div>
               </div>
-              <small class="text-muted ficha-edit d-block mt-1">Al elegir una coincidencia se rellenan marca y proyecto si vienen del inventario.</small>
+              <small class="text-muted ficha-edit d-block mt-1">Al elegir una coincidencia se rellenan marca, proyecto, IP, módem y SIM si están asociados en inventario.</small>
               {% endif %}
             </dd>
             <dt class="col-sm-4">Empresa</dt>
@@ -982,7 +982,7 @@ document.addEventListener('DOMContentLoaded', function() {
     selectEl.value = value;
   }
 
-  // Rellena marca / proyecto / telemetría al elegir un medidor del inventario.
+  // Rellena marca / proyecto / IP / módem / SIM / telemetría al elegir un medidor.
   window.fichaClienteMedidorPick = function(item) {
     if (!item) return;
     var serie = (item.serie || '').trim();
@@ -999,16 +999,30 @@ document.addEventListener('DOMContentLoaded', function() {
       if (proySelect) ensureSelectOption(proySelect, proyecto, proyecto);
     }
 
+    var rellenados = [];
+    if (marca && marca.toLowerCase() !== 'no especificada') rellenados.push('marca');
+    if (proyecto) rellenados.push('proyecto');
+
+    [['ip', 'ip'], ['puerto', 'puerto'], ['modem', 'modem'],
+     ['sim_operador', 'sim_operador'], ['sim_iccid', 'sim_iccid'], ['sim_abonado', 'sim_abonado']
+    ].forEach(function(pair) {
+      var val = (item[pair[0]] || '').toString().trim();
+      if (!val) return;
+      setValorCampo(pair[1], val);
+      rellenados.push(pair[1]);
+    });
+
     var tele = ficha.querySelector('[name="estado_telemetria"]');
     if (tele && (tele.value === 'SIN_MEDIDOR' || !tele.value)) {
       tele.value = 'OPERATIVO';
       tele.dispatchEvent(new Event('change', { bubbles: true }));
+      rellenados.push('telemetría');
     }
 
     if (window.showToast) {
       var msg = 'Medidor «' + (serie || item.label || '') + '» seleccionado';
-      if (marca && marca.toLowerCase() !== 'no especificada') msg += ' · marca ' + marca;
-      showToast(msg, 'info', 2500);
+      if (rellenados.length) msg += ' · rellenado: ' + rellenados.join(', ');
+      showToast(msg, 'success', 3200);
     }
   };
 

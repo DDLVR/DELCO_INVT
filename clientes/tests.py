@@ -401,9 +401,28 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertIn('no está en inventario', data['message'])
 
 	def test_api_buscar_medidores_devuelve_coincidencias_con_proyecto(self):
+		from inventario.models import Modem, SimCard
+
 		self.medidor.marca = 'SCHNEIDER'
 		self.medidor.proyecto = 'PROY-AC-TEST'
 		self.medidor.save(update_fields=['marca', 'proyecto'])
+		SimCard.objects.create(
+			imei='ICCID-AC-001',
+			operador='ENTEL',
+			abonado='56911110000',
+			direccion_ip='10.20.30.40',
+			medidor=self.medidor,
+			eliminado=False,
+		)
+		Modem.objects.create(
+			serie='MOD-AC-001',
+			marca='Huawei',
+			modelo='B315',
+			ip='10.20.30.40',
+			puerto='502',
+			medidor=self.medidor,
+			eliminado=False,
+		)
 		response = self.client.get(
 			reverse('api_buscar_medidores'),
 			{'q': self.medidor.serie[:4]},
@@ -419,6 +438,12 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertIsNotNone(match)
 		self.assertEqual(match['marca'], 'SCHNEIDER')
 		self.assertEqual(match['proyecto'], 'PROY-AC-TEST')
+		self.assertEqual(match['ip'], '10.20.30.40')
+		self.assertEqual(match['puerto'], '502')
+		self.assertEqual(match['modem'], 'MOD-AC-001')
+		self.assertEqual(match['sim_operador'], 'ENTEL')
+		self.assertEqual(match['sim_iccid'], 'ICCID-AC-001')
+		self.assertEqual(match['sim_abonado'], '56911110000')
 		self.assertIn('serie', match)
 		self.assertIn('label', match)
 

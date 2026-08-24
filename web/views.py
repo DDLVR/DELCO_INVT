@@ -5453,8 +5453,22 @@ def api_buscar_medidores(request):
             if series_norm:
                 medidores = medidores.annotate(_serie_l=Lower('serie')).exclude(_serie_l__in=series_norm)
 
+        from django.db.models import Prefetch
+        from inventario.models import Modem, SimCard
+
         medidores_list = list(
-            medidores.select_related('entregado_a', 'en_custodia_de').order_by('serie')[:20]
+            medidores.select_related('entregado_a', 'en_custodia_de')
+            .prefetch_related(
+                Prefetch(
+                    'simcards_asociadas',
+                    queryset=SimCard.objects.filter(eliminado=False),
+                ),
+                Prefetch(
+                    'modems_asociados',
+                    queryset=Modem.objects.filter(eliminado=False),
+                ),
+            )
+            .order_by('serie')[:20]
         )
 
         results = []
@@ -5471,6 +5485,21 @@ def api_buscar_medidores(request):
             label = f"{med.serie} - {med.marca or 'S/M'}"
             if tipo_txt:
                 label = f"{label} ({tipo_txt})"
+
+            sims = list(med.simcards_asociadas.all())
+            modems = list(med.modems_asociados.all())
+            sim = sims[0] if sims else None
+            modem = modems[0] if modems else None
+            ip_val = ''
+            puerto_val = ''
+            modem_val = ''
+            if modem:
+                ip_val = (modem.ip or '').strip()
+                puerto_val = (modem.puerto or '').strip()
+                modem_val = (modem.serie or modem.modelo or modem.marca or '').strip()
+            if not ip_val and sim:
+                ip_val = (getattr(sim, 'direccion_ip', None) or getattr(sim, 'ip_fija', None) or '').strip()
+
             results.append({
                 'id': med.id,
                 'serie': med.serie,
@@ -5481,6 +5510,12 @@ def api_buscar_medidores(request):
                 'proyecto': (getattr(med, 'proyecto', None) or '').strip(),
                 'custodia': custodia,
                 'label': label,
+                'ip': ip_val,
+                'puerto': puerto_val,
+                'modem': modem_val,
+                'sim_operador': ((sim.operador if sim else '') or '').strip(),
+                'sim_iccid': ((sim.imei if sim else '') or '').strip(),
+                'sim_abonado': ((sim.abonado if sim else '') or '').strip(),
             })
 
         return JsonResponse({'results': results})
