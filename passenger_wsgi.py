@@ -43,6 +43,16 @@ except Exception as e:
 # Usar configuración de producción (las variables de entorno se configuran en Setup Python App)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings_production')
 
+
+try:
+    from web.static_sync import sincronizar_css_fuente_a_staticfiles
+
+    _css_copiados = sincronizar_css_fuente_a_staticfiles(current_dir)
+    if _css_copiados:
+        logging.info('CSS sincronizado a staticfiles: %s archivo(s)', _css_copiados)
+except Exception as exc:
+    logging.warning('No se pudo sincronizar CSS a staticfiles: %s', exc)
+
 # Inicializar la aplicación Django
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
