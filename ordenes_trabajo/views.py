@@ -445,12 +445,8 @@ def orden_crear_view(request):
                 return redirect('orden_crear')
 
             orden.observaciones_tecnicas = request.POST.get('observaciones_tecnicas', '')
+            # Solo el proyecto indicado en el formulario (no copiar del cliente).
             proyecto_carga = (request.POST.get('proyecto_carga_administrativa') or '').strip()
-            if not proyecto_carga and cliente and getattr(cliente, 'proyecto', None):
-                # Prefill desde proyecto del cliente si el usuario no indicó nada
-                from web.services.filtros_export import es_sin_proyecto
-                if not es_sin_proyecto(cliente.proyecto):
-                    proyecto_carga = (cliente.proyecto or '').strip()
             orden.proyecto_carga_administrativa = proyecto_carga[:255]
             
             # Técnico / administrativo responsable (opcional — sin responsable queda CREADA)
