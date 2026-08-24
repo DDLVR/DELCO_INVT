@@ -29,7 +29,7 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 
   <!-- Tu CSS -->
-  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}?v={{ delco_css_v|default:'1' }}">
 
   <style>
     body {
