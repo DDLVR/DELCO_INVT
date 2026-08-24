@@ -177,7 +177,21 @@
             <dd class="col-sm-8">
               <span class="ficha-view">{{ cliente.meter_serial_n_1|default:"—" }}</span>
               {% if puede_editar %}
-              <input type="text" class="form-control form-control-sm ficha-edit" name="meter_serial_n_1" value="{{ cliente.meter_serial_n_1|default:'' }}" autocomplete="off">
+              <div class="delco-ac ficha-edit ficha-medidor-ac"
+                   data-ac-url="{{ delco_api.buscar_medidores }}"
+                   data-ac-min="2"
+                   data-ac-value-field="serie"
+                   data-ac-on-pick="fichaClienteMedidorPick">
+                <input type="text"
+                       class="form-control form-control-sm delco-ac-input"
+                       name="meter_serial_n_1"
+                       id="fichaMeterSerial"
+                       value="{{ cliente.meter_serial_n_1|default:'' }}"
+                       placeholder="Escribe serie, marca o caja…"
+                       autocomplete="off">
+                <div class="delco-ac-results list-group shadow-sm d-none"></div>
+              </div>
+              <small class="text-muted ficha-edit d-block mt-1">Al elegir una coincidencia se rellenan marca, proyecto, IP, módem y SIM si están asociados en inventario.</small>
               {% endif %}
             </dd>
             <dt class="col-sm-4">Empresa</dt>
@@ -504,30 +518,54 @@
       {% endif %}
 
       {% if puede_gestionar_adjuntos %}
-      <form method="post" enctype="multipart/form-data" class="delco-upload-form">
+      <form method="post" enctype="multipart/form-data" class="delco-upload-form" id="formSubirAdjuntosCliente">
         {% csrf_token %}
         <input type="hidden" name="accion" value="subir_adjunto">
+        <input type="hidden" name="ajax" value="1">
         <div class="row g-2 align-items-end delco-form-row">
           <div class="col-12 col-md-4">
             <label class="form-label small mb-0">Tipo</label>
-            <select name="tipo" class="form-select form-select-sm">
+            <select name="tipo" class="form-select form-select-sm" id="tipoAdjuntoCliente">
               {% for value, label in tipos_adjunto_cliente %}
               <option value="{{ value }}">{{ label }}</option>
               {% endfor %}
             </select>
           </div>
           <div class="col-12 col-md-5">
-            <label class="form-label small mb-0">Archivo</label>
-            <input type="file" name="archivo" class="form-control form-control-sm" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.pdf,image/*,application/pdf" required>
+            <label class="form-label small mb-0">Archivos</label>
+            <input type="file" name="archivo" id="inputAdjuntosCliente" class="form-control form-control-sm" accept=".jpg,.jpeg,.png,.gif,.webp,.bmp,.pdf,image/*,application/pdf" multiple required>
           </div>
           <div class="col-12 col-md-3">
-            <button type="submit" class="btn btn-sm btn-primary w-100">
+            <button type="submit" class="btn btn-sm btn-primary w-100" id="btnSubirAdjuntosCliente">
               <i class="bi bi-upload"></i> Subir
             </button>
           </div>
         </div>
-        <p class="small text-muted mb-0 mt-2">Imágenes o PDF hasta 15 MB. Cada subida, reemplazo o papelera queda registrada en «Cambios de datos de la ficha».</p>
+        <p class="small text-muted mb-0 mt-2">Puedes seleccionar varios archivos (imágenes o PDF, hasta 15 MB c/u). Verás un popup con el estado de cada uno. Queda registrado en «Cambios de datos de la ficha».</p>
       </form>
+
+      <div class="modal fade" id="modalEstadoAdjuntosCliente" tabindex="-1" aria-labelledby="modalEstadoAdjuntosClienteTitulo" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+              <h5 class="modal-title" id="modalEstadoAdjuntosClienteTitulo">
+                <i class="bi bi-cloud-upload me-2"></i>Estado de subida
+              </h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+            </div>
+            <div class="modal-body">
+              <p class="small text-muted mb-2" id="modalEstadoAdjuntosResumen">Preparando…</p>
+              <ul class="list-group list-group-flush" id="modalEstadoAdjuntosLista"></ul>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" id="btnCerrarModalAdjuntos">Cerrar</button>
+              <button type="button" class="btn btn-primary d-none" id="btnRecargarTrasAdjuntos">
+                <i class="bi bi-arrow-clockwise"></i> Actualizar ficha
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
       {% endif %}
 
       {% if adjuntos_papelera %}
@@ -900,7 +938,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var snapshot = {};
 
   function camposEditables() {
-    return ficha.querySelectorAll('.ficha-edit');
+    // Inputs/selects/textarea con clase ficha-edit, o con name dentro de un contenedor .ficha-edit
+    return ficha.querySelectorAll(
+      'input.ficha-edit[name], select.ficha-edit[name], textarea.ficha-edit[name], .ficha-edit input[name], .ficha-edit select[name], .ficha-edit textarea[name]'
+    );
   }
 
   function tomarSnapshot() {
@@ -917,6 +958,73 @@ document.addEventListener('DOMContentLoaded', function() {
       el.value = snapshot[el.name];
     });
   }
+
+  function setValorCampo(name, value) {
+    if (value == null) return;
+    var el = ficha.querySelector('[name="' + name + '"]');
+    if (!el) return;
+    el.value = value;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function ensureSelectOption(selectEl, value, label) {
+    if (!selectEl || !value) return;
+    var exists = Array.prototype.some.call(selectEl.options, function(opt) {
+      return opt.value === value;
+    });
+    if (!exists) {
+      var opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label || value;
+      selectEl.appendChild(opt);
+    }
+    selectEl.value = value;
+  }
+
+  // Rellena marca / proyecto / IP / módem / SIM / telemetría al elegir un medidor.
+  window.fichaClienteMedidorPick = function(item) {
+    if (!item) return;
+    var serie = (item.serie || '').trim();
+    if (serie) setValorCampo('meter_serial_n_1', serie);
+
+    var marca = (item.marca || '').trim();
+    if (marca && marca.toLowerCase() !== 'no especificada') {
+      setValorCampo('meter_manufacturer_id', marca);
+    }
+
+    var proyecto = (item.proyecto || '').trim();
+    if (proyecto) {
+      var proySelect = ficha.querySelector('[name="proyecto"]');
+      if (proySelect) ensureSelectOption(proySelect, proyecto, proyecto);
+    }
+
+    var rellenados = [];
+    if (marca && marca.toLowerCase() !== 'no especificada') rellenados.push('marca');
+    if (proyecto) rellenados.push('proyecto');
+
+    [['ip', 'ip'], ['puerto', 'puerto'], ['modem', 'modem'],
+     ['sim_operador', 'sim_operador'], ['sim_iccid', 'sim_iccid'], ['sim_abonado', 'sim_abonado']
+    ].forEach(function(pair) {
+      var val = (item[pair[0]] || '').toString().trim();
+      if (!val) return;
+      setValorCampo(pair[1], val);
+      rellenados.push(pair[1]);
+    });
+
+    var tele = ficha.querySelector('[name="estado_telemetria"]');
+    if (tele && (tele.value === 'SIN_MEDIDOR' || !tele.value)) {
+      tele.value = 'OPERATIVO';
+      tele.dispatchEvent(new Event('change', { bubbles: true }));
+      rellenados.push('telemetría');
+    }
+
+    if (window.showToast) {
+      var msg = 'Medidor «' + (serie || item.label || '') + '» seleccionado';
+      if (rellenados.length) msg += ' · rellenado: ' + rellenados.join(', ');
+      showToast(msg, 'success', 3200);
+    }
+  };
 
   function setEditing(on) {
     ficha.classList.toggle('is-editing', !!on);
@@ -938,10 +1046,16 @@ document.addEventListener('DOMContentLoaded', function() {
       alerta.textContent = '';
     }
     if (on) {
-      var first = ficha.querySelector('.ficha-edit');
+      var first = ficha.querySelector('input.ficha-edit, select.ficha-edit, textarea.ficha-edit, .ficha-edit input, .ficha-edit select, .ficha-edit textarea');
       if (first) first.focus();
       ficha.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  }
+
+  function csrfToken() {
+    if (csrfInput && csrfInput.value) return csrfInput.value;
+    var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
   }
 
   tomarSnapshot();
@@ -962,7 +1076,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var formData = new FormData();
     formData.append('ajax', '1');
     formData.append('next', window.location.pathname);
-    if (csrfInput) formData.append('csrfmiddlewaretoken', csrfInput.value);
+    var token = csrfToken();
+    if (token) formData.append('csrfmiddlewaretoken', token);
     camposEditables().forEach(function(el) {
       if (!el.name) return;
       formData.append(el.name, el.value);
@@ -975,12 +1090,23 @@ document.addEventListener('DOMContentLoaded', function() {
     fetch('/clientes/' + clienteId + '/editar/', {
       method: 'POST',
       body: formData,
+      credentials: 'same-origin',
       headers: {
         'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'X-CSRFToken': token
       }
     })
     .then(function(response) {
+      var ct = (response.headers.get('content-type') || '');
+      if (ct.indexOf('application/json') === -1) {
+        return response.text().then(function() {
+          return {
+            ok: false,
+            data: { success: false, message: 'Respuesta inesperada del servidor (HTTP ' + response.status + ').' }
+          };
+        });
+      }
       return response.json().then(function(data) {
         return { ok: response.ok, data: data };
       });
@@ -1023,6 +1149,159 @@ document.addEventListener('DOMContentLoaded', function() {
     var qs = params.toString();
     window.history.replaceState({}, '', window.location.pathname + (qs ? ('?' + qs) : ''));
   }
+});
+</script>
+{% endif %}
+{% if puede_gestionar_adjuntos %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var form = document.getElementById('formSubirAdjuntosCliente');
+  var input = document.getElementById('inputAdjuntosCliente');
+  var btn = document.getElementById('btnSubirAdjuntosCliente');
+  var modalEl = document.getElementById('modalEstadoAdjuntosCliente');
+  var lista = document.getElementById('modalEstadoAdjuntosLista');
+  var resumen = document.getElementById('modalEstadoAdjuntosResumen');
+  var btnRecargar = document.getElementById('btnRecargarTrasAdjuntos');
+  if (!form || !input || !modalEl || typeof bootstrap === 'undefined') return;
+
+  var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+  var huboExito = false;
+
+  function csrfFromForm() {
+    var el = form.querySelector('[name=csrfmiddlewaretoken]');
+    if (el && el.value) return el.value;
+    var m = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : '';
+  }
+
+  function filaEstado(nombre, estado, detalle) {
+    var li = document.createElement('li');
+    li.className = 'list-group-item d-flex justify-content-between align-items-start gap-2';
+    var icon = 'bi-hourglass-split text-secondary';
+    if (estado === 'ok') icon = 'bi-check-circle-fill text-success';
+    if (estado === 'error') icon = 'bi-x-circle-fill text-danger';
+    if (estado === 'subiendo') icon = 'bi-arrow-repeat text-primary';
+    li.innerHTML =
+      '<div class="me-2"><i class="bi ' + icon + '"></i></div>' +
+      '<div class="flex-grow-1">' +
+        '<div class="fw-semibold text-break">' + (nombre || 'Archivo') + '</div>' +
+        '<div class="small text-muted">' + (detalle || '') + '</div>' +
+      '</div>';
+    return li;
+  }
+
+  function mostrarPreparacion(files) {
+    huboExito = false;
+    lista.innerHTML = '';
+    resumen.textContent = 'Subiendo ' + files.length + ' archivo(s)…';
+    Array.prototype.forEach.call(files, function(f) {
+      lista.appendChild(filaEstado(f.name, 'subiendo', 'En proceso…'));
+    });
+    if (btnRecargar) btnRecargar.classList.add('d-none');
+    modal.show();
+  }
+
+  function pintarResultados(data) {
+    lista.innerHTML = '';
+    var resultados = (data && data.resultados) || [];
+    if (!resultados.length) {
+      lista.appendChild(filaEstado('—', data && data.success ? 'ok' : 'error', (data && data.message) || 'Sin detalle'));
+    } else {
+      resultados.forEach(function(r) {
+        lista.appendChild(filaEstado(
+          r.nombre || 'Archivo',
+          r.ok ? 'ok' : 'error',
+          r.message || (r.ok ? 'Subido' : 'Error')
+        ));
+        if (r.ok) huboExito = true;
+      });
+    }
+    resumen.textContent = (data && data.message) || (huboExito ? 'Subida finalizada.' : 'No se pudo completar la subida.');
+    if (btnRecargar) btnRecargar.classList.toggle('d-none', !huboExito);
+  }
+
+  if (btnRecargar) {
+    btnRecargar.addEventListener('click', function() {
+      window.location.reload();
+    });
+  }
+
+  modalEl.addEventListener('hidden.bs.modal', function() {
+    if (huboExito) window.location.reload();
+  });
+
+  form.addEventListener('submit', function(ev) {
+    ev.preventDefault();
+    if (!input.files || !input.files.length) {
+      if (window.showToast) showToast('Selecciona al menos un archivo.', 'warning');
+      return;
+    }
+    mostrarPreparacion(input.files);
+
+    var fd = new FormData(form);
+    // Asegurar que todos los archivos seleccionados viajen como 'archivo'
+    fd.delete('archivo');
+    Array.prototype.forEach.call(input.files, function(f) {
+      fd.append('archivo', f);
+    });
+    fd.set('ajax', '1');
+    fd.set('accion', 'subir_adjunto');
+
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Subiendo…';
+    }
+
+    var token = csrfFromForm();
+    fetch(form.getAttribute('action') || window.location.pathname, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json',
+        'X-CSRFToken': token
+      }
+    })
+    .then(function(response) {
+      var ct = (response.headers.get('content-type') || '');
+      if (ct.indexOf('application/json') === -1) {
+        return response.text().then(function() {
+          return {
+            success: false,
+            message: 'Error del servidor al subir (HTTP ' + response.status + ').',
+            resultados: []
+          };
+        });
+      }
+      return response.json();
+    })
+    .then(function(data) {
+      pintarResultados(data || {});
+      if (window.showToast) {
+        showToast(
+          (data && data.message) || (data && data.success ? 'Archivos subidos.' : 'Error al subir.'),
+          data && data.success ? (data.parcial ? 'warning' : 'success') : 'danger'
+        );
+      }
+    })
+    .catch(function() {
+      pintarResultados({
+        success: false,
+        message: 'Error de red al subir los archivos.',
+        resultados: Array.prototype.map.call(input.files, function(f) {
+          return { ok: false, nombre: f.name, message: 'Error de red' };
+        })
+      });
+      if (window.showToast) showToast('Error de red al subir los archivos.', 'danger');
+    })
+    .finally(function() {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-upload"></i> Subir';
+      }
+    });
+  });
 });
 </script>
 {% endif %}
