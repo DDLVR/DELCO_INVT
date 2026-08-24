@@ -177,7 +177,21 @@
             <dd class="col-sm-8">
               <span class="ficha-view">{{ cliente.meter_serial_n_1|default:"—" }}</span>
               {% if puede_editar %}
-              <input type="text" class="form-control form-control-sm ficha-edit" name="meter_serial_n_1" value="{{ cliente.meter_serial_n_1|default:'' }}" autocomplete="off">
+              <div class="delco-ac ficha-edit ficha-medidor-ac"
+                   data-ac-url="{{ delco_api.buscar_medidores }}"
+                   data-ac-min="2"
+                   data-ac-value-field="serie"
+                   data-ac-on-pick="fichaClienteMedidorPick">
+                <input type="text"
+                       class="form-control form-control-sm delco-ac-input"
+                       name="meter_serial_n_1"
+                       id="fichaMeterSerial"
+                       value="{{ cliente.meter_serial_n_1|default:'' }}"
+                       placeholder="Escribe serie, marca o caja…"
+                       autocomplete="off">
+                <div class="delco-ac-results list-group shadow-sm d-none"></div>
+              </div>
+              <small class="text-muted ficha-edit d-block mt-1">Al elegir una coincidencia se rellenan marca y proyecto si vienen del inventario.</small>
               {% endif %}
             </dd>
             <dt class="col-sm-4">Empresa</dt>
@@ -924,7 +938,10 @@ document.addEventListener('DOMContentLoaded', function() {
   var snapshot = {};
 
   function camposEditables() {
-    return ficha.querySelectorAll('.ficha-edit');
+    // Inputs/selects/textarea con clase ficha-edit, o con name dentro de un contenedor .ficha-edit
+    return ficha.querySelectorAll(
+      'input.ficha-edit[name], select.ficha-edit[name], textarea.ficha-edit[name], .ficha-edit input[name], .ficha-edit select[name], .ficha-edit textarea[name]'
+    );
   }
 
   function tomarSnapshot() {
@@ -941,6 +958,59 @@ document.addEventListener('DOMContentLoaded', function() {
       el.value = snapshot[el.name];
     });
   }
+
+  function setValorCampo(name, value) {
+    if (value == null) return;
+    var el = ficha.querySelector('[name="' + name + '"]');
+    if (!el) return;
+    el.value = value;
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  function ensureSelectOption(selectEl, value, label) {
+    if (!selectEl || !value) return;
+    var exists = Array.prototype.some.call(selectEl.options, function(opt) {
+      return opt.value === value;
+    });
+    if (!exists) {
+      var opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = label || value;
+      selectEl.appendChild(opt);
+    }
+    selectEl.value = value;
+  }
+
+  // Rellena marca / proyecto / telemetría al elegir un medidor del inventario.
+  window.fichaClienteMedidorPick = function(item) {
+    if (!item) return;
+    var serie = (item.serie || '').trim();
+    if (serie) setValorCampo('meter_serial_n_1', serie);
+
+    var marca = (item.marca || '').trim();
+    if (marca && marca.toLowerCase() !== 'no especificada') {
+      setValorCampo('meter_manufacturer_id', marca);
+    }
+
+    var proyecto = (item.proyecto || '').trim();
+    if (proyecto) {
+      var proySelect = ficha.querySelector('[name="proyecto"]');
+      if (proySelect) ensureSelectOption(proySelect, proyecto, proyecto);
+    }
+
+    var tele = ficha.querySelector('[name="estado_telemetria"]');
+    if (tele && (tele.value === 'SIN_MEDIDOR' || !tele.value)) {
+      tele.value = 'OPERATIVO';
+      tele.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    if (window.showToast) {
+      var msg = 'Medidor «' + (serie || item.label || '') + '» seleccionado';
+      if (marca && marca.toLowerCase() !== 'no especificada') msg += ' · marca ' + marca;
+      showToast(msg, 'info', 2500);
+    }
+  };
 
   function setEditing(on) {
     ficha.classList.toggle('is-editing', !!on);
@@ -962,7 +1032,7 @@ document.addEventListener('DOMContentLoaded', function() {
       alerta.textContent = '';
     }
     if (on) {
-      var first = ficha.querySelector('.ficha-edit');
+      var first = ficha.querySelector('input.ficha-edit, select.ficha-edit, textarea.ficha-edit, .ficha-edit input, .ficha-edit select, .ficha-edit textarea');
       if (first) first.focus();
       ficha.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }

@@ -254,6 +254,11 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertIn('id="formSubirAdjuntosCliente"', html)
 		self.assertIn('multiple', html)
 		self.assertIn('modalEstadoAdjuntosCliente', html)
+		self.assertIn('fichaClienteMedidorPick', html)
+		self.assertIn('data-ac-url', html)
+		self.assertIn('data-ac-value-field="serie"', html)
+		self.assertIn('ficha-medidor-ac', html)
+		self.assertIn('name="meter_serial_n_1"', html)
 
 	def test_edicion_guarda_campos_extendidos_de_ficha(self):
 		cliente = Cliente.objects.create(
@@ -394,6 +399,67 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertEqual(cliente.meter_serial_n_1, 'SERIE-SIN-STOCK-999')
 		self.assertIsNone(cliente.medidor_actual_id)
 		self.assertIn('no está en inventario', data['message'])
+
+	def test_api_buscar_medidores_devuelve_coincidencias_con_proyecto(self):
+		self.medidor.marca = 'SCHNEIDER'
+		self.medidor.proyecto = 'PROY-AC-TEST'
+		self.medidor.save(update_fields=['marca', 'proyecto'])
+		response = self.client.get(
+			reverse('api_buscar_medidores'),
+			{'q': self.medidor.serie[:4]},
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertIn('results', data)
+		self.assertTrue(data['results'])
+		match = next(
+			(r for r in data['results'] if r.get('serie') == self.medidor.serie),
+			None,
+		)
+		self.assertIsNotNone(match)
+		self.assertEqual(match['marca'], 'SCHNEIDER')
+		self.assertEqual(match['proyecto'], 'PROY-AC-TEST')
+		self.assertIn('serie', match)
+		self.assertIn('label', match)
+
+	def test_edicion_asigna_medidor_de_inventario_y_marca(self):
+		self.medidor.marca = 'LANDIS'
+		self.medidor.save(update_fields=['marca'])
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-AC-FILL',
+			direccion='Dir',
+			comuna='Santiago',
+			customer_name='Sin marca',
+			meter_serial_n_1='',
+			meter_manufacturer_id='',
+			medidor_actual=None,
+			estado_telemetria='SIN_MEDIDOR',
+			activo=True,
+		)
+		response = self.client.post(
+			reverse('cliente_editar', kwargs={'pk': cliente.pk}),
+			{
+				'numero_cliente': cliente.numero_cliente,
+				'customer_name': 'Con medidor',
+				'comuna': 'Santiago',
+				'direccion': 'Dir',
+				'meter_serial_n_1': self.medidor.serie,
+				'meter_manufacturer_id': 'LANDIS',
+				'proyecto': '',
+				'estado_telemetria': 'OPERATIVO',
+				'estado_stb': 'SIN_REGISTRO',
+				'ajax': '1',
+			},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+			HTTP_ACCEPT='application/json',
+		)
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.json()['success'])
+		cliente.refresh_from_db()
+		self.assertEqual(cliente.meter_serial_n_1, self.medidor.serie)
+		self.assertEqual(cliente.meter_manufacturer_id, 'LANDIS')
+		self.assertEqual(cliente.medidor_actual_id, self.medidor.pk)
+		self.assertEqual(cliente.estado_telemetria, 'OPERATIVO')
 
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])

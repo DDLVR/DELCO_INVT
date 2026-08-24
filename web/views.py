@@ -5478,6 +5478,7 @@ def api_buscar_medidores(request):
                 'marca': med.marca or 'No especificada',
                 'tipo_medidor': tipo_txt or '—',
                 'tipo_medidor_codigo': tipo_codigo,
+                'proyecto': (getattr(med, 'proyecto', None) or '').strip(),
                 'custodia': custodia,
                 'label': label,
             })

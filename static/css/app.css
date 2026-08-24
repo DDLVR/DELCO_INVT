@@ -1433,6 +1433,7 @@ td.cliente-numero-duplicado strong {
 #fichaCliente.is-editing .delco-ficha-card {
   outline: 2px solid rgba(18, 75, 121, 0.35);
   outline-offset: 0;
+  overflow: visible;
 }
 
 #fichaCliente.is-editing .delco-ficha-dl > dd {
@@ -1441,6 +1442,14 @@ td.cliente-numero-duplicado strong {
 
 #fichaCliente .ficha-edit {
   max-width: 100%;
+}
+
+#fichaCliente .ficha-medidor-ac {
+  max-width: 100%;
+}
+
+#fichaCliente .ficha-medidor-ac .delco-ac-results {
+  z-index: 1080;
 }
 
 #fichaCliente textarea.ficha-edit {
