@@ -371,10 +371,13 @@
                                                 <li><code>MEDIDOR</code>, <code>MARCA</code>, <code>MODEM</code>, <code>IP</code>, <code>PUERTO</code></li>
                                                 <li><code>NOMBRE</code>, <code>DIRECCION</code>, <code>COMUNA</code></li>
                                                 <li><code>FECHA</code> — fecha de asignación</li>
-                                                <li><code>PROYECTO</code> — se conserva en la orden</li>
+                                                <li><code>PROYECTO</code> — solo si viene en el Excel (no se copia del cliente)</li>
                                             </ul>
                                             <p class="small text-muted mb-0">
-                                                El export agrega <strong>Fecha Creacion</strong> y <strong>Fecha Asignacion</strong>. El formato anterior (Número Cliente / Título) sigue funcionando.
+                                                El export agrega <strong>Fecha Creacion</strong>, <strong>Fecha Asignacion</strong>,
+                                                <strong>Fecha Fin</strong> y <strong>ESTADO</strong>.
+                                                No rellena proyecto ni fecha desde datos ajenos a la OT.
+                                                En trabajos completados incluye medidor/IP/puerto/módem del trabajo.
                                             </p>
                                         </div>
                                     </div>
@@ -445,13 +448,15 @@
                         <tr><td><code>DIRECCION</code></td><td>No</td><td>Dirección de instalación.</td></tr>
                         <tr><td><code>COMUNA</code></td><td>No</td><td>Comuna.</td></tr>
                         <tr><td><code>TECNICO</code></td><td>No</td><td>Nombre interno del técnico. Si viene, la orden queda <strong>Asignada</strong>.</td></tr>
-                        <tr><td><code>TRABAJO</code></td><td>No</td><td>Tipo: Instalación, Cambio, Retiro, Mantención, etc. Default: Instalación.</td></tr>
+                        <tr><td><code>TRABAJO</code></td><td>No</td><td>Tipo: Instalación, Cambio, Retiro, Mantención, etc. Si viene vacío se deduce de SOLICITUD; si no, queda como Otro (no se fuerza Instalación).</td></tr>
                         <tr><td><code>IP</code> / <code>PUERTO</code></td><td>No</td><td>Datos de comunicación del punto.</td></tr>
                         <tr><td><code>MODEM</code></td><td>No</td><td>Serie del módem. Si existe en inventario, se vincula a la OT.</td></tr>
-                        <tr><td><code>FECHA</code></td><td>No</td><td>Fecha de asignación (dd/mm/aaaa).</td></tr>
-                        <tr><td><code>PROYECTO</code></td><td>No</td><td>Proyecto de la orden (se conserva).</td></tr>
-                        <tr><td><code>Fecha Creacion</code></td><td>Export</td><td>La genera el sistema al exportar; no se pisa al importar.</td></tr>
-                        <tr><td><code>Fecha Asignacion</code></td><td>Export</td><td>La genera el sistema al exportar (también sale en <code>FECHA</code>).</td></tr>
+                        <tr><td><code>FECHA</code></td><td>No</td><td>Fecha de asignación (dd/mm/aaaa). Vacío si la OT no tiene asignación.</td></tr>
+                        <tr><td><code>PROYECTO</code></td><td>No</td><td>Solo el de la OT (no se copia del cliente).</td></tr>
+                        <tr><td><code>Fecha Creacion</code></td><td>Export</td><td>Fecha real de creación en el sistema; no se pisa al importar.</td></tr>
+                        <tr><td><code>Fecha Asignacion</code></td><td>Export</td><td>Fecha real de asignación (también en <code>FECHA</code> si existe).</td></tr>
+                        <tr><td><code>Fecha Fin</code></td><td>Export</td><td>Fin de ejecución (trabajos completados).</td></tr>
+                        <tr><td><code>ESTADO</code></td><td>Export</td><td>Estado actual de la OT.</td></tr>
                     </tbody>
                 </table>
                 <div class="alert alert-info small">

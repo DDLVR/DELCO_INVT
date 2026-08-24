@@ -392,6 +392,101 @@ class OrdenesBasicasWorkflowTests(TestCase):
 		self.assertEqual(fila[1], 'CLI-OT-001')
 		self.assertEqual(fila[2], 'SER-OT-001')
 
+	def test_import_sin_trabajo_infiere_mantenimiento_desde_solicitud(self):
+		archivo = self._excel_plantilla_asignacion([
+			[
+				'Mantenimiento TM',
+				'CLI-OT-001',
+				'',
+				'',
+				'Cliente OT',
+				'Calle 1',
+				'Santiago',
+				'',
+				'',  # TRABAJO vacío
+				'',
+				'',
+				'',
+				'',
+			],
+		])
+		importacion = importar_ordenes_excel(archivo, self.admin)
+		self.assertEqual(importacion.exitosas, 1, importacion.observaciones)
+		orden = OrdenTrabajo.objects.get(titulo='Mantenimiento TM')
+		self.assertEqual(orden.tipo_trabajo, 'MANTENCION')
+		self.assertEqual(orden.proyecto_carga_administrativa, '')
+
+	def test_export_no_rellena_proyecto_ni_fecha_ni_equipo_desde_cliente(self):
+		from ordenes_trabajo.utils import exportar_ordenes_excel
+
+		self.cliente.proyecto = 'PROYECTO MIL'
+		self.cliente.ip = '10.0.0.1'
+		self.cliente.puerto = '4060'
+		self.cliente.modem = 'MODEM-CLI'
+		self.cliente.save()
+
+		orden = OrdenTrabajo.objects.create(
+			titulo='Mantenimiento TM',
+			tipo_trabajo='MANTENCION',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			estado='CREADA',
+			proyecto_carga_administrativa='',
+		)
+		wb = exportar_ordenes_excel([orden])
+		headers = [c.value for c in wb.active[1]]
+		fila = [c.value for c in wb.active[2]]
+		idx = {h: i for i, h in enumerate(headers)}
+
+		self.assertEqual(fila[idx['TRABAJO']], 'Mantención')
+		self.assertEqual(fila[idx['PROYECTO']], '')
+		self.assertEqual(fila[idx['FECHA']], '')
+		self.assertEqual(fila[idx['IP']], '')
+		self.assertEqual(fila[idx['PUERTO']], '')
+		self.assertEqual(fila[idx['MODEM']], '')
+		self.assertEqual(fila[idx['MEDIDOR']], '')
+		# Fecha Creacion es real de BD, no inventada desde otro campo
+		self.assertTrue(fila[idx['Fecha Creacion']])
+		self.assertEqual(fila[idx['Fecha Asignacion']], '')
+
+	def test_export_trabajo_completado_incluye_equipos_del_trabajo(self):
+		from django.utils import timezone
+		from inventario.models import Modem
+		from ordenes_trabajo.utils import exportar_ordenes_excel
+
+		modem = Modem.objects.create(serie='MDM-FIN-1', marca='X', ip='10.9.8.7', puerto='5001')
+		orden = OrdenTrabajo.objects.create(
+			titulo='OT completada',
+			tipo_trabajo='CAMBIO',
+			cliente=self.cliente,
+			creada_por=self.admin,
+			tecnico_responsable=self.tecnico,
+			medidor=self.medidor,
+			modem=modem,
+			estado='FINALIZADA',
+			proyecto_carga_administrativa='Proyecto Real OT',
+			fecha_asignacion=timezone.now(),
+			fecha_fin_ejecucion=timezone.now(),
+		)
+		self.cliente.ip = '1.1.1.1'
+		self.cliente.proyecto = 'PROYECTO MIL'
+		self.cliente.save()
+
+		wb = exportar_ordenes_excel([orden])
+		headers = [c.value for c in wb.active[1]]
+		fila = [c.value for c in wb.active[2]]
+		idx = {h: i for i, h in enumerate(headers)}
+
+		self.assertEqual(fila[idx['MEDIDOR']], 'SER-OT-001')
+		self.assertEqual(fila[idx['MARCA']], 'TEST')
+		self.assertEqual(fila[idx['IP']], '10.9.8.7')
+		self.assertEqual(fila[idx['PUERTO']], '5001')
+		self.assertEqual(fila[idx['MODEM']], 'MDM-FIN-1')
+		self.assertEqual(fila[idx['PROYECTO']], 'Proyecto Real OT')
+		self.assertTrue(fila[idx['FECHA']])
+		self.assertTrue(fila[idx['Fecha Fin']])
+		self.assertEqual(fila[idx['ESTADO']], 'Finalizada')
+
 	def test_tecnico_ve_solo_sus_ordenes_en_listado(self):
 		orden_1 = OrdenTrabajo.objects.create(
 			titulo='OT Tec',

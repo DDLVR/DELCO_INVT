@@ -159,18 +159,58 @@ def _valor_fila_raw(valores, indice, campo, default=None):
     return valores[pos]
 
 
-def _resolver_tipo_trabajo(texto: str) -> str:
+def _resolver_tipo_trabajo(texto: str) -> Optional[str]:
+    """Resuelve tipo de trabajo. Vacío → None (no inventar Instalación)."""
     clave = _normalizar_texto(texto).upper()
     if not clave:
-        return 'INSTALACION'
+        return None
     clave_sin_acentos = unicodedata.normalize('NFD', clave)
     clave_sin_acentos = ''.join(c for c in clave_sin_acentos if unicodedata.category(c) != 'Mn')
     if clave in dict(OrdenTrabajo.TIPO_TRABAJO_CHOICES):
         return clave
     if clave_sin_acentos in dict(OrdenTrabajo.TIPO_TRABAJO_CHOICES):
         return clave_sin_acentos
-    return TIPO_TRABAJO_MAP.get(clave, TIPO_TRABAJO_MAP.get(clave_sin_acentos, 'OTRO'))
+    mapeado = TIPO_TRABAJO_MAP.get(clave) or TIPO_TRABAJO_MAP.get(clave_sin_acentos)
+    return mapeado
 
+
+def _inferir_tipo_desde_texto(*textos: str) -> Optional[str]:
+    """Intenta deducir el tipo desde SOLICITUD / título (sin inventar Instalación)."""
+    for texto in textos:
+        resuelto = _resolver_tipo_trabajo(texto)
+        if resuelto:
+            return resuelto
+        clave = _normalizar_texto(texto).upper()
+        if not clave:
+            continue
+        clave = unicodedata.normalize('NFD', clave)
+        clave = ''.join(c for c in clave if unicodedata.category(c) != 'Mn')
+        if 'MANTEN' in clave:
+            return 'MANTENCION'
+        if 'CAMBIO' in clave or 'REEMPLAZ' in clave:
+            return 'CAMBIO'
+        if 'RETIR' in clave:
+            return 'RETIRO'
+        if 'REPAR' in clave:
+            return 'REPARACION'
+        if 'INSPEC' in clave:
+            return 'INSPECCION'
+        if 'CONFIG' in clave:
+            return 'CONFIGURACION'
+        if 'INSTAL' in clave:
+            return 'INSTALACION'
+    return None
+
+
+def _tipo_trabajo_para_importacion(trabajo_excel: str, *textos_contexto: str) -> str:
+    """Tipo al importar: Excel TRABAJO, si no inferencia, si no OTRO (nunca default Instalación silencioso)."""
+    tip = _resolver_tipo_trabajo(trabajo_excel)
+    if tip:
+        return tip
+    tip = _inferir_tipo_desde_texto(*textos_contexto)
+    if tip:
+        return tip
+    return 'OTRO'
 
 def _resolver_estado(texto: str) -> Optional[str]:
     clave = _normalizar_texto(texto).upper()
@@ -598,7 +638,11 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                     puerto,
                     serie_modem,
                 )
-                tipo_trabajo = _resolver_tipo_trabajo(_valor_fila(valores, indice, 'tipo_trabajo'))
+                tipo_trabajo = _tipo_trabajo_para_importacion(
+                    _valor_fila(valores, indice, 'tipo_trabajo'),
+                    solicitud,
+                    titulo,
+                )
                 tecnico_nombre = _valor_fila(valores, indice, 'tecnico')
                 tecnico = _resolver_tecnico(tecnico_nombre)
                 estado_import = _resolver_estado(_valor_fila(valores, indice, 'estado'))
@@ -672,10 +716,7 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
                             orden.observaciones_tecnicas = observaciones_tecnicas
                         if proyecto_carga:
                             orden.proyecto_carga_administrativa = str(proyecto_carga).strip()[:255]
-                        elif getattr(cliente, 'proyecto', None):
-                            from web.services.filtros_export import es_sin_proyecto
-                            if not es_sin_proyecto(cliente.proyecto):
-                                orden.proyecto_carga_administrativa = (cliente.proyecto or '')[:255]
+                        # No copiar proyecto del cliente: solo lo que viene en el Excel / OT.
                         if medidor_obj:
                             orden.medidor = medidor_obj
                         if modem_obj:
@@ -735,8 +776,72 @@ def importar_ordenes_excel(archivo, usuario) -> ImportacionExcel:
     return importacion
 
 
+def _orden_con_datos_ejecucion(orden) -> bool:
+    """True si la OT ya tiene (o tuvo) ejecución: exportar equipos/IP del trabajo."""
+    if getattr(orden, 'fecha_fin_ejecucion', None):
+        return True
+    estado = getattr(orden, 'estado', '') or ''
+    return estado in (
+        *ESTADOS_TERMINADOS,
+        'REALIZADA_PENDIENTE_COMPROBACION',
+        'PENDIENTE_VALIDACION',
+        'OBSERVADA',
+        'EN_EJECUCION',
+    )
+
+
+def _valores_equipo_export(orden) -> Dict[str, str]:
+    """
+    Datos de medidor / IP / puerto / módem para la fila de export.
+
+    - Sin ejecución: solo lo vinculado a la OT (no inventar desde ficha del cliente).
+    - Con ejecución / completada: prioriza equipos de la OT y completa con la ficha
+      del cliente (snapshot del trabajo realizado).
+    """
+    cliente = orden.cliente
+    medidor = orden.medidor
+    modem = orden.modem
+    sim = getattr(orden, 'simcard', None)
+    con_ejecucion = _orden_con_datos_ejecucion(orden)
+
+    serie_medidor = (getattr(medidor, 'serie', None) or '') if medidor else ''
+    marca = (getattr(medidor, 'marca', None) or '') if medidor else ''
+    serie_modem = (getattr(modem, 'serie', None) or '') if modem else ''
+    ip = (getattr(modem, 'ip', None) or '') if modem else ''
+    puerto = (getattr(modem, 'puerto', None) or '') if modem else ''
+
+    if con_ejecucion and cliente:
+        if not serie_medidor:
+            serie_medidor = getattr(cliente, 'meter_serial_n_1', None) or ''
+        if not marca:
+            marca = getattr(cliente, 'meter_manufacturer_id', None) or ''
+        if not serie_modem:
+            serie_modem = getattr(cliente, 'modem', None) or ''
+        if not ip:
+            ip = (
+                getattr(cliente, 'ip', None)
+                or (getattr(sim, 'direccion_ip', None) if sim else None)
+                or (getattr(sim, 'ip_fija', None) if sim else None)
+                or ''
+            )
+        if not puerto:
+            puerto = getattr(cliente, 'puerto', None) or ''
+
+    return {
+        'medidor': (serie_medidor or '').strip(),
+        'marca': (marca or '').strip(),
+        'ip': (ip or '').strip(),
+        'puerto': (puerto or '').strip(),
+        'modem': (serie_modem or '').strip(),
+    }
+
+
 def exportar_ordenes_excel(ordenes):
-    """Genera workbook Excel en formato Plantilla Asignación de Trabajo (técnicos)."""
+    """Genera workbook Excel en formato Plantilla Asignación de Trabajo (técnicos).
+
+    No rellena PROYECTO/FECHA/equipos desde datos ajenos a la OT.
+    En trabajos con ejecución, exporta medidor/IP/puerto/módem del trabajo realizado.
+    """
     from importaciones.utils import aplicar_estilo_hoja_exportacion
 
     wb = openpyxl.Workbook()
@@ -759,38 +864,44 @@ def exportar_ordenes_excel(ordenes):
         'PROYECTO',
         'Fecha Creacion',
         'Fecha Asignacion',
+        'Fecha Fin',
+        'ESTADO',
     ])
 
     for orden in ordenes:
         cliente = orden.cliente
-        medidor = orden.medidor
-        modem = orden.modem
+        equipo = _valores_equipo_export(orden)
+        # Solo fechas reales de la OT (FECHA = asignación; no inventar con fecha_creacion)
+        fecha_corta = (
+            orden.fecha_asignacion.strftime('%d/%m/%Y') if orden.fecha_asignacion else ''
+        )
         ws.append([
             orden.titulo or '',
             cliente.numero_cliente if cliente else '',
-            medidor.serie if medidor else (getattr(cliente, 'meter_serial_n_1', None) or ''),
-            (medidor.marca if medidor and getattr(medidor, 'marca', None) else '')
-            or (getattr(cliente, 'meter_manufacturer_id', None) or ''),
+            equipo['medidor'],
+            equipo['marca'],
             (getattr(cliente, 'customer_name', None) or '') if cliente else '',
-            (cliente.direccion if cliente else '') or (getattr(cliente, 'installation_address', None) or ''),
+            (
+                (cliente.direccion if cliente else '')
+                or (getattr(cliente, 'installation_address', None) or '')
+            ),
             cliente.comuna if cliente else '',
             orden.tecnico_responsable.nombre_interno if orden.tecnico_responsable else '',
-            orden.get_tipo_trabajo_display(),
-            (getattr(cliente, 'ip', None) or (getattr(modem, 'ip', None) if modem else '')) or '',
-            (getattr(cliente, 'puerto', None) or (getattr(modem, 'puerto', None) if modem else '')) or '',
-            (modem.serie if modem else '') or (getattr(cliente, 'modem', None) or ''),
-            orden.fecha_asignacion.strftime('%d/%m/%Y') if orden.fecha_asignacion else (
-                orden.fecha_creacion.strftime('%d/%m/%Y') if orden.fecha_creacion else ''
-            ),
-            orden.proyecto_carga_administrativa or (getattr(cliente, 'proyecto', None) or ''),
+            orden.get_tipo_trabajo_display() if orden.tipo_trabajo else '',
+            equipo['ip'],
+            equipo['puerto'],
+            equipo['modem'],
+            fecha_corta,
+            (orden.proyecto_carga_administrativa or '').strip(),
             orden.fecha_creacion.strftime('%d/%m/%Y %H:%M') if orden.fecha_creacion else '',
             orden.fecha_asignacion.strftime('%d/%m/%Y %H:%M') if orden.fecha_asignacion else '',
+            orden.fecha_fin_ejecucion.strftime('%d/%m/%Y %H:%M') if orden.fecha_fin_ejecucion else '',
+            orden.get_estado_display() if orden.estado else '',
         ])
 
-    # Filtro en Técnico / Trabajo / Proyecto
-    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=8, filter_to_col=14)
+    # Filtro en Técnico / Trabajo / Proyecto / Estado
+    aplicar_estilo_hoja_exportacion(ws, auto_filter=True, filter_from_col=8, filter_to_col=18)
     return wb
-
 
 def guardar_informe_pdf(
     cliente,
