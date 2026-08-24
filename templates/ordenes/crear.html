@@ -50,23 +50,23 @@
                             </div>
                             
                             <div class="col-md-6 mb-3">
-                                <label class="form-label">Técnico Responsable</label>
+                                <label class="form-label">Responsable (técnico / administrativo)</label>
                                 <input type="hidden" name="tecnico_responsable" id="crearTecnicoId" value="">
                                 <div class="delco-ac mb-2"
-                                     data-ac-url="{{ delco_api.buscar_tecnicos }}"
+                                     data-ac-url="{{ delco_api.buscar_tecnicos }}?ambito=ot"
                                      data-ac-hidden="#crearTecnicoId"
                                      data-ac-select="#crearTecnicoSelect"
                                      data-ac-min="2">
-                                    <input type="text" class="form-control delco-ac-input" id="crearTecnicoSearch" placeholder="Escribe para buscar técnico..." autocomplete="off">
+                                    <input type="text" class="form-control delco-ac-input" id="crearTecnicoSearch" placeholder="Escribe para buscar responsable..." autocomplete="off">
                                     <div class="delco-ac-results list-group shadow-sm d-none"></div>
                                 </div>
                                 <select id="crearTecnicoSelect" class="form-select">
                                     <option value="">— O elige de la lista —</option>
                                     {% for tecnico in tecnicos %}
-                                    <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}{% if tecnico.nombre or tecnico.apellido %} · {{ tecnico.nombre }} {{ tecnico.apellido }}{% endif %}</option>
+                                    <option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}{% if tecnico.rol == 'ADMINISTRATIVO' %} (Administrativo){% elif tecnico.nombre or tecnico.apellido %} · {{ tecnico.nombre }} {{ tecnico.apellido }}{% endif %}</option>
                                     {% endfor %}
                                 </select>
-                                <small class="text-muted">Opcional. Puedes buscar escribiendo o elegir de la lista.</small>
+                                <small class="text-muted">Opcional. Incluye técnicos y administrativos activos.</small>
                             </div>
                         </div>
                         

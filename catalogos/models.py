@@ -52,7 +52,8 @@ class Proyecto(models.Model):
         verbose_name_plural = 'Proyectos'
         ordering = ['nombre']
         indexes = [
-            models.Index(fields=['activo', 'nombre']),
+            # Nombre fijo (igual a 0003) para evitar RenameIndex en hosting.
+            models.Index(fields=['activo', 'nombre'], name='catalogos_p_activo_nombre_idx'),
         ]
 
     def __str__(self):
