@@ -44,6 +44,7 @@
     var timer = null;
     var abortCtrl = null;
     var onPick = root.getAttribute('data-ac-on-pick') || '';
+    var valueField = (root.getAttribute('data-ac-value-field') || '').trim();
 
     if (!input || !results || !url) return;
     root.dataset.acReady = '1';
@@ -80,12 +81,20 @@
       clearBoundId();
     }
 
+    function pickValue(item) {
+      if (valueField && Object.prototype.hasOwnProperty.call(item, valueField) && item[valueField] != null && item[valueField] !== '') {
+        return String(item[valueField]);
+      }
+      return item.label || item.numero_cliente || item.nombre_interno || item.serie || String(item.id);
+    }
+
     function pick(item) {
       var label = item.label || item.numero_cliente || item.nombre_interno || String(item.id);
-      input.value = label;
+      var value = pickValue(item);
+      input.value = value;
       if (hidden) hidden.value = item.id;
       if (selectEl) ensureOption(selectEl, item.id, label);
-      lockedLabel = String(label || '').trim();
+      lockedLabel = String(value || '').trim();
       lockedId = String(item.id);
       clearResults();
       if (onPick && typeof window[onPick] === 'function') {

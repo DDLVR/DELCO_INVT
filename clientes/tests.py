@@ -251,6 +251,14 @@ class ClienteFlujoViewTests(TestCase):
 		self.assertIn('id="documentosCliente"', html)
 		self.assertIn('Documentos del cliente', html)
 		self.assertIn('name="accion" value="subir_adjunto"', html)
+		self.assertIn('id="formSubirAdjuntosCliente"', html)
+		self.assertIn('multiple', html)
+		self.assertIn('modalEstadoAdjuntosCliente', html)
+		self.assertIn('fichaClienteMedidorPick', html)
+		self.assertIn('data-ac-url', html)
+		self.assertIn('data-ac-value-field="serie"', html)
+		self.assertIn('ficha-medidor-ac', html)
+		self.assertIn('name="meter_serial_n_1"', html)
 
 	def test_edicion_guarda_campos_extendidos_de_ficha(self):
 		cliente = Cliente.objects.create(
@@ -354,6 +362,129 @@ class ClienteFlujoViewTests(TestCase):
 		response = self.client.get(reverse('cliente_editar', kwargs={'pk': cliente.pk}))
 		self.assertEqual(response.status_code, 302)
 		self.assertEqual(response.url, reverse('cliente_historial', kwargs={'pk': cliente.pk}))
+
+	def test_edicion_guarda_aunque_serie_no_este_en_inventario(self):
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-SERIE-HUERFANA',
+			direccion='Dir Vieja',
+			comuna='Santiago',
+			customer_name='Antes',
+			meter_serial_n_1='SERIE-SIN-STOCK-999',
+			medidor_actual=None,
+			activo=True,
+		)
+		response = self.client.post(
+			reverse('cliente_editar', kwargs={'pk': cliente.pk}),
+			{
+				'numero_cliente': cliente.numero_cliente,
+				'customer_name': 'Despues',
+				'comuna': 'Maipu',
+				'direccion': 'Dir Nueva',
+				'meter_serial_n_1': 'SERIE-SIN-STOCK-999',
+				'proyecto': '',
+				'estado_telemetria': 'OPERATIVO',
+				'estado_stb': 'SIN_REGISTRO',
+				'ajax': '1',
+			},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+			HTTP_ACCEPT='application/json',
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertTrue(data['success'])
+		cliente.refresh_from_db()
+		self.assertEqual(cliente.customer_name, 'Despues')
+		self.assertEqual(cliente.comuna, 'Maipu')
+		self.assertEqual(cliente.direccion, 'Dir Nueva')
+		self.assertEqual(cliente.meter_serial_n_1, 'SERIE-SIN-STOCK-999')
+		self.assertIsNone(cliente.medidor_actual_id)
+		self.assertIn('no está en inventario', data['message'])
+
+	def test_api_buscar_medidores_devuelve_coincidencias_con_proyecto(self):
+		from inventario.models import Modem, SimCard
+
+		self.medidor.marca = 'SCHNEIDER'
+		self.medidor.proyecto = 'PROY-AC-TEST'
+		self.medidor.save(update_fields=['marca', 'proyecto'])
+		SimCard.objects.create(
+			imei='ICCID-AC-001',
+			operador='ENTEL',
+			abonado='56911110000',
+			direccion_ip='10.20.30.40',
+			medidor=self.medidor,
+			eliminado=False,
+		)
+		Modem.objects.create(
+			serie='MOD-AC-001',
+			marca='Huawei',
+			modelo='B315',
+			ip='10.20.30.40',
+			puerto='502',
+			medidor=self.medidor,
+			eliminado=False,
+		)
+		response = self.client.get(
+			reverse('api_buscar_medidores'),
+			{'q': self.medidor.serie[:4]},
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertIn('results', data)
+		self.assertTrue(data['results'])
+		match = next(
+			(r for r in data['results'] if r.get('serie') == self.medidor.serie),
+			None,
+		)
+		self.assertIsNotNone(match)
+		self.assertEqual(match['marca'], 'SCHNEIDER')
+		self.assertEqual(match['proyecto'], 'PROY-AC-TEST')
+		self.assertEqual(match['ip'], '10.20.30.40')
+		self.assertEqual(match['puerto'], '502')
+		self.assertEqual(match['modem'], 'MOD-AC-001')
+		self.assertEqual(match['sim_operador'], 'ENTEL')
+		self.assertEqual(match['sim_iccid'], 'ICCID-AC-001')
+		self.assertEqual(match['sim_abonado'], '56911110000')
+		self.assertIn('serie', match)
+		self.assertIn('label', match)
+
+	def test_edicion_asigna_medidor_de_inventario_y_marca(self):
+		self.medidor.marca = 'LANDIS'
+		self.medidor.save(update_fields=['marca'])
+		cliente = Cliente.objects.create(
+			numero_cliente='CLI-AC-FILL',
+			direccion='Dir',
+			comuna='Santiago',
+			customer_name='Sin marca',
+			meter_serial_n_1='',
+			meter_manufacturer_id='',
+			medidor_actual=None,
+			estado_telemetria='SIN_MEDIDOR',
+			activo=True,
+		)
+		response = self.client.post(
+			reverse('cliente_editar', kwargs={'pk': cliente.pk}),
+			{
+				'numero_cliente': cliente.numero_cliente,
+				'customer_name': 'Con medidor',
+				'comuna': 'Santiago',
+				'direccion': 'Dir',
+				'meter_serial_n_1': self.medidor.serie,
+				'meter_manufacturer_id': 'LANDIS',
+				'proyecto': '',
+				'estado_telemetria': 'OPERATIVO',
+				'estado_stb': 'SIN_REGISTRO',
+				'ajax': '1',
+			},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+			HTTP_ACCEPT='application/json',
+		)
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(response.json()['success'])
+		cliente.refresh_from_db()
+		self.assertEqual(cliente.meter_serial_n_1, self.medidor.serie)
+		self.assertEqual(cliente.meter_manufacturer_id, 'LANDIS')
+		self.assertEqual(cliente.medidor_actual_id, self.medidor.pk)
+		self.assertEqual(cliente.estado_telemetria, 'OPERATIVO')
 
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
@@ -519,6 +650,42 @@ class ClienteAdjuntoHistorialTests(TestCase):
 				action='CLIENT_ADJUNTO_PURGE',
 			).exists()
 		)
+
+	def test_subir_varios_archivos_ajax_devuelve_estado_por_archivo(self):
+		from .models import ClienteAdjunto
+
+		self.assertTrue(self.client.login(rut=self.admin_op.rut, password=self.password))
+		url = reverse('cliente_historial', kwargs={'pk': self.cliente.pk})
+		response = self.client.post(
+			url,
+			{
+				'accion': 'subir_adjunto',
+				'tipo': 'FOTO',
+				'ajax': '1',
+				'archivo': [
+					SimpleUploadedFile('uno.png', self.png, content_type='image/png'),
+					SimpleUploadedFile('dos.png', self.png, content_type='image/png'),
+					SimpleUploadedFile(
+						'tres.pdf',
+						b'%PDF-1.4\n%demo\n',
+						content_type='application/pdf',
+					),
+				],
+			},
+			HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+			HTTP_ACCEPT='application/json',
+		)
+		self.assertEqual(response.status_code, 200)
+		data = response.json()
+		self.assertTrue(data['success'])
+		self.assertEqual(len(data['resultados']), 3)
+		self.assertTrue(all(r['ok'] for r in data['resultados']))
+		self.assertEqual(
+			ClienteAdjunto.objects.filter(cliente=self.cliente, eliminado=False).count(),
+			3,
+		)
+		nombres = {r['nombre'] for r in data['resultados']}
+		self.assertEqual(nombres, {'uno.png', 'dos.png', 'tres.pdf'})
 
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
