@@ -240,6 +240,14 @@ MOREAPP_FIRST_SCAN_TAIL = int(os.getenv('MOREAPP_FIRST_SCAN_TAIL', '40'))
 # Modulo de ordenes de trabajo (fase de desactivacion segura)
 ORDENES_TRABAJO_ENABLED = os.getenv('ORDENES_TRABAJO_ENABLED', 'false').strip().lower() == 'true'
 
+# Subidas: adjuntos de cliente/carga hasta 150 MB. Content-Length del request
+# no puede superar DATA_UPLOAD_MAX_MEMORY_SIZE (Django lo valida antes de parsear).
+# Margen extra para multipart. Archivos grandes van a disco vía TemporaryFileUploadHandler.
+_DATA_UPLOAD_MAX_MB = int(os.getenv('DATA_UPLOAD_MAX_MB', '160'))
+DATA_UPLOAD_MAX_MEMORY_SIZE = _DATA_UPLOAD_MAX_MB * 1024 * 1024
+# Mantener en memoria solo archivos chicos; el resto a temporal en disco.
+FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv('FILE_UPLOAD_MAX_MEMORY_SIZE', str(10 * 1024 * 1024)))
+
 # Configuracion API para integracion con MoreApp (Webhooks)
 # Sin valor → el webhook rechaza con 403. En producción settings_production lo exige.
 MOREAPP_WEBHOOK_SECRET = os.getenv('MOREAPP_WEBHOOK_SECRET', '').strip()
