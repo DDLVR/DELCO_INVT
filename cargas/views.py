@@ -37,7 +37,8 @@ PRIORIDAD_ORDER = Case(
     output_field=IntegerField(),
 )
 
-MAX_ADJUNTO_BYTES = 15 * 1024 * 1024
+MAX_ADJUNTO_MB = 150
+MAX_ADJUNTO_BYTES = MAX_ADJUNTO_MB * 1024 * 1024
 EXTENSIONES_IMAGEN = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
 EXTENSIONES_PDF = ('.pdf',)
 EXTENSIONES_PERMITIDAS = EXTENSIONES_IMAGEN + EXTENSIONES_PDF
@@ -139,7 +140,7 @@ def _validar_archivo_adjunto(request):
     if size <= 0:
         return False, 'El archivo está vacío.', None, None
     if size > MAX_ADJUNTO_BYTES:
-        return False, 'El archivo supera el máximo de 15 MB.', None, None
+        return False, f'El archivo supera el máximo de {MAX_ADJUNTO_MB} MB.', None, None
 
     tipo = _inferir_tipo_adjunto(request.POST.get('tipo'), nombre)
     return True, nombre, archivo, tipo
