@@ -9,7 +9,9 @@ from web.services.audit import AuditEvent, register_audit_event
 
 from .models import ClienteAdjunto
 
-MAX_ADJUNTO_BYTES = 15 * 1024 * 1024
+# Límite por archivo en adjuntos de ficha de cliente (fotos/PDF).
+MAX_ADJUNTO_MB = 150
+MAX_ADJUNTO_BYTES = MAX_ADJUNTO_MB * 1024 * 1024
 EXTENSIONES_IMAGEN = ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp')
 EXTENSIONES_PDF = ('.pdf',)
 EXTENSIONES_PERMITIDAS = EXTENSIONES_IMAGEN + EXTENSIONES_PDF
@@ -54,7 +56,7 @@ def _validar_archivo(archivo, tipo_post):
     if size <= 0:
         return False, f'«{nombre}»: el archivo está vacío.', None, None
     if size > MAX_ADJUNTO_BYTES:
-        return False, f'«{nombre}»: supera el máximo de 15 MB.', None, None
+        return False, f'«{nombre}»: supera el máximo de {MAX_ADJUNTO_MB} MB.', None, None
 
     tipo = _inferir_tipo_adjunto(tipo_post, nombre)
     return True, nombre, archivo, tipo

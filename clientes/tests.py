@@ -687,6 +687,23 @@ class ClienteAdjuntoHistorialTests(TestCase):
 		nombres = {r['nombre'] for r in data['resultados']}
 		self.assertEqual(nombres, {'uno.png', 'dos.png', 'tres.pdf'})
 
+	def test_limite_adjunto_cliente_es_150mb(self):
+		from clientes.adjuntos import MAX_ADJUNTO_BYTES, MAX_ADJUNTO_MB, _validar_archivo
+
+		self.assertEqual(MAX_ADJUNTO_MB, 150)
+		self.assertEqual(MAX_ADJUNTO_BYTES, 150 * 1024 * 1024)
+
+		ok_bajo = SimpleUploadedFile('ok.pdf', b'%PDF-1.4\n', content_type='application/pdf')
+		ok_bajo.size = MAX_ADJUNTO_BYTES
+		ok, msg, _, _ = _validar_archivo(ok_bajo, 'PDF')
+		self.assertTrue(ok, msg)
+
+		grande = SimpleUploadedFile('grande.pdf', b'%PDF-1.4\n', content_type='application/pdf')
+		grande.size = MAX_ADJUNTO_BYTES + 1
+		ok, msg, _, _ = _validar_archivo(grande, 'PDF')
+		self.assertFalse(ok)
+		self.assertIn('150 MB', msg)
+
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
 class ClienteImportarViewTests(TestCase):
