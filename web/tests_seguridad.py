@@ -146,4 +146,7 @@ class ProductionSettingsRequireEnvTests(TestCase):
 		self.assertIn("_require_env('MOREAPP_WEBHOOK_SECRET')", texto)
 		settings_py = Path(__file__).resolve().parents[1] / 'config' / 'settings.py'
 		settings_texto = settings_py.read_text(encoding='utf-8')
-		self.assertNotIn('REMOVED_MOREAPP_WEBHOOK_SECRET=', settings_texto)
+		self.assertIn(
+			"MOREAPP_WEBHOOK_SECRET = os.getenv('MOREAPP_WEBHOOK_SECRET', '').strip()",
+			settings_texto,
+		)

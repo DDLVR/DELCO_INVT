@@ -29,7 +29,7 @@ except ImportError:
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-# En desarrollo local se permite un fallback inseguro; producción exige SECRET_KEY vía env.
+# Clave explícitamente local; producción exige SECRET_KEY vía entorno.
 SECRET_KEY = os.getenv(
     'SECRET_KEY',
     'django-insecure-development-only-not-for-production',
