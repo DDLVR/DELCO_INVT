@@ -1838,3 +1838,174 @@ input[type="file"].form-control,
 .modal-dialog .delco-ac-input {
   max-width: 100%;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   UX: scroll suave, volver arriba, transiciones, móvil
+   ═══════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  #delcoMainContent {
+    scroll-behavior: auto;
+  }
+
+  .delco-page-enter,
+  .delco-back-to-top,
+  .delco-kpi-card,
+  .card-kpi-mov,
+  .delco-sidebar .list-group-item,
+  .modal.fade .modal-dialog,
+  .offcanvas {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+#delcoMainContent {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+.delco-page-enter {
+  animation: delcoPageEnter 0.28s ease-out;
+}
+
+@keyframes delcoPageEnter {
+  from {
+    opacity: 0.55;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Transiciones suaves en paneles / modales / offcanvas */
+.delco-panel-card,
+.card.shadow-sm,
+.card.delco-panel-card {
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.modal.fade .modal-dialog {
+  transition: transform 0.25s ease-out, opacity 0.25s ease-out;
+}
+
+.delco-sidebar-offcanvas.offcanvas {
+  transition: transform 0.28s ease;
+}
+
+.delco-sidebar .app-nav-link {
+  transition: background-color 0.18s ease, color 0.18s ease, padding-left 0.18s ease, transform 0.15s ease;
+}
+
+.delco-sidebar .app-nav-link.delco-nav-touch {
+  background-color: var(--bs-tertiary-bg);
+}
+
+/* Botón volver arriba (scroll del main) */
+.delco-back-to-top {
+  position: fixed;
+  right: 1rem;
+  bottom: 1.1rem;
+  z-index: 1080;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--delco-primary) 0%, var(--delco-secondary) 100%);
+  color: #fff;
+  box-shadow: 0 0.35rem 1rem rgba(15, 36, 56, 0.28);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(10px) scale(0.92);
+  transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease, box-shadow 0.2s ease;
+}
+
+.delco-back-to-top.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0) scale(1);
+}
+
+.delco-back-to-top:hover,
+.delco-back-to-top:focus-visible {
+  color: #fff;
+  box-shadow: 0 0.5rem 1.25rem rgba(15, 36, 56, 0.38);
+  outline: none;
+}
+
+.delco-back-to-top:active {
+  transform: scale(0.96);
+}
+
+[data-bs-theme="dark"] .delco-back-to-top {
+  box-shadow: 0 0.35rem 1rem rgba(0, 0, 0, 0.45);
+}
+
+/* Móvil: tablas y filtros más usables */
+@media (max-width: 991.98px) {
+  .delco-table-wrap,
+  .table-responsive {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+
+  .delco-table-compact th,
+  .delco-table-compact td {
+    white-space: nowrap;
+  }
+
+  .delco-sidebar-offcanvas .app-nav-link {
+    min-height: 48px;
+    font-size: 1rem;
+    padding-top: 0.7rem;
+    padding-bottom: 0.7rem;
+  }
+
+  .delco-sidebar-offcanvas .delco-nav-section {
+    padding-top: 0.85rem;
+    font-size: 0.78rem;
+  }
+
+  .delco-back-to-top {
+    right: 0.85rem;
+    bottom: calc(0.85rem + env(safe-area-inset-bottom, 0px));
+    width: 3rem;
+    height: 3rem;
+  }
+
+  /* Evita que toolbars densas se aplasten */
+  .btn-toolbar,
+  .d-flex.flex-wrap.gap-2 {
+    row-gap: 0.5rem;
+  }
+
+  main#delcoMainContent {
+    padding-bottom: 4.5rem;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .navbar .nav-link.text-light.small {
+    max-width: 42vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .delco-panel-card .card-header,
+  .card-header-delco {
+    padding-top: 0.65rem;
+    padding-bottom: 0.65rem;
+  }
+}
