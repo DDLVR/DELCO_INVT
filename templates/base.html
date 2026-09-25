@@ -147,6 +147,15 @@
     </main>
   </div>
 
+  <button type="button"
+          id="delcoBackToTop"
+          class="delco-back-to-top"
+          aria-label="Volver arriba"
+          title="Volver arriba"
+          aria-hidden="true">
+    <i class="bi bi-arrow-up" aria-hidden="true"></i>
+  </button>
+
   <!-- jQuery (requerido por DataTables) -->
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   
@@ -158,6 +167,7 @@
   <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 
   <script src="{% static 'js/delco_autocomplete.js' %}"></script>
+  <script src="{% static 'js/delco_ux.js' %}"></script>
   <script src="{% static 'js/delco_rut.js' %}"></script>
   <script src="{% static 'js/delco_charts.js' %}"></script>
 
@@ -562,6 +572,17 @@
         if (instance) instance.hide();
       });
     });
+
+    // En móvil: al abrir el menú, enfocar el primer enlace para navegación por teclado/lectores
+    var offcanvasMenu = document.getElementById('delcoSidebarOffcanvas');
+    if (offcanvasMenu) {
+      offcanvasMenu.addEventListener('shown.bs.offcanvas', function () {
+        var first = offcanvasMenu.querySelector('.app-nav-link');
+        if (first) {
+          try { first.focus({ preventScroll: true }); } catch (e) { /* ignore */ }
+        }
+      });
+    }
 
     var profileModalEl = document.getElementById('profileModal');
 
