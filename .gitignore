@@ -12,6 +12,7 @@ staticfiles/
 # Entornos virtuales (usar venv38 = Python 3.8, como Hostingplus)
 venv/
 venv38/
+.venv/
 # Archivos locales y temporales
 db.sqlite3
 delete
@@ -23,8 +24,23 @@ _tmp_test_out.txt
 docs/_diagramas_tmp/
 # Archivos generados en runtime por la app
 Registros/
+media/
+
+# Datos operativos o exportaciones locales (pueden contener PII)
+datos_prueba/*
+!datos_prueba/.gitkeep
+
+# Credenciales, respaldos y volcados
+*.sql
+*.pem
+*.key
+*.p12
+*.pfx
+*.bak
 
 .env
 .env.local
+.env.*
+!.env.example
 reset_mysql_password.py
 setup_mysql_user.py
