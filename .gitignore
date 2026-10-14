@@ -1,5 +1,20 @@
 # Ignorar archivos temporales y locales
 .env
+.env.*
+!.env.example
+*.local.env
+.env.local
+.env.production
+.env.staging
+# Secretos / API keys (nunca versionar)
+secrets/
+.secrets/
+**/secrets.json
+**/credentials.json
+**/*api_key*
+**/*apikey*
+**/*api-key*
+moreapp.keys
 .db.sqlite3
 __pycache__/
 *.pyc
@@ -12,6 +27,9 @@ staticfiles/
 # Entornos virtuales (usar venv38 = Python 3.8, como Hostingplus)
 venv/
 venv38/
+.venv/
+# Entorno temporal para pruebas/integraciones
+.venv_moreapp/
 # Archivos locales y temporales
 db.sqlite3
 delete
@@ -24,7 +42,5 @@ docs/_diagramas_tmp/
 # Archivos generados en runtime por la app
 Registros/
 
-.env
-.env.local
 reset_mysql_password.py
 setup_mysql_user.py

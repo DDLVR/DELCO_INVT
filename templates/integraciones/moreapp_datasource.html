@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block title %}Data Source MoreApp API{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-secondary btn-sm mb-3">&larr; Volver</a>
+  <h1 class="mb-3">Data Source {{ datasource.name|default:datasource_id }}</h1>
+  {% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+  {% if raw_json %}
+  <pre class="bg-body-secondary p-3 small overflow-auto" style="max-height: 640px;">{{ raw_json }}</pre>
+  {% endif %}
+</div>
+{% endblock %}

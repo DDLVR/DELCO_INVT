@@ -87,6 +87,17 @@ DATABASES = {
 # Webhook MoreApp — obligatorio
 MOREAPP_WEBHOOK_SECRET = _require_env('MOREAPP_WEBHOOK_SECRET')
 
+# API REST MoreApp — solo exigir key si la integración está habilitada.
+MOREAPP_API_ENABLED = os.environ.get('MOREAPP_API_ENABLED', 'false').strip().lower() == 'true'
+MOREAPP_API_BASE_URL = (os.environ.get('MOREAPP_API_BASE_URL') or 'https://api.moreapp.com/api/v1.0').strip()
+MOREAPP_API_TIMEOUT_SECONDS = int(os.environ.get('MOREAPP_API_TIMEOUT_SECONDS', '20') or 20)
+if MOREAPP_API_ENABLED:
+    MOREAPP_API_KEY = _require_env('MOREAPP_API_KEY')
+    MOREAPP_CUSTOMER_ID = _require_env('MOREAPP_CUSTOMER_ID')
+else:
+    MOREAPP_API_KEY = (os.environ.get('MOREAPP_API_KEY') or '').strip()
+    MOREAPP_CUSTOMER_ID = (os.environ.get('MOREAPP_CUSTOMER_ID') or '').strip()
+
 # Archivos estáticos
 STATIC_URL = '/static/'
 STATIC_ROOT = os.path.join(str(BASE_DIR), 'staticfiles')

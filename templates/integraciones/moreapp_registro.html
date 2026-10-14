@@ -1,0 +1,103 @@
+{% extends 'base.html' %}
+
+{% block title %}Registro · {{ formulario.name|default:"MoreApp" }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="mb-3 d-flex flex-wrap gap-2">
+    <a href="{% url 'moreapp_api_form_registros' form_id %}" class="btn btn-outline-secondary btn-sm">&larr; Volver a registros</a>
+    <a href="{% url 'moreapp_api_formulario' form_id %}" class="btn btn-outline-primary btn-sm">Ver estructura</a>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-1">{{ formulario.name|default:"Formulario" }}</h1>
+      <p class="text-muted mb-0">Contenido del envío {{ registro.id|default:submission_id }}</p>
+    </div>
+    {% if registro.status %}
+    <span class="badge bg-secondary fs-6">{{ registro.status }}</span>
+    {% endif %}
+  </div>
+
+  {% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  <div class="row g-2 mb-3">
+    <div class="col-md-4">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Fecha</div>
+        <div class="fw-semibold">{{ registro.created|default:"—" }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-4">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Usuario MoreApp</div>
+        <div class="fw-semibold">{{ registro.user|default:"—" }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-4">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Campos con valor</div>
+        <div class="fw-semibold">{{ campos|length }}</div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm delco-panel-card">
+    <div class="card-header fw-semibold">Datos del registro</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Campo</th>
+            <th>Valor</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for campo in campos %}
+          <tr>
+            <td class="align-top" style="width: 32%;">
+              <div>{{ campo.label }}</div>
+              <code class="small">{{ campo.key }}</code>
+            </td>
+            <td>
+              {% if campo.text %}
+              <div>{{ campo.text|linebreaksbr }}</div>
+              {% endif %}
+              {% for archivo in campo.files %}
+                {% if archivo.is_image and archivo.id %}
+                <div class="mb-2">
+                  <a href="{% url 'moreapp_api_registro_archivo' archivo.id %}" target="_blank" rel="noopener">
+                    <img src="{% url 'moreapp_api_registro_archivo' archivo.id %}" alt="{{ archivo.name }}" class="img-fluid border rounded" style="max-height: 220px;">
+                  </a>
+                  <div class="small text-muted">{{ archivo.name }}</div>
+                </div>
+                {% elif archivo.id %}
+                <div>
+                  <a href="{% url 'moreapp_api_registro_archivo' archivo.id %}">{{ archivo.name|default:archivo.id }}</a>
+                </div>
+                {% endif %}
+              {% empty %}
+                {% if not campo.text %}
+                <span class="text-muted">—</span>
+                {% endif %}
+              {% endfor %}
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="2" class="text-muted">Este envío no trae campos para mostrar.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if raw_json %}
+  <details class="mt-3">
+    <summary class="small text-muted">Datos resumidos (verificación)</summary>
+    <pre class="bg-body-secondary p-3 mt-2 small overflow-auto" style="max-height: 320px;">{{ raw_json }}</pre>
+  </details>
+  {% endif %}
+</div>
+{% endblock %}

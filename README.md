@@ -169,7 +169,18 @@ python manage.py inicializar_estados
 python manage.py verificar_calidad --solo-reporte
 python manage.py verificar_calidad
 python manage.py test ordenes_trabajo.tests cargas.tests
+python manage.py probar_moreapp_api
+python manage.py probar_moreapp_api --listar-formularios --page 0
 ```
+
+Catálogo MoreApp API (módulo nuevo, no reemplaza reportes actuales):
+
+- UI catálogo: `/integraciones/moreapp/api/catalogo/`
+- UI registros: `/integraciones/moreapp/api/catalogo/forms/<formId>/registros/`
+- JSON Fase 1: `/integraciones/api/moreapp/v1/visualizacion/forms/`
+- JSON Fase 2: `/integraciones/api/moreapp/v1/datos/forms/<formId>/submissions/`
+
+La API key vive solo en `.env` (`MOREAPP_API_KEY`); nunca en Git.
 
 Settings:
 - Desarrollo: `config.settings` (vía `manage.py`)

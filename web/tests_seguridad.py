@@ -147,3 +147,12 @@ class ProductionSettingsRequireEnvTests(TestCase):
 		settings_py = Path(__file__).resolve().parents[1] / 'config' / 'settings.py'
 		settings_texto = settings_py.read_text(encoding='utf-8')
 		self.assertNotIn('REMOVED_MOREAPP_WEBHOOK_SECRET=', settings_texto)
+		self.assertIn("os.getenv('MOREAPP_API_KEY'", settings_texto)
+		self.assertNotRegex(settings_texto, r"MOREAPP_API_KEY\s*=\s*['\"][^'\"]+['\"]")
+
+	def test_gitignore_cubre_secretos_api(self):
+		gitignore = (Path(__file__).resolve().parents[1] / '.gitignore').read_text(encoding='utf-8')
+		self.assertIn('.env', gitignore)
+		self.assertIn('!.env.example', gitignore)
+		self.assertIn('*api_key*', gitignore)
+		self.assertIn('*apikey*', gitignore)

@@ -256,6 +256,13 @@ MOREAPP_WEBHOOK_SECRET = os.getenv('MOREAPP_WEBHOOK_SECRET', '').strip()
 # Estructura: {MOREAPP_REGISTROS_DIR}/{customerId}/{formName}/{correlativo}/registration.json
 MOREAPP_REGISTROS_DIR = os.getenv('MOREAPP_REGISTROS_DIR', str(BASE_DIR / 'Registros'))
 
+# API REST MoreApp (v1.0). Se deja desactivada por defecto hasta completar credenciales.
+MOREAPP_API_ENABLED = os.getenv('MOREAPP_API_ENABLED', 'false').strip().lower() == 'true'
+MOREAPP_API_BASE_URL = os.getenv('MOREAPP_API_BASE_URL', 'https://api.moreapp.com/api/v1.0').strip()
+MOREAPP_API_KEY = os.getenv('MOREAPP_API_KEY', '').strip()
+MOREAPP_CUSTOMER_ID = os.getenv('MOREAPP_CUSTOMER_ID', '').strip()
+MOREAPP_API_TIMEOUT_SECONDS = int(os.getenv('MOREAPP_API_TIMEOUT_SECONDS', '20'))
+
 # Ejemplo (usa TUS datos reales):
 # FTPS_HOST=ftp.tuservidor.com
 # FTPS_PORT=21
