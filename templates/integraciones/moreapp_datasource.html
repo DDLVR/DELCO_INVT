@@ -1,16 +1,76 @@
 {% extends 'base.html' %}
 
-{% block title %}Data Source MoreApp API{% endblock %}
+{% block title %}Data Source · {{ datasource.name|default:"MoreApp" }}{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
   <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-secondary btn-sm mb-3">&larr; Volver</a>
-  <h1 class="mb-3">Data Source {{ datasource.name|default:datasource_id }}</h1>
+  <h1 class="h3 mb-3">{{ datasource.name|default:datasource_id }}</h1>
+
   {% if error %}
   <div class="alert alert-danger">{{ error }}</div>
   {% endif %}
+
+  <div class="row g-2 mb-3">
+    <div class="col-md-3">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Última actualización</div>
+        <div class="fw-semibold">{{ datasource.last_updated|default:"—" }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Filas informadas</div>
+        <div class="fw-semibold">{% if filas is not None %}{{ filas }}{% else %}—{% endif %}</div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Columnas</div>
+        <div class="fw-semibold">{{ columnas|length }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Búsqueda</div>
+        <div class="fw-semibold">{{ datasource.search_type|default:"—" }}</div>
+      </div></div>
+    </div>
+  </div>
+
+  {% if sin_filas_api %}
+  <div class="alert alert-light border">MoreApp entrega la configuración y el recuento, no el contenido de cada fila.</div>
+  {% endif %}
+
+  <div class="card shadow-sm delco-panel-card">
+    <div class="card-header fw-semibold">Columnas de la lista</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Etiqueta</th>
+            <th>Nombre técnico</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for columna in columnas %}
+          <tr>
+            <td>{{ columna.label|default:"—" }}</td>
+            <td><code>{{ columna.id|default:"—" }}</code></td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="2" class="text-muted">Sin columnas declaradas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
   {% if raw_json %}
-  <pre class="bg-body-secondary p-3 small overflow-auto" style="max-height: 640px;">{{ raw_json }}</pre>
+  <details class="mt-3">
+    <summary class="small text-muted">Datos resumidos (verificación)</summary>
+    <pre class="bg-body-secondary p-3 mt-2 small overflow-auto" style="max-height: 320px;">{{ raw_json }}</pre>
+  </details>
   {% endif %}
 </div>
 {% endblock %}

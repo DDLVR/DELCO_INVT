@@ -3,23 +3,33 @@
 from __future__ import annotations
 
 import json
+import unicodedata
+from datetime import datetime
 from typing import Any, Dict, List
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.shortcuts import redirect, render
+from django.urls import reverse
+from django.views.decorators.http import require_POST
 
 from web.decorators import admin_or_administrativo
+
+from .models import MoreAppFormularioOculto
 
 from .moreapp_api import (
     MoreAppApiConfigError,
     MoreAppApiError,
     get_datasource,
+    get_datasource_entries,
     get_form,
     get_form_version,
+    list_all_forms,
     list_datasources,
     list_form_versions,
-    list_forms,
+    list_users,
 )
+from .moreapp_fechas import format_moreapp_when
 from .moreapp_http import assert_safe_id
 
 _WIDGET_LABELS = {
@@ -44,6 +54,33 @@ _WIDGET_LABELS = {
     "drawing": "Dibujo",
     "file": "Archivo",
 }
+
+
+def _fold_text(value: Any) -> str:
+    text = unicodedata.normalize("NFD", str(value or ""))
+    return "".join(ch for ch in text if unicodedata.category(ch) != "Mn").lower()
+
+
+def _fecha_param(raw: Any) -> str:
+    text = str(raw or "").strip()
+    try:
+        datetime.strptime(text, "%Y-%m-%d")
+    except (TypeError, ValueError):
+        return ""
+    return text
+
+
+def _catalogo_qs(query: str, mostrar_ocultos: bool, fecha_desde: str, fecha_hasta: str) -> str:
+    params: Dict[str, str] = {}
+    if query:
+        params["query"] = query
+    if mostrar_ocultos:
+        params["mostrar_ocultos"] = "1"
+    if fecha_desde:
+        params["fecha_desde"] = fecha_desde
+    if fecha_hasta:
+        params["fecha_hasta"] = fecha_hasta
+    return urlencode(params)
 
 
 def _as_list(data: Any) -> List[Any]:
@@ -139,7 +176,7 @@ def _version_row(item: Dict[str, Any]) -> Dict[str, str]:
     return {
         "id": str(item.get("id") or ""),
         "status": str(status),
-        "last_updated": str(meta.get("lastUpdated") or item.get("lastUpdated") or ""),
+        "last_updated": format_moreapp_when(meta.get("lastUpdated") or item.get("lastUpdated") or ""),
         "updated_by": str(meta.get("lastUpdatedBy") or ""),
     }
 
@@ -161,35 +198,108 @@ def _form_row(item: Dict[str, Any]) -> Dict[str, Any]:
         "description": item.get("description") or meta.get("description") or "",
         "published_version": published.get("formVersion") or "",
         "latest_status": latest.get("status") or meta.get("status") or "",
-        "latest_updated": latest.get("lastUpdated") or meta.get("lastUpdated") or "",
+        "latest_updated": format_moreapp_when(latest.get("lastUpdated") or meta.get("lastUpdated") or ""),
         "icon": item.get("icon") or meta.get("icon") or "clipboard",
     }
 
 
+def _catalogo_return_url(request) -> str:
+    url = reverse("moreapp_api_catalogo")
+    query = (request.POST.get("query") or request.GET.get("query") or "").strip()
+    mostrar = (request.POST.get("mostrar_ocultos") or request.GET.get("mostrar_ocultos") or "").strip() in (
+        "1",
+        "true",
+        "on",
+    )
+    fecha_desde = _fecha_param(request.POST.get("fecha_desde") or request.GET.get("fecha_desde"))
+    fecha_hasta = _fecha_param(request.POST.get("fecha_hasta") or request.GET.get("fecha_hasta"))
+    qs = _catalogo_qs(query, mostrar, fecha_desde, fecha_hasta)
+    if qs:
+        return url + "?" + qs
+    return url
+
+
 @admin_or_administrativo
 def catalogo_forms_view(request):
+    query = (request.GET.get("query") or "").strip()
+    mostrar_ocultos = (request.GET.get("mostrar_ocultos") or "").strip() in ("1", "true", "on")
+    fecha_desde = _fecha_param(request.GET.get("fecha_desde"))
+    fecha_hasta = _fecha_param(request.GET.get("fecha_hasta"))
+    registros_params: Dict[str, str] = {}
+    if fecha_desde:
+        registros_params["fecha_desde"] = fecha_desde
+    if fecha_hasta:
+        registros_params["fecha_hasta"] = fecha_hasta
     context = {
         "conexion": None,
         "formularios": [],
         "error": "",
-        "query": (request.GET.get("query") or "").strip(),
-        "page": int(request.GET.get("page") or 0),
+        "query": query,
+        "mostrar_ocultos": mostrar_ocultos,
+        "fecha_desde": fecha_desde,
+        "fecha_hasta": fecha_hasta,
+        "tiene_filtros": bool(query or mostrar_ocultos or fecha_desde or fecha_hasta),
+        "registros_qs": urlencode(registros_params),
         "activos": 0,
+        "ocultos": 0,
     }
     try:
-        raw = list_forms(page=context["page"], query_text=context["query"])
-        rows = [_form_row(item) for item in _as_list(raw) if isinstance(item, dict)]
+        raw = list_all_forms()
+        rows = [_form_row(item) for item in raw if isinstance(item, dict)]
+        if query:
+            needle = _fold_text(query)
+            rows = [row for row in rows if needle in _fold_text(row.get("name"))]
+        ocultos_ids = set(
+            MoreAppFormularioOculto.objects.filter(usuario=request.user).values_list("form_id", flat=True)
+        )
+        for row in rows:
+            row["oculto"] = row.get("id") in ocultos_ids
+        ocultos_count = MoreAppFormularioOculto.objects.filter(usuario=request.user).count()
+        if not mostrar_ocultos:
+            rows = [row for row in rows if not row.get("oculto")]
         context["conexion"] = {
             "ok": True,
             "forms_detected_in_first_call": len(rows),
         }
         context["formularios"] = rows
         context["activos"] = sum(1 for row in rows if row.get("status") == "ACTIVE")
+        context["ocultos"] = ocultos_count
         context["raw_json"] = _pretty(raw)
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
         messages.error(request, str(exc))
     return render(request, "integraciones/moreapp_catalogo.html", context)
+
+
+@require_POST
+@admin_or_administrativo
+def catalogo_ocultar_form_view(request, form_id: str):
+    try:
+        form_id = assert_safe_id(form_id, "formId")
+    except MoreAppApiConfigError as exc:
+        messages.error(request, str(exc))
+        return redirect(_catalogo_return_url(request))
+    nombre = (request.POST.get("nombre") or "").strip()[:255]
+    MoreAppFormularioOculto.objects.get_or_create(
+        usuario=request.user,
+        form_id=form_id,
+        defaults={"form_name": nombre},
+    )
+    messages.success(request, "Formulario oculto en tu catálogo. Puedes volver a mostrarlo cuando quieras.")
+    return redirect(_catalogo_return_url(request))
+
+
+@require_POST
+@admin_or_administrativo
+def catalogo_mostrar_form_view(request, form_id: str):
+    try:
+        form_id = assert_safe_id(form_id, "formId")
+    except MoreAppApiConfigError as exc:
+        messages.error(request, str(exc))
+        return redirect(_catalogo_return_url(request))
+    MoreAppFormularioOculto.objects.filter(usuario=request.user, form_id=form_id).delete()
+    messages.success(request, "Formulario visible otra vez en tu catálogo.")
+    return redirect(_catalogo_return_url(request))
 
 
 @admin_or_administrativo
@@ -260,29 +370,69 @@ def catalogo_form_detail_view(request, form_id: str):
     return render(request, "integraciones/moreapp_formulario.html", context)
 
 
+def _column_rows(mapping: Any) -> List[Dict[str, str]]:
+    rows: List[Dict[str, str]] = []
+    if not isinstance(mapping, list):
+        return rows
+    for item in mapping:
+        if not isinstance(item, dict):
+            continue
+        col_id = str(item.get("id") or item.get("key") or "")
+        label = str(item.get("label") or item.get("name") or col_id)
+        if not col_id and not label:
+            continue
+        rows.append({"id": col_id, "label": label})
+    return rows
+
+
+def _datasource_row(item: Dict[str, Any]) -> Dict[str, Any]:
+    columns = _column_rows(item.get("columnMapping") or item.get("dataKeyList"))
+    return {
+        "id": item.get("id") or "",
+        "name": item.get("name") or "Sin nombre",
+        "search_type": item.get("searchType") or "",
+        "enabled": bool(item.get("enabled", True)),
+        "update_status": item.get("updateStatus") or "",
+        "last_updated": format_moreapp_when(item.get("lastUpdated") or item.get("lastSuccessfulUpdate") or ""),
+        "columns": columns,
+        "column_labels": ", ".join(col["label"] for col in columns if col.get("label")),
+        "column_count": len(columns),
+    }
+
+
 @admin_or_administrativo
 def catalogo_datasources_view(request):
-    context = {"datasources": [], "error": "", "raw_json": ""}
+    query = (request.GET.get("query") or "").strip()
+    context = {
+        "datasources": [],
+        "error": "",
+        "raw_json": "",
+        "query": query,
+        "tiene_filtros": bool(query),
+    }
     try:
         raw = list_datasources()
-        rows = []
-        for item in _as_list(raw):
-            if not isinstance(item, dict):
-                continue
-            rows.append(
-                {
-                    "id": item.get("id") or "",
-                    "name": item.get("name") or "Sin nombre",
-                    "search_type": item.get("searchType") or "",
-                    "update_interval": (
-                        (item.get("urlConfiguration") or {}).get("updateInterval")
-                        or (item.get("googleConfiguration") or {}).get("updateInterval")
-                        or ""
-                    ),
-                }
-            )
+        rows = [_datasource_row(item) for item in _as_list(raw) if isinstance(item, dict)]
+        if query:
+            needle = _fold_text(query)
+            rows = [
+                row
+                for row in rows
+                if needle in _fold_text(row.get("name")) or needle in _fold_text(row.get("column_labels"))
+            ]
         context["datasources"] = rows
-        context["raw_json"] = _pretty(raw)
+        context["raw_json"] = _pretty(
+            [
+                {
+                    "id": row.get("id"),
+                    "name": row.get("name"),
+                    "searchType": row.get("search_type"),
+                    "lastUpdated": row.get("last_updated"),
+                    "columns": row.get("column_labels"),
+                }
+                for row in rows
+            ]
+        )
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
         messages.error(request, str(exc))
@@ -297,12 +447,122 @@ def catalogo_datasource_detail_view(request, datasource_id: str):
         messages.error(request, str(exc))
         return redirect("moreapp_api_datasources")
 
-    context = {"datasource_id": datasource_id, "error": "", "raw_json": ""}
+    context = {
+        "datasource_id": datasource_id,
+        "error": "",
+        "raw_json": "",
+        "datasource": {},
+        "columnas": [],
+        "filas": None,
+        "sin_filas_api": True,
+    }
     try:
         data = get_datasource(datasource_id)
-        context["raw_json"] = _pretty(data)
-        context["datasource"] = data if isinstance(data, dict) else {"value": data}
+        datasource = data if isinstance(data, dict) else {}
+        row = _datasource_row(datasource)
+        columnas = list(row.get("columns") or [])
+        filas = None
+        try:
+            entries = get_datasource_entries(datasource_id)
+        except MoreAppApiError:
+            entries = {}
+        if isinstance(entries, dict):
+            if entries.get("numberOfEntries") is not None:
+                filas = entries.get("numberOfEntries")
+            extra_cols = _column_rows(entries.get("dataKeyList"))
+            if extra_cols and not columnas:
+                columnas = extra_cols
+                row["column_labels"] = ", ".join(col["label"] for col in columnas if col.get("label"))
+                row["column_count"] = len(columnas)
+        row["columns"] = columnas
+        context.update(
+            {
+                "datasource": row,
+                "columnas": columnas,
+                "filas": filas,
+                "sin_filas_api": True,
+                "raw_json": _pretty(
+                    {
+                        "id": datasource.get("id"),
+                        "name": datasource.get("name"),
+                        "searchType": datasource.get("searchType"),
+                        "enabled": datasource.get("enabled"),
+                        "lastUpdated": row.get("last_updated"),
+                        "columnMapping": columnas,
+                        "numberOfEntries": filas,
+                    }
+                ),
+            }
+        )
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
         messages.error(request, str(exc))
     return render(request, "integraciones/moreapp_datasource.html", context)
+
+
+def _group_labels(value: Any) -> str:
+    if isinstance(value, list):
+        labels = []
+        for item in value:
+            if isinstance(item, dict):
+                labels.append(str(item.get("name") or item.get("id") or ""))
+            elif item not in (None, ""):
+                labels.append(str(item))
+        return ", ".join(part for part in labels if part)
+    if value in (None, ""):
+        return ""
+    return str(value)
+
+
+def _user_row(item: Dict[str, Any]) -> Dict[str, Any]:
+    settings = item.get("settings") if isinstance(item.get("settings"), dict) else {}
+    display = (
+        settings.get("displayName")
+        or settings.get("name")
+        or item.get("username")
+        or item.get("emailAddress")
+        or ""
+    )
+    groups = item.get("groups") if isinstance(item.get("groups"), list) else []
+    return {
+        "id": str(item.get("id") or ""),
+        "nombre": str(display),
+        "email": str(item.get("emailAddress") or ""),
+        "username": str(item.get("username") or ""),
+        "disabled": bool(item.get("disabled")),
+        "email_validated": bool(item.get("emailValidated")),
+        "groups": _group_labels(groups),
+        "groups_count": len(groups),
+    }
+
+
+@admin_or_administrativo
+def catalogo_usuarios_view(request):
+    query = (request.GET.get("query") or "").strip()
+    context = {
+        "usuarios": [],
+        "error": "",
+        "query": query,
+        "tiene_filtros": bool(query),
+        "activos": 0,
+        "deshabilitados": 0,
+    }
+    try:
+        raw = list_users()
+        rows = [_user_row(item) for item in _as_list(raw) if isinstance(item, dict)]
+        if query:
+            needle = _fold_text(query)
+            rows = [
+                row
+                for row in rows
+                if needle in _fold_text(row.get("nombre"))
+                or needle in _fold_text(row.get("email"))
+                or needle in _fold_text(row.get("username"))
+            ]
+        context["usuarios"] = rows
+        context["activos"] = sum(1 for row in rows if not row.get("disabled"))
+        context["deshabilitados"] = sum(1 for row in rows if row.get("disabled"))
+    except (MoreAppApiConfigError, MoreAppApiError) as exc:
+        context["error"] = str(exc)
+        messages.error(request, str(exc))
+    return render(request, "integraciones/moreapp_usuarios.html", context)

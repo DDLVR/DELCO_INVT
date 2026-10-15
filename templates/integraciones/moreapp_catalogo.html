@@ -7,11 +7,16 @@
   <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
     <div>
       <h1 class="mb-1"><i class="bi bi-diagram-3"></i> Catálogo MoreApp</h1>
-      <p class="text-muted mb-0">Plantillas de terreno disponibles en MoreApp. Úsalo para revisar campos antes de mapear OTs.</p>
+      <p class="text-muted mb-0">Filtra por nombre o por fecha del último registro. Al abrir un formulario se mantienen las fechas. Ocultar queda solo en tu usuario.</p>
     </div>
-    <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-primary btn-sm">
-      <i class="bi bi-database"></i> Data Sources
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{% url 'moreapp_api_usuarios' %}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-people"></i> Usuarios MoreApp
+      </a>
+      <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-database"></i> Data Sources
+      </a>
+    </div>
   </div>
 
   {% if conexion.ok %}
@@ -19,8 +24,8 @@
     <div class="col-md-4">
       <div class="card delco-panel-card h-100">
         <div class="card-body py-3">
-          <div class="text-muted small">Formularios en esta página</div>
-          <div class="fs-4 fw-semibold">{{ conexion.forms_detected_in_first_call }}</div>
+          <div class="text-muted small">Formularios visibles</div>
+          <div class="fs-4 fw-semibold js-visibles-count">{{ conexion.forms_detected_in_first_call }}</div>
         </div>
       </div>
     </div>
@@ -28,15 +33,15 @@
       <div class="card delco-panel-card h-100">
         <div class="card-body py-3">
           <div class="text-muted small">Activos</div>
-          <div class="fs-4 fw-semibold text-success">{{ activos }}</div>
+          <div class="fs-4 fw-semibold text-success js-activos-count">{{ activos }}</div>
         </div>
       </div>
     </div>
     <div class="col-md-4">
       <div class="card delco-panel-card h-100">
         <div class="card-body py-3">
-          <div class="text-muted small">Conexión API</div>
-          <div class="fw-semibold text-success"><i class="bi bi-check-circle"></i> Operativa</div>
+          <div class="text-muted small">Ocultos en tu perfil</div>
+          <div class="fs-4 fw-semibold">{{ ocultos }}</div>
         </div>
       </div>
     </div>
@@ -48,31 +53,48 @@
   <div class="card shadow-sm mb-3 delco-panel-card">
     <div class="card-body">
       <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-6">
-          <label class="form-label">Buscar plantilla</label>
+        <div class="col-md-2">
+          <label class="form-label">Desde</label>
+          <input type="date" name="fecha_desde" class="form-control" value="{{ fecha_desde }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Hasta</label>
+          <input type="date" name="fecha_hasta" class="form-control" value="{{ fecha_hasta }}">
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Nombre del formulario</label>
           <input type="text" name="query" class="form-control" value="{{ query }}" placeholder="Ej. reposición, medidor, mantención">
+        </div>
+        <div class="col-md-2">
+          <div class="form-check mt-4">
+            <input class="form-check-input" type="checkbox" name="mostrar_ocultos" value="1" id="mostrarOcultos" {% if mostrar_ocultos %}checked{% endif %}>
+            <label class="form-check-label" for="mostrarOcultos">Mostrar los que oculté</label>
+          </div>
         </div>
         <div class="col-md-2">
           <button type="submit" class="btn btn-primary w-100">Filtrar</button>
         </div>
-        {% if query %}
-        <div class="col-md-2">
-          <a href="{% url 'moreapp_api_catalogo' %}" class="btn btn-outline-secondary w-100">Limpiar</a>
+        {% if tiene_filtros %}
+        <div class="col-12">
+          <a href="{% url 'moreapp_api_catalogo' %}" class="btn btn-outline-secondary btn-sm">Limpiar filtros</a>
         </div>
         {% endif %}
       </form>
     </div>
   </div>
 
-  <div class="row g-3">
+  <div class="row g-3" id="js-catalogo-grid" data-fecha-desde="{{ fecha_desde }}" data-fecha-hasta="{{ fecha_hasta }}">
     {% for form in formularios %}
-    <div class="col-md-6 col-xl-4">
-      <div class="card shadow-sm h-100 delco-panel-card">
+    <div class="col-md-6 col-xl-4 js-form-card"{% if fecha_desde or fecha_hasta %} hidden{% endif %}>
+      <div class="card shadow-sm h-100 delco-panel-card {% if form.oculto %}border-secondary{% endif %}">
         <div class="card-body d-flex flex-column">
           <div class="d-flex justify-content-between gap-2 mb-2">
             <h2 class="h6 mb-0">{{ form.name }}</h2>
             <span class="badge bg-{{ form.status_badge }}">{{ form.status|default:"—" }}</span>
           </div>
+          {% if form.oculto %}
+          <div class="small text-muted mb-2">Oculto en tu catálogo</div>
+          {% endif %}
           {% if form.description %}
           <p class="small text-muted mb-2">{{ form.description|truncatechars:140 }}</p>
           {% endif %}
@@ -84,43 +106,115 @@
             <a class="btn btn-sm btn-outline-primary" href="{% url 'moreapp_api_formulario' form.id %}">
               Ver estructura
             </a>
-            <a class="btn btn-sm btn-primary" href="{% url 'moreapp_api_form_registros' form.id %}">
+            <a class="btn btn-sm btn-primary" href="{% url 'moreapp_api_form_registros' form.id %}{% if registros_qs %}?{{ registros_qs }}{% endif %}">
               Ver registros
             </a>
+            {% if form.oculto %}
+            <form method="post" action="{% url 'moreapp_api_form_mostrar' form.id %}" class="d-inline">
+              {% csrf_token %}
+              {% if query %}<input type="hidden" name="query" value="{{ query }}">{% endif %}
+              {% if mostrar_ocultos %}<input type="hidden" name="mostrar_ocultos" value="1">{% endif %}
+              {% if fecha_desde %}<input type="hidden" name="fecha_desde" value="{{ fecha_desde }}">{% endif %}
+              {% if fecha_hasta %}<input type="hidden" name="fecha_hasta" value="{{ fecha_hasta }}">{% endif %}
+              <button type="submit" class="btn btn-sm btn-outline-success">Mostrar</button>
+            </form>
+            {% else %}
+            <form method="post" action="{% url 'moreapp_api_form_ocultar' form.id %}" class="d-inline">
+              {% csrf_token %}
+              <input type="hidden" name="nombre" value="{{ form.name }}">
+              {% if query %}<input type="hidden" name="query" value="{{ query }}">{% endif %}
+              {% if fecha_desde %}<input type="hidden" name="fecha_desde" value="{{ fecha_desde }}">{% endif %}
+              {% if fecha_hasta %}<input type="hidden" name="fecha_hasta" value="{{ fecha_hasta }}">{% endif %}
+              <button type="submit" class="btn btn-sm btn-outline-secondary">Ocultar</button>
+            </form>
+            {% endif %}
           </div>
         </div>
       </div>
     </div>
     {% empty %}
     <div class="col-12">
-      <div class="alert alert-light border">No hay formularios para mostrar.</div>
+      <div class="alert alert-light border">No hay formularios para mostrar.{% if ocultos and not mostrar_ocultos %} Tienes {{ ocultos }} oculto{{ ocultos|pluralize }} en tu perfil.{% endif %}</div>
     </div>
     {% endfor %}
+    <div class="col-12 d-none" id="js-catalogo-vacio-fecha">
+      <div class="alert alert-light border">Ningún formulario tiene registros en ese rango de fechas.</div>
+    </div>
   </div>
 </div>
 <script>
 (function () {
+  var grid = document.getElementById('js-catalogo-grid');
+  var desde = grid ? (grid.getAttribute('data-fecha-desde') || '') : '';
+  var hasta = grid ? (grid.getAttribute('data-fecha-hasta') || '') : '';
+  var filtraFecha = Boolean(desde || hasta);
   var nodes = Array.prototype.slice.call(document.querySelectorAll('.js-ultimo-registro'));
   var index = 0;
+
+  function inRange(day) {
+    if (!filtraFecha) return true;
+    if (!day) return false;
+    if (desde && day < desde) return false;
+    if (hasta && day > hasta) return false;
+    return true;
+  }
+
+  function refreshCounts() {
+    var cards = document.querySelectorAll('.js-form-card');
+    var visible = 0;
+    var activos = 0;
+    Array.prototype.forEach.call(cards, function (card) {
+      if (card.hidden) return;
+      visible += 1;
+      var badge = card.querySelector('.badge');
+      if (badge && badge.textContent.indexOf('ACTIVE') !== -1) activos += 1;
+    });
+    var visiblesEl = document.querySelector('.js-visibles-count');
+    var activosEl = document.querySelector('.js-activos-count');
+    if (visiblesEl) visiblesEl.textContent = String(visible);
+    if (activosEl) activosEl.textContent = String(activos);
+    var empty = document.getElementById('js-catalogo-vacio-fecha');
+    if (empty) {
+      var pending = Array.prototype.some.call(document.querySelectorAll('.js-ultimo-registro'), function (el) {
+        return el.textContent === '…';
+      });
+      empty.classList.toggle('d-none', pending || visible > 0 || cards.length === 0);
+    }
+  }
+
+  function applyCard(el, day, empty) {
+    var card = el.closest('.js-form-card');
+    if (!card || !filtraFecha) return;
+    card.hidden = Boolean(empty) || !inRange(day);
+    refreshCounts();
+  }
+
   function nextBatch() {
     var batch = nodes.slice(index, index + 4);
     index += 4;
-    if (!batch.length) return;
+    if (!batch.length) {
+      refreshCounts();
+      return;
+    }
     Promise.all(batch.map(function (el) {
       return fetch(el.getAttribute('data-url'), { credentials: 'same-origin' })
         .then(function (resp) { return resp.json(); })
         .then(function (data) {
           if (data && data.date) {
             el.textContent = data.date;
+            applyCard(el, data.day || String(data.date).slice(0, 10), false);
           } else {
             el.textContent = 'sin registros';
+            applyCard(el, '', true);
           }
         })
         .catch(function () {
           el.textContent = '—';
+          applyCard(el, '', true);
         });
     })).then(nextBatch);
   }
+  if (filtraFecha) refreshCounts();
   nextBatch();
 })();
 </script>

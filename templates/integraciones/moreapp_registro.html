@@ -5,7 +5,7 @@
 {% block content %}
 <div class="container-fluid py-4">
   <div class="mb-3 d-flex flex-wrap gap-2">
-    <a href="{% url 'moreapp_api_form_registros' form_id %}" class="btn btn-outline-secondary btn-sm">&larr; Volver a registros</a>
+    <a href="{% url 'moreapp_api_form_registros' form_id %}{% if filtros_qs %}?{{ filtros_qs }}{% endif %}" class="btn btn-outline-secondary btn-sm">&larr; Volver a registros</a>
     <a href="{% url 'moreapp_api_formulario' form_id %}" class="btn btn-outline-primary btn-sm">Ver estructura</a>
   </div>
 
@@ -24,19 +24,25 @@
   {% endif %}
 
   <div class="row g-2 mb-3">
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card delco-panel-card"><div class="card-body py-3">
         <div class="text-muted small">Fecha</div>
         <div class="fw-semibold">{{ registro.created|default:"—" }}</div>
       </div></div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Usuario MoreApp</div>
-        <div class="fw-semibold">{{ registro.user|default:"—" }}</div>
+        <div class="text-muted small">Técnico responsable</div>
+        <div class="fw-semibold">{{ registro.tecnico|default:"—" }}</div>
       </div></div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">N° cliente</div>
+        <div class="fw-semibold">{{ registro.cliente|default:"—" }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
       <div class="card delco-panel-card"><div class="card-body py-3">
         <div class="text-muted small">Campos con valor</div>
         <div class="fw-semibold">{{ campos|length }}</div>

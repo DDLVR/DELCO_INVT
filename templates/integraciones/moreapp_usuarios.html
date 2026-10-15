@@ -1,0 +1,97 @@
+{% extends 'base.html' %}
+
+{% block title %}Usuarios MoreApp{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+      <h1 class="h3 mb-1"><i class="bi bi-people"></i> Usuarios MoreApp</h1>
+      <p class="text-muted mb-0">Listado de la cuenta MoreApp. El cruce con técnicos de la intranet queda pendiente hasta estandarizar nombres y correos.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-primary btn-sm">Data Sources</a>
+      <a href="{% url 'moreapp_api_catalogo' %}" class="btn btn-outline-secondary btn-sm">Volver a formularios</a>
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  <div class="row g-2 mb-3">
+    <div class="col-md-4">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Usuarios visibles</div>
+        <div class="fs-4 fw-semibold">{{ usuarios|length }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-4">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Activos</div>
+        <div class="fs-4 fw-semibold text-success">{{ activos }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-4">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Deshabilitados</div>
+        <div class="fs-4 fw-semibold">{{ deshabilitados }}</div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-3 delco-panel-card">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-8">
+          <label class="form-label">Nombre o correo</label>
+          <input type="text" name="query" class="form-control" value="{{ query }}" placeholder="Ej. juan, @delcochile">
+        </div>
+        <div class="col-md-4">
+          <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+        </div>
+        {% if tiene_filtros %}
+        <div class="col-12">
+          <a href="{% url 'moreapp_api_usuarios' %}" class="btn btn-outline-secondary btn-sm">Limpiar filtros</a>
+        </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm delco-panel-card">
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Correo</th>
+            <th>Estado</th>
+            <th>Correo validado</th>
+            <th>Grupos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for usuario in usuarios %}
+          <tr>
+            <td>{{ usuario.username|default:usuario.nombre|default:"—" }}</td>
+            <td>{{ usuario.email|default:"—" }}</td>
+            <td>
+              {% if usuario.disabled %}
+              <span class="badge bg-secondary">Deshabilitado</span>
+              {% else %}
+              <span class="badge bg-success">Activo</span>
+              {% endif %}
+            </td>
+            <td>{% if usuario.email_validated %}Sí{% else %}No{% endif %}</td>
+            <td class="small">{% if usuario.groups_count %}{{ usuario.groups_count }}{% else %}0{% endif %}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="5" class="text-muted p-3">No hay usuarios para mostrar.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

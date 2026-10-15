@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from urllib import error, parse, request
 
 from django.conf import settings
@@ -147,6 +147,43 @@ def list_forms(*, page: int = 0, query_text: str = "") -> Any:
     )
 
 
+def _forms_from_payload(raw: Any) -> List[Any]:
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        for key in ("elements", "content", "items"):
+            value = raw.get(key)
+            if isinstance(value, list):
+                return value
+        if raw.get("id"):
+            return [raw]
+    return []
+
+
+def list_all_forms(*, max_pages: int = 20, query_text: str = "") -> List[Any]:
+    collected: List[Any] = []
+    seen = set()
+    pages = max(1, int(max_pages or 1))
+    for page in range(pages):
+        items = _forms_from_payload(list_forms(page=page, query_text=query_text))
+        if not items:
+            break
+        added = 0
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            form_id = str(item.get("id") or "")
+            if form_id and form_id in seen:
+                continue
+            if form_id:
+                seen.add(form_id)
+            collected.append(item)
+            added += 1
+        if added == 0:
+            break
+    return collected
+
+
 def get_form(form_id: str) -> Any:
     return _request_json(
         "GET",
@@ -184,6 +221,14 @@ def get_datasource(datasource_id: str) -> Any:
     return _request_json(
         "GET",
         f"customers/{get_customer_id()}/datasources/{datasource_id}",
+    )
+
+
+def get_datasource_entries(datasource_id: str) -> Any:
+    return _request_json(
+        "POST",
+        f"customers/{get_customer_id()}/datasources/{datasource_id}/entries",
+        payload={},
     )
 
 

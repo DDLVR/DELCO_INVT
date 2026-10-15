@@ -6,6 +6,9 @@ from .moreapp_catalogo_views import (
     catalogo_datasources_view,
     catalogo_form_detail_view,
     catalogo_forms_view,
+    catalogo_mostrar_form_view,
+    catalogo_ocultar_form_view,
+    catalogo_usuarios_view,
 )
 from .moreapp_datos_views import (
     v1_datos_export_fields,
@@ -40,19 +43,29 @@ urlpatterns = [
         name='moreapp_api_catalogo',
     ),
     path(
-        'moreapp/api/catalogo/forms/<str:form_id>/',
-        catalogo_form_detail_view,
-        name='moreapp_api_formulario',
-    ),
-    path(
         'moreapp/api/catalogo/datasources/',
         catalogo_datasources_view,
         name='moreapp_api_datasources',
     ),
     path(
+        'moreapp/api/catalogo/usuarios/',
+        catalogo_usuarios_view,
+        name='moreapp_api_usuarios',
+    ),
+    path(
         'moreapp/api/catalogo/datasources/<str:datasource_id>/',
         catalogo_datasource_detail_view,
         name='moreapp_api_datasource',
+    ),
+    path(
+        'moreapp/api/catalogo/forms/<str:form_id>/ocultar/',
+        catalogo_ocultar_form_view,
+        name='moreapp_api_form_ocultar',
+    ),
+    path(
+        'moreapp/api/catalogo/forms/<str:form_id>/mostrar/',
+        catalogo_mostrar_form_view,
+        name='moreapp_api_form_mostrar',
     ),
     path(
         'moreapp/api/catalogo/forms/<str:form_id>/ultimo-registro/',
@@ -68,6 +81,11 @@ urlpatterns = [
         'moreapp/api/catalogo/forms/<str:form_id>/registros/<str:submission_id>/',
         registro_detail_view,
         name='moreapp_api_registro',
+    ),
+    path(
+        'moreapp/api/catalogo/forms/<str:form_id>/',
+        catalogo_form_detail_view,
+        name='moreapp_api_formulario',
     ),
     path(
         'moreapp/api/archivos/<str:file_id>/',
