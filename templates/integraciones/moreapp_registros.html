@@ -3,111 +3,143 @@
 {% block title %}Registros · {{ formulario.name|default:"MoreApp" }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="mb-3 d-flex flex-wrap gap-2">
-    <a href="{% url 'moreapp_api_catalogo' %}{% if catalogo_qs %}?{{ catalogo_qs }}{% endif %}" class="btn btn-outline-secondary btn-sm">&larr; Volver al catálogo</a>
-    <a href="{% url 'moreapp_api_formulario' form_id %}" class="btn btn-outline-primary btn-sm">Ver estructura</a>
-  </div>
-
-  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-    <div>
-      <h1 class="h3 mb-1">{{ formulario.name|default:"Formulario" }}</h1>
-      <p class="text-muted mb-0">Busca por fecha, técnico responsable o n° de cliente. Esta vista no modifica reportes ni OTs.</p>
+<div class="container-fluid py-4 delco-registros">
+  <div class="delco-registros-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <a href="{% url 'moreapp_formularios_list' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Formularios asignados
+          </a>
+          <a href="{% url 'moreapp_api_formulario' form_id %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-diagram-3"></i> Ver estructura
+          </a>
+        </div>
+        <h1 class="h3 mb-1">{{ formulario.name|default:"Formulario" }}</h1>
+        <p class="text-muted mb-0">Registros de terreno. Filtra por fecha, técnico o n° de cliente.</p>
+      </div>
+      <span class="badge rounded-pill bg-{{ formulario.status_badge|default:'secondary' }} delco-registros-status">{{ formulario.status|default:"—" }}</span>
     </div>
-    <span class="badge bg-{{ formulario.status_badge|default:'secondary' }} fs-6">{{ formulario.status|default:"—" }}</span>
   </div>
 
   {% if error %}
   <div class="alert alert-danger">{{ error }}</div>
   {% endif %}
 
-  <div class="card shadow-sm mb-3 delco-panel-card">
-    <div class="card-body">
-      <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-2">
-          <label class="form-label">Desde</label>
-          <input type="date" name="fecha_desde" class="form-control" value="{{ fecha_desde }}">
+  <form method="get" class="delco-registros-filters mb-3">
+    <div class="row g-2 align-items-end">
+      <div class="col-6 col-md-2">
+        <label class="form-label small text-muted mb-1" for="fecha_desde">Desde</label>
+        <input type="date" name="fecha_desde" id="fecha_desde" class="form-control" value="{{ fecha_desde }}">
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label small text-muted mb-1" for="fecha_hasta">Hasta</label>
+        <input type="date" name="fecha_hasta" id="fecha_hasta" class="form-control" value="{{ fecha_hasta }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1" for="tecnico">Técnico responsable</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-person"></i></span>
+          <input type="text" name="tecnico" id="tecnico" class="form-control" value="{{ tecnico }}" placeholder="Nombre del técnico">
         </div>
-        <div class="col-md-2">
-          <label class="form-label">Hasta</label>
-          <input type="date" name="fecha_hasta" class="form-control" value="{{ fecha_hasta }}">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label small text-muted mb-1" for="num_cliente">N° cliente</label>
+        <div class="input-group">
+          <span class="input-group-text"><i class="bi bi-hash"></i></span>
+          <input type="text" name="num_cliente" id="num_cliente" class="form-control" value="{{ num_cliente }}" placeholder="Número de cliente">
         </div>
-        <div class="col-md-3">
-          <label class="form-label">Técnico responsable</label>
-          <input type="text" name="tecnico" class="form-control" value="{{ tecnico }}" placeholder="Nombre del técnico">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">N° cliente</label>
-          <input type="text" name="num_cliente" class="form-control" value="{{ num_cliente }}" placeholder="Número de cliente">
-        </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-primary w-100">Filtrar</button>
-        </div>
-        {% if tiene_filtros %}
-        <div class="col-12">
-          <a href="{% url 'moreapp_api_form_registros' form_id %}" class="btn btn-outline-secondary btn-sm">Limpiar filtros</a>
-        </div>
-        {% endif %}
-      </form>
+      </div>
+      <div class="col-md-2 d-flex gap-2">
+        <button type="submit" class="btn btn-primary flex-grow-1">
+          <i class="bi bi-funnel"></i> Filtrar
+        </button>
+      </div>
+      {% if tiene_filtros %}
+      <div class="col-12">
+        <a href="{% url 'moreapp_api_form_registros' form_id %}" class="btn btn-link btn-sm px-0">Limpiar filtros</a>
+      </div>
+      {% endif %}
     </div>
+  </form>
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="delco-registros-count">
+      <strong>{{ registros|length }}</strong>
+      registro{{ registros|length|pluralize:"s" }}
+      <span class="text-muted">· página {{ page_display|default:1 }}</span>
+    </div>
+    <a class="btn btn-sm btn-outline-success" href="?{% if filtros_qs %}{{ filtros_qs }}&{% endif %}export=xlsx">
+      <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+    </a>
   </div>
 
-  <div class="card shadow-sm delco-panel-card">
-    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span class="fw-semibold">{{ registros|length }} registro{{ registros|length|pluralize:"s" }} en esta página</span>
-      <div class="d-flex align-items-center gap-2">
-        <span class="small text-muted">Página {{ page }}</span>
-        <a class="btn btn-sm btn-outline-success" href="?{% if filtros_qs %}{{ filtros_qs }}&{% endif %}export=xlsx">
-          <i class="bi bi-file-earmark-excel"></i> Exportar Excel
-        </a>
-      </div>
-    </div>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Técnico responsable</th>
-            <th>N° cliente</th>
-            {% for label in preview_labels %}
-            <th>{{ label }}</th>
-            {% endfor %}
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for registro in registros %}
-          <tr>
-            <td class="small text-nowrap">{{ registro.created|default:"—" }}</td>
-            <td>{{ registro.tecnico|default:"—" }}</td>
-            <td>{{ registro.cliente|default:"—" }}</td>
-            {% for dato in registro.preview %}
-            <td>{{ dato.text|default:"—" }}</td>
-            {% endfor %}
-            <td class="text-end">
-              {% if registro.id %}
-              <a class="btn btn-sm btn-primary" href="{% url 'moreapp_api_registro' form_id registro.id %}{% if filtros_detalle %}?{{ filtros_detalle }}{% endif %}">Ver contenido</a>
+  {% if registros %}
+  <div class="delco-registros-list">
+    {% for registro in registros %}
+    <article class="delco-registro-card">
+      <div class="delco-registro-card-accent"></div>
+      <div class="delco-registro-card-body">
+        <div class="delco-registro-card-main">
+          <div class="delco-registro-when" aria-hidden="true">
+            <span class="delco-registro-when-day">{{ registro.created|default:"—" }}</span>
+          </div>
+          <div class="delco-registro-avatar" aria-hidden="true">
+            {{ registro.tecnico|default:"?"|make_list|first|upper }}
+          </div>
+          <div class="min-w-0 flex-grow-1">
+            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+              <h2 class="h6 mb-0 text-truncate">{{ registro.tecnico|default:"Técnico no informado" }}</h2>
+              {% if registro.status %}
+              <span class="badge rounded-pill text-bg-light border">{{ registro.status }}</span>
               {% endif %}
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="8" class="text-muted p-3">No hay registros para mostrar.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-    {% if has_prev or has_next %}
-    <div class="card-footer d-flex justify-content-between">
-      {% if has_prev %}
-      <a class="btn btn-sm btn-outline-secondary" href="?{{ filtros_prev }}">Anterior</a>
-      {% else %}
-      <span></span>
-      {% endif %}
-      {% if has_next %}
-      <a class="btn btn-sm btn-outline-secondary" href="?{{ filtros_next }}">Siguiente</a>
-      {% endif %}
-    </div>
+            </div>
+            <div class="small text-muted d-flex flex-wrap gap-3">
+              <span class="delco-registro-when-inline"><i class="bi bi-calendar3 me-1"></i>{{ registro.created|default:"—" }}</span>
+              <span><i class="bi bi-person-vcard me-1"></i>N° cliente {{ registro.cliente|default:"—" }}</span>
+            </div>
+            {% if registro.preview %}
+            <div class="delco-registro-preview mt-2">
+              {% for dato in registro.preview %}
+                {% if dato.text %}
+                <span class="delco-registro-chip{% if 'INCIDENCIA' in dato.text %} delco-chip-warn{% elif 'EJECUTADO' in dato.text or 'CERRADO' in dato.text %} delco-chip-ok{% endif %}">
+                  <span class="text-muted">{{ dato.label }}</span>
+                  {{ dato.text|truncatechars:42 }}
+                </span>
+                {% endif %}
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% if registro.id %}
+        <a class="btn btn-primary delco-registro-card-cta" href="{% url 'moreapp_api_registro' form_id registro.id %}{% if filtros_detalle %}?{{ filtros_detalle }}{% endif %}">
+          Ver contenido <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+        {% endif %}
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="delco-registros-empty">
+    <i class="bi bi-inbox"></i>
+    <h2 class="h5 mb-1">No hay registros para mostrar</h2>
+    <p class="text-muted mb-0">Prueba otro rango de fechas o quita los filtros.</p>
+  </div>
+  {% endif %}
+
+  {% if has_prev or has_next %}
+  <div class="d-flex justify-content-between mt-3">
+    {% if has_prev %}
+    <a class="btn btn-outline-secondary" href="?{{ filtros_prev }}"><i class="bi bi-chevron-left"></i> Anterior</a>
+    {% else %}
+    <span></span>
+    {% endif %}
+    {% if has_next %}
+    <a class="btn btn-outline-secondary" href="?{{ filtros_next }}">Siguiente <i class="bi bi-chevron-right"></i></a>
     {% endif %}
   </div>
+  {% endif %}
 </div>
 {% endblock %}

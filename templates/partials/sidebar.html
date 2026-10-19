@@ -34,8 +34,14 @@
       </a>
     {% endif %}
 
-    {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}
+    {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR,TECNICO' %}
     <div class="delco-nav-section">MoreApp y reportes</div>
+    {% url 'moreapp_formularios_list' as moreapp_formularios_list_url %}
+    {% if moreapp_formularios_list_url %}
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'moreapp_formularios_list' %}active bg-primary text-white{% endif %}" href="{{ moreapp_formularios_list_url }}">
+        <i class="bi bi-ui-checks me-2"></i> Formularios asignados
+      </a>
+    {% endif %}
     {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'pendientes_operativos' %}active bg-primary text-white{% endif %}" href="{% url 'pendientes_operativos' %}">
         <i class="bi bi-list-check me-2"></i> Pendientes MoreApp
@@ -50,20 +56,14 @@
       </a>
       {% endif %}
     {% endif %}
+    {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}
       <a class="list-group-item list-group-item-action app-nav-link {% if 'reportes_moreapp' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}" href="{% url 'reportes_moreapp_list' %}">
         <i class="bi bi-cloud-download me-2"></i> Reportes MoreApp
       </a>
-      {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
-      {% url 'moreapp_api_catalogo' as moreapp_api_catalogo_url %}
-      {% if moreapp_api_catalogo_url %}
-      <a class="list-group-item list-group-item-action app-nav-link {% if 'moreapp_api_' in request.resolver_match.url_name %}active bg-primary text-white{% endif %}" href="{{ moreapp_api_catalogo_url }}">
-        <i class="bi bi-diagram-3 me-2"></i> Catálogo MoreApp API
-      </a>
-      {% endif %}
-      {% endif %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'reportes_hub' %}active bg-primary text-white{% endif %}" href="{% url 'reportes_hub' %}">
         <i class="bi bi-file-earmark-bar-graph me-2"></i> Reportes operativos
       </a>
+    {% endif %}
     {% endif %}
 
     {% if user.rol in 'ADMIN,ADMINISTRATIVO,AUDITOR,GERENCIA' %}
@@ -79,9 +79,55 @@
     {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
     <div class="delco-nav-section">Administración</div>
     {% if user.rol == 'ADMIN' %}
-      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'usuarios_list' %}active bg-primary text-white{% endif %}" href="{% url 'usuarios_list' %}">
-        <i class="bi bi-people me-2"></i> Usuarios
+      <button type="button"
+              class="list-group-item list-group-item-action app-nav-toggle d-flex align-items-center{% if request.resolver_match.url_name == 'usuarios_list' or request.resolver_match.url_name == 'usuarios_moreapp' or request.resolver_match.url_name == 'usuarios_moreapp_tecnicos' or request.resolver_match.url_name == 'usuarios_moreapp_certelec' or request.resolver_match.url_name == 'usuario_crear' or request.resolver_match.url_name == 'usuario_editar' or request.resolver_match.url_name == 'moreapp_api_usuarios' %} delco-nav-open{% endif %}"
+              data-bs-toggle="collapse"
+              data-bs-target="#navUsuarios-{{ nav_scope|default:'main' }}"
+              aria-expanded="{% if request.resolver_match.url_name == 'usuarios_list' or request.resolver_match.url_name == 'usuarios_moreapp' or request.resolver_match.url_name == 'usuarios_moreapp_tecnicos' or request.resolver_match.url_name == 'usuarios_moreapp_certelec' or request.resolver_match.url_name == 'usuario_crear' or request.resolver_match.url_name == 'usuario_editar' or request.resolver_match.url_name == 'moreapp_api_usuarios' %}true{% else %}false{% endif %}"
+              aria-controls="navUsuarios-{{ nav_scope|default:'main' }}">
+        <span><i class="bi bi-people me-2"></i> Usuarios</span>
+        <i class="bi bi-chevron-down delco-nav-chevron"></i>
+      </button>
+      <div class="collapse{% if request.resolver_match.url_name == 'usuarios_list' or request.resolver_match.url_name == 'usuarios_moreapp' or request.resolver_match.url_name == 'usuarios_moreapp_tecnicos' or request.resolver_match.url_name == 'usuarios_moreapp_certelec' or request.resolver_match.url_name == 'usuario_crear' or request.resolver_match.url_name == 'usuario_editar' or request.resolver_match.url_name == 'moreapp_api_usuarios' %} show{% endif %}" id="navUsuarios-{{ nav_scope|default:'main' }}">
+        <button type="button"
+                class="list-group-item list-group-item-action app-nav-toggle app-nav-sub ps-4 small d-flex align-items-center{% if request.resolver_match.url_name == 'usuarios_moreapp' or request.resolver_match.url_name == 'usuarios_moreapp_tecnicos' or request.resolver_match.url_name == 'usuarios_moreapp_certelec' or request.resolver_match.url_name == 'moreapp_api_usuarios' %} delco-nav-open{% endif %}"
+                data-bs-toggle="collapse"
+                data-bs-target="#navUsuariosMoreapp-{{ nav_scope|default:'main' }}"
+                aria-expanded="{% if request.resolver_match.url_name == 'usuarios_moreapp' or request.resolver_match.url_name == 'usuarios_moreapp_tecnicos' or request.resolver_match.url_name == 'usuarios_moreapp_certelec' or request.resolver_match.url_name == 'moreapp_api_usuarios' %}true{% else %}false{% endif %}"
+                aria-controls="navUsuariosMoreapp-{{ nav_scope|default:'main' }}">
+          <span>Usuario MoreApp</span>
+          <i class="bi bi-chevron-down delco-nav-chevron"></i>
+        </button>
+        <div class="collapse{% if request.resolver_match.url_name == 'usuarios_moreapp' or request.resolver_match.url_name == 'usuarios_moreapp_tecnicos' or request.resolver_match.url_name == 'usuarios_moreapp_certelec' or request.resolver_match.url_name == 'moreapp_api_usuarios' %} show{% endif %}" id="navUsuariosMoreapp-{{ nav_scope|default:'main' }}">
+          {% url 'usuarios_moreapp' as usuarios_moreapp_url %}
+          {% url 'usuarios_moreapp_tecnicos' as usuarios_moreapp_tecnicos_url %}
+          {% url 'usuarios_moreapp_certelec' as usuarios_moreapp_certelec_url %}
+          {% if usuarios_moreapp_url %}
+          <a class="list-group-item list-group-item-action app-nav-link app-nav-sub2 small {% if request.resolver_match.url_name == 'usuarios_moreapp' or request.resolver_match.url_name == 'moreapp_api_usuarios' %}active bg-primary text-white{% endif %}" href="{{ usuarios_moreapp_url }}">
+            Cuentas MoreApp
+          </a>
+          {% endif %}
+          {% if usuarios_moreapp_tecnicos_url %}
+          <a class="list-group-item list-group-item-action app-nav-link app-nav-sub2 small {% if request.resolver_match.url_name == 'usuarios_moreapp_tecnicos' %}active bg-primary text-white{% endif %}" href="{{ usuarios_moreapp_tecnicos_url }}">
+            Técnicos
+          </a>
+          {% endif %}
+          {% if usuarios_moreapp_certelec_url %}
+          <a class="list-group-item list-group-item-action app-nav-link app-nav-sub2 small {% if request.resolver_match.url_name == 'usuarios_moreapp_certelec' %}active bg-primary text-white{% endif %}" href="{{ usuarios_moreapp_certelec_url }}">
+            Certelec Técnicos
+          </a>
+          {% endif %}
+        </div>
+        <a class="list-group-item list-group-item-action app-nav-link app-nav-sub ps-4 small {% if request.resolver_match.url_name == 'usuarios_list' or request.resolver_match.url_name == 'usuario_crear' or request.resolver_match.url_name == 'usuario_editar' %}active bg-primary text-white{% endif %}" href="{% url 'usuarios_list' %}">
+          Usuario interno
+        </a>
+      </div>
+      {% url 'moreapp_api_catalogo' as moreapp_api_catalogo_url %}
+      {% if moreapp_api_catalogo_url %}
+      <a class="list-group-item list-group-item-action app-nav-link {% if 'moreapp_api_' in request.resolver_match.url_name and request.resolver_match.url_name != 'moreapp_api_usuarios' %}active bg-primary text-white{% endif %}" href="{{ moreapp_api_catalogo_url }}">
+        <i class="bi bi-diagram-3 me-2"></i> Catálogo MoreApp
       </a>
+      {% endif %}
       {% url 'soporte_hub' as soporte_hub_url %}
       {% if soporte_hub_url %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'soporte_hub' or request.resolver_match.url_name == 'soporte_list' or request.resolver_match.url_name == 'soporte_crear' or request.resolver_match.url_name == 'soporte_detalle' %}active bg-primary text-white{% endif %}" href="{{ soporte_hub_url }}">

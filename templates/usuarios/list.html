@@ -7,13 +7,15 @@
 <div class="container-fluid py-3">
   <div class="row mb-4">
     <div class="col-12">
-      <div class="d-flex justify-content-between align-items-center">
-        <h1><i class="bi bi-people"></i> Gestión de Usuarios</h1>
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+          <h1 class="mb-1"><i class="bi bi-people"></i> Usuarios internos</h1>
+          <p class="text-muted mb-0">Cuentas de la intranet. Total activos: <strong>{{ total_usuarios|format_numero }}</strong></p>
+        </div>
         <a href="{% url 'usuario_crear' %}" class="btn btn-primary">
           <i class="bi bi-plus-circle"></i> Nuevo Usuario
         </a>
       </div>
-      <p class="text-muted">Total de usuarios activos: <strong>{{ total_usuarios|format_numero }}</strong></p>
     </div>
   </div>
 
@@ -44,6 +46,7 @@
           <th>Nombre de Usuario</th>
           <th>Nombre Completo</th>
           <th>Email</th>
+          <th>Tipo</th>
           <th>Rol</th>
           <th>Acciones</th>
         </tr>
@@ -56,6 +59,7 @@
           <td>{{ usuario.nombre_interno }}</td>
           <td>{{ usuario.nombre }} {{ usuario.apellido }}</td>
           <td>{{ usuario.email }}</td>
+          <td><span class="badge bg-secondary">Interno</span></td>
           <td><span class="badge bg-primary">{{ usuario.rol }}</span></td>
           <td>
             <button class="btn btn-sm btn-info btn-editar" data-id="{{ usuario.id }}" data-nombre="{{ usuario.nombre }}" data-apellido="{{ usuario.apellido }}" data-nombre_interno="{{ usuario.nombre_interno }}" data-email="{{ usuario.email }}" data-rol="{{ usuario.rol }}" data-rut="{{ usuario.rut }}">
@@ -227,7 +231,7 @@ document.addEventListener('DOMContentLoaded', function() {
             fila.querySelector('td:nth-child(3)').textContent = data.usuario.nombre_interno;
             fila.querySelector('td:nth-child(4)').textContent = data.usuario.nombre + ' ' + data.usuario.apellido;
             fila.querySelector('td:nth-child(5)').textContent = data.usuario.email;
-            fila.querySelector('td:nth-child(6) .badge').textContent = data.usuario.rol;
+            fila.querySelector('td:nth-child(7) .badge').textContent = data.usuario.rol;
             fila.setAttribute('data-rol', data.usuario.rol);
             // Actualizar los data-* del botón editar
             const btnEditar = fila.querySelector('.btn-editar');

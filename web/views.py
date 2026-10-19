@@ -2775,6 +2775,7 @@ def usuarios_list_view(request):
         'usuarios': usuarios,
         'roles_order': roles_order,
         'total_usuarios': usuarios.count(),
+        'seccion_usuarios': 'interno',
     }
     return render(request, 'usuarios/list.html', context)
 
@@ -2825,7 +2826,7 @@ def usuario_crear_view(request):
             return redirect('usuario_crear')
     
     roles = ['ADMIN', 'ADMINISTRATIVO', 'TECNICO', 'GERENCIA', 'AUDITOR']
-    context = {'roles': roles}
+    context = {'roles': roles, 'seccion_usuarios': 'interno'}
     return render(request, 'usuarios/crear.html', context)
 
 

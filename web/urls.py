@@ -1,4 +1,5 @@
 from django.urls import path
+# MoreApp: catálogo asigna formularios; moreapp_formularios_list es el listado del usuario.
 from .views import (
     login_view, logout_view, dashboard_view,
     inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, inventario_eliminar_view, inventario_crear_view, inventario_modificar_masivo_view, profile_view, update_profile_view,
@@ -16,6 +17,7 @@ from .views import (
 )
 from reportes.views import reportes_hub_view, reportes_export_view
 from catalogos.views import catalogo_diagnostico_list_view
+from integraciones.moreapp_catalogo_views import catalogo_usuarios_fuente_view, catalogo_usuarios_view
 from cargas.views import (
     cargas_hub_view,
     cargas_list_view,
@@ -99,8 +101,11 @@ urlpatterns = [
     path('importaciones/<int:pk>/errores/', importacion_errores_view, name='importacion_errores'),
     path('importaciones/<int:importacion_id>/corregir/<int:error_id>/', importacion_corregir_fila_view, name='importacion_corregir_fila'),
 
-    # Usuarios (solo ADMIN)
+    # Usuarios (internos: solo ADMIN; MoreApp en vivo: cuentas, Técnicos y Certelec Técnicos)
     path('usuarios/', usuarios_list_view, name='usuarios_list'),
+    path('usuarios/moreapp/', catalogo_usuarios_view, name='usuarios_moreapp'),
+    path('usuarios/moreapp/tecnicos/', catalogo_usuarios_fuente_view, {'fuente': 'tecnicos'}, name='usuarios_moreapp_tecnicos'),
+    path('usuarios/moreapp/certelec/', catalogo_usuarios_fuente_view, {'fuente': 'certelec'}, name='usuarios_moreapp_certelec'),
     path('usuarios/crear/', usuario_crear_view, name='usuario_crear'),
     path('usuarios/<int:pk>/editar/', usuario_editar_view, name='usuario_editar'),
     path('usuarios/<int:pk>/eliminar/', usuario_eliminar_view, name='usuario_eliminar'),

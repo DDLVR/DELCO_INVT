@@ -1,5 +1,7 @@
 # coding: utf-8
+import json
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from unittest import mock
@@ -40,6 +42,35 @@ class MoreAppApiModulosTests(TestCase):
         self.client.login(username=self.tecnico.rut, password=self.password)
         resp = self.client.get(reverse('moreapp_api_catalogo'))
         self.assertEqual(resp.status_code, 403)
+
+    def test_administrativo_no_accede_catalogo(self):
+        adminis = Usuario.objects.create_user(
+            rut='66666666-6',
+            email='adm-api@delco.cl',
+            password=self.password,
+            nombre='Adm',
+            apellido='Api',
+            nombre_interno='adm_api',
+            rol='ADMINISTRATIVO',
+            is_active=True,
+        )
+        self.client.login(username=adminis.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_api_catalogo'))
+        self.assertEqual(resp.status_code, 403)
+        dash = self.client.get(reverse('dashboard'))
+        body = dash.content.decode('utf-8')
+        self.assertNotIn('Catálogo MoreApp', body)
+        self.assertIn('Formularios asignados', body)
+
+    def test_admin_ve_catalogo_en_administracion(self):
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('dashboard'))
+        body = resp.content.decode('utf-8')
+        moreapp_block = body.split('MoreApp y reportes', 1)[1].split('Control', 1)[0]
+        admin_block = body.split('Administración', 1)[1]
+        self.assertNotIn('Catálogo MoreApp', moreapp_block)
+        self.assertIn('Formularios asignados', moreapp_block)
+        self.assertIn('Catálogo MoreApp', admin_block)
 
     @override_settings(MOREAPP_API_ENABLED=False)
     def test_json_forms_sin_api_enabled(self):
@@ -450,6 +481,45 @@ class MoreAppApiModulosTests(TestCase):
         MOREAPP_API_KEY='test-key',
         MOREAPP_CUSTOMER_ID='123',
     )
+    @mock.patch('integraciones.moreapp_catalogo_views.list_datasource_entry_rows')
+    @mock.patch('integraciones.moreapp_catalogo_views.get_datasource')
+    def test_datasource_muestra_contenido_de_filas(self, mocked_get, mocked_rows):
+        mocked_get.return_value = {
+            'id': '6491e945a2abd076df165abc',
+            'name': 'comunas',
+            'columnMapping': [{'id': 'id', 'label': 'Id'}, {'id': 'comuna', 'label': 'Comuna'}],
+        }
+        mocked_rows.return_value = {
+            'total': 2,
+            'columns': [{'id': 'id', 'label': 'Id'}, {'id': 'comuna', 'label': 'Comuna'}],
+            'rows': [
+                {'id': '1', 'comuna': 'CONCHALI'},
+                {'id': '2', 'comuna': 'SANTIAGO'},
+            ],
+            'fetched': 2,
+            'truncated': False,
+            'limit': 250,
+        }
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_api_datasource', args=['6491e945a2abd076df165abc']))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('Contenido de la tabla', body)
+        self.assertIn('CONCHALI', body)
+        self.assertIn('SANTIAGO', body)
+        filtrado = self.client.get(
+            reverse('moreapp_api_datasource', args=['6491e945a2abd076df165abc']),
+            {'query': 'santiago'},
+        )
+        filtrado_body = filtrado.content.decode('utf-8')
+        self.assertIn('SANTIAGO', filtrado_body)
+        self.assertNotIn('CONCHALI', filtrado_body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
     @mock.patch('integraciones.moreapp_catalogo_views.list_users')
     def test_usuarios_moreapp_filtra_correo(self, mocked_users):
         mocked_users.return_value = [
@@ -471,14 +541,69 @@ class MoreAppApiModulosTests(TestCase):
             },
         ]
         self.client.login(username=self.admin.rut, password=self.password)
-        resp = self.client.get(reverse('moreapp_api_usuarios'), {'query': 'juan'})
+        resp = self.client.get(reverse('usuarios_moreapp'), {'query': 'juan'})
         self.assertEqual(resp.status_code, 200)
         body = resp.content.decode('utf-8')
         self.assertIn('juan@delco.cl', body)
         self.assertNotIn('otro@moreapp.com', body)
-        self.assertIn('Usuarios MoreApp', body)
+        self.assertIn('Usuario MoreApp', body)
+        self.assertIn('Usuario interno', body)
+        self.assertIn('No se copian a la intranet', body)
         self.assertNotIn('vincular técnico', body.lower())
         self.assertNotIn('mapear usuario', body.lower())
+        self.assertIn('navUsuariosMoreapp-', body)
+        self.assertIn('Técnicos', body)
+        self.assertIn('Certelec Técnicos', body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_catalogo_views.list_datasource_entry_rows')
+    @mock.patch('integraciones.moreapp_catalogo_views.list_datasources')
+    def test_usuarios_moreapp_muestra_tecnicos_y_certelec(self, mocked_ds, mocked_rows):
+        mocked_ds.return_value = [
+            {
+                'id': '690cdeaea4d2441300ec961d',
+                'name': 'Tecnicos',
+                'columnMapping': [{'id': 'id', 'label': 'Id'}, {'id': 'NOMBRES', 'label': 'NOMBRES'}],
+            },
+            {
+                'id': '68cab36aca9ce33084120ae2',
+                'name': 'Certelec Técnicos',
+                'columnMapping': [{'id': 'id', 'label': 'Id'}, {'id': 'nombres', 'label': 'Nombres'}],
+            },
+        ]
+        mocked_rows.return_value = {
+            'total': 2,
+            'columns': [{'id': 'id', 'label': 'Id'}, {'id': 'NOMBRES', 'label': 'NOMBRES'}],
+            'rows': [
+                {'id': '1', 'NOMBRES': 'ALEXANDER ANDRES GONTHIER'},
+                {'id': '2', 'NOMBRES': 'ASHLY LLANQUIMAN'},
+            ],
+            'fetched': 2,
+            'truncated': False,
+        }
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('usuarios_moreapp_tecnicos'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('ALEXANDER ANDRES GONTHIER', body)
+        self.assertIn('ASHLY LLANQUIMAN', body)
+        self.assertNotIn('vincular técnico', body.lower())
+        mocked_rows.return_value = {
+            'total': 1,
+            'columns': [{'id': 'id', 'label': 'Id'}, {'id': 'nombres', 'label': 'Nombres'}],
+            'rows': [{'id': '1', 'nombres': 'Juan Andres Maldonado Perez'}],
+            'fetched': 1,
+            'truncated': False,
+        }
+        certelec = self.client.get(reverse('usuarios_moreapp_certelec'))
+        self.assertEqual(certelec.status_code, 200)
+        certelec_body = certelec.content.decode('utf-8')
+        self.assertIn('Juan Andres Maldonado Perez', certelec_body)
+        self.assertIn('Certelec Técnicos', certelec_body)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -553,3 +678,266 @@ class MoreAppApiModulosTests(TestCase):
         )
         self.assertIn('attachment', resp['Content-Disposition'])
         self.assertGreater(len(resp.content), 100)
+
+    def test_usuarios_internos_distinguen_moreapp(self):
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('usuarios_list'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('Usuario MoreApp', body)
+        self.assertIn('Usuario interno', body)
+        self.assertIn('Interno', body)
+        self.assertIn('/usuarios/moreapp/', body)
+        self.assertIn('data-bs-toggle="collapse"', body)
+        self.assertIn('navUsuarios-', body)
+        self.assertIn('navUsuariosMoreapp-', body)
+        self.assertIn('Técnicos', body)
+        self.assertIn('Certelec Técnicos', body)
+        self.assertIn('/usuarios/moreapp/tecnicos/', body)
+        self.assertIn('/usuarios/moreapp/certelec/', body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_catalogo_views.get_datasource_entries')
+    @mock.patch('integraciones.moreapp_catalogo_views.get_datasource')
+    @mock.patch('integraciones.moreapp_catalogo_views.list_datasources')
+    def test_guardar_fuente_es_opt_in(self, mocked_list, mocked_get, mocked_entries):
+        from integraciones.models import MoreAppFuenteInterna
+
+        mocked_list.return_value = [
+            {
+                'id': '6491e945a2abd076df165abc',
+                'name': 'comunas',
+                'searchType': 'LOCAL_FALLBACK',
+                'enabled': True,
+                'columnMapping': [{'id': 'id', 'label': 'Id'}, {'id': 'comuna', 'label': 'Comuna'}],
+            },
+            {
+                'id': '690cdeaea4d2441300ec961d',
+                'name': 'Tecnicos',
+                'searchType': 'LOCAL_FALLBACK',
+                'enabled': True,
+                'columnMapping': [{'id': 'id', 'label': 'Id'}, {'id': 'NOMBRES', 'label': 'NOMBRES'}],
+            },
+        ]
+        mocked_get.return_value = mocked_list.return_value[0]
+        mocked_entries.return_value = {'numberOfEntries': 33, 'dataKeyList': mocked_list.return_value[0]['columnMapping']}
+        self.client.login(username=self.admin.rut, password=self.password)
+        save = self.client.post(
+            reverse('moreapp_api_datasource_guardar', args=['6491e945a2abd076df165abc'])
+        )
+        self.assertEqual(save.status_code, 302)
+        self.assertTrue(
+            MoreAppFuenteInterna.objects.filter(datasource_id='6491e945a2abd076df165abc').exists()
+        )
+        self.assertEqual(MoreAppFuenteInterna.objects.count(), 1)
+        listing = self.client.get(reverse('moreapp_api_datasources'))
+        body = listing.content.decode('utf-8')
+        self.assertIn('Guardada', body)
+        self.assertIn('No se guarda', body)
+        self.assertIn('Guardar en intranet', body)
+        only_local = self.client.get(reverse('moreapp_api_datasources'), {'solo_internas': '1'})
+        only_body = only_local.content.decode('utf-8')
+        self.assertIn('comunas', only_body)
+        self.assertNotIn('Tecnicos', only_body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_catalogo_views.get_datasource_entries')
+    @mock.patch('integraciones.moreapp_catalogo_views.get_datasource')
+    def test_importar_filas_solo_si_esta_guardada(self, mocked_get, mocked_entries):
+        from integraciones.models import MoreAppFuenteFila, MoreAppFuenteInterna
+
+        mocked_get.return_value = {
+            'id': '6491e945a2abd076df165abc',
+            'name': 'comunas',
+            'columnMapping': [{'id': 'id', 'label': 'Id'}, {'id': 'comuna', 'label': 'Comuna'}],
+        }
+        mocked_entries.return_value = {'numberOfEntries': 2, 'dataKeyList': mocked_get.return_value['columnMapping']}
+        self.client.login(username=self.admin.rut, password=self.password)
+        archivo = SimpleUploadedFile(
+            'comunas.json',
+            json.dumps([{'id': 'stgo', 'comuna': 'Santiago'}, {'id': 'maipu', 'comuna': 'Maipu'}]).encode('utf-8'),
+            content_type='application/json',
+        )
+        denied = self.client.post(
+            reverse('moreapp_api_datasource_importar', args=['6491e945a2abd076df165abc']),
+            {'archivo': archivo},
+        )
+        self.assertEqual(denied.status_code, 302)
+        self.assertEqual(MoreAppFuenteFila.objects.count(), 0)
+        self.client.post(reverse('moreapp_api_datasource_guardar', args=['6491e945a2abd076df165abc']))
+        archivo2 = SimpleUploadedFile(
+            'comunas.json',
+            json.dumps([{'id': 'stgo', 'comuna': 'Santiago'}, {'id': 'maipu', 'comuna': 'Maipu'}]).encode('utf-8'),
+            content_type='application/json',
+        )
+        imported = self.client.post(
+            reverse('moreapp_api_datasource_importar', args=['6491e945a2abd076df165abc']),
+            {'archivo': archivo2},
+        )
+        self.assertEqual(imported.status_code, 302)
+        fuente = MoreAppFuenteInterna.objects.get(datasource_id='6491e945a2abd076df165abc')
+        self.assertEqual(fuente.filas.count(), 2)
+        self.assertEqual(MoreAppFuenteFila.objects.get(entry_id='stgo').valores.get('comuna'), 'Santiago')
+        detail = self.client.get(reverse('moreapp_api_datasource', args=['6491e945a2abd076df165abc']))
+        self.assertIn('Santiago', detail.content.decode('utf-8'))
+        self.assertIn('Copia en la intranet', detail.content.decode('utf-8'))
+
+    def test_listado_formularios_requiere_login(self):
+        resp = self.client.get(reverse('moreapp_formularios_list'))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/login', resp.url)
+
+    def test_tecnico_ve_formularios_en_sidebar(self):
+        self.client.login(username=self.tecnico.rut, password=self.password)
+        resp = self.client.get(reverse('dashboard'))
+        body = resp.content.decode('utf-8')
+        self.assertIn('Formularios asignados', body)
+        self.assertNotIn('Pendientes MoreApp', body)
+        self.assertNotIn('Catálogo MoreApp', body)
+
+    def test_tecnico_sin_asignacion_lista_vacia(self):
+        self.client.login(username=self.tecnico.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_formularios_list'))
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('No tienes formularios asignados', resp.content.decode('utf-8'))
+
+    def test_tecnico_no_asigna_formularios(self):
+        self.client.login(username=self.tecnico.rut, password=self.password)
+        resp = self.client.get(
+            reverse('moreapp_formulario_asignar', args=['abc123abc123abc123abc123'])
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_formularios_views.list_all_forms')
+    @mock.patch('integraciones.moreapp_catalogo_views.list_all_forms')
+    def test_admin_lista_y_asigna_formulario(self, mocked_catalogo_forms, mocked_list_forms):
+        from integraciones.models import MoreAppFormularioAsignado
+
+        form = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Instalacion',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': '1'},
+        }
+        extra = {
+            'id': 'def456def456def456def456',
+            'name': 'Retiro',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': '1'},
+        }
+        mocked_catalogo_forms.return_value = [form, extra]
+        mocked_list_forms.return_value = [form, extra]
+        self.client.login(username=self.admin.rut, password=self.password)
+        vacio = self.client.get(reverse('moreapp_formularios_list'))
+        self.assertEqual(vacio.status_code, 200)
+        self.assertIn('Aún no hay formularios asignados', vacio.content.decode('utf-8'))
+        catalogo = self.client.get(reverse('moreapp_api_catalogo'))
+        self.assertEqual(catalogo.status_code, 200)
+        body = catalogo.content.decode('utf-8')
+        self.assertIn('Instalacion', body)
+        self.assertIn('Asignar usuarios', body)
+        self.assertIn('modalAsignarFormulario', body)
+        get_page = self.client.get(
+            reverse('moreapp_formulario_asignar', args=['abc123abc123abc123abc123'])
+        )
+        self.assertEqual(get_page.status_code, 302)
+        self.assertEqual(get_page.url, reverse('moreapp_api_catalogo'))
+        post = self.client.post(
+            reverse('moreapp_formulario_asignar', args=['abc123abc123abc123abc123']),
+            {'nombre': 'Instalacion', 'usuarios': [str(self.tecnico.pk)]},
+        )
+        self.assertEqual(post.status_code, 302)
+        self.assertTrue(
+            MoreAppFormularioAsignado.objects.filter(
+                usuario=self.tecnico,
+                form_id='abc123abc123abc123abc123',
+            ).exists()
+        )
+        listing = self.client.get(reverse('moreapp_formularios_list'))
+        self.assertEqual(listing.status_code, 200)
+        list_body = listing.content.decode('utf-8')
+        self.assertIn('Instalacion', list_body)
+        self.assertNotIn('Retiro', list_body)
+        self.assertIn('tec_api', list_body)
+        self.assertNotIn('Asignar usuarios', list_body)
+        self.assertNotIn('Ir al catálogo', list_body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_formularios_views.list_all_forms')
+    def test_tecnico_solo_ve_formularios_asignados(self, mocked_forms):
+        from integraciones.models import MoreAppFormularioAsignado
+
+        mocked_forms.return_value = [
+            {
+                'id': 'abc123abc123abc123abc123',
+                'name': 'Instalacion',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': '1'},
+            },
+            {
+                'id': 'def456def456def456def456',
+                'name': 'Retiro',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': '1'},
+            },
+        ]
+        MoreAppFormularioAsignado.objects.create(
+            usuario=self.tecnico,
+            form_id='abc123abc123abc123abc123',
+            form_name='Instalacion',
+        )
+        self.client.login(username=self.tecnico.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_formularios_list'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('Instalacion', body)
+        self.assertNotIn('Retiro', body)
+        self.assertNotIn('Asignar usuarios', body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_registros_views.get_form_version')
+    @mock.patch('integraciones.moreapp_registros_views.list_submissions')
+    @mock.patch('integraciones.moreapp_registros_views.get_form')
+    def test_tecnico_con_asignacion_accede_registros(self, mocked_form, mocked_subs, mocked_version):
+        from integraciones.models import MoreAppFormularioAsignado
+
+        MoreAppFormularioAsignado.objects.create(
+            usuario=self.tecnico,
+            form_id='abc123abc123abc123abc123',
+            form_name='Instalacion',
+        )
+        mocked_form.return_value = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Instalacion',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_version.return_value = {'id': 'ver123ver123ver123ver123', 'fields': []}
+        mocked_subs.return_value = {'data': []}
+        self.client.login(username=self.tecnico.rut, password=self.password)
+        resp = self.client.get(
+            reverse('moreapp_api_form_registros', args=['abc123abc123abc123abc123'])
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('Instalacion', resp.content.decode('utf-8'))

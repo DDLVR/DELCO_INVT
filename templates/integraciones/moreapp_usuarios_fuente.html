@@ -1,0 +1,84 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }} · Usuario MoreApp{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+      <h1 class="h3 mb-1"><i class="bi bi-people"></i> {{ titulo }}</h1>
+      <p class="text-muted mb-0">{{ descripcion }}{% if datasource_name %} Fuente: <strong>{{ datasource_name }}</strong>.{% endif %}</p>
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-danger">{{ error }}</div>
+  {% endif %}
+
+  <div class="row g-2 mb-3">
+    <div class="col-md-6">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Filas visibles</div>
+        <div class="fs-4 fw-semibold">{{ filas|length }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-6">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">En MoreApp</div>
+        <div class="fs-4 fw-semibold">{{ total|default:"—" }}</div>
+      </div></div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mb-3 delco-panel-card">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-8">
+          <label class="form-label">Buscar</label>
+          <input type="text" name="query" class="form-control" value="{{ query }}" placeholder="Nombre o id">
+        </div>
+        <div class="col-md-4">
+          <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+        </div>
+        {% if tiene_filtros %}
+        <div class="col-12">
+          <a href="{% url request.resolver_match.url_name %}" class="btn btn-outline-secondary btn-sm">Limpiar filtros</a>
+        </div>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+
+  <div class="card shadow-sm delco-panel-card">
+    {% if truncadas %}
+    <div class="px-3 pt-2 small text-muted">Se muestran las primeras {{ filas|length }} filas de {{ total }}.</div>
+    {% endif %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            {% for columna in columnas %}
+            <th>{{ columna.label|default:columna.id }}</th>
+            {% empty %}
+            <th>id</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for fila in filas %}
+          <tr>
+            {% for celda in fila.celdas %}
+            <td>{{ celda|default:"—" }}</td>
+            {% empty %}
+            <td>{{ fila.entry_id }}</td>
+            {% endfor %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="{{ columnas|length|default:1 }}" class="text-muted p-3">No hay técnicos para mostrar.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

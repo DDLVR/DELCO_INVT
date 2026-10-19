@@ -82,6 +82,10 @@
                 </a>
                 {% if rol == 'ADMIN' %}
                 <a href="{% url 'usuarios_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-people"></i> Usuarios</a>
+                {% url 'moreapp_api_catalogo' as moreapp_api_catalogo_url %}
+                {% if moreapp_api_catalogo_url %}
+                <a href="{{ moreapp_api_catalogo_url }}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-diagram-3"></i> Catálogo MoreApp</a>
+                {% endif %}
                 {% endif %}
             </div>
 

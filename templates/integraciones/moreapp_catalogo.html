@@ -7,10 +7,10 @@
   <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
     <div>
       <h1 class="mb-1"><i class="bi bi-diagram-3"></i> Catálogo MoreApp</h1>
-      <p class="text-muted mb-0">Filtra por nombre o por fecha del último registro. Al abrir un formulario se mantienen las fechas. Ocultar queda solo en tu usuario.</p>
+      <p class="text-muted mb-0">Herramienta de administración para verificar información, asignar formularios a usuarios de la intranet y revisar bases de datos. Filtra por nombre o por fecha del último registro. Ocultar queda solo en tu usuario.</p>
     </div>
     <div class="d-flex flex-wrap gap-2">
-      <a href="{% url 'moreapp_api_usuarios' %}" class="btn btn-outline-primary btn-sm">
+      <a href="{% url 'usuarios_moreapp' %}" class="btn btn-outline-primary btn-sm">
         <i class="bi bi-people"></i> Usuarios MoreApp
       </a>
       <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-primary btn-sm">
@@ -101,6 +101,14 @@
           <div class="small text-muted mb-3">
             <div>Versión publicada: <code>{{ form.published_version|default:"—" }}</code></div>
             <div>Último registro: <span class="js-ultimo-registro" data-url="{% url 'moreapp_api_form_ultimo_registro' form.id %}">…</span></div>
+            <div class="mt-1">
+              Asignado a
+              <strong>{{ form.asignados_count|default:0 }}</strong>
+              usuario{{ form.asignados_count|default:0|pluralize }}
+              {% if form.asignados %}
+              · {{ form.asignados|join:", " }}
+              {% endif %}
+            </div>
           </div>
           <div class="mt-auto d-flex flex-wrap gap-2">
             <a class="btn btn-sm btn-outline-primary" href="{% url 'moreapp_api_formulario' form.id %}">
@@ -109,6 +117,16 @@
             <a class="btn btn-sm btn-primary" href="{% url 'moreapp_api_form_registros' form.id %}{% if registros_qs %}?{{ registros_qs }}{% endif %}">
               Ver registros
             </a>
+            <button type="button"
+                    class="btn btn-sm btn-outline-secondary js-asignar-formulario"
+                    data-bs-toggle="modal"
+                    data-bs-target="#modalAsignarFormulario"
+                    data-action="{% url 'moreapp_formulario_asignar' form.id %}"
+                    data-form-id="{{ form.id }}"
+                    data-form-name="{{ form.name }}"
+                    data-asignados="{{ form.asignados_ids|join:',' }}">
+              Asignar usuarios
+            </button>
             {% if form.oculto %}
             <form method="post" action="{% url 'moreapp_api_form_mostrar' form.id %}" class="d-inline">
               {% csrf_token %}
@@ -139,6 +157,69 @@
     {% endfor %}
     <div class="col-12 d-none" id="js-catalogo-vacio-fecha">
       <div class="alert alert-light border">Ningún formulario tiene registros en ese rango de fechas.</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="modalAsignarFormulario" tabindex="-1" aria-labelledby="modalAsignarFormularioLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+    <div class="modal-content border-0 shadow">
+      <form method="post" id="formAsignarFormulario" action="">
+        {% csrf_token %}
+        <input type="hidden" name="nombre" id="asignarFormNombre" value="">
+        {% if query %}<input type="hidden" name="query" value="{{ query }}">{% endif %}
+        {% if mostrar_ocultos %}<input type="hidden" name="mostrar_ocultos" value="1">{% endif %}
+        {% if fecha_desde %}<input type="hidden" name="fecha_desde" value="{{ fecha_desde }}">{% endif %}
+        {% if fecha_hasta %}<input type="hidden" name="fecha_hasta" value="{{ fecha_hasta }}">{% endif %}
+        <div class="modal-header card-header-delco text-white">
+          <h5 class="modal-title" id="modalAsignarFormularioLabel">Asignar formulario</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <p class="small text-muted mb-3">
+            <span id="asignarFormTitulo"></span>
+            · los usuarios marcados lo verán en <strong>Formularios asignados</strong>.
+          </p>
+          {% if not usuarios_asignables %}
+          <p class="text-muted mb-0">No hay usuarios internos activos para asignar (se excluyen administradores).</p>
+          {% else %}
+          <p class="small text-muted">Marca los usuarios que van a trabajar este formulario. Los desmarcados dejarán de verlo.</p>
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+              <thead>
+                <tr>
+                  <th style="width: 2.5rem;"></th>
+                  <th>Usuario</th>
+                  <th>Rol</th>
+                  <th>Correo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for u in usuarios_asignables %}
+                <tr>
+                  <td>
+                    <input class="form-check-input js-asignar-usuario" type="checkbox" name="usuarios" value="{{ u.id }}" id="asignar-u-{{ u.id }}">
+                  </td>
+                  <td>
+                    <label class="form-check-label" for="asignar-u-{{ u.id }}">
+                      {{ u.nombre }} {{ u.apellido }}
+                      <div class="small text-muted">{{ u.nombre_interno }}</div>
+                    </label>
+                  </td>
+                  <td>{{ u.get_rol_display }}</td>
+                  <td class="small">{{ u.email }}</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" {% if not usuarios_asignables %}disabled{% endif %}>Guardar asignaciones</button>
+        </div>
+      </form>
     </div>
   </div>
 </div>
@@ -216,6 +297,26 @@
   }
   if (filtraFecha) refreshCounts();
   nextBatch();
+
+  var modalAsignar = document.getElementById('modalAsignarFormulario');
+  if (modalAsignar) {
+    modalAsignar.addEventListener('show.bs.modal', function (ev) {
+      var btn = ev.relatedTarget;
+      if (!btn) return;
+      var form = document.getElementById('formAsignarFormulario');
+      var nombre = document.getElementById('asignarFormNombre');
+      var titulo = document.getElementById('asignarFormTitulo');
+      var action = btn.getAttribute('data-action') || '';
+      var formName = btn.getAttribute('data-form-name') || '';
+      var ids = (btn.getAttribute('data-asignados') || '').split(',').filter(Boolean);
+      if (form) form.setAttribute('action', action);
+      if (nombre) nombre.value = formName;
+      if (titulo) titulo.textContent = formName;
+      Array.prototype.forEach.call(document.querySelectorAll('.js-asignar-usuario'), function (box) {
+        box.checked = ids.indexOf(String(box.value)) !== -1;
+      });
+    });
+  }
 })();
 </script>
 {% endblock %}

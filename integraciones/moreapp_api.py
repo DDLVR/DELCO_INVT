@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 from urllib import error, parse, request
 
@@ -230,6 +231,66 @@ def get_datasource_entries(datasource_id: str) -> Any:
         f"customers/{get_customer_id()}/datasources/{datasource_id}/entries",
         payload={},
     )
+
+
+def get_datasource_entry(datasource_id: str, entry_id: str) -> Any:
+    safe_entry = parse.quote(str(entry_id or "").strip(), safe="")
+    if not safe_entry:
+        raise MoreAppApiConfigError("entryId inválido.")
+    return _request_json(
+        "GET",
+        f"customers/{get_customer_id()}/datasources/{datasource_id}/entries/{safe_entry}",
+    )
+
+
+_MAX_DATASOURCE_ROWS = 250
+
+
+def list_datasource_entry_rows(
+    datasource_id: str,
+    *,
+    limit: int = _MAX_DATASOURCE_ROWS,
+) -> Dict[str, Any]:
+    """Lee filas vivas de MoreApp. POST /entries solo trae el conteo; el contenido va por GET /entries/{id}."""
+    meta = get_datasource_entries(datasource_id)
+    columns: List[Any] = []
+    total = 0
+    if isinstance(meta, dict):
+        columns = meta.get("dataKeyList") or []
+        try:
+            total = int(meta.get("numberOfEntries") or 0)
+        except (TypeError, ValueError):
+            total = 0
+    cap = max(0, min(int(limit or 0), _MAX_DATASOURCE_ROWS))
+    to_fetch = min(total, cap) if total > 0 else 0
+
+    def _row_at(index: int) -> Optional[Dict[str, Any]]:
+        try:
+            payload = get_datasource_entry(datasource_id, str(index))
+        except (MoreAppApiError, MoreAppApiConfigError):
+            return None
+        if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+            return payload["data"]
+        return None
+
+    rows: List[Dict[str, Any]] = []
+    if to_fetch:
+        workers = 8 if to_fetch > 8 else 1
+        ordered: List[Optional[Dict[str, Any]]] = [None] * to_fetch
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_row_at, index): index - 1 for index in range(1, to_fetch + 1)}
+            for future in as_completed(futures):
+                ordered[futures[future]] = future.result()
+        rows = [item for item in ordered if isinstance(item, dict)]
+
+    return {
+        "total": total,
+        "columns": columns if isinstance(columns, list) else [],
+        "rows": rows,
+        "fetched": len(rows),
+        "truncated": bool(total > len(rows)),
+        "limit": cap,
+    }
 
 
 def list_submissions(form_id: str, page: int = 0, payload: Optional[Dict[str, Any]] = None) -> Any:

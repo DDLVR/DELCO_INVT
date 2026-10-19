@@ -14,7 +14,8 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
-from web.decorators import admin_or_administrativo
+from web.decorators import admin_or_formulario_asignado, admin_or_tiene_formulario_asignado
+from .moreapp_asignaciones import volver_listado_name
 
 from .moreapp_api import (
     MoreAppApiConfigError,
@@ -103,7 +104,7 @@ def _preview_keys(campos: List[Dict[str, Any]]) -> List[str]:
         widget = str(campo.get("widget") or "")
         if not data_name or widget in _SKIP_WIDGETS or widget in {"photo", "signature", "file", "drawing"}:
             continue
-        if _is_cliente_key(data_name) or _is_tecnico_key(data_name):
+        if _is_cliente_key(data_name) or _is_tecnico_key(data_name) or "cliente" in _norm_key(data_name):
             continue
         if data_name not in keys:
             keys.append(data_name)
@@ -545,13 +546,13 @@ def _campos_desde_formulario(formulario: Dict[str, Any]) -> List[Dict[str, Any]]
     return _extract_version_fields(version)
 
 
-@admin_or_administrativo
+@admin_or_formulario_asignado
 def registros_form_view(request, form_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
     except MoreAppApiConfigError as exc:
         messages.error(request, str(exc))
-        return redirect("moreapp_api_catalogo")
+        return redirect(volver_listado_name(request.user))
 
     tecnico = (request.GET.get("tecnico") or request.GET.get("query") or "").strip()
     num_cliente = (request.GET.get("num_cliente") or "").strip()
@@ -570,6 +571,7 @@ def registros_form_view(request, form_id: str):
         "fecha_desde": fecha_desde,
         "fecha_hasta": fecha_hasta,
         "page": page,
+        "page_display": page + 1,
         "has_next": False,
         "has_prev": page > 0,
         "preview_labels": [],
@@ -637,7 +639,7 @@ def registros_form_view(request, form_id: str):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_or_formulario_asignado
 def ultimo_registro_view(request, form_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
@@ -663,14 +665,14 @@ def ultimo_registro_view(request, form_id: str):
         return JsonResponse({"ok": False, "date": "", "empty": True, "error": str(exc)}, status=502)
 
 
-@admin_or_administrativo
+@admin_or_formulario_asignado
 def registro_detail_view(request, form_id: str, submission_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
         submission_id = assert_safe_id(submission_id, "submissionId")
     except MoreAppApiConfigError as exc:
         messages.error(request, str(exc))
-        return redirect("moreapp_api_catalogo")
+        return redirect(volver_listado_name(request.user))
 
     tecnico = (request.GET.get("tecnico") or request.GET.get("query") or "").strip()
     num_cliente = (request.GET.get("num_cliente") or "").strip()
@@ -683,6 +685,8 @@ def registro_detail_view(request, form_id: str, submission_id: str):
         "formulario": {},
         "registro": {},
         "campos": [],
+        "campos_con_valor": [],
+        "fotos_count": 0,
         "error": "",
         "raw_json": "",
         "filtros_qs": _filtros_qs(tecnico, num_cliente, fecha_desde, fecha_hasta, page if page else None),
@@ -700,6 +704,8 @@ def registro_detail_view(request, form_id: str, submission_id: str):
         usuarios = _usuarios_por_email([info.get("userId") or "", info.get("email") or "", info.get("userName") or ""])
         created, tecnico, status, cliente = _info_meta(item, usuarios)
         campos = _detail_fields(item, labels)
+        campos_con_valor = [c for c in campos if c.get("text") or c.get("files")]
+        fotos_count = sum(len(c.get("files") or []) for c in campos)
         context.update(
             {
                 "formulario": formulario_row,
@@ -712,6 +718,8 @@ def registro_detail_view(request, form_id: str, submission_id: str):
                     "status": status,
                 },
                 "campos": campos,
+                "campos_con_valor": campos_con_valor,
+                "fotos_count": fotos_count,
                 "raw_json": _pretty(
                     {
                         "id": item.get("id"),
@@ -729,17 +737,17 @@ def registro_detail_view(request, form_id: str, submission_id: str):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_or_tiene_formulario_asignado
 def registro_archivo_view(request, file_id: str):
     try:
         file_id = assert_safe_id(file_id, "fileId")
         archivo = download_registration_file(file_id)
     except MoreAppApiConfigError as exc:
         messages.error(request, str(exc))
-        return redirect("moreapp_api_catalogo")
+        return redirect(volver_listado_name(request.user))
     except MoreAppApiError as exc:
         messages.error(request, str(exc))
-        return redirect("moreapp_api_catalogo")
+        return redirect(volver_listado_name(request.user))
 
     content_type = archivo.get("content_type") or "application/octet-stream"
     filename = (archivo.get("filename") or file_id).replace('"', "")

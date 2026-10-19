@@ -7,7 +7,7 @@ import json
 from django.http import HttpResponse
 from django.views.decorators.http import require_GET, require_http_methods
 
-from web.decorators import admin_or_administrativo
+from web.decorators import admin_only
 
 from .moreapp_api import (
     download_registration_file,
@@ -21,7 +21,7 @@ from .moreapp_http import assert_safe_id, json_error, json_ok
 
 
 @require_http_methods(["POST"])
-@admin_or_administrativo
+@admin_only
 def v1_datos_submissions_list(request, form_id: str):
     operacion = "submissions.list"
     try:
@@ -37,7 +37,7 @@ def v1_datos_submissions_list(request, form_id: str):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_datos_submission_detail(request, submission_id: str):
     operacion = "submissions.detail"
     try:
@@ -49,7 +49,7 @@ def v1_datos_submission_detail(request, submission_id: str):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_datos_file_download(request, file_id: str):
     operacion = "files.download"
     try:
@@ -67,7 +67,7 @@ def v1_datos_file_download(request, file_id: str):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_datos_users_list(request):
     operacion = "users.list"
     try:
@@ -78,7 +78,7 @@ def v1_datos_users_list(request):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_datos_user_detail(request, user_id: str):
     operacion = "users.detail"
     try:
@@ -90,7 +90,7 @@ def v1_datos_user_detail(request, user_id: str):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_datos_export_fields(request, form_id: str):
     operacion = "export.fields"
     try:

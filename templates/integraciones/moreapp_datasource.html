@@ -5,7 +5,29 @@
 {% block content %}
 <div class="container-fluid py-4">
   <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-secondary btn-sm mb-3">&larr; Volver</a>
-  <h1 class="h3 mb-3">{{ datasource.name|default:datasource_id }}</h1>
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-1">{{ datasource.name|default:datasource_id }}</h1>
+      {% if fuente %}
+      <p class="text-muted mb-0">Abajo ves las filas vivas de MoreApp. Esta lista también está copiada en la intranet si importaste un archivo.</p>
+      {% else %}
+      <p class="text-muted mb-0">Abajo ves el contenido de la tabla en MoreApp. Márcala solo si quieres una copia en la intranet.</p>
+      {% endif %}
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      {% if fuente %}
+      <form method="post" action="{% url 'moreapp_api_datasource_quitar' datasource_id %}" onsubmit="return confirm('¿Quitar esta lista de la intranet? Se borran las filas locales.');">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-danger">Quitar de la intranet</button>
+      </form>
+      {% else %}
+      <form method="post" action="{% url 'moreapp_api_datasource_guardar' datasource_id %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success">Guardar en intranet</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
 
   {% if error %}
   <div class="alert alert-danger">{{ error }}</div>
@@ -14,14 +36,20 @@
   <div class="row g-2 mb-3">
     <div class="col-md-3">
       <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Última actualización</div>
+        <div class="text-muted small">Última actualización MoreApp</div>
         <div class="fw-semibold">{{ datasource.last_updated|default:"—" }}</div>
       </div></div>
     </div>
     <div class="col-md-3">
       <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Filas informadas</div>
+        <div class="text-muted small">Filas en MoreApp</div>
         <div class="fw-semibold">{% if filas is not None %}{{ filas }}{% else %}—{% endif %}</div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Filas en intranet</div>
+        <div class="fw-semibold">{% if fuente %}{{ fuente.filas.count }}{% else %}—{% endif %}</div>
       </div></div>
     </div>
     <div class="col-md-3">
@@ -30,20 +58,52 @@
         <div class="fw-semibold">{{ columnas|length }}</div>
       </div></div>
     </div>
-    <div class="col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Búsqueda</div>
-        <div class="fw-semibold">{{ datasource.search_type|default:"—" }}</div>
-      </div></div>
+  </div>
+
+  <div class="card shadow-sm delco-panel-card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <span class="fw-semibold">Contenido de la tabla</span>
+      <form method="get" class="d-flex gap-2">
+        <input type="text" name="query" class="form-control form-control-sm" value="{{ query }}" placeholder="Buscar en las filas">
+        <button type="submit" class="btn btn-sm btn-outline-primary">Buscar</button>
+        {% if tiene_filtros %}
+        <a href="{% url 'moreapp_api_datasource' datasource_id %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+        {% endif %}
+      </form>
+    </div>
+    {% if filas_api_truncadas %}
+    <div class="px-3 pt-2 small text-muted">Mostrando las primeras {{ filas_api_leidas }} de {{ filas_api_total }} filas. Importa el archivo si necesitas el resto.</div>
+    {% endif %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            {% for columna in columnas %}
+            <th>{{ columna.label|default:columna.id }}</th>
+            {% empty %}
+            <th>id</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for fila in filas_api %}
+          <tr>
+            {% for celda in fila.celdas %}
+            <td>{{ celda|default:"—" }}</td>
+            {% empty %}
+            <td>{{ fila.entry_id }}</td>
+            {% endfor %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="{{ columnas|length|default:1 }}" class="text-muted p-3">No hay filas para mostrar.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
   </div>
 
-  {% if sin_filas_api %}
-  <div class="alert alert-light border">MoreApp entrega la configuración y el recuento, no el contenido de cada fila.</div>
-  {% endif %}
-
-  <div class="card shadow-sm delco-panel-card">
-    <div class="card-header fw-semibold">Columnas de la lista</div>
+  <details class="card shadow-sm delco-panel-card mb-3">
+    <summary class="card-header fw-semibold" style="cursor:pointer;">Estructura ({{ columnas|length }} columna{{ columnas|length|pluralize:"s" }})</summary>
     <div class="table-responsive">
       <table class="table table-sm table-hover mb-0">
         <thead>
@@ -64,7 +124,62 @@
         </tbody>
       </table>
     </div>
+  </details>
+
+  {% if fuente %}
+  <div class="card shadow-sm delco-panel-card mb-3">
+    <div class="card-header fw-semibold">Importar filas</div>
+    <div class="card-body">
+      <p class="small text-muted">Exporta esta data source desde MoreApp (Excel, CSV o JSON con un <code>id</code> por fila) y cárgala aquí. No se sincroniza sola.</p>
+      <form method="post" action="{% url 'moreapp_api_datasource_importar' datasource_id %}" enctype="multipart/form-data" class="row g-2 align-items-end">
+        {% csrf_token %}
+        <div class="col-md-6">
+          <label class="form-label">Archivo</label>
+          <input type="file" name="archivo" class="form-control" accept=".xlsx,.xlsm,.csv,.json" required>
+        </div>
+        <div class="col-md-3">
+          <div class="form-check mt-4">
+            <input class="form-check-input" type="checkbox" name="reemplazar" value="1" id="reemplazarFilas">
+            <label class="form-check-label" for="reemplazarFilas">Reemplazar filas actuales</label>
+          </div>
+        </div>
+        <div class="col-md-3">
+          <button type="submit" class="btn btn-primary w-100">Importar</button>
+        </div>
+      </form>
+    </div>
   </div>
+
+  <div class="card shadow-sm delco-panel-card">
+    <div class="card-header fw-semibold">Copia en la intranet</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            {% for columna in columnas %}
+            <th>{{ columna.label|default:columna.id }}</th>
+            {% empty %}
+            <th>id</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for fila in filas_locales %}
+          <tr>
+            {% for celda in fila.celdas %}
+            <td>{{ celda|default:"—" }}</td>
+            {% empty %}
+            <td>{{ fila.entry_id }}</td>
+            {% endfor %}
+          </tr>
+          {% empty %}
+          <tr><td colspan="{{ columnas|length|default:1 }}" class="text-muted p-3">Aún no hay filas locales. Importa el archivo de MoreApp.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% endif %}
 
   {% if raw_json %}
   <details class="mt-3">

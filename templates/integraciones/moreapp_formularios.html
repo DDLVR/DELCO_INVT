@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+
+{% block title %}Formularios asignados{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-1"><i class="bi bi-ui-checks"></i> Formularios asignados</h1>
+      {% if es_admin %}
+      <p class="text-muted mb-0">Listado de formularios MoreApp ya asignados a usuarios de la intranet.</p>
+      {% else %}
+      <p class="text-muted mb-0">Formularios MoreApp que un administrador te asignó para trabajar en la plataforma.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-warning">{{ error }}</div>
+  {% endif %}
+
+  <div class="card shadow-sm mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-6 col-lg-4">
+          <label class="form-label small mb-1" for="query">Buscar por nombre</label>
+          <input class="form-control" id="query" name="query" value="{{ query }}" placeholder="Nombre del formulario">
+        </div>
+        <div class="col-auto">
+          <button type="submit" class="btn btn-primary">Buscar</button>
+          {% if tiene_filtros %}
+          <a href="{% url 'moreapp_formularios_list' %}" class="btn btn-outline-secondary">Limpiar</a>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {% if not formularios %}
+  <div class="alert alert-light border">
+    {% if es_admin %}
+    Aún no hay formularios asignados.
+    {% else %}
+    No tienes formularios asignados. Pide a un administrador que te asigne los que vas a trabajar.
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="row g-3">
+    {% for form in formularios %}
+    <div class="col-md-6 col-xl-4">
+      <div class="card shadow-sm h-100 delco-panel-card">
+        <div class="card-body d-flex flex-column">
+          <div class="d-flex justify-content-between gap-2 mb-2">
+            <h2 class="h6 mb-0">{{ form.name }}</h2>
+            <span class="badge bg-{{ form.status_badge }}">{{ form.status|default:"—" }}</span>
+          </div>
+          {% if form.description %}
+          <p class="small text-muted mb-2">{{ form.description|truncatechars:140 }}</p>
+          {% endif %}
+          <div class="small text-muted mb-3">
+            <div>Versión publicada: <code>{{ form.published_version|default:"—" }}</code></div>
+            <div>Último registro: <span class="js-ultimo-registro" data-url="{% url 'moreapp_api_form_ultimo_registro' form.id %}">…</span></div>
+            {% if es_admin %}
+            <div class="mt-1">
+              Asignado a
+              <strong>{{ form.asignados_count|default:0 }}</strong>
+              usuario{{ form.asignados_count|default:0|pluralize }}
+              {% if form.asignados %}
+              · {{ form.asignados|join:", " }}
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+          <div class="mt-auto d-flex flex-wrap gap-2">
+            <a class="btn btn-sm btn-outline-primary" href="{% url 'moreapp_api_formulario' form.id %}">
+              Ver estructura
+            </a>
+            <a class="btn btn-sm btn-primary" href="{% url 'moreapp_api_form_registros' form.id %}">
+              Ver registros
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var nodes = document.querySelectorAll('.js-ultimo-registro');
+  var index = 0;
+  function nextBatch() {
+    var batch = Array.prototype.slice.call(nodes, index, index + 4);
+    index += 4;
+    if (!batch.length) return;
+    Promise.all(batch.map(function (el) {
+      return fetch(el.getAttribute('data-url'), { credentials: 'same-origin' })
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          el.textContent = (data && data.date) ? data.date : 'sin registros';
+        })
+        .catch(function () {
+          el.textContent = '—';
+        });
+    })).then(nextBatch);
+  }
+  nextBatch();
+})();
+</script>
+{% endblock %}

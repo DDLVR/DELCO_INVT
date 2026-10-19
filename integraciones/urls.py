@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import webhook_moreapp
+from .moreapp_formularios_views import formulario_asignar_view, formularios_list_view
 from .moreapp_catalogo_views import (
     catalogo_datasource_detail_view,
     catalogo_datasources_view,
@@ -8,6 +9,9 @@ from .moreapp_catalogo_views import (
     catalogo_forms_view,
     catalogo_mostrar_form_view,
     catalogo_ocultar_form_view,
+    catalogo_guardar_fuente_view,
+    catalogo_importar_fuente_view,
+    catalogo_quitar_fuente_view,
     catalogo_usuarios_view,
 )
 from .moreapp_datos_views import (
@@ -36,6 +40,16 @@ from .moreapp_visualizacion_views import (
 urlpatterns = [
     # Webhook para MoreApp (recibe archivos FPTs)
     path('moreapp/', webhook_moreapp, name='webhook_moreapp'),
+    path(
+        'moreapp/formularios/',
+        formularios_list_view,
+        name='moreapp_formularios_list',
+    ),
+    path(
+        'moreapp/formularios/<str:form_id>/asignar/',
+        formulario_asignar_view,
+        name='moreapp_formulario_asignar',
+    ),
     # Pantallas de observación (Fase 1) — no reemplazan reportes actuales
     path(
         'moreapp/api/catalogo/',
@@ -51,6 +65,21 @@ urlpatterns = [
         'moreapp/api/catalogo/usuarios/',
         catalogo_usuarios_view,
         name='moreapp_api_usuarios',
+    ),
+    path(
+        'moreapp/api/catalogo/datasources/<str:datasource_id>/guardar/',
+        catalogo_guardar_fuente_view,
+        name='moreapp_api_datasource_guardar',
+    ),
+    path(
+        'moreapp/api/catalogo/datasources/<str:datasource_id>/quitar/',
+        catalogo_quitar_fuente_view,
+        name='moreapp_api_datasource_quitar',
+    ),
+    path(
+        'moreapp/api/catalogo/datasources/<str:datasource_id>/importar/',
+        catalogo_importar_fuente_view,
+        name='moreapp_api_datasource_importar',
     ),
     path(
         'moreapp/api/catalogo/datasources/<str:datasource_id>/',

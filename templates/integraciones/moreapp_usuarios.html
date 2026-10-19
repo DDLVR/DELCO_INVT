@@ -1,18 +1,15 @@
 {% extends 'base.html' %}
 
-{% block title %}Usuarios MoreApp{% endblock %}
+{% block title %}Usuario MoreApp{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
   <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
     <div>
       <h1 class="h3 mb-1"><i class="bi bi-people"></i> Usuarios MoreApp</h1>
-      <p class="text-muted mb-0">Listado de la cuenta MoreApp. El cruce con técnicos de la intranet queda pendiente hasta estandarizar nombres y correos.</p>
+      <p class="text-muted mb-0">Cuentas de la plataforma MoreApp. Las listas de Técnicos y Certelec Técnicos están en el menú. No se copian a la intranet.</p>
     </div>
-    <div class="d-flex flex-wrap gap-2">
-      <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-primary btn-sm">Data Sources</a>
-      <a href="{% url 'moreapp_api_catalogo' %}" class="btn btn-outline-secondary btn-sm">Volver a formularios</a>
-    </div>
+    <a href="{% url 'moreapp_api_catalogo' %}" class="btn btn-outline-secondary btn-sm">Catálogo MoreApp</a>
   </div>
 
   {% if error %}
@@ -52,7 +49,7 @@
         </div>
         {% if tiene_filtros %}
         <div class="col-12">
-          <a href="{% url 'moreapp_api_usuarios' %}" class="btn btn-outline-secondary btn-sm">Limpiar filtros</a>
+          <a href="{% url 'usuarios_moreapp' %}" class="btn btn-outline-secondary btn-sm">Limpiar filtros</a>
         </div>
         {% endif %}
       </form>
@@ -64,6 +61,7 @@
       <table class="table table-sm table-hover mb-0">
         <thead>
           <tr>
+            <th>Tipo</th>
             <th>Usuario</th>
             <th>Correo</th>
             <th>Estado</th>
@@ -74,6 +72,7 @@
         <tbody>
           {% for usuario in usuarios %}
           <tr>
+            <td><span class="badge bg-info text-dark">MoreApp</span></td>
             <td>{{ usuario.username|default:usuario.nombre|default:"—" }}</td>
             <td>{{ usuario.email|default:"—" }}</td>
             <td>
@@ -87,7 +86,7 @@
             <td class="small">{% if usuario.groups_count %}{{ usuario.groups_count }}{% else %}0{% endif %}</td>
           </tr>
           {% empty %}
-          <tr><td colspan="5" class="text-muted p-3">No hay usuarios para mostrar.</td></tr>
+          <tr><td colspan="6" class="text-muted p-3">No hay usuarios MoreApp para mostrar.</td></tr>
           {% endfor %}
         </tbody>
       </table>

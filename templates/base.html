@@ -127,7 +127,7 @@
   <div class="main-container">
     <!-- Sidebar desktop (sticky / siempre visible al navegar) -->
     <aside class="sidebar d-none d-lg-flex" id="delcoSidebarDesktop" aria-label="Navegación principal">
-      {% include "partials/sidebar.html" %}
+      {% include "partials/sidebar.html" with nav_scope='desktop' %}
     </aside>
 
     <!-- Sidebar móvil (offcanvas) -->
@@ -137,7 +137,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Cerrar"></button>
       </div>
       <div class="offcanvas-body p-0">
-        {% include "partials/sidebar.html" %}
+        {% include "partials/sidebar.html" with nav_scope='mobile' %}
       </div>
     </div>
 

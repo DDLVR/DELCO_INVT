@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django.views.decorators.http import require_GET
 
-from web.decorators import admin_or_administrativo
+from web.decorators import admin_only
 
 from .moreapp_api import (
     get_datasource,
@@ -18,7 +18,7 @@ from .moreapp_http import assert_safe_id, json_error, json_ok
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_visualizacion_forms_list(request):
     try:
         page = int(request.GET.get("page", "0") or 0)
@@ -30,7 +30,7 @@ def v1_visualizacion_forms_list(request):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_visualizacion_form_detail(request, form_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
@@ -41,7 +41,7 @@ def v1_visualizacion_form_detail(request, form_id: str):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_visualizacion_form_versions(request, form_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
@@ -55,7 +55,7 @@ def v1_visualizacion_form_versions(request, form_id: str):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_visualizacion_form_version_detail(request, form_id: str, form_version_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
@@ -68,7 +68,7 @@ def v1_visualizacion_form_version_detail(request, form_id: str, form_version_id:
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_visualizacion_datasources_list(request):
     try:
         data = list_datasources()
@@ -78,7 +78,7 @@ def v1_visualizacion_datasources_list(request):
 
 
 @require_GET
-@admin_or_administrativo
+@admin_only
 def v1_visualizacion_datasource_detail(request, datasource_id: str):
     try:
         datasource_id = assert_safe_id(datasource_id, "datasourceId")

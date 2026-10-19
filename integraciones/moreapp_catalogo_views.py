@@ -9,13 +9,15 @@ from typing import Any, Dict, List
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.db.models import Count
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 
-from web.decorators import admin_or_administrativo
+from web.decorators import admin_only, admin_or_formulario_asignado
 
-from .models import MoreAppFormularioOculto
+from .models import MoreAppFormularioOculto, MoreAppFuenteInterna
+from .moreapp_asignaciones import asignaciones_por_form, enriquecer_fila, usuarios_asignables
 
 from .moreapp_api import (
     MoreAppApiConfigError,
@@ -25,11 +27,13 @@ from .moreapp_api import (
     get_form,
     get_form_version,
     list_all_forms,
+    list_datasource_entry_rows,
     list_datasources,
     list_form_versions,
     list_users,
 )
 from .moreapp_fechas import format_moreapp_when
+from .moreapp_fuentes import parse_uploaded_fuente, upsert_filas
 from .moreapp_http import assert_safe_id
 
 _WIDGET_LABELS = {
@@ -219,7 +223,7 @@ def _catalogo_return_url(request) -> str:
     return url
 
 
-@admin_or_administrativo
+@admin_only
 def catalogo_forms_view(request):
     query = (request.GET.get("query") or "").strip()
     mostrar_ocultos = (request.GET.get("mostrar_ocultos") or "").strip() in ("1", "true", "on")
@@ -242,6 +246,7 @@ def catalogo_forms_view(request):
         "registros_qs": urlencode(registros_params),
         "activos": 0,
         "ocultos": 0,
+        "usuarios_asignables": list(usuarios_asignables()),
     }
     try:
         raw = list_all_forms()
@@ -252,8 +257,11 @@ def catalogo_forms_view(request):
         ocultos_ids = set(
             MoreAppFormularioOculto.objects.filter(usuario=request.user).values_list("form_id", flat=True)
         )
+        por_form = asignaciones_por_form()
         for row in rows:
-            row["oculto"] = row.get("id") in ocultos_ids
+            form_id = str(row.get("id") or "")
+            row["oculto"] = form_id in ocultos_ids
+            enriquecer_fila(row, por_form.get(form_id, []))
         ocultos_count = MoreAppFormularioOculto.objects.filter(usuario=request.user).count()
         if not mostrar_ocultos:
             rows = [row for row in rows if not row.get("oculto")]
@@ -272,7 +280,7 @@ def catalogo_forms_view(request):
 
 
 @require_POST
-@admin_or_administrativo
+@admin_only
 def catalogo_ocultar_form_view(request, form_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
@@ -290,7 +298,7 @@ def catalogo_ocultar_form_view(request, form_id: str):
 
 
 @require_POST
-@admin_or_administrativo
+@admin_only
 def catalogo_mostrar_form_view(request, form_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
@@ -302,7 +310,7 @@ def catalogo_mostrar_form_view(request, form_id: str):
     return redirect(_catalogo_return_url(request))
 
 
-@admin_or_administrativo
+@admin_or_formulario_asignado
 def catalogo_form_detail_view(request, form_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
@@ -400,46 +408,159 @@ def _datasource_row(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@admin_or_administrativo
+def _row_desde_fuente_local(fuente: MoreAppFuenteInterna) -> Dict[str, Any]:
+    columns = fuente.columnas if isinstance(fuente.columnas, list) else []
+    labels = [
+        str(col.get("label") or col.get("id") or "")
+        for col in columns
+        if isinstance(col, dict)
+    ]
+    return {
+        "id": fuente.datasource_id,
+        "name": fuente.nombre,
+        "search_type": "",
+        "enabled": True,
+        "last_updated": "",
+        "columns": columns,
+        "column_labels": ", ".join(part for part in labels if part),
+        "column_count": len(columns),
+    }
+
+
+def _fuentes_locales() -> Dict[str, MoreAppFuenteInterna]:
+    return {item.datasource_id: item for item in MoreAppFuenteInterna.objects.all()}
+
+
+def _filas_para_tabla(filas, columnas: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    col_ids = [str(col.get("id") or "") for col in columnas if col.get("id")]
+    out: List[Dict[str, Any]] = []
+    for item in filas:
+        valores = item.valores if isinstance(item.valores, dict) else {}
+        out.append(
+            {
+                "entry_id": item.entry_id,
+                "valores": valores,
+                "celdas": [valores.get(col_id, "") for col_id in col_ids],
+            }
+        )
+    return out
+
+
+def _celdas_de_valores(valores: Dict[str, Any], col_ids: List[str]) -> List[str]:
+    celdas: List[str] = []
+    for col_id in col_ids:
+        value = valores.get(col_id)
+        if value in (None, "") and col_id:
+            for key, candidate in valores.items():
+                if str(key) == col_id:
+                    value = candidate
+                    break
+        if value in (None, ""):
+            celdas.append("")
+        else:
+            celdas.append(str(value))
+    return celdas
+
+
+def _filas_api_para_tabla(rows: List[Any], columnas: List[Dict[str, str]]) -> List[Dict[str, Any]]:
+    col_ids = [str(col.get("id") or "") for col in columnas if col.get("id")]
+    if not col_ids:
+        for item in rows:
+            if isinstance(item, dict) and item:
+                col_ids = [str(key) for key in item.keys()]
+                break
+    out: List[Dict[str, Any]] = []
+    for item in rows:
+        if not isinstance(item, dict):
+            continue
+        out.append(
+            {
+                "entry_id": str(item.get("id") or ""),
+                "valores": item,
+                "celdas": _celdas_de_valores(item, col_ids) if col_ids else [str(v) for v in item.values()],
+            }
+        )
+    return out
+
+
+def _filtrar_filas_tabla(filas: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
+    needle = _fold_text(query)
+    if not needle:
+        return filas
+    return [
+        item
+        for item in filas
+        if needle in _fold_text(item.get("entry_id")) or needle in _fold_text(item.get("valores"))
+    ]
+
+
+def _marcar_fuentes_locales(rows: List[Dict[str, Any]], locales: Dict[str, MoreAppFuenteInterna]) -> None:
+    counts = {}
+    if locales:
+        counts = dict(
+            MoreAppFuenteInterna.objects.filter(datasource_id__in=list(locales.keys()))
+            .annotate(n=Count("filas"))
+            .values_list("datasource_id", "n")
+        )
+    for row in rows:
+        fuente = locales.get(str(row.get("id") or ""))
+        row["en_intranet"] = bool(fuente)
+        row["filas_locales"] = counts.get(str(row.get("id") or ""), 0) if fuente else 0
+
+
+@admin_only
 def catalogo_datasources_view(request):
     query = (request.GET.get("query") or "").strip()
+    solo_internas = (request.GET.get("solo_internas") or "").strip() in ("1", "true", "on")
     context = {
         "datasources": [],
         "error": "",
         "raw_json": "",
         "query": query,
-        "tiene_filtros": bool(query),
+        "solo_internas": solo_internas,
+        "tiene_filtros": bool(query or solo_internas),
+        "internas_count": MoreAppFuenteInterna.objects.count(),
     }
+    locales = _fuentes_locales()
+    rows: List[Dict[str, Any]] = []
     try:
         raw = list_datasources()
         rows = [_datasource_row(item) for item in _as_list(raw) if isinstance(item, dict)]
-        if query:
-            needle = _fold_text(query)
-            rows = [
-                row
-                for row in rows
-                if needle in _fold_text(row.get("name")) or needle in _fold_text(row.get("column_labels"))
-            ]
-        context["datasources"] = rows
-        context["raw_json"] = _pretty(
-            [
-                {
-                    "id": row.get("id"),
-                    "name": row.get("name"),
-                    "searchType": row.get("search_type"),
-                    "lastUpdated": row.get("last_updated"),
-                    "columns": row.get("column_labels"),
-                }
-                for row in rows
-            ]
-        )
+        seen = {str(row.get("id") or "") for row in rows}
+        for fuente in locales.values():
+            if fuente.datasource_id not in seen:
+                rows.append(_row_desde_fuente_local(fuente))
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
         messages.error(request, str(exc))
+        rows = [_row_desde_fuente_local(fuente) for fuente in locales.values()]
+    if query:
+        needle = _fold_text(query)
+        rows = [
+            row
+            for row in rows
+            if needle in _fold_text(row.get("name")) or needle in _fold_text(row.get("column_labels"))
+        ]
+    _marcar_fuentes_locales(rows, locales)
+    if solo_internas:
+        rows = [row for row in rows if row.get("en_intranet")]
+    context["datasources"] = rows
+    context["raw_json"] = _pretty(
+        [
+            {
+                "id": row.get("id"),
+                "name": row.get("name"),
+                "enIntranet": row.get("en_intranet"),
+                "filasLocales": row.get("filas_locales"),
+                "columns": row.get("column_labels"),
+            }
+            for row in rows
+        ]
+    )
     return render(request, "integraciones/moreapp_datasources.html", context)
 
 
-@admin_or_administrativo
+@admin_only
 def catalogo_datasource_detail_view(request, datasource_id: str):
     try:
         datasource_id = assert_safe_id(datasource_id, "datasourceId")
@@ -447,6 +568,7 @@ def catalogo_datasource_detail_view(request, datasource_id: str):
         messages.error(request, str(exc))
         return redirect("moreapp_api_datasources")
 
+    query = (request.GET.get("query") or "").strip()
     context = {
         "datasource_id": datasource_id,
         "error": "",
@@ -454,7 +576,15 @@ def catalogo_datasource_detail_view(request, datasource_id: str):
         "datasource": {},
         "columnas": [],
         "filas": None,
-        "sin_filas_api": True,
+        "sin_filas_api": False,
+        "fuente": None,
+        "filas_locales": [],
+        "filas_api": [],
+        "filas_api_total": 0,
+        "filas_api_leidas": 0,
+        "filas_api_truncadas": False,
+        "query": query,
+        "tiene_filtros": bool(query),
     }
     try:
         data = get_datasource(datasource_id)
@@ -462,25 +592,46 @@ def catalogo_datasource_detail_view(request, datasource_id: str):
         row = _datasource_row(datasource)
         columnas = list(row.get("columns") or [])
         filas = None
+        packed: Dict[str, Any] = {}
         try:
-            entries = get_datasource_entries(datasource_id)
+            packed = list_datasource_entry_rows(datasource_id)
         except MoreAppApiError:
-            entries = {}
-        if isinstance(entries, dict):
-            if entries.get("numberOfEntries") is not None:
-                filas = entries.get("numberOfEntries")
-            extra_cols = _column_rows(entries.get("dataKeyList"))
-            if extra_cols and not columnas:
-                columnas = extra_cols
-                row["column_labels"] = ", ".join(col["label"] for col in columnas if col.get("label"))
-                row["column_count"] = len(columnas)
+            packed = {}
+            try:
+                entries = get_datasource_entries(datasource_id)
+            except MoreAppApiError:
+                entries = {}
+            packed = {
+                "total": (entries or {}).get("numberOfEntries") if isinstance(entries, dict) else None,
+                "columns": (entries or {}).get("dataKeyList") if isinstance(entries, dict) else [],
+                "rows": [],
+                "truncated": False,
+            }
+        extra_cols = _column_rows(packed.get("columns"))
+        if extra_cols and not columnas:
+            columnas = extra_cols
+            row["column_labels"] = ", ".join(col["label"] for col in columnas if col.get("label"))
+            row["column_count"] = len(columnas)
+        filas = packed.get("total")
         row["columns"] = columnas
+        filas_api = _filtrar_filas_tabla(_filas_api_para_tabla(list(packed.get("rows") or []), columnas), query)
+        fuente = MoreAppFuenteInterna.objects.filter(datasource_id=datasource_id).first()
+        filas_locales = []
+        if fuente:
+            local_qs = list(fuente.filas.all().order_by("entry_id")[:300])
+            filas_locales = _filtrar_filas_tabla(_filas_para_tabla(local_qs, columnas), query)
         context.update(
             {
                 "datasource": row,
                 "columnas": columnas,
                 "filas": filas,
-                "sin_filas_api": True,
+                "sin_filas_api": not bool(packed.get("rows")),
+                "fuente": fuente,
+                "filas_locales": filas_locales,
+                "filas_api": filas_api,
+                "filas_api_total": packed.get("total") or 0,
+                "filas_api_leidas": len(packed.get("rows") or []),
+                "filas_api_truncadas": bool(packed.get("truncated")),
                 "raw_json": _pretty(
                     {
                         "id": datasource.get("id"),
@@ -490,6 +641,8 @@ def catalogo_datasource_detail_view(request, datasource_id: str):
                         "lastUpdated": row.get("last_updated"),
                         "columnMapping": columnas,
                         "numberOfEntries": filas,
+                        "filasLeidas": len(packed.get("rows") or []),
+                        "enIntranet": bool(fuente),
                     }
                 ),
             }
@@ -497,7 +650,130 @@ def catalogo_datasource_detail_view(request, datasource_id: str):
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
         messages.error(request, str(exc))
+        fuente = MoreAppFuenteInterna.objects.filter(datasource_id=datasource_id).first()
+        if fuente:
+            context["datasource"] = {
+                "id": fuente.datasource_id,
+                "name": fuente.nombre,
+                "columns": fuente.columnas if isinstance(fuente.columnas, list) else [],
+                "last_updated": "",
+                "search_type": "",
+            }
+            context["columnas"] = context["datasource"]["columns"]
+            context["fuente"] = fuente
+            context["filas_locales"] = _filtrar_filas_tabla(
+                _filas_para_tabla(
+                    list(fuente.filas.all().order_by("entry_id")[:300]),
+                    context["columnas"],
+                ),
+                query,
+            )
     return render(request, "integraciones/moreapp_datasource.html", context)
+
+
+def _snapshot_fuente(datasource_id: str) -> Dict[str, Any]:
+    data = get_datasource(datasource_id)
+    datasource = data if isinstance(data, dict) else {}
+    row = _datasource_row(datasource)
+    columnas = list(row.get("columns") or [])
+    filas = None
+    try:
+        entries = get_datasource_entries(datasource_id)
+    except MoreAppApiError:
+        entries = {}
+    if isinstance(entries, dict) and entries.get("numberOfEntries") is not None:
+        filas = entries.get("numberOfEntries")
+        extra_cols = _column_rows(entries.get("dataKeyList"))
+        if extra_cols and not columnas:
+            columnas = extra_cols
+    return {
+        "nombre": row.get("name") or datasource_id,
+        "columnas": columnas,
+        "filas_moreapp": filas,
+    }
+
+
+@require_POST
+@admin_only
+def catalogo_guardar_fuente_view(request, datasource_id: str):
+    try:
+        datasource_id = assert_safe_id(datasource_id, "datasourceId")
+        snapshot = _snapshot_fuente(datasource_id)
+    except MoreAppApiConfigError as exc:
+        messages.error(request, str(exc))
+        return redirect("moreapp_api_datasources")
+    except MoreAppApiError as exc:
+        messages.error(request, str(exc))
+        return redirect("moreapp_api_datasource", datasource_id=datasource_id)
+
+    fuente, created = MoreAppFuenteInterna.objects.update_or_create(
+        datasource_id=datasource_id,
+        defaults={
+            "nombre": snapshot["nombre"],
+            "columnas": snapshot["columnas"],
+            "filas_moreapp": snapshot["filas_moreapp"],
+            "actualizado_por": request.user,
+        },
+    )
+    if created:
+        messages.success(
+            request,
+            "Se guardó «%s» en la intranet. El resto de listas de MoreApp no se copia." % fuente.nombre,
+        )
+    else:
+        messages.success(request, "Se actualizó la configuración de «%s»." % fuente.nombre)
+    return redirect("moreapp_api_datasource", datasource_id=datasource_id)
+
+
+@require_POST
+@admin_only
+def catalogo_quitar_fuente_view(request, datasource_id: str):
+    try:
+        datasource_id = assert_safe_id(datasource_id, "datasourceId")
+    except MoreAppApiConfigError as exc:
+        messages.error(request, str(exc))
+        return redirect("moreapp_api_datasources")
+    fuente = MoreAppFuenteInterna.objects.filter(datasource_id=datasource_id).first()
+    if fuente:
+        nombre = fuente.nombre
+        fuente.delete()
+        messages.success(request, "Se quitó «%s» de la intranet. Las filas locales también se eliminaron." % nombre)
+    return redirect("moreapp_api_datasources")
+
+
+@require_POST
+@admin_only
+def catalogo_importar_fuente_view(request, datasource_id: str):
+    try:
+        datasource_id = assert_safe_id(datasource_id, "datasourceId")
+    except MoreAppApiConfigError as exc:
+        messages.error(request, str(exc))
+        return redirect("moreapp_api_datasources")
+    fuente = MoreAppFuenteInterna.objects.filter(datasource_id=datasource_id).first()
+    if not fuente:
+        messages.error(request, "Primero guarda esta lista en la intranet. No se importan bases que no hayas elegido.")
+        return redirect("moreapp_api_datasource", datasource_id=datasource_id)
+    uploaded = request.FILES.get("archivo")
+    if not uploaded:
+        messages.error(request, "Selecciona un Excel, CSV o JSON exportado desde MoreApp.")
+        return redirect("moreapp_api_datasource", datasource_id=datasource_id)
+    reemplazar = (request.POST.get("reemplazar") or "").strip() in ("1", "true", "on")
+    try:
+        filas = parse_uploaded_fuente(uploaded, fuente.columnas)
+        if not filas:
+            raise ValueError("El archivo no trae filas para importar.")
+        creadas, actualizadas = upsert_filas(fuente, filas, reemplazar=reemplazar)
+    except (ValueError, json.JSONDecodeError) as exc:
+        messages.error(request, str(exc))
+        return redirect("moreapp_api_datasource", datasource_id=datasource_id)
+    except Exception as exc:  # noqa: BLE001
+        messages.error(request, "No se pudo leer el archivo: %s" % exc)
+        return redirect("moreapp_api_datasource", datasource_id=datasource_id)
+    messages.success(
+        request,
+        "Importación de «%s»: %s nueva(s), %s actualizada(s)." % (fuente.nombre, creadas, actualizadas),
+    )
+    return redirect("moreapp_api_datasource", datasource_id=datasource_id)
 
 
 def _group_labels(value: Any) -> str:
@@ -536,7 +812,40 @@ def _user_row(item: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-@admin_or_administrativo
+_FUENTES_USUARIO_MOREAPP = {
+    "tecnicos": {
+        "slug": "tecnicos",
+        "titulo": "Técnicos",
+        "descripcion": "Filas vivas de la data source Técnicos. No se copian a la intranet.",
+    },
+    "certelec": {
+        "slug": "certelec",
+        "titulo": "Certelec Técnicos",
+        "descripcion": "Filas vivas de la data source Certelec Técnicos. No se copian a la intranet.",
+    },
+}
+
+
+def _datasource_es_fuente_usuario(item: Dict[str, Any], slug: str) -> bool:
+    name = _fold_text(item.get("name"))
+    if slug == "certelec":
+        return "certelec" in name
+    if slug == "tecnicos":
+        return "tecnic" in name and "certelec" not in name
+    return False
+
+
+def _resolver_fuente_usuario(slug: str):
+    meta = _FUENTES_USUARIO_MOREAPP.get(slug)
+    if not meta:
+        raise MoreAppApiConfigError("Fuente de usuarios no válida.")
+    for item in _as_list(list_datasources()):
+        if isinstance(item, dict) and _datasource_es_fuente_usuario(item, slug):
+            return meta, item
+    return meta, None
+
+
+@admin_only
 def catalogo_usuarios_view(request):
     query = (request.GET.get("query") or "").strip()
     context = {
@@ -546,6 +855,7 @@ def catalogo_usuarios_view(request):
         "tiene_filtros": bool(query),
         "activos": 0,
         "deshabilitados": 0,
+        "seccion_usuarios": "moreapp",
     }
     try:
         raw = list_users()
@@ -566,3 +876,55 @@ def catalogo_usuarios_view(request):
         context["error"] = str(exc)
         messages.error(request, str(exc))
     return render(request, "integraciones/moreapp_usuarios.html", context)
+
+
+@admin_only
+def catalogo_usuarios_fuente_view(request, fuente: str):
+    query = (request.GET.get("query") or "").strip()
+    slug = (fuente or "").strip().lower()
+    context = {
+        "error": "",
+        "query": query,
+        "tiene_filtros": bool(query),
+        "seccion_usuarios": slug,
+        "titulo": "",
+        "descripcion": "",
+        "columnas": [],
+        "filas": [],
+        "total": 0,
+        "truncadas": False,
+        "datasource_name": "",
+    }
+    try:
+        meta, item = _resolver_fuente_usuario(slug)
+    except MoreAppApiConfigError as exc:
+        messages.error(request, str(exc))
+        return redirect("usuarios_moreapp")
+    context["titulo"] = meta["titulo"]
+    context["descripcion"] = meta["descripcion"]
+    if not item:
+        context["error"] = "No se encontró la data source «%s» en MoreApp." % meta["titulo"]
+        messages.error(request, context["error"])
+        return render(request, "integraciones/moreapp_usuarios_fuente.html", context)
+    context["datasource_name"] = str(item.get("name") or meta["titulo"])
+    columnas = _column_rows(item.get("columnMapping") or item.get("dataKeyList"))
+    packed: Dict[str, Any] = {}
+    try:
+        packed = list_datasource_entry_rows(str(item.get("id") or ""))
+    except (MoreAppApiConfigError, MoreAppApiError) as exc:
+        context["error"] = str(exc)
+        messages.error(request, str(exc))
+        packed = {}
+    extra_cols = _column_rows(packed.get("columns"))
+    if extra_cols and not columnas:
+        columnas = extra_cols
+    filas = _filtrar_filas_tabla(_filas_api_para_tabla(list(packed.get("rows") or []), columnas), query)
+    context.update(
+        {
+            "columnas": columnas,
+            "filas": filas,
+            "total": packed.get("total") or 0,
+            "truncadas": bool(packed.get("truncated")),
+        }
+    )
+    return render(request, "integraciones/moreapp_usuarios_fuente.html", context)
