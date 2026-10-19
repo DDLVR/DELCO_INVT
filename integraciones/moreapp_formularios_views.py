@@ -105,17 +105,14 @@ def formulario_asignar_view(request, form_id: str):
         except (TypeError, ValueError):
             continue
     permitidos = {user.pk: user for user in usuarios}
-    elegido = None
-    for uid in ids:
-        user = permitidos.get(uid)
-        if user is not None:
-            elegido = user
-            break
     with transaction.atomic():
         keep = set()
-        if elegido is not None:
+        for uid in ids:
+            user = permitidos.get(uid)
+            if user is None:
+                continue
             obj, _created = MoreAppFormularioAsignado.objects.update_or_create(
-                usuario=elegido,
+                usuario=user,
                 form_id=form_id,
                 defaults={"form_name": nombre, "asignado_por": request.user},
             )

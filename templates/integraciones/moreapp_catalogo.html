@@ -178,12 +178,12 @@
         <div class="modal-body">
           <p class="small text-muted mb-3">
             <span id="asignarFormTitulo"></span>
-            · la persona elegida lo verá en <strong>Formularios asignados</strong>.
+            · las personas marcadas lo verán en <strong>Formularios asignados</strong>.
           </p>
           {% if not usuarios_asignables %}
           <p class="text-muted mb-0">No hay administradores o administrativos activos para asignar.</p>
           {% else %}
-          <p class="small text-muted">Selecciona un administrador o un administrativo. Solo puede quedar una persona.</p>
+          <p class="small text-muted">Marca uno o varios administradores o administrativos.</p>
           <div>
             <table class="table table-sm align-middle mb-0">
               <thead>
@@ -195,18 +195,10 @@
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>
-                    <input class="form-check-input" type="radio" name="usuarios" value="" id="asignar-u-none">
-                  </td>
-                  <td colspan="3">
-                    <label class="form-check-label" for="asignar-u-none">Sin asignar</label>
-                  </td>
-                </tr>
                 {% for u in usuarios_asignables %}
                 <tr>
                   <td>
-                    <input class="form-check-input js-asignar-usuario" type="radio" name="usuarios" value="{{ u.id }}" id="asignar-u-{{ u.id }}">
+                    <input class="form-check-input js-asignar-usuario" type="checkbox" name="usuarios" value="{{ u.id }}" id="asignar-u-{{ u.id }}">
                   </td>
                   <td>
                     <label class="form-check-label" for="asignar-u-{{ u.id }}">
@@ -317,19 +309,15 @@
       var form = document.getElementById('formAsignarFormulario');
       var nombre = document.getElementById('asignarFormNombre');
       var titulo = document.getElementById('asignarFormTitulo');
-      var none = document.getElementById('asignar-u-none');
       var action = btn.getAttribute('data-action') || '';
       var formName = btn.getAttribute('data-form-name') || '';
       var ids = (btn.getAttribute('data-asignados') || '').split(',').filter(Boolean);
       if (form) form.setAttribute('action', action);
       if (nombre) nombre.value = formName;
       if (titulo) titulo.textContent = formName;
-      var marked = false;
       Array.prototype.forEach.call(document.querySelectorAll('.js-asignar-usuario'), function (box) {
-        box.checked = !marked && ids.indexOf(String(box.value)) !== -1;
-        if (box.checked) marked = true;
+        box.checked = ids.indexOf(String(box.value)) !== -1;
       });
-      if (none) none.checked = !marked;
     });
   }
 })();

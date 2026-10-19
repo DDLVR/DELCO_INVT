@@ -860,7 +860,7 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Instalacion', body)
         self.assertIn('Asignar usuarios', body)
         self.assertIn('modalAsignarFormulario', body)
-        self.assertIn('type="radio"', body)
+        self.assertIn('type="checkbox"', body)
         self.assertIn('adm_api', body)
         self.assertNotIn('tec_api', body)
         get_page = self.client.get(
@@ -881,9 +881,15 @@ class MoreAppApiModulosTests(TestCase):
         )
         post = self.client.post(
             reverse('moreapp_formulario_asignar', args=['abc123abc123abc123abc123']),
-            {'nombre': 'Instalacion', 'usuarios': [str(adminis.pk)]},
+            {'nombre': 'Instalacion', 'usuarios': [str(adminis.pk), str(self.admin.pk)]},
         )
         self.assertEqual(post.status_code, 302)
+        self.assertEqual(
+            MoreAppFormularioAsignado.objects.filter(
+                form_id='abc123abc123abc123abc123',
+            ).count(),
+            2,
+        )
         self.assertTrue(
             MoreAppFormularioAsignado.objects.filter(
                 usuario=adminis,
