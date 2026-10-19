@@ -840,6 +840,16 @@ class MoreAppApiModulosTests(TestCase):
         }
         mocked_catalogo_forms.return_value = [form, extra]
         mocked_list_forms.return_value = [form, extra]
+        adminis = Usuario.objects.create_user(
+            rut='66666666-6',
+            email='adm-asig@delco.cl',
+            password=self.password,
+            nombre='Adm',
+            apellido='Asig',
+            nombre_interno='adm_api',
+            rol='ADMINISTRATIVO',
+            is_active=True,
+        )
         self.client.login(username=self.admin.rut, password=self.password)
         vacio = self.client.get(reverse('moreapp_formularios_list'))
         self.assertEqual(vacio.status_code, 200)
@@ -850,19 +860,33 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Instalacion', body)
         self.assertIn('Asignar usuarios', body)
         self.assertIn('modalAsignarFormulario', body)
+        self.assertIn('type="radio"', body)
+        self.assertIn('adm_api', body)
+        self.assertNotIn('tec_api', body)
         get_page = self.client.get(
             reverse('moreapp_formulario_asignar', args=['abc123abc123abc123abc123'])
         )
         self.assertEqual(get_page.status_code, 302)
         self.assertEqual(get_page.url, reverse('moreapp_api_catalogo'))
-        post = self.client.post(
+        denied = self.client.post(
             reverse('moreapp_formulario_asignar', args=['abc123abc123abc123abc123']),
             {'nombre': 'Instalacion', 'usuarios': [str(self.tecnico.pk)]},
+        )
+        self.assertEqual(denied.status_code, 302)
+        self.assertFalse(
+            MoreAppFormularioAsignado.objects.filter(
+                usuario=self.tecnico,
+                form_id='abc123abc123abc123abc123',
+            ).exists()
+        )
+        post = self.client.post(
+            reverse('moreapp_formulario_asignar', args=['abc123abc123abc123abc123']),
+            {'nombre': 'Instalacion', 'usuarios': [str(adminis.pk)]},
         )
         self.assertEqual(post.status_code, 302)
         self.assertTrue(
             MoreAppFormularioAsignado.objects.filter(
-                usuario=self.tecnico,
+                usuario=adminis,
                 form_id='abc123abc123abc123abc123',
             ).exists()
         )
@@ -871,7 +895,7 @@ class MoreAppApiModulosTests(TestCase):
         list_body = listing.content.decode('utf-8')
         self.assertIn('Instalacion', list_body)
         self.assertNotIn('Retiro', list_body)
-        self.assertIn('tec_api', list_body)
+        self.assertIn('adm_api', list_body)
         self.assertNotIn('Asignar usuarios', list_body)
         self.assertNotIn('Ir al catálogo', list_body)
 

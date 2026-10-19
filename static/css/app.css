@@ -2373,6 +2373,27 @@ body.delco-foto-lightbox-open {
   right: 0.55rem;
 }
 
+#modalAsignarFormulario .modal-dialog {
+  max-height: calc(100dvh - 1.5rem);
+}
+
+#modalAsignarFormulario .modal-content {
+  max-height: calc(100dvh - 1.5rem);
+}
+
+#modalAsignarFormulario .modal-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  max-height: calc(100dvh - 11rem);
+}
+
+#modalAsignarFormulario thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bs-body-bg);
+}
+
 .delco-registro-raw summary {
   cursor: pointer;
   color: var(--bs-secondary-color);

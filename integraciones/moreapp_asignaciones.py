@@ -13,10 +13,12 @@ from .models import MoreAppFormularioAsignado
 Usuario = get_user_model()
 
 
+_ROLES_ASIGNABLES = ("ADMIN", "ADMINISTRATIVO")
+
+
 def usuarios_asignables():
     return (
-        Usuario.objects.filter(is_active=True)
-        .exclude(rol="ADMIN")
+        Usuario.objects.filter(is_active=True, rol__in=_ROLES_ASIGNABLES)
         .order_by("nombre", "apellido", "nombre_interno")
     )
 
