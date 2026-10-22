@@ -1148,9 +1148,9 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(payload['message'], 'Instalar medidor')
         self.assertEqual(payload['publishInfo']['type'], 'IMMEDIATE')
         self.assertEqual(payload['data'], {'cliente': 'ACME'})
-        self.assertEqual(payload['location']['name'], 'Av. Principal 100')
-        self.assertEqual(payload['location']['lat'], -33.45)
-        self.assertEqual(payload['location']['lng'], -70.66)
+        self.assertEqual(payload['location']['formattedValue'], 'Av. Principal 100')
+        self.assertEqual(payload['location']['coordinates']['latitude'], -33.45)
+        self.assertEqual(payload['location']['coordinates']['longitude'], -70.66)
         tarea = MoreAppTareaEnviada.objects.get()
         self.assertEqual(tarea.task_id, 'task-99')
         self.assertEqual(tarea.mensaje, 'Instalar medidor')
@@ -1227,6 +1227,8 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(sorted(payload['recipients']), ['campo@more.app', 'oficina@more.app'])
         self.assertNotIn('g1', payload['recipients'])
         self.assertNotIn('groups', payload)
+        self.assertEqual(payload['data'], {})
+        self.assertNotIn('location', payload)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,

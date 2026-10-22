@@ -207,25 +207,33 @@ def _payload_tarea(
     payload: Dict[str, Any] = {
         "recipients": list(recipients),
         "message": message,
+        "data": data if isinstance(data, dict) else {},
         "publishInfo": {"type": "IMMEDIATE"},
     }
-    if data:
-        payload["data"] = data
     if envio == "SCHEDULED" and programada is not None:
         payload["publishInfo"] = {"type": "SCHEDULED", "value": _millis(programada)}
     if limite is not None:
         payload["dueDate"] = _millis(limite)
     lat_n = _coord(lat)
     lng_n = _coord(lng)
-    if ubicacion or (lat_n is not None and lng_n is not None):
-        loc: Dict[str, Any] = {}
-        if ubicacion:
-            loc["name"] = ubicacion
-        if lat_n is not None and lng_n is not None:
-            loc["lat"] = lat_n
-            loc["lng"] = lng_n
-        payload["location"] = loc
+    if lat_n is not None and lng_n is not None:
+        formatted = ubicacion or ("%s, %s" % (lat_n, lng_n))
+        payload["location"] = {
+            "formattedValue": formatted,
+            "coordinates": {"latitude": lat_n, "longitude": lng_n},
+        }
     return payload
+
+
+def _mensaje_error_tarea(exc: Exception) -> str:
+    text = str(exc)
+    lower = text.lower()
+    if "no user has the necessary permissions" in lower:
+        return (
+            "MoreApp no creó la tarea: nadie de los destinatarios tiene acceso a ese formulario. "
+            "Asígnaselo primero en MoreApp (usuarios o grupo) y vuelve a enviar."
+        )
+    return text
 
 
 @admin_or_administrativo
@@ -374,7 +382,7 @@ def tarea_crear_view(request):
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         tarea.error = str(exc)
         tarea.save()
-        messages.error(request, str(exc))
+        messages.error(request, _mensaje_error_tarea(exc))
         return render(request, "integraciones/moreapp_tarea_crear.html", context)
 
     messages.success(
