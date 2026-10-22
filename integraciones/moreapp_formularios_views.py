@@ -117,7 +117,10 @@ def formulario_asignar_view(request, form_id: str):
                 defaults={"form_name": nombre, "asignado_por": request.user},
             )
             keep.add(obj.pk)
-        MoreAppFormularioAsignado.objects.filter(form_id=form_id).exclude(pk__in=keep).delete()
+        MoreAppFormularioAsignado.objects.filter(
+            form_id=form_id,
+            usuario_id__in=list(permitidos.keys()),
+        ).exclude(pk__in=keep).delete()
     count = len(keep)
     if count:
         messages.success(

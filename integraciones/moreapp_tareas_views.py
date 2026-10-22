@@ -20,7 +20,6 @@ from .moreapp_api import (
     create_task,
     get_form,
     list_all_forms,
-    list_groups,
     list_users,
 )
 from .moreapp_catalogo_views import _as_list, _extract_version_fields, _form_row, _user_row
@@ -42,13 +41,6 @@ _SKIP_PREFILL = {
     "photo",
     "location",
 }
-
-
-def _group_row(item: Dict[str, Any]) -> Dict[str, str]:
-    return {
-        "id": str(item.get("id") or item.get("groupId") or ""),
-        "nombre": str(item.get("name") or item.get("label") or item.get("id") or "Grupo"),
-    }
 
 
 def _dt_from_local(raw: str):
@@ -101,16 +93,81 @@ def _formularios_activos() -> List[Dict[str, Any]]:
     return rows
 
 
-def _usuarios_moreapp() -> List[Dict[str, Any]]:
+def _group_ids_de_usuario(item: Dict[str, Any]) -> List[str]:
+    raw_groups = item.get("groups") if isinstance(item.get("groups"), list) else []
+    ids = []
+    seen = set()
+    for group in raw_groups:
+        if isinstance(group, dict):
+            gid = str(group.get("id") or group.get("groupId") or "").strip()
+        else:
+            gid = str(group or "").strip()
+        if gid and gid not in seen:
+            seen.add(gid)
+            ids.append(gid)
+    return ids
+
+
+def _grupo_etiqueta(nombre: str, group_id: str, miembros: int) -> str:
+    n = miembros
+    sufijo = "%s persona%s" % (n, "" if n == 1 else "s")
+    if nombre and nombre != group_id:
+        return "%s · %s" % (nombre, sufijo)
+    short = group_id[-6:] if len(group_id) > 6 else group_id
+    return "Grupo %s · %s" % (short, sufijo)
+
+
+def _grupos_desde_usuarios(raw_users: Any) -> List[Dict[str, str]]:
+    grupos: Dict[str, Dict[str, str]] = {}
+    counts: Dict[str, int] = {}
+    for item in _items_de_lista(raw_users, ("users",)):
+        if not isinstance(item, dict):
+            continue
+        for gid in _group_ids_de_usuario(item):
+            counts[gid] = counts.get(gid, 0) + 1
+            if gid in grupos:
+                continue
+            raw_groups = item.get("groups") if isinstance(item.get("groups"), list) else []
+            nombre = gid
+            for group in raw_groups:
+                if isinstance(group, dict) and str(group.get("id") or group.get("groupId") or "") == gid:
+                    nombre = str(group.get("name") or group.get("label") or gid)
+                    break
+            grupos[gid] = {"id": gid, "nombre": nombre}
     rows = []
-    for item in _as_list(list_users()):
+    for gid, row in grupos.items():
+        n = counts.get(gid, 0)
+        rows.append({"id": gid, "nombre": _grupo_etiqueta(row.get("nombre") or gid, gid, n)})
+    return rows
+
+
+def _emails_de_grupos(usuarios: List[Dict[str, Any]], group_ids: List[str]) -> List[str]:
+    wanted = {item for item in group_ids if item}
+    emails: List[str] = []
+    seen = set()
+    for user in usuarios:
+        ids = set(user.get("group_ids") or [])
+        if not wanted.intersection(ids):
+            continue
+        email = str(user.get("email") or "").strip()
+        if email and email not in seen:
+            seen.add(email)
+            emails.append(email)
+    return emails
+
+
+def _usuarios_moreapp() -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
+    raw = list_users()
+    rows = []
+    for item in _items_de_lista(raw, ("users",)):
         if not isinstance(item, dict):
             continue
         row = _user_row(item)
+        row["group_ids"] = _group_ids_de_usuario(item)
         if row.get("disabled") or not row.get("email"):
             continue
         rows.append(row)
-    return rows
+    return rows, _grupos_desde_usuarios(raw)
 
 
 def _items_de_lista(raw: Any, extra_keys: Tuple[str, ...] = ()) -> List[Any]:
@@ -135,24 +192,9 @@ def _coord(raw: str):
         return None
 
 
-def _grupos_moreapp() -> Tuple[List[Dict[str, str]], str]:
-    try:
-        rows = []
-        for item in _items_de_lista(list_groups(), ("groups",)):
-            if not isinstance(item, dict):
-                continue
-            row = _group_row(item)
-            if row.get("id"):
-                rows.append(row)
-        return rows, ""
-    except (MoreAppApiConfigError, MoreAppApiError) as exc:
-        return [], str(exc)
-
-
 def _payload_tarea(
     *,
     recipients: List[str],
-    groups: List[str],
     message: str,
     data: Dict[str, Any],
     envio: str,
@@ -162,12 +204,8 @@ def _payload_tarea(
     lat: str,
     lng: str,
 ) -> Dict[str, Any]:
-    all_recipients = list(recipients)
-    for group_id in groups:
-        if group_id and group_id not in all_recipients:
-            all_recipients.append(group_id)
     payload: Dict[str, Any] = {
-        "recipients": all_recipients,
+        "recipients": list(recipients),
         "message": message,
         "publishInfo": {"type": "IMMEDIATE"},
     }
@@ -236,11 +274,9 @@ def tarea_crear_view(request):
     }
     try:
         context["formularios"] = _formularios_activos()
-        context["usuarios"] = _usuarios_moreapp()
-        grupos, group_error = _grupos_moreapp()
+        usuarios, grupos = _usuarios_moreapp()
+        context["usuarios"] = usuarios
         context["grupos"] = grupos
-        if group_error:
-            context["error"] = "No se pudieron cargar grupos: %s" % group_error
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
         messages.error(request, str(exc))
@@ -283,6 +319,16 @@ def tarea_crear_view(request):
     if not recipients and not groups:
         messages.error(request, "Asigna la tarea a uno o varios usuarios, o a un grupo.")
         return render(request, "integraciones/moreapp_tarea_crear.html", context)
+    group_emails = _emails_de_grupos(context["usuarios"], groups)
+    all_recipients: List[str] = []
+    seen_emails = set()
+    for email in recipients + group_emails:
+        if email and email not in seen_emails:
+            seen_emails.add(email)
+            all_recipients.append(email)
+    if not all_recipients:
+        messages.error(request, "El grupo elegido no tiene usuarios MoreApp activos con correo.")
+        return render(request, "integraciones/moreapp_tarea_crear.html", context)
     if not mensaje:
         messages.error(request, "Escribe un mensaje corto para quien reciba la tarea.")
         return render(request, "integraciones/moreapp_tarea_crear.html", context)
@@ -291,8 +337,7 @@ def tarea_crear_view(request):
         return render(request, "integraciones/moreapp_tarea_crear.html", context)
 
     payload = _payload_tarea(
-        recipients=recipients,
-        groups=groups,
+        recipients=all_recipients,
         message=mensaje,
         data=data,
         envio=envio,

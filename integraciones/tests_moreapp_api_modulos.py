@@ -898,6 +898,12 @@ class MoreAppApiModulosTests(TestCase):
                 form_id='abc123abc123abc123abc123',
             ).exists()
         )
+        MoreAppFormularioAsignado.objects.create(
+            usuario=self.tecnico,
+            form_id='abc123abc123abc123abc123',
+            form_name='Instalacion',
+            asignado_por=self.admin,
+        )
         post = self.client.post(
             reverse('moreapp_formulario_asignar', args=['abc123abc123abc123abc123']),
             {'nombre': 'Instalacion', 'usuarios': [str(adminis.pk), str(self.admin.pk)]},
@@ -907,7 +913,13 @@ class MoreAppApiModulosTests(TestCase):
             MoreAppFormularioAsignado.objects.filter(
                 form_id='abc123abc123abc123abc123',
             ).count(),
-            2,
+            3,
+        )
+        self.assertTrue(
+            MoreAppFormularioAsignado.objects.filter(
+                usuario=self.tecnico,
+                form_id='abc123abc123abc123abc123',
+            ).exists()
         )
         self.assertTrue(
             MoreAppFormularioAsignado.objects.filter(
@@ -1006,10 +1018,9 @@ class MoreAppApiModulosTests(TestCase):
         MOREAPP_API_KEY='test-key',
         MOREAPP_CUSTOMER_ID='123',
     )
-    @mock.patch('integraciones.moreapp_tareas_views.list_groups')
     @mock.patch('integraciones.moreapp_tareas_views.list_users')
     @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
-    def test_admin_ve_formulario_de_tarea(self, mocked_forms, mocked_users, mocked_groups):
+    def test_admin_ve_formulario_de_tarea(self, mocked_forms, mocked_users):
         mocked_forms.return_value = [
             {
                 'id': 'abc123abc123abc123abc123',
@@ -1023,9 +1034,9 @@ class MoreAppApiModulosTests(TestCase):
                 'emailAddress': 'campo@more.app',
                 'disabled': False,
                 'settings': {'displayName': 'Tecnico More'},
+                'groups': [{'id': 'g1', 'name': 'Terreno'}],
             }
         ]
-        mocked_groups.return_value = {'groups': [{'id': 'g1', 'name': 'Terreno'}]}
         self.client.login(username=self.admin.rut, password=self.password)
         resp = self.client.get(reverse('moreapp_tarea_crear'))
         self.assertEqual(resp.status_code, 200)
@@ -1036,6 +1047,24 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Al momento', body)
         self.assertIn('Fecha y hora programadas', body)
         self.assertIn('Pin, firma, catálogo, dibujo y archivo no se pueden precargar', body)
+        self.assertNotIn('No se pudieron cargar grupos', body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_api.list_users')
+    def test_grupos_moreapp_salen_de_usuarios(self, mocked_users):
+        from integraciones.moreapp_api import list_groups
+
+        mocked_users.return_value = [
+            {'id': 'u1', 'groups': [{'id': 'g1', 'name': 'Terreno'}]},
+            {'id': 'u2', 'groups': [{'id': 'g1', 'name': 'Terreno'}, {'id': 'g2', 'name': 'Oficina'}]},
+        ]
+        groups = list_groups()
+        self.assertEqual({item['id'] for item in groups}, {'g1', 'g2'})
+        self.assertEqual({item['name'] for item in groups}, {'Terreno', 'Oficina'})
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -1045,14 +1074,12 @@ class MoreAppApiModulosTests(TestCase):
     @mock.patch('integraciones.moreapp_tareas_views.create_task')
     @mock.patch('integraciones.moreapp_tareas_views._campos_desde_formulario')
     @mock.patch('integraciones.moreapp_tareas_views.get_form')
-    @mock.patch('integraciones.moreapp_tareas_views.list_groups')
     @mock.patch('integraciones.moreapp_tareas_views.list_users')
     @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
     def test_admin_crea_tarea_inmediata(
         self,
         mocked_forms,
         mocked_users,
-        mocked_groups,
         mocked_get_form,
         mocked_campos,
         mocked_create,
@@ -1068,7 +1095,6 @@ class MoreAppApiModulosTests(TestCase):
         mocked_users.return_value = [
             {'id': 'u1', 'emailAddress': 'campo@more.app', 'disabled': False}
         ]
-        mocked_groups.return_value = []
         mocked_get_form.return_value = form
         mocked_campos.return_value = [
             {'widget': 'text', 'data_name': 'cliente', 'label': 'Cliente'},
@@ -1134,6 +1160,73 @@ class MoreAppApiModulosTests(TestCase):
         list_body = listing.content.decode('utf-8')
         self.assertIn('Instalar medidor', list_body)
         self.assertIn('aviso llega en MoreApp, no por correo', list_body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.create_task')
+    @mock.patch('integraciones.moreapp_tareas_views._campos_desde_formulario')
+    @mock.patch('integraciones.moreapp_tareas_views.get_form')
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_tarea_a_grupo_expande_correos_y_no_manda_ids(
+        self,
+        mocked_forms,
+        mocked_users,
+        mocked_get_form,
+        mocked_campos,
+        mocked_create,
+    ):
+        form = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Instalacion',
+            'status': 'ACTIVE',
+        }
+        mocked_forms.return_value = [form]
+        mocked_users.return_value = [
+            {
+                'id': 'u1',
+                'emailAddress': 'campo@more.app',
+                'disabled': False,
+                'groups': ['g1'],
+            },
+            {
+                'id': 'u2',
+                'emailAddress': 'oficina@more.app',
+                'disabled': False,
+                'groups': ['g1', 'g2'],
+            },
+            {
+                'id': 'u3',
+                'emailAddress': 'otro@more.app',
+                'disabled': False,
+                'groups': ['g2'],
+            },
+        ]
+        mocked_get_form.return_value = form
+        mocked_campos.return_value = []
+        mocked_create.return_value = {'id': 'task-group-1'}
+        self.client.login(username=self.admin.rut, password=self.password)
+        crear = self.client.get(reverse('moreapp_tarea_crear'))
+        self.assertEqual(crear.status_code, 200)
+        self.assertIn('Grupo g1 · 2 personas', crear.content.decode('utf-8'))
+        resp = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': 'abc123abc123abc123abc123',
+                'mensaje': 'Ir a terreno',
+                'envio': 'IMMEDIATE',
+                'grupos': ['g1'],
+            },
+        )
+        self.assertEqual(resp.status_code, 302)
+        mocked_create.assert_called_once()
+        _form_id, payload = mocked_create.call_args[0]
+        self.assertEqual(sorted(payload['recipients']), ['campo@more.app', 'oficina@more.app'])
+        self.assertNotIn('g1', payload['recipients'])
+        self.assertNotIn('groups', payload)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,

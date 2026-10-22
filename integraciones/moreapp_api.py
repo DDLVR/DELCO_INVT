@@ -337,8 +337,38 @@ def list_users() -> Any:
     return _request_json("GET", f"customers/{get_customer_id()}/users")
 
 
+def _users_from_payload(raw: Any) -> List[Any]:
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        for key in ("elements", "content", "items", "users"):
+            value = raw.get(key)
+            if isinstance(value, list):
+                return value
+        if raw.get("id") and (raw.get("emailAddress") or raw.get("groups") is not None):
+            return [raw]
+    return []
+
+
 def list_groups() -> Any:
-    return _request_json("GET", f"customers/{get_customer_id()}/groups")
+    """MoreApp v1.0 no tiene GET .../groups; los grupos vienen en cada usuario."""
+    found: Dict[str, Dict[str, str]] = {}
+    for item in _users_from_payload(list_users()):
+        if not isinstance(item, dict):
+            continue
+        groups = item.get("groups")
+        if not isinstance(groups, list):
+            continue
+        for group in groups:
+            if isinstance(group, dict):
+                group_id = str(group.get("id") or group.get("groupId") or "").strip()
+                name = str(group.get("name") or group.get("label") or group_id)
+            else:
+                group_id = str(group or "").strip()
+                name = group_id
+            if group_id and group_id not in found:
+                found[group_id] = {"id": group_id, "name": name}
+    return list(found.values())
 
 
 def create_task(form_id: str, payload: Dict[str, Any]) -> Any:
