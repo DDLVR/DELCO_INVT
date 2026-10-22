@@ -28,7 +28,7 @@
           <option value="{{ form.id }}" {% if form.id == form_id %}selected{% endif %}>{{ form.name }}</option>
           {% endfor %}
         </select>
-        <p class="small text-muted mb-0 mt-2">Los destinatarios ya deben tener acceso a este formulario en MoreApp.</p>
+        <p class="small text-muted mb-0 mt-2">Solo aparecen formularios con versión publicada. Los destinatarios ya deben tener acceso en MoreApp.</p>
       </div>
     </div>
 
@@ -57,9 +57,14 @@
             <div class="fw-semibold small mb-2">Grupos</div>
             <div class="delco-tarea-lista">
               {% for g in grupos %}
-              <label class="d-flex gap-2 align-items-start py-1">
+              <label class="d-flex gap-2 align-items-start py-2 delco-tarea-grupo">
                 <input class="form-check-input mt-1" type="checkbox" name="grupos" value="{{ g.id }}" {% if g.id in grupos_sel %}checked{% endif %}>
-                <span>{{ g.nombre }}</span>
+                <span>
+                  {{ g.nombre }}
+                  {% if g.detalle %}
+                  <div class="small text-muted">{{ g.detalle }}</div>
+                  {% endif %}
+                </span>
               </label>
               {% empty %}
               <p class="text-muted mb-0">No hay grupos para mostrar.</p>

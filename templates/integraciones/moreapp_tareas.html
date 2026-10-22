@@ -36,7 +36,7 @@
           <td>{{ tarea.mensaje }}</td>
           <td class="small">
             {% if tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% endif %}
-            {% if tarea.grupos %}<div class="text-muted">Grupos: {{ tarea.grupos|join:", " }}</div>{% endif %}
+            {% if tarea.grupos_nombres %}<div class="text-muted">Grupos: {{ tarea.grupos_nombres|join:", " }}</div>{% endif %}
           </td>
           <td class="small">
             {% if tarea.envio == 'SCHEDULED' %}

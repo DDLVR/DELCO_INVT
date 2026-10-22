@@ -63,6 +63,15 @@ def _ensure_config() -> Dict[str, str]:
     return {"api_key": api_key, "customer_id": customer_id}
 
 
+def _v2_base_url() -> str:
+    base = _build_base_url()
+    if "/api/v1.0" in base:
+        return base.replace("/api/v1.0", "/api/v2")
+    if "/api/v1" in base:
+        return base.replace("/api/v1", "/api/v2")
+    return "https://api.moreapp.com/api/v2"
+
+
 def _request_raw(
     method: str,
     path: str,
@@ -70,9 +79,10 @@ def _request_raw(
     query: Optional[Dict[str, Any]] = None,
     payload: Optional[Dict[str, Any]] = None,
     accept: str = "application/json, */*",
+    base_url: Optional[str] = None,
 ) -> tuple:
     cfg = _ensure_config()
-    url = f"{_build_base_url()}/{path.lstrip('/')}"
+    url = f"{(base_url or _build_base_url()).rstrip('/')}/{path.lstrip('/')}"
     if query:
         encoded = parse.urlencode({k: v for k, v in query.items() if v is not None})
         if encoded:
@@ -120,9 +130,10 @@ def _request_json(
     *,
     query: Optional[Dict[str, Any]] = None,
     payload: Optional[Dict[str, Any]] = None,
+    base_url: Optional[str] = None,
 ) -> Any:
     raw_bytes, _content_type, _filename = _request_raw(
-        method, path, query=query, payload=payload
+        method, path, query=query, payload=payload, base_url=base_url
     )
     if not raw_bytes:
         return {}
@@ -350,8 +361,51 @@ def _users_from_payload(raw: Any) -> List[Any]:
     return []
 
 
+_group_names_cache: Optional[Dict[str, str]] = None
+
+
+def _groups_from_payload(raw: Any) -> List[Any]:
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        for key in ("elements", "content", "items", "groups"):
+            value = raw.get(key)
+            if isinstance(value, list):
+                return value
+        if raw.get("id") and (raw.get("name") or raw.get("label")):
+            return [raw]
+    return []
+
+
+def group_names_by_id() -> Dict[str, str]:
+    """Nombres oficiales MoreApp (API v2 GET customers/{id}/groups)."""
+    global _group_names_cache
+    if _group_names_cache is not None:
+        return _group_names_cache
+    _group_names_cache = {}
+    if _setting_str("MOREAPP_API_KEY") in ("", "test-key"):
+        return _group_names_cache
+    try:
+        raw = _request_json(
+            "GET",
+            f"customers/{get_customer_id()}/groups",
+            base_url=_v2_base_url(),
+        )
+        for item in _groups_from_payload(raw):
+            if not isinstance(item, dict):
+                continue
+            group_id = str(item.get("id") or item.get("groupId") or "").strip()
+            name = str(item.get("name") or item.get("label") or "").strip()
+            if group_id and name and name != group_id:
+                _group_names_cache[group_id] = name
+    except (MoreAppApiConfigError, MoreAppApiError):
+        return _group_names_cache
+    return _group_names_cache
+
+
 def list_groups() -> Any:
-    """MoreApp v1.0 no tiene GET .../groups; los grupos vienen en cada usuario."""
+    """Grupos desde usuarios; si la API de grupos responde, usa esos nombres."""
+    official = group_names_by_id()
     found: Dict[str, Dict[str, str]] = {}
     for item in _users_from_payload(list_users()):
         if not isinstance(item, dict):
@@ -366,6 +420,8 @@ def list_groups() -> Any:
             else:
                 group_id = str(group or "").strip()
                 name = group_id
+            if official.get(group_id):
+                name = official[group_id]
             if group_id and group_id not in found:
                 found[group_id] = {"id": group_id, "name": name}
     return list(found.values())

@@ -5,6 +5,7 @@ from .models import (
     MoreAppFormularioOculto,
     MoreAppFuenteFila,
     MoreAppFuenteInterna,
+    MoreAppGrupoAlias,
     MoreAppTareaEnviada,
 )
 
@@ -37,6 +38,13 @@ class MoreAppFuenteFilaAdmin(admin.ModelAdmin):
     list_display = ("fuente", "entry_id")
     search_fields = ("entry_id", "fuente__nombre")
     list_filter = ("fuente",)
+
+
+@admin.register(MoreAppGrupoAlias)
+class MoreAppGrupoAliasAdmin(admin.ModelAdmin):
+    list_display = ("nombre", "group_id", "actualizado_por", "fecha_actualizacion")
+    search_fields = ("nombre", "group_id")
+    readonly_fields = ("fecha_actualizacion",)
 
 
 @admin.register(MoreAppTareaEnviada)

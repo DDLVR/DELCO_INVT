@@ -1026,6 +1026,7 @@ class MoreAppApiModulosTests(TestCase):
                 'id': 'abc123abc123abc123abc123',
                 'name': 'Instalacion',
                 'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
             }
         ]
         mocked_users.return_value = [
@@ -1048,6 +1049,83 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Fecha y hora programadas', body)
         self.assertIn('Pin, firma, catálogo, dibujo y archivo no se pueden precargar', body)
         self.assertNotIn('No se pudieron cargar grupos', body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_tarea_omite_formulario_sin_version_publicada(self, mocked_forms, mocked_users):
+        mocked_forms.return_value = [
+            {
+                'id': '6a074c42668c2d11d36cfcf5',
+                'name': 'Borrador sin publicar',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': ''},
+            },
+            {
+                'id': 'abc123abc123abc123abc123',
+                'name': 'Instalacion',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+            },
+        ]
+        mocked_users.return_value = [
+            {'id': 'u1', 'emailAddress': 'campo@more.app', 'disabled': False}
+        ]
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_tarea_crear'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('Instalacion', body)
+        self.assertNotIn('Borrador sin publicar', body)
+        blocked = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': '6a074c42668c2d11d36cfcf5',
+                'mensaje': 'Ir a terreno',
+                'envio': 'IMMEDIATE',
+                'usuarios': ['campo@more.app'],
+            },
+        )
+        self.assertEqual(blocked.status_code, 200)
+        self.assertIn('versión publicada', blocked.content.decode('utf-8'))
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.group_names_by_id')
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_grupos_muestran_nombre_oficial_moreapp(self, mocked_forms, mocked_users, mocked_names):
+        mocked_forms.return_value = [
+            {
+                'id': 'abc123abc123abc123abc123',
+                'name': 'Instalacion',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+            }
+        ]
+        mocked_users.return_value = [
+            {
+                'id': 'u1',
+                'emailAddress': 'campo@more.app',
+                'disabled': False,
+                'groups': ['65f0a25a128983033c9fd314'],
+            }
+        ]
+        mocked_names.return_value = {'65f0a25a128983033c9fd314': 'Cuadrilla Norte'}
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_tarea_crear'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('Cuadrilla Norte', body)
+        self.assertNotIn('Grupo 9fd314', body)
+        self.assertNotIn('Guardar nombres', body)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -1090,6 +1168,7 @@ class MoreAppApiModulosTests(TestCase):
             'id': 'abc123abc123abc123abc123',
             'name': 'Instalacion',
             'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
         }
         mocked_forms.return_value = [form]
         mocked_users.return_value = [
@@ -1183,6 +1262,7 @@ class MoreAppApiModulosTests(TestCase):
             'id': 'abc123abc123abc123abc123',
             'name': 'Instalacion',
             'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
         }
         mocked_forms.return_value = [form]
         mocked_users.return_value = [
@@ -1211,7 +1291,11 @@ class MoreAppApiModulosTests(TestCase):
         self.client.login(username=self.admin.rut, password=self.password)
         crear = self.client.get(reverse('moreapp_tarea_crear'))
         self.assertEqual(crear.status_code, 200)
-        self.assertIn('Grupo g1 · 2 personas', crear.content.decode('utf-8'))
+        crear_body = crear.content.decode('utf-8')
+        self.assertIn('2 personas', crear_body)
+        self.assertIn('campo@more.app', crear_body)
+        self.assertNotIn('Grupo g1', crear_body)
+        self.assertNotIn('Grupo 9fd314', crear_body)
         resp = self.client.post(
             reverse('moreapp_tarea_crear'),
             {

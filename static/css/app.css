@@ -2455,6 +2455,10 @@ body.delco-foto-lightbox-open {
   background: var(--bs-body-bg);
 }
 
+.delco-tarea-grupo + .delco-tarea-grupo {
+  border-top: 1px solid var(--bs-border-color);
+}
+
 .delco-tarea-form .card-header {
   font-weight: 600;
 }

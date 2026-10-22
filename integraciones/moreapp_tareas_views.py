@@ -19,6 +19,7 @@ from .moreapp_api import (
     MoreAppApiError,
     create_task,
     get_form,
+    group_names_by_id,
     list_all_forms,
     list_users,
 )
@@ -81,6 +82,16 @@ def _campos_precargables(campos: List[Dict[str, Any]]) -> List[Dict[str, str]]:
     return rows
 
 
+def _tiene_version_publicada(row: Dict[str, Any]) -> bool:
+    version = str(row.get("published_version") or "").strip()
+    if version:
+        return True
+    published = row.get("publishedVersion")
+    if isinstance(published, dict):
+        return bool(str(published.get("formVersion") or "").strip())
+    return bool(str(published or "").strip())
+
+
 def _formularios_activos() -> List[Dict[str, Any]]:
     rows = []
     for item in list_all_forms():
@@ -88,6 +99,8 @@ def _formularios_activos() -> List[Dict[str, Any]]:
             continue
         row = _form_row(item)
         if str(row.get("status") or "").upper() == "TRASH":
+            continue
+        if not _tiene_version_publicada(row):
             continue
         rows.append(row)
     return rows
@@ -108,36 +121,113 @@ def _group_ids_de_usuario(item: Dict[str, Any]) -> List[str]:
     return ids
 
 
-def _grupo_etiqueta(nombre: str, group_id: str, miembros: int) -> str:
+def _parece_id_moreapp(valor: str) -> bool:
+    text = (valor or "").strip().lower()
+    if not text:
+        return False
+    return all(ch in "0123456789abcdef" for ch in text) and len(text) >= 6
+
+
+def _nombre_corto_usuario(item: Dict[str, Any]) -> str:
+    settings_user = item.get("settings") if isinstance(item.get("settings"), dict) else {}
+    full = " ".join(
+        part
+        for part in (
+            str(settings_user.get("firstName") or "").strip(),
+            str(settings_user.get("lastName") or "").strip(),
+        )
+        if part
+    )
+    for candidate in (
+        settings_user.get("displayName"),
+        settings_user.get("name"),
+        full,
+        item.get("username"),
+    ):
+        text = str(candidate or "").strip()
+        if text:
+            return text
+    return ""
+
+
+def _grupo_etiqueta(nombre: str, group_id: str, miembros: int, ejemplos: List[str]) -> str:
     n = miembros
     sufijo = "%s persona%s" % (n, "" if n == 1 else "s")
-    if nombre and nombre != group_id:
+    if nombre and nombre != group_id and not _parece_id_moreapp(nombre):
         return "%s · %s" % (nombre, sufijo)
-    short = group_id[-6:] if len(group_id) > 6 else group_id
-    return "Grupo %s · %s" % (short, sufijo)
+    extra = ", ".join(ejemplos[:3])
+    if extra:
+        return "%s · %s" % (sufijo, extra)
+    return "Grupo · %s" % sufijo
 
 
-def _grupos_desde_usuarios(raw_users: Any) -> List[Dict[str, str]]:
+def _detalle_grupo(miembros: int, ejemplos: List[str]) -> str:
+    n = miembros
+    sufijo = "%s persona%s" % (n, "" if n == 1 else "s")
+    extra = ", ".join(ejemplos[:3])
+    if extra:
+        return "%s · %s" % (sufijo, extra)
+    return sufijo
+
+
+def _nombres_grupos_guardados(group_ids: List[Any]) -> List[str]:
+    ids: List[str] = []
+    for item in group_ids or []:
+        if isinstance(item, dict):
+            gid = str(item.get("id") or "").strip()
+        else:
+            gid = str(item or "").strip()
+        if gid:
+            ids.append(gid)
+    official = group_names_by_id()
+    labels = []
+    for gid in ids:
+        name = str(official.get(gid) or "").strip()
+        if name and name != gid and not _parece_id_moreapp(name):
+            labels.append(name)
+    return labels
+
+
+def _grupos_desde_usuarios(raw_users: Any) -> List[Dict[str, Any]]:
     grupos: Dict[str, Dict[str, str]] = {}
     counts: Dict[str, int] = {}
+    ejemplos: Dict[str, List[str]] = {}
+    official = group_names_by_id()
     for item in _items_de_lista(raw_users, ("users",)):
         if not isinstance(item, dict):
             continue
+        visible = _nombre_corto_usuario(item)
         for gid in _group_ids_de_usuario(item):
             counts[gid] = counts.get(gid, 0) + 1
+            if visible:
+                names = ejemplos.setdefault(gid, [])
+                if visible not in names and len(names) < 3:
+                    names.append(visible)
             if gid in grupos:
                 continue
             raw_groups = item.get("groups") if isinstance(item.get("groups"), list) else []
-            nombre = gid
-            for group in raw_groups:
-                if isinstance(group, dict) and str(group.get("id") or group.get("groupId") or "") == gid:
-                    nombre = str(group.get("name") or group.get("label") or gid)
-                    break
+            nombre = str(official.get(gid) or "")
+            if not nombre:
+                for group in raw_groups:
+                    if isinstance(group, dict) and str(group.get("id") or group.get("groupId") or "") == gid:
+                        nombre = str(group.get("name") or group.get("label") or "")
+                        break
             grupos[gid] = {"id": gid, "nombre": nombre}
     rows = []
     for gid, row in grupos.items():
         n = counts.get(gid, 0)
-        rows.append({"id": gid, "nombre": _grupo_etiqueta(row.get("nombre") or gid, gid, n)})
+        sample = ejemplos.get(gid) or []
+        api_name = str(row.get("nombre") or "").strip()
+        if api_name == gid or _parece_id_moreapp(api_name):
+            api_name = ""
+        rows.append(
+            {
+                "id": gid,
+                "nombre": _grupo_etiqueta(api_name, gid, n, sample),
+                "detalle": _detalle_grupo(n, sample) if api_name else "",
+            }
+        )
+    rows.sort(key=lambda item: (0 if item.get("detalle") else 1, (item.get("nombre") or "").lower()))
     return rows
 
 
@@ -233,16 +323,24 @@ def _mensaje_error_tarea(exc: Exception) -> str:
             "MoreApp no creó la tarea: nadie de los destinatarios tiene acceso a ese formulario. "
             "Asígnaselo primero en MoreApp (usuarios o grupo) y vuelve a enviar."
         )
+    if "published version" in lower:
+        return (
+            "MoreApp no creó la tarea: ese formulario no tiene una versión publicada. "
+            "Publícalo en MoreApp y vuelve a enviar."
+        )
     return text
 
 
 @admin_or_administrativo
 def tareas_list_view(request):
+    tareas = list(MoreAppTareaEnviada.objects.select_related("creado_por")[:80])
+    for tarea in tareas:
+        tarea.grupos_nombres = _nombres_grupos_guardados(tarea.grupos)
     return render(
         request,
         "integraciones/moreapp_tareas.html",
         {
-            "tareas": MoreAppTareaEnviada.objects.select_related("creado_por")[:80],
+            "tareas": tareas,
         },
     )
 
@@ -321,8 +419,15 @@ def tarea_crear_view(request):
         if field in permitidos and text:
             data[field] = text
 
+    elegido = next((item for item in context["formularios"] if str(item.get("id") or "") == form_id), None)
     if not form_id:
         messages.error(request, "Elige el formulario que hay que llenar.")
+        return render(request, "integraciones/moreapp_tarea_crear.html", context)
+    if not elegido or not _tiene_version_publicada(elegido):
+        messages.error(
+            request,
+            "Ese formulario no tiene una versión publicada en MoreApp. Elige uno publicado o publícalo primero.",
+        )
         return render(request, "integraciones/moreapp_tarea_crear.html", context)
     if not recipients and not groups:
         messages.error(request, "Asigna la tarea a uno o varios usuarios, o a un grupo.")

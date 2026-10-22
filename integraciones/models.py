@@ -106,6 +106,28 @@ class MoreAppFuenteFila(models.Model):
         return "%s · %s" % (self.fuente_id, self.entry_id)
 
 
+class MoreAppGrupoAlias(models.Model):
+    """Nombre visible en la intranet para un grupo MoreApp (la API v1.0 no envía el nombre)."""
+
+    group_id = models.CharField(max_length=80, unique=True)
+    nombre = models.CharField(max_length=120)
+    actualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="moreapp_grupos_nombrados",
+    )
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Alias de grupo MoreApp"
+        verbose_name_plural = "Alias de grupos MoreApp"
+
+    def __str__(self):
+        return "%s · %s" % (self.nombre, self.group_id)
+
+
 class MoreAppTareaEnviada(models.Model):
     """Tarea creada en MoreApp desde la intranet (aviso en la app, no por correo)."""
 
