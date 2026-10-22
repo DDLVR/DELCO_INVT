@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+
+{% block title %}Nueva tarea MoreApp{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="mb-3">
+    <a href="{% url 'moreapp_tareas_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left"></i> Tareas MoreApp
+    </a>
+  </div>
+  <h1 class="h3 mb-1">Nueva tarea MoreApp</h1>
+  <p class="text-muted mb-4">Quien reciba la tarea la verá en <strong>Tareas</strong> del celular o tablet, con una notificación dentro de la app.</p>
+
+  {% if error %}
+  <div class="alert alert-warning">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" class="delco-tarea-form" id="formTareaMoreApp">
+    {% csrf_token %}
+    <div class="card delco-panel-card mb-3">
+      <div class="card-header">1. Formulario</div>
+      <div class="card-body">
+        <label class="form-label" for="form_id">Formulario a llenar</label>
+        <select name="form_id" id="form_id" class="form-select" required>
+          <option value="">— Elige un formulario —</option>
+          {% for form in formularios %}
+          <option value="{{ form.id }}" {% if form.id == form_id %}selected{% endif %}>{{ form.name }}</option>
+          {% endfor %}
+        </select>
+        <p class="small text-muted mb-0 mt-2">Los destinatarios ya deben tener acceso a este formulario en MoreApp.</p>
+      </div>
+    </div>
+
+    <div class="card delco-panel-card mb-3">
+      <div class="card-header">2. Destinatarios</div>
+      <div class="card-body">
+        <p class="small text-muted">Asigna a uno o varios usuarios, o a un grupo.</p>
+        <div class="row g-3">
+          <div class="col-lg-7">
+            <div class="fw-semibold small mb-2">Usuarios MoreApp</div>
+            <div class="delco-tarea-lista">
+              {% for u in usuarios %}
+              <label class="d-flex gap-2 align-items-start py-1">
+                <input class="form-check-input mt-1" type="checkbox" name="usuarios" value="{{ u.email }}" {% if u.email in usuarios_sel %}checked{% endif %}>
+                <span>
+                  {{ u.nombre|default:u.email }}
+                  <div class="small text-muted">{{ u.email }}</div>
+                </span>
+              </label>
+              {% empty %}
+              <p class="text-muted mb-0">No hay usuarios MoreApp activos.</p>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="col-lg-5">
+            <div class="fw-semibold small mb-2">Grupos</div>
+            <div class="delco-tarea-lista">
+              {% for g in grupos %}
+              <label class="d-flex gap-2 align-items-start py-1">
+                <input class="form-check-input mt-1" type="checkbox" name="grupos" value="{{ g.id }}" {% if g.id in grupos_sel %}checked{% endif %}>
+                <span>{{ g.nombre }}</span>
+              </label>
+              {% empty %}
+              <p class="text-muted mb-0">No hay grupos para mostrar.</p>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card delco-panel-card mb-3">
+      <div class="card-header">3. Mensaje</div>
+      <div class="card-body">
+        <label class="form-label" for="mensaje">Mensaje corto</label>
+        <textarea name="mensaje" id="mensaje" class="form-control" rows="2" maxlength="500" required>{{ mensaje }}</textarea>
+      </div>
+    </div>
+
+    <div class="card delco-panel-card mb-3">
+      <div class="card-header">4. Cuándo llega</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label" for="envio">Envío</label>
+            <select name="envio" id="envio" class="form-select">
+              <option value="IMMEDIATE" {% if envio != 'SCHEDULED' %}selected{% endif %}>Al momento</option>
+              <option value="SCHEDULED" {% if envio == 'SCHEDULED' %}selected{% endif %}>Fecha y hora programadas</option>
+            </select>
+          </div>
+          <div class="col-md-4 js-programada">
+            <label class="form-label" for="programada_para">Programada para</label>
+            <input type="datetime-local" name="programada_para" id="programada_para" class="form-control" value="{{ programada_para }}">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label" for="fecha_limite">Fecha límite (opcional)</label>
+            <input type="datetime-local" name="fecha_limite" id="fecha_limite" class="form-control" value="{{ fecha_limite }}">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card delco-panel-card mb-3">
+      <div class="card-header">5. Ubicación</div>
+      <div class="card-body">
+        <p class="small text-muted">Opcional. En la app se ve dónde hay que hacer el trabajo.</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="ubicacion">Lugar</label>
+            <input type="text" name="ubicacion" id="ubicacion" class="form-control" value="{{ ubicacion }}" placeholder="Dirección o nombre del sitio">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="latitud">Latitud</label>
+            <input type="text" name="latitud" id="latitud" class="form-control" value="{{ latitud }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label" for="longitud">Longitud</label>
+            <input type="text" name="longitud" id="longitud" class="form-control" value="{{ longitud }}">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card delco-panel-card mb-3">
+      <div class="card-header">6. Precargar campos</div>
+      <div class="card-body">
+        <p class="small text-muted mb-3">Rellena de antemano lo que ya conoces (cliente, dirección, n° de orden). Pin, firma, catálogo, dibujo y archivo no se pueden precargar.</p>
+        <div id="js-campos-precarga" class="row g-2">
+          <div class="col-12 text-muted small">Elige un formulario para ver los campos disponibles.</div>
+        </div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">
+      <i class="bi bi-send"></i> Crear tarea
+    </button>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var select = document.getElementById('form_id');
+  var box = document.getElementById('js-campos-precarga');
+  var envio = document.getElementById('envio');
+  var programada = document.querySelector('.js-programada');
+  var camposUrl = "{% url 'moreapp_tarea_campos' 'FORM_ID' %}";
+
+  function toggleProgramada() {
+    if (!programada || !envio) return;
+    programada.classList.toggle('d-none', envio.value !== 'SCHEDULED');
+  }
+
+  function renderCampos(campos) {
+    if (!box) return;
+    if (!campos || !campos.length) {
+      box.innerHTML = '<div class="col-12 text-muted small">Este formulario no tiene campos que se puedan precargar.</div>';
+      return;
+    }
+    box.innerHTML = campos.map(function (campo) {
+      var key = String(campo.key || '');
+      var label = String(campo.label || key);
+      return '<div class="col-md-6"><label class="form-label small">' + label.replace(/</g, '') +
+        '</label><input type="text" class="form-control" name="prefill__' + key.replace(/"/g, '') + '"></div>';
+    }).join('');
+  }
+
+  function loadCampos() {
+    if (!select || !box) return;
+    var id = select.value;
+    if (!id) {
+      box.innerHTML = '<div class="col-12 text-muted small">Elige un formulario para ver los campos disponibles.</div>';
+      return;
+    }
+    box.innerHTML = '<div class="col-12 text-muted small">Cargando campos…</div>';
+    fetch(camposUrl.replace('FORM_ID', encodeURIComponent(id)), { credentials: 'same-origin' })
+      .then(function (resp) { return resp.json(); })
+      .then(function (data) {
+        if (data && data.ok) renderCampos(data.campos || []);
+        else box.innerHTML = '<div class="col-12 text-danger small">' + ((data && data.error) || 'No se pudieron leer los campos.') + '</div>';
+      })
+      .catch(function () {
+        box.innerHTML = '<div class="col-12 text-danger small">No se pudieron leer los campos.</div>';
+      });
+  }
+
+  if (select) select.addEventListener('change', loadCampos);
+  if (envio) envio.addEventListener('change', toggleProgramada);
+  toggleProgramada();
+  if (select && select.value) loadCampos();
+})();
+</script>
+{% endblock %}

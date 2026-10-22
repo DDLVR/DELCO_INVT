@@ -28,6 +28,7 @@ from .moreapp_registros_views import (
     registros_form_view,
     ultimo_registro_view,
 )
+from .moreapp_tareas_views import tarea_campos_view, tarea_crear_view, tareas_list_view
 from .moreapp_visualizacion_views import (
     v1_visualizacion_datasource_detail,
     v1_visualizacion_datasources_list,
@@ -49,6 +50,13 @@ urlpatterns = [
         'moreapp/formularios/<str:form_id>/asignar/',
         formulario_asignar_view,
         name='moreapp_formulario_asignar',
+    ),
+    path('moreapp/tareas/', tareas_list_view, name='moreapp_tareas_list'),
+    path('moreapp/tareas/nueva/', tarea_crear_view, name='moreapp_tarea_crear'),
+    path(
+        'moreapp/tareas/campos/<str:form_id>/',
+        tarea_campos_view,
+        name='moreapp_tarea_campos',
     ),
     # Pantallas de observación (Fase 1) — no reemplazan reportes actuales
     path(

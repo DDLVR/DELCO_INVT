@@ -74,7 +74,15 @@ def _fecha_param(raw: Any) -> str:
     return text
 
 
-def _catalogo_qs(query: str, mostrar_ocultos: bool, fecha_desde: str, fecha_hasta: str) -> str:
+def _catalogo_qs(
+    query: str,
+    mostrar_ocultos: bool,
+    fecha_desde: str,
+    fecha_hasta: str,
+    estado: str = "",
+    asignacion: str = "",
+    orden: str = "",
+) -> str:
     params: Dict[str, str] = {}
     if query:
         params["query"] = query
@@ -84,7 +92,40 @@ def _catalogo_qs(query: str, mostrar_ocultos: bool, fecha_desde: str, fecha_hast
         params["fecha_desde"] = fecha_desde
     if fecha_hasta:
         params["fecha_hasta"] = fecha_hasta
+    if estado:
+        params["estado"] = estado
+    if asignacion:
+        params["asignacion"] = asignacion
+    if orden and orden != "nombre":
+        params["orden"] = orden
     return urlencode(params)
+
+
+def _filtro_estado(raw: Any) -> str:
+    value = str(raw or "").strip().upper()
+    return value if value in ("ACTIVE", "HIDDEN", "TRASH") else ""
+
+
+def _filtro_asignacion(raw: Any) -> str:
+    value = str(raw or "").strip().lower()
+    return value if value in ("con", "sin") else ""
+
+
+def _filtro_orden(raw: Any) -> str:
+    value = str(raw or "").strip().lower()
+    return value if value in ("nombre", "asignados", "registro") else "nombre"
+
+
+def _search_haystack(row: Dict[str, Any]) -> str:
+    parts = [
+        row.get("name"),
+        row.get("description"),
+        row.get("id"),
+        row.get("status"),
+        row.get("status_label"),
+    ]
+    parts.extend(row.get("asignados") or [])
+    return _fold_text(" ".join(str(part or "") for part in parts))
 
 
 def _as_list(data: Any) -> List[Any]:
@@ -199,6 +240,11 @@ def _form_row(item: Dict[str, Any]) -> Dict[str, Any]:
             "HIDDEN": "secondary",
             "TRASH": "danger",
         }.get(status, "secondary"),
+        "status_label": {
+            "ACTIVE": "Activo",
+            "HIDDEN": "Oculto",
+            "TRASH": "Papelera",
+        }.get(status, status or "—"),
         "description": item.get("description") or meta.get("description") or "",
         "published_version": published.get("formVersion") or "",
         "latest_status": latest.get("status") or meta.get("status") or "",
@@ -217,7 +263,10 @@ def _catalogo_return_url(request) -> str:
     )
     fecha_desde = _fecha_param(request.POST.get("fecha_desde") or request.GET.get("fecha_desde"))
     fecha_hasta = _fecha_param(request.POST.get("fecha_hasta") or request.GET.get("fecha_hasta"))
-    qs = _catalogo_qs(query, mostrar, fecha_desde, fecha_hasta)
+    estado = _filtro_estado(request.POST.get("estado") or request.GET.get("estado"))
+    asignacion = _filtro_asignacion(request.POST.get("asignacion") or request.GET.get("asignacion"))
+    orden = _filtro_orden(request.POST.get("orden") or request.GET.get("orden"))
+    qs = _catalogo_qs(query, mostrar, fecha_desde, fecha_hasta, estado, asignacion, orden)
     if qs:
         return url + "?" + qs
     return url
@@ -229,6 +278,9 @@ def catalogo_forms_view(request):
     mostrar_ocultos = (request.GET.get("mostrar_ocultos") or "").strip() in ("1", "true", "on")
     fecha_desde = _fecha_param(request.GET.get("fecha_desde"))
     fecha_hasta = _fecha_param(request.GET.get("fecha_hasta"))
+    estado = _filtro_estado(request.GET.get("estado"))
+    asignacion = _filtro_asignacion(request.GET.get("asignacion"))
+    orden = _filtro_orden(request.GET.get("orden"))
     registros_params: Dict[str, str] = {}
     if fecha_desde:
         registros_params["fecha_desde"] = fecha_desde
@@ -242,18 +294,21 @@ def catalogo_forms_view(request):
         "mostrar_ocultos": mostrar_ocultos,
         "fecha_desde": fecha_desde,
         "fecha_hasta": fecha_hasta,
-        "tiene_filtros": bool(query or mostrar_ocultos or fecha_desde or fecha_hasta),
+        "estado": estado,
+        "asignacion": asignacion,
+        "orden": orden,
+        "tiene_filtros": bool(
+            query or mostrar_ocultos or fecha_desde or fecha_hasta or estado or asignacion or orden != "nombre"
+        ),
         "registros_qs": urlencode(registros_params),
         "activos": 0,
         "ocultos": 0,
+        "asignados_forms": 0,
         "usuarios_asignables": list(usuarios_asignables()),
     }
     try:
         raw = list_all_forms()
         rows = [_form_row(item) for item in raw if isinstance(item, dict)]
-        if query:
-            needle = _fold_text(query)
-            rows = [row for row in rows if needle in _fold_text(row.get("name"))]
         ocultos_ids = set(
             MoreAppFormularioOculto.objects.filter(usuario=request.user).values_list("form_id", flat=True)
         )
@@ -262,6 +317,7 @@ def catalogo_forms_view(request):
             form_id = str(row.get("id") or "")
             row["oculto"] = form_id in ocultos_ids
             enriquecer_fila(row, por_form.get(form_id, []))
+            row["search_haystack"] = _search_haystack(row)
         ocultos_count = MoreAppFormularioOculto.objects.filter(usuario=request.user).count()
         if not mostrar_ocultos:
             rows = [row for row in rows if not row.get("oculto")]
@@ -271,6 +327,7 @@ def catalogo_forms_view(request):
         }
         context["formularios"] = rows
         context["activos"] = sum(1 for row in rows if row.get("status") == "ACTIVE")
+        context["asignados_forms"] = sum(1 for row in rows if int(row.get("asignados_count") or 0) > 0)
         context["ocultos"] = ocultos_count
         context["raw_json"] = _pretty(raw)
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
@@ -494,6 +551,23 @@ def _filtrar_filas_tabla(filas: List[Dict[str, Any]], query: str) -> List[Dict[s
     ]
 
 
+def _ds_search_haystack(row: Dict[str, Any]) -> str:
+    parts = [
+        row.get("name"),
+        row.get("column_labels"),
+        row.get("id"),
+        row.get("search_type"),
+        "guardada intranet" if row.get("en_intranet") else "no se guarda",
+    ]
+    return _fold_text(" ".join(str(part or "") for part in parts))
+
+
+def _fila_search_haystack(item: Dict[str, Any]) -> str:
+    parts = [item.get("entry_id")]
+    parts.extend(item.get("celdas") or [])
+    return _fold_text(" ".join(str(part or "") for part in parts))
+
+
 def _marcar_fuentes_locales(rows: List[Dict[str, Any]], locales: Dict[str, MoreAppFuenteInterna]) -> None:
     counts = {}
     if locales:
@@ -520,6 +594,7 @@ def catalogo_datasources_view(request):
         "solo_internas": solo_internas,
         "tiene_filtros": bool(query or solo_internas),
         "internas_count": MoreAppFuenteInterna.objects.count(),
+        "guardadas_count": 0,
     }
     locales = _fuentes_locales()
     rows: List[Dict[str, Any]] = []
@@ -534,17 +609,19 @@ def catalogo_datasources_view(request):
         context["error"] = str(exc)
         messages.error(request, str(exc))
         rows = [_row_desde_fuente_local(fuente) for fuente in locales.values()]
-    if query:
-        needle = _fold_text(query)
-        rows = [
-            row
-            for row in rows
-            if needle in _fold_text(row.get("name")) or needle in _fold_text(row.get("column_labels"))
-        ]
     _marcar_fuentes_locales(rows, locales)
-    if solo_internas:
-        rows = [row for row in rows if row.get("en_intranet")]
+    for row in rows:
+        row["search_haystack"] = _ds_search_haystack(row)
+        chips = [
+            str(col.get("label") or col.get("id") or "")
+            for col in (row.get("columns") or [])
+            if isinstance(col, dict)
+        ]
+        row["column_chips"] = chips[:6]
+        row["column_more"] = max(0, len(chips) - 6)
     context["datasources"] = rows
+    context["guardadas_count"] = sum(1 for row in rows if row.get("en_intranet"))
+    context["remotas_count"] = sum(1 for row in rows if not row.get("en_intranet"))
     context["raw_json"] = _pretty(
         [
             {
@@ -614,12 +691,16 @@ def catalogo_datasource_detail_view(request, datasource_id: str):
             row["column_count"] = len(columnas)
         filas = packed.get("total")
         row["columns"] = columnas
-        filas_api = _filtrar_filas_tabla(_filas_api_para_tabla(list(packed.get("rows") or []), columnas), query)
+        filas_api = _filas_api_para_tabla(list(packed.get("rows") or []), columnas)
+        for item in filas_api:
+            item["search_haystack"] = _fila_search_haystack(item)
         fuente = MoreAppFuenteInterna.objects.filter(datasource_id=datasource_id).first()
         filas_locales = []
         if fuente:
             local_qs = list(fuente.filas.all().order_by("entry_id")[:300])
-            filas_locales = _filtrar_filas_tabla(_filas_para_tabla(local_qs, columnas), query)
+            filas_locales = _filas_para_tabla(local_qs, columnas)
+            for item in filas_locales:
+                item["search_haystack"] = _fila_search_haystack(item)
         context.update(
             {
                 "datasource": row,
@@ -661,13 +742,13 @@ def catalogo_datasource_detail_view(request, datasource_id: str):
             }
             context["columnas"] = context["datasource"]["columns"]
             context["fuente"] = fuente
-            context["filas_locales"] = _filtrar_filas_tabla(
-                _filas_para_tabla(
-                    list(fuente.filas.all().order_by("entry_id")[:300]),
-                    context["columnas"],
-                ),
-                query,
+            filas_locales = _filas_para_tabla(
+                list(fuente.filas.all().order_by("entry_id")[:300]),
+                context["columnas"],
             )
+            for item in filas_locales:
+                item["search_haystack"] = _fila_search_haystack(item)
+            context["filas_locales"] = filas_locales
     return render(request, "integraciones/moreapp_datasource.html", context)
 
 

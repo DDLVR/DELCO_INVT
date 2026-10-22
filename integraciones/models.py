@@ -104,3 +104,38 @@ class MoreAppFuenteFila(models.Model):
 
     def __str__(self):
         return "%s · %s" % (self.fuente_id, self.entry_id)
+
+
+class MoreAppTareaEnviada(models.Model):
+    """Tarea creada en MoreApp desde la intranet (aviso en la app, no por correo)."""
+
+    form_id = models.CharField(max_length=80)
+    form_name = models.CharField(max_length=255, blank=True)
+    task_id = models.CharField(max_length=80, blank=True)
+    mensaje = models.CharField(max_length=500)
+    destinatarios = models.JSONField(default=list, blank=True)
+    grupos = models.JSONField(default=list, blank=True)
+    envio = models.CharField(max_length=20, default="IMMEDIATE")
+    programada_para = models.DateTimeField(null=True, blank=True)
+    fecha_limite = models.DateTimeField(null=True, blank=True)
+    ubicacion = models.CharField(max_length=255, blank=True)
+    latitud = models.CharField(max_length=40, blank=True)
+    longitud = models.CharField(max_length=40, blank=True)
+    datos_precarga = models.JSONField(default=dict, blank=True)
+    creado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="moreapp_tareas_enviadas",
+    )
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    error = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name = "Tarea MoreApp enviada"
+        verbose_name_plural = "Tareas MoreApp enviadas"
+        ordering = ["-fecha_creacion"]
+
+    def __str__(self):
+        return "%s · %s" % (self.form_name or self.form_id, self.mensaje[:40])

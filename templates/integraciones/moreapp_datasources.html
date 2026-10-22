@@ -3,15 +3,22 @@
 {% block title %}Data Sources MoreApp API{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-    <div>
-      <h1 class="h3 mb-1"><i class="bi bi-database"></i> Data Sources MoreApp</h1>
-      <p class="text-muted mb-0">Abre una lista para ver sus filas, no solo las columnas. Solo las que marques se copian a la intranet.</p>
-    </div>
-    <div class="d-flex flex-wrap gap-2">
-      <a href="{% url 'usuarios_moreapp' %}" class="btn btn-outline-primary btn-sm">Usuarios MoreApp</a>
-      <a href="{% url 'moreapp_api_catalogo' %}" class="btn btn-outline-secondary btn-sm">Volver a formularios</a>
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Administración</p>
+        <h1 class="h3 mb-1">Data Sources MoreApp</h1>
+        <p class="text-muted mb-0">Abre una lista para ver sus filas. Solo las que marques se copian a la intranet.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'usuarios_moreapp' %}" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-people"></i> Usuarios MoreApp
+        </a>
+        <a href="{% url 'moreapp_api_catalogo' %}" class="btn btn-outline-secondary btn-sm">
+          <i class="bi bi-arrow-left"></i> Volver a formularios
+        </a>
+      </div>
     </div>
   </div>
 
@@ -20,95 +27,229 @@
   {% endif %}
 
   <div class="row g-2 mb-3">
-    <div class="col-md-6">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Listas de MoreApp</div>
-        <div class="fs-4 fw-semibold">{{ datasources|length }}</div>
-      </div></div>
+    <div class="col-6 col-lg-4">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-database"></i></span>
+        <div>
+          <div class="text-muted small">Listas de MoreApp</div>
+          <div class="fs-4 fw-semibold js-ds-visibles">{{ datasources|length }}</div>
+        </div>
+      </div>
     </div>
-    <div class="col-md-6">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Guardadas en la intranet</div>
-        <div class="fs-4 fw-semibold">{{ internas_count }}</div>
-      </div></div>
+    <div class="col-6 col-lg-4">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-ok"><i class="bi bi-hdd-stack"></i></span>
+        <div>
+          <div class="text-muted small">Guardadas en la intranet</div>
+          <div class="fs-4 fw-semibold js-ds-guardadas">{{ guardadas_count|default:internas_count }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-12 col-lg-4">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-muted"><i class="bi bi-cloud"></i></span>
+        <div>
+          <div class="text-muted small">Solo en MoreApp</div>
+          <div class="fs-4 fw-semibold js-ds-remotas">{{ remotas_count|default:0 }}</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="card shadow-sm mb-3 delco-panel-card">
-    <div class="card-body">
-      <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-6">
-          <label class="form-label">Nombre o columna</label>
-          <input type="text" name="query" class="form-control" value="{{ query }}" placeholder="Ej. técnicos, comuna, caudal">
+  <div class="delco-catalogo-filters mb-3">
+    <form method="get" id="js-ds-form" class="d-flex flex-column gap-3">
+      <div class="delco-catalogo-search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search"
+               name="query"
+               id="js-ds-buscar"
+               class="form-control"
+               value="{{ query }}"
+               placeholder="Busca por nombre, columna o ID…"
+               autocomplete="off">
+        <button type="button" class="btn btn-sm btn-link text-muted js-ds-clear-q {% if not query %}d-none{% endif %}" aria-label="Limpiar búsqueda">
+          <i class="bi bi-x-circle"></i>
+        </button>
+      </div>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <span class="small text-muted">Ubicación</span>
+        <div class="delco-catalogo-chips" id="js-ds-ubicacion">
+          <button type="button" class="delco-catalogo-chip {% if not solo_internas %}is-active{% endif %}" data-ubicacion="">Todas</button>
+          <button type="button" class="delco-catalogo-chip {% if solo_internas %}is-active{% endif %}" data-ubicacion="intranet">En intranet</button>
+          <button type="button" class="delco-catalogo-chip" data-ubicacion="moreapp">Solo MoreApp</button>
         </div>
-        <div class="col-md-3">
-          <div class="form-check mt-4">
-            <input class="form-check-input" type="checkbox" name="solo_internas" value="1" id="soloInternas" {% if solo_internas %}checked{% endif %}>
-            <label class="form-check-label" for="soloInternas">Solo las de la intranet</label>
+        <input type="hidden" name="solo_internas" id="js-ds-solo" value="{% if solo_internas %}1{% endif %}">
+      </div>
+      {% if tiene_filtros %}
+      <div>
+        <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-link btn-sm px-0">Limpiar filtros</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="small text-muted mb-2">
+    <strong class="js-ds-visibles">{{ datasources|length }}</strong> fuente{{ datasources|length|pluralize:"s" }}
+  </div>
+
+  <div class="row g-3" id="js-ds-grid">
+    {% for item in datasources %}
+    <div class="col-md-6 col-xl-4 js-ds-card"
+         data-search="{{ item.search_haystack }}"
+         data-intranet="{% if item.en_intranet %}1{% else %}0{% endif %}"
+         data-nombre="{{ item.name }}">
+      <article class="delco-catalogo-card h-100 {% if item.en_intranet %}is-guardada{% endif %}">
+        <div class="delco-catalogo-card-accent"></div>
+        <div class="delco-catalogo-card-body">
+          <div class="d-flex align-items-start gap-2 mb-2">
+            <span class="delco-catalogo-form-icon" aria-hidden="true"><i class="bi bi-database"></i></span>
+            <div class="min-w-0">
+              <h2 class="h6 mb-1 text-break">{{ item.name }}</h2>
+              {% if item.en_intranet %}
+              <span class="badge rounded-pill bg-success">Guardada</span>
+              {% else %}
+              <span class="badge rounded-pill text-bg-light border text-muted">No se guarda</span>
+              {% endif %}
+            </div>
+          </div>
+          {% if item.column_chips %}
+          <div class="delco-registro-preview mb-2">
+            {% for col in item.column_chips %}
+            <span class="delco-registro-chip">{{ col }}</span>
+            {% endfor %}
+            {% if item.column_more %}
+            <span class="delco-registro-chip text-muted">+{{ item.column_more }}</span>
+            {% endif %}
+          </div>
+          {% elif item.column_labels %}
+          <p class="small text-muted mb-2">{{ item.column_labels }}</p>
+          {% endif %}
+          <div class="delco-catalogo-meta mb-3">
+            <div><i class="bi bi-clock-history me-1"></i>Última actualización: {{ item.last_updated|default:"—" }}</div>
+            {% if item.en_intranet %}
+            <div><i class="bi bi-hdd me-1"></i>{{ item.filas_locales }} fila{{ item.filas_locales|pluralize:"s" }} en intranet</div>
+            {% endif %}
+            {% if item.column_count %}
+            <div><i class="bi bi-layout-three-columns me-1"></i>{{ item.column_count }} columna{{ item.column_count|pluralize:"s" }}</div>
+            {% endif %}
+          </div>
+          <div class="mt-auto d-flex flex-wrap gap-2">
+            {% if item.id %}
+            <a class="btn btn-sm btn-primary" href="{% url 'moreapp_api_datasource' item.id %}">Abrir</a>
+            {% if item.en_intranet %}
+            <form method="post" action="{% url 'moreapp_api_datasource_quitar' item.id %}" class="d-inline" onsubmit="return confirm('¿Quitar esta lista de la intranet? Se borran las filas locales.');">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-outline-danger">Quitar</button>
+            </form>
+            {% else %}
+            <form method="post" action="{% url 'moreapp_api_datasource_guardar' item.id %}" class="d-inline">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-success">Guardar en intranet</button>
+            </form>
+            {% endif %}
+            {% endif %}
           </div>
         </div>
-        <div class="col-md-3">
-          <button type="submit" class="btn btn-primary w-100">Filtrar</button>
-        </div>
-        {% if tiene_filtros %}
-        <div class="col-12">
-          <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-secondary btn-sm">Limpiar filtros</a>
-        </div>
-        {% endif %}
-      </form>
+      </article>
     </div>
-  </div>
-
-  <div class="card shadow-sm delco-panel-card">
-    <div class="card-header fw-semibold">{{ datasources|length }} fuente{{ datasources|length|pluralize:"s" }}</div>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
-        <thead>
-          <tr>
-            <th>Nombre</th>
-            <th>Columnas</th>
-            <th>Última actualización</th>
-            <th>Intranet</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for item in datasources %}
-          <tr {% if item.en_intranet %}class="table-success"{% endif %}>
-            <td>{{ item.name }}</td>
-            <td class="small">{{ item.column_labels|default:"—" }}</td>
-            <td class="small text-nowrap">{{ item.last_updated|default:"—" }}</td>
-            <td>
-              {% if item.en_intranet %}
-              <span class="badge bg-success">Guardada</span>
-              <div class="small text-muted">{{ item.filas_locales }} fila{{ item.filas_locales|pluralize:"s" }}</div>
-              {% else %}
-              <span class="text-muted">No se guarda</span>
-              {% endif %}
-            </td>
-            <td class="text-end text-nowrap">
-              {% if item.id %}
-              <a class="btn btn-sm btn-outline-primary" href="{% url 'moreapp_api_datasource' item.id %}">Abrir</a>
-              {% if item.en_intranet %}
-              <form method="post" action="{% url 'moreapp_api_datasource_quitar' item.id %}" class="d-inline" onsubmit="return confirm('¿Quitar esta lista de la intranet? Se borran las filas locales.');">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-outline-danger">Quitar</button>
-              </form>
-              {% else %}
-              <form method="post" action="{% url 'moreapp_api_datasource_guardar' item.id %}" class="d-inline">
-                {% csrf_token %}
-                <button type="submit" class="btn btn-sm btn-success">Guardar en intranet</button>
-              </form>
-              {% endif %}
-              {% endif %}
-            </td>
-          </tr>
-          {% empty %}
-          <tr><td colspan="5" class="text-muted p-3">No hay data sources.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    {% empty %}
+    <div class="col-12">
+      <div class="delco-catalogo-empty">
+        <i class="bi bi-inboxes"></i>
+        No hay data sources.
+      </div>
+    </div>
+    {% endfor %}
+    <div class="col-12 d-none" id="js-ds-vacio">
+      <div class="delco-catalogo-empty">
+        <i class="bi bi-funnel"></i>
+        Ninguna lista coincide con esos filtros.
+      </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var search = document.getElementById('js-ds-buscar');
+  var solo = document.getElementById('js-ds-solo');
+  var clearQ = document.querySelector('.js-ds-clear-q');
+  var empty = document.getElementById('js-ds-vacio');
+  var grid = document.getElementById('js-ds-grid');
+  var form = document.getElementById('js-ds-form');
+  var timer = null;
+  var path = "{% url 'moreapp_api_datasources' %}";
+  var ubicacion = (solo && solo.value === '1') ? 'intranet' : '';
+
+  function fold(text) {
+    return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  function applyFilters() {
+    var needle = fold(search ? search.value : '');
+    var cards = document.querySelectorAll('.js-ds-card');
+    var visible = 0;
+    var guardadas = 0;
+    if (clearQ) clearQ.classList.toggle('d-none', !(search && search.value));
+    Array.prototype.forEach.call(cards, function (card) {
+      var haystack = card.getAttribute('data-search') || '';
+      var intranet = card.getAttribute('data-intranet') === '1';
+      var match = true;
+      if (needle && haystack.indexOf(needle) === -1) match = false;
+      if (ubicacion === 'intranet' && !intranet) match = false;
+      if (ubicacion === 'moreapp' && intranet) match = false;
+      card.hidden = !match;
+      if (match) {
+        visible += 1;
+        if (intranet) guardadas += 1;
+      }
+    });
+    document.querySelectorAll('.js-ds-visibles').forEach(function (el) { el.textContent = String(visible); });
+    var g = document.querySelector('.js-ds-guardadas');
+    var r = document.querySelector('.js-ds-remotas');
+    if (g) g.textContent = String(guardadas);
+    if (r) r.textContent = String(Math.max(0, visible - guardadas));
+    if (empty) empty.classList.toggle('d-none', visible > 0 || cards.length === 0);
+    var params = new URLSearchParams();
+    if (search && search.value.trim()) params.set('query', search.value.trim());
+    if (ubicacion === 'intranet') params.set('solo_internas', '1');
+    if (solo) solo.value = ubicacion === 'intranet' ? '1' : '';
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', path + (params.toString() ? ('?' + params.toString()) : ''));
+    }
+  }
+
+  if (search) {
+    search.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(applyFilters, 80);
+    });
+    search.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') ev.preventDefault();
+    });
+  }
+  if (clearQ && search) {
+    clearQ.addEventListener('click', function () {
+      search.value = '';
+      applyFilters();
+      search.focus();
+    });
+  }
+  document.querySelectorAll('#js-ds-ubicacion .delco-catalogo-chip').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#js-ds-ubicacion .delco-catalogo-chip').forEach(function (item) {
+        item.classList.toggle('is-active', item === btn);
+      });
+      ubicacion = btn.getAttribute('data-ubicacion') || '';
+      applyFilters();
+    });
+  });
+  if (form) {
+    form.addEventListener('submit', function (ev) { ev.preventDefault(); applyFilters(); });
+  }
+  applyFilters();
+})();
+</script>
 {% endblock %}

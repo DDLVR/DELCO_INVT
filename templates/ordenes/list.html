@@ -20,6 +20,14 @@
                 <a href="{% url 'ordenes_terminadas' %}" class="btn btn-outline-success">
                     <i class="bi bi-check2-circle"></i> Trabajos terminados
                 </a>
+                {% url 'moreapp_tareas_list' as moreapp_tareas_list_url %}
+                {% if moreapp_tareas_list_url %}
+                {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
+                <a href="{{ moreapp_tareas_list_url }}" class="btn btn-outline-primary">
+                    <i class="bi bi-send-check"></i> Tareas MoreApp
+                </a>
+                {% endif %}
+                {% endif %}
                 {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
                 <a href="{% url 'orden_crear' %}" class="btn btn-success">
                     <i class="bi bi-plus-circle"></i> Nueva Orden

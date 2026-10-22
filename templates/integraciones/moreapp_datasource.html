@@ -3,29 +3,35 @@
 {% block title %}Data Source · {{ datasource.name|default:"MoreApp" }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-secondary btn-sm mb-3">&larr; Volver</a>
-  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-    <div>
-      <h1 class="h3 mb-1">{{ datasource.name|default:datasource_id }}</h1>
-      {% if fuente %}
-      <p class="text-muted mb-0">Abajo ves las filas vivas de MoreApp. Esta lista también está copiada en la intranet si importaste un archivo.</p>
-      {% else %}
-      <p class="text-muted mb-0">Abajo ves el contenido de la tabla en MoreApp. Márcala solo si quieres una copia en la intranet.</p>
-      {% endif %}
-    </div>
-    <div class="d-flex flex-wrap gap-2">
-      {% if fuente %}
-      <form method="post" action="{% url 'moreapp_api_datasource_quitar' datasource_id %}" onsubmit="return confirm('¿Quitar esta lista de la intranet? Se borran las filas locales.');">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-outline-danger">Quitar de la intranet</button>
-      </form>
-      {% else %}
-      <form method="post" action="{% url 'moreapp_api_datasource_guardar' datasource_id %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-success">Guardar en intranet</button>
-      </form>
-      {% endif %}
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <a href="{% url 'moreapp_api_datasources' %}" class="btn btn-outline-secondary btn-sm mb-2">
+          <i class="bi bi-arrow-left"></i> Data Sources
+        </a>
+        <p class="delco-catalogo-kicker mb-1">Lista MoreApp</p>
+        <h1 class="h3 mb-1">{{ datasource.name|default:datasource_id }}</h1>
+        {% if fuente %}
+        <p class="text-muted mb-0">Abajo ves las filas vivas de MoreApp. Esta lista también está copiada en la intranet si importaste un archivo.</p>
+        {% else %}
+        <p class="text-muted mb-0">Abajo ves el contenido de la tabla en MoreApp. Márcala solo si quieres una copia en la intranet.</p>
+        {% endif %}
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        {% if fuente %}
+        <span class="badge rounded-pill bg-success align-self-start">Guardada</span>
+        <form method="post" action="{% url 'moreapp_api_datasource_quitar' datasource_id %}" onsubmit="return confirm('¿Quitar esta lista de la intranet? Se borran las filas locales.');">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-outline-danger btn-sm">Quitar de la intranet</button>
+        </form>
+        {% else %}
+        <form method="post" action="{% url 'moreapp_api_datasource_guardar' datasource_id %}">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-success btn-sm">Guardar en intranet</button>
+        </form>
+        {% endif %}
+      </div>
     </div>
   </div>
 
@@ -34,48 +40,65 @@
   {% endif %}
 
   <div class="row g-2 mb-3">
-    <div class="col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Última actualización MoreApp</div>
-        <div class="fw-semibold">{{ datasource.last_updated|default:"—" }}</div>
-      </div></div>
+    <div class="col-6 col-lg-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-clock-history"></i></span>
+        <div>
+          <div class="text-muted small">Última actualización MoreApp</div>
+          <div class="fw-semibold">{{ datasource.last_updated|default:"—" }}</div>
+        </div>
+      </div>
     </div>
-    <div class="col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Filas en MoreApp</div>
-        <div class="fw-semibold">{% if filas is not None %}{{ filas }}{% else %}—{% endif %}</div>
-      </div></div>
+    <div class="col-6 col-lg-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-info"><i class="bi bi-table"></i></span>
+        <div>
+          <div class="text-muted small">Filas en MoreApp</div>
+          <div class="fw-semibold">{% if filas is not None %}{{ filas }}{% else %}—{% endif %}</div>
+        </div>
+      </div>
     </div>
-    <div class="col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Filas en intranet</div>
-        <div class="fw-semibold">{% if fuente %}{{ fuente.filas.count }}{% else %}—{% endif %}</div>
-      </div></div>
+    <div class="col-6 col-lg-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-ok"><i class="bi bi-hdd"></i></span>
+        <div>
+          <div class="text-muted small">Filas en intranet</div>
+          <div class="fw-semibold">{% if fuente %}{{ fuente.filas.count }}{% else %}—{% endif %}</div>
+        </div>
+      </div>
     </div>
-    <div class="col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Columnas</div>
-        <div class="fw-semibold">{{ columnas|length }}</div>
-      </div></div>
+    <div class="col-6 col-lg-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-muted"><i class="bi bi-layout-three-columns"></i></span>
+        <div>
+          <div class="text-muted small">Columnas</div>
+          <div class="fw-semibold">{{ columnas|length }}</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="card shadow-sm delco-panel-card mb-3">
-    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
-      <span class="fw-semibold">Contenido de la tabla</span>
-      <form method="get" class="d-flex gap-2">
-        <input type="text" name="query" class="form-control form-control-sm" value="{{ query }}" placeholder="Buscar en las filas">
-        <button type="submit" class="btn btn-sm btn-outline-primary">Buscar</button>
-        {% if tiene_filtros %}
-        <a href="{% url 'moreapp_api_datasource' datasource_id %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
-        {% endif %}
-      </form>
+  <div class="delco-ds-panel mb-3">
+    <div class="delco-ds-panel-head">
+      <div>
+        <h2 class="h6 mb-1">Contenido de la tabla</h2>
+        <div class="small text-muted"><span class="js-ds-filas-count">{{ filas_api|length }}</span> fila{{ filas_api|length|pluralize:"s" }} visibles</div>
+      </div>
+      <div class="delco-catalogo-search delco-ds-search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search"
+               id="js-ds-filas-buscar"
+               class="form-control"
+               value="{{ query }}"
+               placeholder="Buscar en las filas"
+               autocomplete="off">
+      </div>
     </div>
     {% if filas_api_truncadas %}
-    <div class="px-3 pt-2 small text-muted">Mostrando las primeras {{ filas_api_leidas }} de {{ filas_api_total }} filas. Importa el archivo si necesitas el resto.</div>
+    <div class="px-3 pb-2 small text-muted">Mostrando las primeras {{ filas_api_leidas }} de {{ filas_api_total }} filas. Importa el archivo si necesitas el resto.</div>
     {% endif %}
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
+    <div class="delco-ds-table-wrap">
+      <table class="table table-sm table-hover mb-0 delco-ds-table">
         <thead>
           <tr>
             {% for columna in columnas %}
@@ -85,9 +108,9 @@
             {% endfor %}
           </tr>
         </thead>
-        <tbody>
+        <tbody id="js-ds-filas-moreapp">
           {% for fila in filas_api %}
-          <tr>
+          <tr class="js-ds-fila" data-search="{{ fila.search_haystack }}">
             {% for celda in fila.celdas %}
             <td>{{ celda|default:"—" }}</td>
             {% empty %}
@@ -95,17 +118,22 @@
             {% endfor %}
           </tr>
           {% empty %}
-          <tr><td colspan="{{ columnas|length|default:1 }}" class="text-muted p-3">No hay filas para mostrar.</td></tr>
+          <tr class="js-ds-empty-row"><td colspan="{{ columnas|length|default:1 }}" class="text-muted p-3">No hay filas para mostrar.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+    <div class="d-none px-3 py-3 js-ds-filas-vacio">
+      <div class="delco-catalogo-empty mb-0">Ninguna fila coincide con la búsqueda.</div>
+    </div>
   </div>
 
-  <details class="card shadow-sm delco-panel-card mb-3">
-    <summary class="card-header fw-semibold" style="cursor:pointer;">Estructura ({{ columnas|length }} columna{{ columnas|length|pluralize:"s" }})</summary>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
+  <details class="delco-ds-panel mb-3">
+    <summary class="delco-ds-panel-head">
+      <span class="fw-semibold">Estructura ({{ columnas|length }} columna{{ columnas|length|pluralize:"s" }})</span>
+    </summary>
+    <div class="delco-ds-table-wrap">
+      <table class="table table-sm table-hover mb-0 delco-ds-table">
         <thead>
           <tr>
             <th>Etiqueta</th>
@@ -127,9 +155,11 @@
   </details>
 
   {% if fuente %}
-  <div class="card shadow-sm delco-panel-card mb-3">
-    <div class="card-header fw-semibold">Importar filas</div>
-    <div class="card-body">
+  <div class="delco-ds-panel mb-3">
+    <div class="delco-ds-panel-head">
+      <h2 class="h6 mb-0">Importar filas</h2>
+    </div>
+    <div class="p-3">
       <p class="small text-muted">Exporta esta data source desde MoreApp (Excel, CSV o JSON con un <code>id</code> por fila) y cárgala aquí. No se sincroniza sola.</p>
       <form method="post" action="{% url 'moreapp_api_datasource_importar' datasource_id %}" enctype="multipart/form-data" class="row g-2 align-items-end">
         {% csrf_token %}
@@ -150,10 +180,12 @@
     </div>
   </div>
 
-  <div class="card shadow-sm delco-panel-card">
-    <div class="card-header fw-semibold">Copia en la intranet</div>
-    <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
+  <div class="delco-ds-panel">
+    <div class="delco-ds-panel-head">
+      <h2 class="h6 mb-0">Copia en la intranet</h2>
+    </div>
+    <div class="delco-ds-table-wrap">
+      <table class="table table-sm table-hover mb-0 delco-ds-table">
         <thead>
           <tr>
             {% for columna in columnas %}
@@ -163,9 +195,9 @@
             {% endfor %}
           </tr>
         </thead>
-        <tbody>
+        <tbody id="js-ds-filas-local">
           {% for fila in filas_locales %}
-          <tr>
+          <tr class="js-ds-fila" data-search="{{ fila.search_haystack }}">
             {% for celda in fila.celdas %}
             <td>{{ celda|default:"—" }}</td>
             {% empty %}
@@ -188,4 +220,53 @@
   </details>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var search = document.getElementById('js-ds-filas-buscar');
+  var empty = document.querySelector('.js-ds-filas-vacio');
+  var countEl = document.querySelector('.js-ds-filas-count');
+  var timer = null;
+  var path = "{% url 'moreapp_api_datasource' datasource_id %}";
+
+  function fold(text) {
+    return String(text || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  }
+
+  function applyFilters() {
+    var needle = fold(search ? search.value : '');
+    var rows = document.querySelectorAll('#js-ds-filas-moreapp .js-ds-fila, #js-ds-filas-local .js-ds-fila');
+    var visibleLive = 0;
+    Array.prototype.forEach.call(rows, function (row) {
+      var haystack = row.getAttribute('data-search') || '';
+      var match = !needle || haystack.indexOf(needle) !== -1;
+      row.hidden = !match;
+      if (match && row.closest('#js-ds-filas-moreapp')) visibleLive += 1;
+    });
+    if (countEl) countEl.textContent = String(visibleLive);
+    if (empty) {
+      var liveRows = document.querySelectorAll('#js-ds-filas-moreapp .js-ds-fila');
+      empty.classList.toggle('d-none', visibleLive > 0 || liveRows.length === 0);
+    }
+    var params = new URLSearchParams();
+    if (search && search.value.trim()) params.set('query', search.value.trim());
+    if (window.history && window.history.replaceState) {
+      window.history.replaceState(null, '', path + (params.toString() ? ('?' + params.toString()) : ''));
+    }
+  }
+
+  if (search) {
+    search.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(applyFilters, 80);
+    });
+    search.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') ev.preventDefault();
+    });
+  }
+  applyFilters();
+})();
+</script>
 {% endblock %}

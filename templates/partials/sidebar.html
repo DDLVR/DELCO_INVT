@@ -13,12 +13,20 @@
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'inventario_list' %}active bg-primary text-white{% endif %}" href="{% url 'inventario_list' %}">
         <i class="bi bi-box me-2"></i> Inventario
       </a>
-      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name in 'ordenes_list,orden_crear,orden_detalle,cambiar_estado_orden,ordenes_terminadas' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name in 'ordenes_list,orden_crear,orden_detalle,cambiar_estado_orden,ordenes_terminadas,moreapp_tareas_list,moreapp_tarea_crear' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
         <i class="bi bi-clipboard-check me-2"></i> Órdenes de trabajo
       </a>
       <a class="list-group-item list-group-item-action app-nav-link ps-4 small {% if request.resolver_match.url_name == 'ordenes_terminadas' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_terminadas' %}">
         <i class="bi bi-check2-circle me-2"></i> Trabajos terminados
       </a>
+      {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
+      {% url 'moreapp_tareas_list' as moreapp_tareas_list_url %}
+      {% if moreapp_tareas_list_url %}
+      <a class="list-group-item list-group-item-action app-nav-link ps-4 small {% if request.resolver_match.url_name == 'moreapp_tareas_list' or request.resolver_match.url_name == 'moreapp_tarea_crear' %}active bg-primary text-white{% endif %}" href="{{ moreapp_tareas_list_url }}">
+        <i class="bi bi-send-check me-2"></i> Tareas MoreApp
+      </a>
+      {% endif %}
+      {% endif %}
       {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}
       {% url 'comprobantes_cambio_list' as comprobantes_cambio_url %}
       {% if comprobantes_cambio_url %}

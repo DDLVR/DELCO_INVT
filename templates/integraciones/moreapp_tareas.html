@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}Tareas MoreApp{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+    <div>
+      <h1 class="h3 mb-1"><i class="bi bi-send-check"></i> Tareas MoreApp</h1>
+      <p class="text-muted mb-0">Envía un formulario a la sección Tareas de la app. El aviso llega en MoreApp, no por correo.</p>
+    </div>
+    <a href="{% url 'moreapp_tarea_crear' %}" class="btn btn-primary">
+      <i class="bi bi-plus-circle"></i> Nueva tarea
+    </a>
+  </div>
+
+  {% if tareas %}
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead class="table-delco">
+        <tr>
+          <th>Cuando</th>
+          <th>Formulario</th>
+          <th>Mensaje</th>
+          <th>Destinatarios</th>
+          <th>Envío</th>
+          <th>Límite</th>
+          <th>Estado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tarea in tareas %}
+        <tr>
+          <td class="small">{{ tarea.fecha_creacion|date:"d/m/Y H:i" }}</td>
+          <td>{{ tarea.form_name|default:tarea.form_id }}</td>
+          <td>{{ tarea.mensaje }}</td>
+          <td class="small">
+            {% if tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% endif %}
+            {% if tarea.grupos %}<div class="text-muted">Grupos: {{ tarea.grupos|join:", " }}</div>{% endif %}
+          </td>
+          <td class="small">
+            {% if tarea.envio == 'SCHEDULED' %}
+            Programada {{ tarea.programada_para|date:"d/m/Y H:i"|default:"—" }}
+            {% else %}
+            Al momento
+            {% endif %}
+          </td>
+          <td class="small">{{ tarea.fecha_limite|date:"d/m/Y H:i"|default:"—" }}</td>
+          <td>
+            {% if tarea.error %}
+            <span class="badge text-bg-danger">Error</span>
+            <div class="small text-danger">{{ tarea.error|truncatechars:80 }}</div>
+            {% else %}
+            <span class="badge text-bg-success">Enviada</span>
+            {% if tarea.task_id %}<div class="small text-muted">{{ tarea.task_id }}</div>{% endif %}
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-light border">
+    Aún no hay tareas enviadas desde la intranet.
+    <a href="{% url 'moreapp_tarea_crear' %}">Crear la primera</a>.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

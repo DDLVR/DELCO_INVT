@@ -5,6 +5,7 @@ from .models import (
     MoreAppFormularioOculto,
     MoreAppFuenteFila,
     MoreAppFuenteInterna,
+    MoreAppTareaEnviada,
 )
 
 
@@ -36,3 +37,11 @@ class MoreAppFuenteFilaAdmin(admin.ModelAdmin):
     list_display = ("fuente", "entry_id")
     search_fields = ("entry_id", "fuente__nombre")
     list_filter = ("fuente",)
+
+
+@admin.register(MoreAppTareaEnviada)
+class MoreAppTareaEnviadaAdmin(admin.ModelAdmin):
+    list_display = ("form_name", "mensaje", "envio", "creado_por", "fecha_creacion", "task_id")
+    list_filter = ("envio",)
+    search_fields = ("form_id", "form_name", "mensaje", "task_id")
+    readonly_fields = ("fecha_creacion",)

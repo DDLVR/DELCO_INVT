@@ -71,6 +71,9 @@ class MoreAppApiModulosTests(TestCase):
         self.assertNotIn('Catálogo MoreApp', moreapp_block)
         self.assertIn('Formularios asignados', moreapp_block)
         self.assertIn('Catálogo MoreApp', admin_block)
+        operacion = body.split('Operación', 1)[1].split('MoreApp y reportes', 1)[0]
+        self.assertIn('Tareas MoreApp', operacion)
+        self.assertIn(reverse('moreapp_tareas_list'), operacion)
 
     @override_settings(MOREAPP_API_ENABLED=False)
     def test_json_forms_sin_api_enabled(self):
@@ -274,9 +277,16 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         body = resp.content.decode('utf-8')
         self.assertIn('Reposición de Suministro', body)
-        self.assertNotIn('Mantención medidor', body)
+        self.assertIn('Mantención medidor', body)
+        self.assertIn('js-catalogo-buscar', body)
+        self.assertIn('value="reposicion"', body)
+        self.assertIn('data-search=', body)
         self.assertIn('name="fecha_desde"', body)
         self.assertIn('name="fecha_hasta"', body)
+        self.assertIn('name="estado"', body)
+        self.assertIn('name="asignacion"', body)
+        self.assertIn('Con asignados', body)
+        self.assertIn('7 días', body)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -475,6 +485,8 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Última actualización', body)
         self.assertIn('20/06/2023', body)
         self.assertNotIn('1687290265881', body)
+        self.assertIn('js-ds-buscar', body)
+        self.assertIn('js-ds-card', body)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -507,13 +519,16 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Contenido de la tabla', body)
         self.assertIn('CONCHALI', body)
         self.assertIn('SANTIAGO', body)
+        self.assertIn('js-ds-filas-buscar', body)
         filtrado = self.client.get(
             reverse('moreapp_api_datasource', args=['6491e945a2abd076df165abc']),
             {'query': 'santiago'},
         )
         filtrado_body = filtrado.content.decode('utf-8')
         self.assertIn('SANTIAGO', filtrado_body)
-        self.assertNotIn('CONCHALI', filtrado_body)
+        self.assertIn('CONCHALI', filtrado_body)
+        self.assertIn('value="santiago"', filtrado_body)
+        self.assertIn('js-ds-fila', filtrado_body)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -742,7 +757,10 @@ class MoreAppApiModulosTests(TestCase):
         only_local = self.client.get(reverse('moreapp_api_datasources'), {'solo_internas': '1'})
         only_body = only_local.content.decode('utf-8')
         self.assertIn('comunas', only_body)
-        self.assertNotIn('Tecnicos', only_body)
+        self.assertIn('Tecnicos', only_body)
+        self.assertIn('data-intranet="1"', only_body)
+        self.assertIn('js-ds-card', only_body)
+        self.assertIn('data-ubicacion="intranet"', only_body)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -802,6 +820,7 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Formularios asignados', body)
         self.assertNotIn('Pendientes MoreApp', body)
         self.assertNotIn('Catálogo MoreApp', body)
+        self.assertNotIn('Tareas MoreApp', body)
 
     def test_tecnico_sin_asignacion_lista_vacia(self):
         self.client.login(username=self.tecnico.rut, password=self.password)
@@ -971,3 +990,174 @@ class MoreAppApiModulosTests(TestCase):
         )
         self.assertEqual(resp.status_code, 200)
         self.assertIn('Instalacion', resp.content.decode('utf-8'))
+
+    def test_tareas_requiere_login(self):
+        resp = self.client.get(reverse('moreapp_tareas_list'))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn('/login', resp.url)
+
+    def test_tecnico_no_accede_tareas(self):
+        self.client.login(username=self.tecnico.rut, password=self.password)
+        self.assertEqual(self.client.get(reverse('moreapp_tareas_list')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('moreapp_tarea_crear')).status_code, 403)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.list_groups')
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_admin_ve_formulario_de_tarea(self, mocked_forms, mocked_users, mocked_groups):
+        mocked_forms.return_value = [
+            {
+                'id': 'abc123abc123abc123abc123',
+                'name': 'Instalacion',
+                'status': 'ACTIVE',
+            }
+        ]
+        mocked_users.return_value = [
+            {
+                'id': 'u1',
+                'emailAddress': 'campo@more.app',
+                'disabled': False,
+                'settings': {'displayName': 'Tecnico More'},
+            }
+        ]
+        mocked_groups.return_value = {'groups': [{'id': 'g1', 'name': 'Terreno'}]}
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_tarea_crear'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('Instalacion', body)
+        self.assertIn('campo@more.app', body)
+        self.assertIn('Terreno', body)
+        self.assertIn('Al momento', body)
+        self.assertIn('Fecha y hora programadas', body)
+        self.assertIn('Pin, firma, catálogo, dibujo y archivo no se pueden precargar', body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.create_task')
+    @mock.patch('integraciones.moreapp_tareas_views._campos_desde_formulario')
+    @mock.patch('integraciones.moreapp_tareas_views.get_form')
+    @mock.patch('integraciones.moreapp_tareas_views.list_groups')
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_admin_crea_tarea_inmediata(
+        self,
+        mocked_forms,
+        mocked_users,
+        mocked_groups,
+        mocked_get_form,
+        mocked_campos,
+        mocked_create,
+    ):
+        from integraciones.models import MoreAppTareaEnviada
+
+        form = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Instalacion',
+            'status': 'ACTIVE',
+        }
+        mocked_forms.return_value = [form]
+        mocked_users.return_value = [
+            {'id': 'u1', 'emailAddress': 'campo@more.app', 'disabled': False}
+        ]
+        mocked_groups.return_value = []
+        mocked_get_form.return_value = form
+        mocked_campos.return_value = [
+            {'widget': 'text', 'data_name': 'cliente', 'label': 'Cliente'},
+            {'widget': 'signature', 'data_name': 'firma', 'label': 'Firma'},
+            {'widget': 'file', 'data_name': 'archivo', 'label': 'Archivo'},
+        ]
+        mocked_create.return_value = {'id': 'task-99'}
+        self.client.login(username=self.admin.rut, password=self.password)
+        sin_dest = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': 'abc123abc123abc123abc123',
+                'mensaje': 'Ir a terreno',
+                'envio': 'IMMEDIATE',
+            },
+        )
+        self.assertEqual(sin_dest.status_code, 200)
+        self.assertFalse(MoreAppTareaEnviada.objects.exists())
+        programada_sin_fecha = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': 'abc123abc123abc123abc123',
+                'mensaje': 'Ir a terreno',
+                'envio': 'SCHEDULED',
+                'usuarios': ['campo@more.app'],
+            },
+        )
+        self.assertEqual(programada_sin_fecha.status_code, 200)
+        self.assertFalse(MoreAppTareaEnviada.objects.exists())
+        resp = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': 'abc123abc123abc123abc123',
+                'mensaje': 'Instalar medidor',
+                'envio': 'IMMEDIATE',
+                'usuarios': ['campo@more.app'],
+                'ubicacion': 'Av. Principal 100',
+                'latitud': '-33.45',
+                'longitud': '-70.66',
+                'prefill__cliente': 'ACME',
+                'prefill__firma': 'no-debe-irse',
+                'prefill__archivo': 'tampoco',
+            },
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse('moreapp_tareas_list'))
+        mocked_create.assert_called_once()
+        form_id, payload = mocked_create.call_args[0]
+        self.assertEqual(form_id, 'abc123abc123abc123abc123')
+        self.assertEqual(payload['recipients'], ['campo@more.app'])
+        self.assertEqual(payload['message'], 'Instalar medidor')
+        self.assertEqual(payload['publishInfo']['type'], 'IMMEDIATE')
+        self.assertEqual(payload['data'], {'cliente': 'ACME'})
+        self.assertEqual(payload['location']['name'], 'Av. Principal 100')
+        self.assertEqual(payload['location']['lat'], -33.45)
+        self.assertEqual(payload['location']['lng'], -70.66)
+        tarea = MoreAppTareaEnviada.objects.get()
+        self.assertEqual(tarea.task_id, 'task-99')
+        self.assertEqual(tarea.mensaje, 'Instalar medidor')
+        self.assertEqual(tarea.datos_precarga, {'cliente': 'ACME'})
+        listing = self.client.get(reverse('moreapp_tareas_list'))
+        self.assertEqual(listing.status_code, 200)
+        list_body = listing.content.decode('utf-8')
+        self.assertIn('Instalar medidor', list_body)
+        self.assertIn('aviso llega en MoreApp, no por correo', list_body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views._campos_desde_formulario')
+    @mock.patch('integraciones.moreapp_tareas_views.get_form')
+    def test_campos_precarga_omite_firma_y_archivo(self, mocked_get_form, mocked_campos):
+        mocked_get_form.return_value = {'id': 'abc123abc123abc123abc123'}
+        mocked_campos.return_value = [
+            {'widget': 'text', 'data_name': 'cliente', 'label': 'Cliente'},
+            {'widget': 'pin', 'data_name': 'pin', 'label': 'Pin'},
+            {'widget': 'signature', 'data_name': 'firma', 'label': 'Firma'},
+            {'widget': 'catalog', 'data_name': 'catalogo', 'label': 'Catalogo'},
+            {'widget': 'drawing', 'data_name': 'dibujo', 'label': 'Dibujo'},
+            {'widget': 'file', 'data_name': 'archivo', 'label': 'Archivo'},
+        ]
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(
+            reverse('moreapp_tarea_campos', args=['abc123abc123abc123abc123'])
+        )
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload['ok'])
+        keys = [item['key'] for item in payload['campos']]
+        self.assertEqual(keys, ['cliente'])

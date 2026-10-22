@@ -337,6 +337,26 @@ def list_users() -> Any:
     return _request_json("GET", f"customers/{get_customer_id()}/users")
 
 
+def list_groups() -> Any:
+    return _request_json("GET", f"customers/{get_customer_id()}/groups")
+
+
+def create_task(form_id: str, payload: Dict[str, Any]) -> Any:
+    return _request_json(
+        "POST",
+        f"customers/{get_customer_id()}/{form_id}/tasks",
+        payload=payload,
+    )
+
+
+def list_form_tasks(form_id: str, *, page: int = 0) -> Any:
+    return _request_json(
+        "GET",
+        f"customers/{get_customer_id()}/{form_id}/tasks",
+        query={"page": page},
+    )
+
+
 def get_user(user_id: str) -> Any:
     return _request_json("GET", f"customers/{get_customer_id()}/users/{user_id}")
 
