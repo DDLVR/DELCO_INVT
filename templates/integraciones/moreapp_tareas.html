@@ -9,10 +9,70 @@
       <h1 class="h3 mb-1"><i class="bi bi-send-check"></i> Tareas MoreApp</h1>
       <p class="text-muted mb-0">Envía un formulario a la sección Tareas de la app. El aviso llega en MoreApp, no por correo.</p>
     </div>
-    <a href="{% url 'moreapp_tarea_crear' %}" class="btn btn-primary">
-      <i class="bi bi-plus-circle"></i> Nueva tarea
-    </a>
+    <div class="d-flex flex-wrap gap-2">
+      <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteListado">
+        <i class="bi bi-list-check"></i> Listado
+      </button>
+      <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteCsv">
+        <i class="bi bi-file-earmark-spreadsheet"></i> Carga Excel/CSV
+      </button>
+      <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteClientes">
+        <i class="bi bi-buildings"></i> Desde clientes
+      </button>
+      <a href="{% url 'moreapp_tarea_crear' %}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Nueva tarea
+      </a>
+    </div>
   </div>
+
+  {% if tareas_aviso.tareas_alertas %}
+  <div class="alert alert-info border mb-3" role="status">
+    {% if tareas_aviso.tareas_creacion %}{{ tareas_aviso.tareas_creacion }} tarea{{ tareas_aviso.tareas_creacion|pluralize }} creada{{ tareas_aviso.tareas_creacion|pluralize }}{% endif %}
+    {% if tareas_aviso.tareas_creacion and tareas_aviso.tareas_completado %} / {% endif %}
+    {% if tareas_aviso.tareas_completado %}{{ tareas_aviso.tareas_completado }} completada{{ tareas_aviso.tareas_completado|pluralize }} por revisar{% endif %}
+  </div>
+  {% endif %}
+
+  {% if kpis_tareas %}
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card delco-panel-card h-100">
+        <div class="card-body py-2">
+          <div class="small text-muted">Abiertas</div>
+          <div class="fs-4 fw-semibold">{{ kpis_tareas.abiertas }}</div>
+          <div class="small text-muted">Hoy {{ kpis_tareas.hoy_creadas }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card delco-panel-card h-100">
+        <div class="card-body py-2">
+          <div class="small text-muted">Completadas 7 d</div>
+          <div class="fs-4 fw-semibold text-success">{{ kpis_tareas.d7_completadas }}</div>
+          <div class="small text-muted">Hoy {{ kpis_tareas.hoy_completadas }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card delco-panel-card h-100">
+        <div class="card-body py-2">
+          <div class="small text-muted">Vencidas</div>
+          <div class="fs-4 fw-semibold {% if kpis_tareas.vencidas %}text-danger{% endif %}">{{ kpis_tareas.vencidas }}</div>
+          <div class="small text-muted">Errores {{ kpis_tareas.errores }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card delco-panel-card h-100">
+        <div class="card-body py-2">
+          <div class="small text-muted">Tiempo medio 30 d</div>
+          <div class="fs-4 fw-semibold">{% if kpis_tareas.media_horas != None %}{{ kpis_tareas.media_horas }} h{% else %}—{% endif %}</div>
+          <div class="small text-muted">Creadas 30 d {{ kpis_tareas.d30_creadas }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endif %}
 
   {% if tareas %}
   <div class="table-responsive">
@@ -26,13 +86,17 @@
           <th>Envío</th>
           <th>Límite</th>
           <th>Estado</th>
+          <th>Historial</th>
         </tr>
       </thead>
       <tbody>
         {% for tarea in tareas %}
         <tr>
           <td class="small">{{ tarea.fecha_creacion|date:"d/m/Y H:i" }}</td>
-          <td>{{ tarea.form_name|default:tarea.form_id }}</td>
+          <td>
+            {{ tarea.form_name|default:tarea.form_id }}
+            {% if tarea.cuenta %}<div class="small text-muted">CUENTA {{ tarea.cuenta }}</div>{% endif %}
+          </td>
           <td>{{ tarea.mensaje }}</td>
           <td class="small">
             {% if tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% endif %}
@@ -47,13 +111,24 @@
           </td>
           <td class="small">{{ tarea.fecha_limite|date:"d/m/Y H:i"|default:"—" }}</td>
           <td>
-            {% if tarea.error %}
+            {% if tarea.estado == 'ERROR' or tarea.error %}
             <span class="badge text-bg-danger">Error</span>
-            <div class="small text-danger">{{ tarea.error|truncatechars:80 }}</div>
+            {% if tarea.error %}<div class="small text-danger">{{ tarea.error|truncatechars:80 }}</div>{% endif %}
+            {% elif tarea.estado == 'COMPLETADA' %}
+            <span class="badge text-bg-success">Completada</span>
+            <div class="small text-muted">{{ tarea.fecha_completado|date:"d/m/Y H:i"|default:"" }}</div>
+            {% elif tarea.estado == 'ASIGNADA' %}
+            <span class="badge text-bg-primary">Asignada</span>
             {% else %}
-            <span class="badge text-bg-success">Enviada</span>
-            {% if tarea.task_id %}<div class="small text-muted">{{ tarea.task_id }}</div>{% endif %}
+            <span class="badge text-bg-secondary">{{ tarea.get_estado_display }}</span>
             {% endif %}
+          </td>
+          <td class="small">
+            {% for evento in tarea.eventos.all %}
+            <div>{{ evento.get_tipo_display }} · {{ evento.en|date:"d/m H:i" }}</div>
+            {% empty %}
+            <span class="text-muted">—</span>
+            {% endfor %}
           </td>
         </tr>
         {% endfor %}
@@ -67,4 +142,297 @@
   </div>
   {% endif %}
 </div>
+
+{% include 'integraciones/_moreapp_lote_csv_modal.html' %}
+{% include 'integraciones/_moreapp_lote_clientes_modal.html' %}
+{% include 'integraciones/_moreapp_lote_listado_modal.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var csvModal = document.getElementById('modalLoteCsv');
+  var clientesModal = document.getElementById('modalLoteClientes');
+  var listadoModal = document.getElementById('modalLoteListado');
+  var open = '{{ lote_modal|default:""|escapejs }}';
+  var jsonUrl = "{% url 'moreapp_tareas_lote_clientes' %}?json=1";
+  var listadoJsonUrl = "{% url 'moreapp_tareas_lote_listado' %}?json=1";
+  var loaded = false;
+  var listadoCatalogo = null;
+  var maxFilasListado = Number({{ max_filas_listado|default:15 }}) || 15;
+
+  function mount(modal) {
+    if (modal && modal.parentElement !== document.body) document.body.appendChild(modal);
+  }
+  mount(csvModal);
+  mount(clientesModal);
+  mount(listadoModal);
+
+  var archivo = document.getElementById('archivoLoteCsv');
+  var archivoNombre = document.getElementById('archivoLoteCsvNombre');
+  if (archivo && archivoNombre) {
+    archivo.addEventListener('change', function () {
+      var file = archivo.files && archivo.files[0];
+      archivoNombre.textContent = file ? file.name : 'Solo .csv o .xlsx · una fila por tarea';
+      if (archivo.closest('.delco-import-file-zone')) {
+        archivo.closest('.delco-import-file-zone').classList.toggle('has-file', !!file);
+      }
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, function (ch) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch];
+    });
+  }
+
+  function bindFiltro() {
+    var input = document.getElementById('js-filtro-clientes');
+    var rows = document.querySelectorAll('.js-lote-cliente');
+    if (!input) return;
+    input.oninput = function () {
+      var q = (input.value || '').toLowerCase();
+      rows = document.querySelectorAll('.js-lote-cliente');
+      rows.forEach(function (row) {
+        row.classList.toggle('d-none', q && row.textContent.toLowerCase().indexOf(q) === -1);
+      });
+    };
+  }
+
+  function fillSelect(select, items, selected) {
+    if (!select) return;
+    var current = selected || select.value || '';
+    select.innerHTML = '<option value="">— Elige un formulario —</option>';
+    (items || []).forEach(function (item) {
+      var opt = document.createElement('option');
+      opt.value = item.id || '';
+      opt.textContent = item.name || item.id || '';
+      if (String(opt.value) === String(current)) opt.selected = true;
+      select.appendChild(opt);
+    });
+  }
+
+  function fillChecks(box, items, name, selected, emptyText) {
+    if (!box) return;
+    var chosen = selected || [];
+    if (!items || !items.length) {
+      box.innerHTML = '<p class="text-muted mb-0">' + escapeHtml(emptyText) + '</p>';
+      return;
+    }
+    box.innerHTML = items.map(function (item) {
+      var value = name === 'grupos' ? (item.id || '') : (item.email || '');
+      var title = name === 'grupos' ? (item.nombre || value) : (item.nombre || item.email || '');
+      var extra = name === 'grupos' ? (item.detalle || '') : (item.email || '');
+      var checked = chosen.indexOf(String(value)) !== -1 ? ' checked' : '';
+      return '<label class="d-flex gap-2 align-items-start py-1">' +
+        '<input class="form-check-input mt-1" type="checkbox" name="' + name + '" value="' + escapeHtml(value) + '"' + checked + '>' +
+        '<span>' + escapeHtml(title) +
+        (extra && extra !== title ? '<div class="small text-muted">' + escapeHtml(extra) + '</div>' : '') +
+        '</span></label>';
+    }).join('');
+  }
+
+  function fillClientes(box, items, selected) {
+    if (!box) return;
+    var chosen = selected || [];
+    if (!items || !items.length) {
+      box.innerHTML = '<p class="text-muted mb-0">No hay clientes activos en la intranet. Pega números de cuenta abajo (tienen que existir como cliente).</p>';
+      return;
+    }
+    box.innerHTML = items.map(function (item) {
+      var id = String(item.id || '');
+      var checked = chosen.indexOf(id) !== -1 ? ' checked' : '';
+      var detalle = [item.direccion, item.comuna].filter(Boolean).join(' · ');
+      return '<label class="d-flex gap-2 align-items-start delco-lote-cliente js-lote-cliente">' +
+        '<input class="form-check-input mt-1" type="checkbox" name="clientes" value="' + escapeHtml(id) + '"' + checked + '>' +
+        '<span><strong>' + escapeHtml(item.numero_cliente || '') + '</strong>' +
+        (detalle ? '<div class="small text-muted">' + escapeHtml(detalle) + '</div>' : '') +
+        '</span></label>';
+    }).join('');
+    bindFiltro();
+  }
+
+  function loadClientesModal() {
+    var select = document.getElementById('lote_form_id');
+    if (loaded || (select && select.options.length > 1)) {
+      bindFiltro();
+      return;
+    }
+    var status = document.getElementById('js-lote-clientes-status');
+    var errBox = document.querySelector('#modalLoteClientes .js-lote-clientes-error');
+    if (status) status.textContent = 'Cargando formularios, destinatarios y clientes…';
+    fetch(jsonUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (resp) { return resp.json().then(function (data) { return { ok: resp.ok, data: data }; }); })
+      .then(function (pack) {
+        var data = pack.data || {};
+        if (!pack.ok || data.ok === false) {
+          if (errBox) {
+            errBox.textContent = data.error || 'No se pudieron cargar los datos.';
+            errBox.classList.remove('d-none');
+          }
+          if (status) status.textContent = 'No se pudo cargar el popup. Cierra y vuelve a intentar.';
+          return;
+        }
+        loaded = true;
+        fillSelect(select, data.formularios || []);
+        fillChecks(document.getElementById('js-lote-usuarios'), data.usuarios || [], 'usuarios', [], 'No hay usuarios MoreApp activos.');
+        fillChecks(document.getElementById('js-lote-grupos'), data.grupos || [], 'grupos', [], 'No hay grupos para mostrar.');
+        fillClientes(document.getElementById('js-lista-clientes'), data.clientes || [], []);
+        if (status) {
+          status.textContent = 'Elige formulario, destinatario MoreApp y clientes. Si el Search coincide con CUENTA, se precarga.';
+        }
+      })
+      .catch(function () {
+        if (errBox) {
+          errBox.textContent = 'No se pudieron cargar los datos.';
+          errBox.classList.remove('d-none');
+        }
+        if (status) status.textContent = 'No se pudo cargar el popup. Cierra y vuelve a intentar.';
+      });
+  }
+
+  if (clientesModal) {
+    clientesModal.addEventListener('show.bs.modal', loadClientesModal);
+  }
+
+  function fillDestinoSelect(select, data) {
+    if (!select) return;
+    var current = select.value || '';
+    var html = '<option value="">— Persona o grupo —</option>';
+    html += '<optgroup label="Usuarios">';
+    (data.usuarios || []).forEach(function (item) {
+      var value = 'user:' + (item.email || '');
+      var label = item.nombre || item.email || '';
+      html += '<option value="' + escapeHtml(value) + '"' + (current === value ? ' selected' : '') + '>' +
+        escapeHtml(label) + '</option>';
+    });
+    html += '</optgroup><optgroup label="Grupos">';
+    (data.grupos || []).forEach(function (item) {
+      var value = 'group:' + (item.id || '');
+      var label = item.nombre || item.id || '';
+      html += '<option value="' + escapeHtml(value) + '"' + (current === value ? ' selected' : '') + '>' +
+        escapeHtml(label) + '</option>';
+    });
+    html += '</optgroup>';
+    select.innerHTML = html;
+  }
+
+  function addListadoFila() {
+    var body = document.getElementById('js-listado-filas');
+    var tpl = document.getElementById('tplListadoFila');
+    if (!body || !tpl || !listadoCatalogo) return;
+    if (body.querySelectorAll('.js-listado-fila').length >= maxFilasListado) return;
+    var row = tpl.content.cloneNode(true);
+    fillSelect(row.querySelector('.js-listado-form'), listadoCatalogo.formularios || []);
+    fillDestinoSelect(row.querySelector('.js-listado-dest'), listadoCatalogo);
+    body.appendChild(row);
+  }
+
+  function loadListadoModal() {
+    var status = document.getElementById('js-lote-listado-status');
+    var errBox = document.querySelector('#modalLoteListado .js-lote-listado-error');
+    var body = document.getElementById('js-listado-filas');
+    if (listadoCatalogo) {
+      if (body && !body.querySelector('.js-listado-fila')) addListadoFila();
+      return;
+    }
+    if (status) status.textContent = 'Cargando formularios y destinatarios…';
+    fetch(listadoJsonUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (resp) { return resp.json().then(function (data) { return { ok: resp.ok, data: data }; }); })
+      .then(function (pack) {
+        var data = pack.data || {};
+        if (!pack.ok || data.ok === false) {
+          if (errBox) {
+            errBox.textContent = data.error || 'No se pudieron cargar los datos.';
+            errBox.classList.remove('d-none');
+          }
+          if (status) status.textContent = 'No se pudo cargar el listado. Cierra y vuelve a intentar.';
+          return;
+        }
+        listadoCatalogo = data;
+        if (body) body.innerHTML = '';
+        addListadoFila();
+        if (status) {
+          status.textContent = 'Cada fila crea esa cantidad de tareas para la misma persona o grupo.';
+        }
+      })
+      .catch(function () {
+        if (errBox) {
+          errBox.textContent = 'No se pudieron cargar los datos.';
+          errBox.classList.remove('d-none');
+        }
+      });
+  }
+
+  var btnAgregar = document.getElementById('js-listado-agregar');
+  if (btnAgregar) {
+    btnAgregar.addEventListener('click', function () {
+      if (!listadoCatalogo) loadListadoModal();
+      else addListadoFila();
+    });
+  }
+  var filasBox = document.getElementById('js-listado-filas');
+  if (filasBox) {
+    filasBox.addEventListener('click', function (ev) {
+      var btn = ev.target.closest('.js-listado-quitar');
+      if (!btn) return;
+      var row = btn.closest('.js-listado-fila');
+      if (!row) return;
+      if (filasBox.querySelectorAll('.js-listado-fila').length <= 1) return;
+      row.remove();
+    });
+  }
+  if (listadoModal) {
+    listadoModal.addEventListener('show.bs.modal', loadListadoModal);
+  }
+  var formListado = document.getElementById('formLoteListado');
+  if (formListado) {
+    formListado.addEventListener('submit', function (ev) {
+      var rows = Array.prototype.slice.call(document.querySelectorAll('.js-listado-fila'));
+      var complete = rows.filter(function (row) {
+        var form = row.querySelector('.js-listado-form');
+        var dest = row.querySelector('.js-listado-dest');
+        return form && dest && form.value && dest.value;
+      });
+      rows.forEach(function (row) {
+        if (complete.indexOf(row) !== -1) return;
+        var form = row.querySelector('.js-listado-form');
+        var dest = row.querySelector('.js-listado-dest');
+        var cant = row.querySelector('input[name="cantidad"]');
+        if (form) form.disabled = true;
+        if (dest) dest.disabled = true;
+        if (cant) cant.disabled = true;
+      });
+      if (!complete.length) {
+        rows.forEach(function (row) {
+          var form = row.querySelector('.js-listado-form');
+          var dest = row.querySelector('.js-listado-dest');
+          var cant = row.querySelector('input[name="cantidad"]');
+          if (form) form.disabled = false;
+          if (dest) dest.disabled = false;
+          if (cant) cant.disabled = false;
+        });
+        ev.preventDefault();
+        var errBox = document.querySelector('#modalLoteListado .js-lote-listado-error');
+        if (errBox) {
+          errBox.textContent = 'Completa al menos una fila con formulario y persona o grupo.';
+          errBox.classList.remove('d-none');
+        }
+      }
+    });
+  }
+
+  bindFiltro();
+
+  if (open === 'csv' && csvModal && window.bootstrap) {
+    window.bootstrap.Modal.getOrCreateInstance(csvModal).show();
+  }
+  if (open === 'clientes' && clientesModal && window.bootstrap) {
+    window.bootstrap.Modal.getOrCreateInstance(clientesModal).show();
+  }
+  if (open === 'listado' && listadoModal && window.bootstrap) {
+    window.bootstrap.Modal.getOrCreateInstance(listadoModal).show();
+  }
+})();
+</script>
 {% endblock %}

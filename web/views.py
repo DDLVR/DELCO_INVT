@@ -101,6 +101,7 @@ from web.services.validators import (
     validate_restriccion_con_justificacion,
 )
 from web.services.dashboard_metrics import (
+    build_kpis_tareas_moreapp,
     build_panel_alarmas_analistas,
     count_clientes_con_ip_duplicada,
     count_clientes_con_medidor_duplicado,
@@ -480,6 +481,7 @@ def dashboard_view(request):
                 .order_by('-c')
             )
             context['moreapp_adv_breakdown'] = _calcular_adv_breakdown(IntegracionMoreApp)
+            context['kpis_tareas_moreapp'] = build_kpis_tareas_moreapp()
         except Exception:
             context['moreapp_pendientes'] = 0
             context['moreapp_con_advertencia'] = 0
@@ -487,6 +489,7 @@ def dashboard_view(request):
             context['moreapp_sinc_breakdown'] = []
             context['moreapp_formulario_breakdown'] = []
             context['moreapp_adv_breakdown'] = []
+            context['kpis_tareas_moreapp'] = {}
 
         return render(request, 'dashboards/admin_dashboard.html', context)
     elif rol == 'TECNICO':

@@ -356,3 +356,14 @@ def build_panel_alarmas_analistas() -> List[Dict[str, Any]]:
             'url': _url_listado_clientes('pendiente_sci4'),
         },
     ]
+
+
+def build_kpis_tareas_moreapp() -> Dict[str, Any]:
+    from web.perf_cache import TTL_CORTO, cache_get_or_set
+
+    def _calc():
+        from integraciones.moreapp_tareas_ciclo import kpis_tareas
+
+        return kpis_tareas()
+
+    return cache_get_or_set('moreapp:tareas_kpis', _calc, TTL_CORTO)

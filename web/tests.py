@@ -799,6 +799,25 @@ class MoreAppAvisoTests(TestCase):
 		self.assertEqual(aviso_despues['por_revisar'], 0)
 		self.assertFalse(aviso_despues['activo'])
 
+	def test_alerta_tarea_aparece_en_navbar(self):
+		from integraciones.models import MoreAppTareaEnviada
+		from integraciones.moreapp_tareas_ciclo import registrar_ciclo_envio
+		from web.moreapp_avisos import construir_aviso_moreapp
+
+		tarea = MoreAppTareaEnviada.objects.create(
+			form_id='abc123abc123abc123abc123',
+			form_name='Instalacion',
+			mensaje='Visita',
+			creado_por=self.admin,
+		)
+		registrar_ciclo_envio(tarea)
+		aviso = construir_aviso_moreapp(self._request_as(self.admin))
+		self.assertGreaterEqual(aviso['tareas_creacion'], 1)
+		self.assertGreaterEqual(aviso['tareas_alertas'], 1)
+		self.assertTrue(aviso['activo'])
+		aviso_tec = construir_aviso_moreapp(self._request_as(self.tecnico))
+		self.assertEqual(aviso_tec['tareas_alertas'], 0)
+
 
 class MoreAppOpsStatusTests(TestCase):
 	"""Panel ops / registro de última sync (Punto 6)."""

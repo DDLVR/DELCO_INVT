@@ -1,0 +1,85 @@
+<div class="modal fade" id="modalLoteCsv" tabindex="-1" aria-labelledby="modalLoteCsvLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content delco-import-clientes-modal">
+      <div class="modal-header delco-import-clientes-header">
+        <div>
+          <h5 class="modal-title" id="modalLoteCsvLabel">
+            <i class="bi bi-file-earmark-spreadsheet me-2" aria-hidden="true"></i>Carga masiva Excel/CSV
+          </h5>
+          <p class="delco-import-clientes-subtitle mb-0">Una fila = una tarea · máximo {{ max_lote }} filas</p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form method="post" action="{% url 'moreapp_tareas_lote_csv' %}" enctype="multipart/form-data" id="formLoteCsv">
+        {% csrf_token %}
+        <div class="modal-body">
+          {% if lote_modal == 'csv' and error %}
+          <div class="alert alert-warning">{{ error }}</div>
+          {% endif %}
+          <section class="delco-import-section">
+            <div class="delco-import-section-label">1. Archivo</div>
+            <label for="archivoLoteCsv" class="delco-import-file-zone{% if archivo_nombre %} has-file{% endif %}">
+              <span class="delco-import-file-icon" aria-hidden="true"><i class="bi bi-cloud-upload"></i></span>
+              <span class="delco-import-file-copy">
+                <span class="delco-import-file-title">Seleccionar CSV o Excel</span>
+                <span class="delco-import-file-hint" id="archivoLoteCsvNombre">{% if archivo_nombre %}{{ archivo_nombre }}{% else %}Solo .csv o .xlsx · una fila por tarea{% endif %}</span>
+              </span>
+              <input type="file" class="form-control" id="archivoLoteCsv" name="archivo"
+                     accept=".csv,.xlsx,.xlsm,text/csv" required>
+            </label>
+            <a href="{% url 'moreapp_tareas_lote_plantilla' %}" class="btn btn-link btn-sm px-0 mt-2">
+              <i class="bi bi-download"></i> Descargar plantilla Excel
+            </a>
+          </section>
+          <section class="delco-import-section mb-0">
+            <div class="delco-import-section-label">2. Columnas</div>
+            <p class="small text-muted mb-2">
+              Cabeceras: <code>formulario</code>, <code>destinatario</code>, <code>mensaje</code>, <code>fecha</code>, <code>ubicacion</code>, <code>cliente</code>.
+              El destinatario es un correo MoreApp o el nombre de un grupo. Si el Search coincide con <strong>CUENTA</strong>, se precarga.
+            </p>
+          </section>
+          {% if lote_modal == 'csv' and resultados %}
+          <div class="table-responsive mt-3">
+            <table class="table align-middle mb-0">
+              <thead class="table-delco">
+                <tr>
+                  <th>Fila</th>
+                  <th>Formulario</th>
+                  <th>Destinatario</th>
+                  <th>Cliente</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in resultados %}
+                <tr>
+                  <td>{{ item.fila }}</td>
+                  <td>{{ item.formulario }}</td>
+                  <td class="small">{{ item.destinatario }}</td>
+                  <td>{{ item.cliente|default:"—" }}</td>
+                  <td>
+                    {% if item.ok %}
+                    <span class="badge text-bg-success">Enviada</span>
+                    {% if item.precarga %}<div class="small text-muted">Search precargado</div>{% endif %}
+                    {% else %}
+                    <span class="badge text-bg-danger">Error</span>
+                    <div class="small text-danger">{{ item.error }}</div>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+        <div class="modal-footer delco-import-clientes-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-send me-1"></i>Validar y enviar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

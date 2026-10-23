@@ -2400,6 +2400,7 @@ def _procesar_json(
     else:
         resultado['mensaje'] = desc_alerta if tiene_alerta else 'OK'
     logger.info('Registrado: %s (alerta=%s)', submission_id, tiene_alerta)
+    _vincular_tarea_moreapp(registro)
     return resultado
 
 
@@ -2546,6 +2547,7 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
         resultado['mensaje'] = f'Pendientes operativos detectados: {len(resumen_operativo.get("pendientes_revision", []))}'
     else:
         resultado['mensaje'] = desc_alerta if tiene_alerta else 'OK'
+    _vincular_tarea_moreapp(registro)
     return resultado
 
 
@@ -2605,6 +2607,19 @@ def reprocesar_registro_moreapp(registro) -> Dict[str, Any]:
         'message': msg,
         'resumen': resumen,
     }
+
+
+def _vincular_tarea_moreapp(registro) -> None:
+    """Cierra una tarea enviada si el informe coincide. Nunca tumba el sync."""
+    try:
+        from integraciones.moreapp_tareas_ciclo import intentar_completar_por_informe
+
+        intentar_completar_por_informe(registro)
+    except Exception:
+        logger.exception(
+            'No se pudo vincular tarea MoreApp al informe %s',
+            getattr(registro, 'pk', None),
+        )
 
 
 def _guardar_error(json_path, ruta_carpeta, numero_correlativo, estado, mensaje, data):

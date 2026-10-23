@@ -1,0 +1,144 @@
+<div class="modal fade" id="modalLoteClientes" tabindex="-1" aria-labelledby="modalLoteClientesLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content delco-import-clientes-modal">
+      <div class="modal-header delco-import-clientes-header">
+        <div>
+          <h5 class="modal-title" id="modalLoteClientesLabel">
+            <i class="bi bi-buildings me-2" aria-hidden="true"></i>Tareas desde clientes
+          </h5>
+          <p class="delco-import-clientes-subtitle mb-0">Una tarea por cliente · máximo {{ max_lote }}</p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form method="post" action="{% url 'moreapp_tareas_lote_clientes' %}" id="formLoteClientes">
+        {% csrf_token %}
+        <div class="modal-body">
+          {% if lote_modal == 'clientes' and error %}
+          <div class="alert alert-warning js-lote-clientes-error">{{ error }}</div>
+          {% else %}
+          <div class="alert alert-warning js-lote-clientes-error d-none"></div>
+          {% endif %}
+          <p class="small text-muted" id="js-lote-clientes-status">Elige formulario, destinatario MoreApp y clientes. Si el Search coincide con CUENTA, se precarga.</p>
+          <section class="delco-import-section">
+            <div class="delco-import-section-label">1. Formulario</div>
+            <label class="form-label visually-hidden" for="lote_form_id">Formulario a llenar</label>
+            <select name="form_id" id="lote_form_id" class="form-select" required>
+              <option value="">— Elige un formulario —</option>
+              {% for form in formularios %}
+              <option value="{{ form.id }}" {% if form.id == form_id %}selected{% endif %}>{{ form.name }}</option>
+              {% endfor %}
+            </select>
+          </section>
+          <section class="delco-import-section">
+            <div class="delco-import-section-label">2. Destinatarios MoreApp</div>
+            <div class="row g-3">
+              <div class="col-lg-7">
+                <div class="fw-semibold small mb-2">Usuarios</div>
+                <div class="delco-tarea-lista" id="js-lote-usuarios">
+                  {% for u in usuarios %}
+                  <label class="d-flex gap-2 align-items-start py-1">
+                    <input class="form-check-input mt-1" type="checkbox" name="usuarios" value="{{ u.email }}" {% if u.email in usuarios_sel %}checked{% endif %}>
+                    <span>
+                      {{ u.nombre|default:u.email }}
+                      <div class="small text-muted">{{ u.email }}</div>
+                    </span>
+                  </label>
+                  {% empty %}
+                  <p class="text-muted mb-0 js-lote-usuarios-empty">Se cargan al abrir el popup.</p>
+                  {% endfor %}
+                </div>
+              </div>
+              <div class="col-lg-5">
+                <div class="fw-semibold small mb-2">Grupos</div>
+                <div class="delco-tarea-lista" id="js-lote-grupos">
+                  {% for g in grupos %}
+                  <label class="d-flex gap-2 align-items-start py-2 delco-tarea-grupo">
+                    <input class="form-check-input mt-1" type="checkbox" name="grupos" value="{{ g.id }}" {% if g.id in grupos_sel %}checked{% endif %}>
+                    <span>
+                      {{ g.nombre }}
+                      {% if g.detalle %}
+                      <div class="small text-muted">{{ g.detalle }}</div>
+                      {% endif %}
+                    </span>
+                  </label>
+                  {% empty %}
+                  <p class="text-muted mb-0 js-lote-grupos-empty">Se cargan al abrir el popup.</p>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="delco-import-section">
+            <div class="delco-import-section-label">3. Mensaje</div>
+            <div class="row g-3">
+              <div class="col-md-8">
+                <label class="form-label" for="lote_mensaje">Mensaje corto</label>
+                <textarea name="mensaje" id="lote_mensaje" class="form-control" rows="2" maxlength="500" required>{{ mensaje }}</textarea>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="lote_fecha_limite">Fecha límite (opcional)</label>
+                <input type="datetime-local" name="fecha_limite" id="lote_fecha_limite" class="form-control" value="{{ fecha_limite }}">
+              </div>
+            </div>
+          </section>
+          <section class="delco-import-section mb-0">
+            <div class="delco-import-section-label">4. Clientes</div>
+            <label class="form-label" for="js-filtro-clientes">Buscar en la lista</label>
+            <input type="search" id="js-filtro-clientes" class="form-control mb-2" placeholder="Cuenta, dirección o comuna" autocomplete="off">
+            <div class="delco-lote-clientes" id="js-lista-clientes">
+              {% for c in clientes %}
+              <label class="d-flex gap-2 align-items-start delco-lote-cliente js-lote-cliente">
+                <input class="form-check-input mt-1" type="checkbox" name="clientes" value="{{ c.id }}" {% if c.id|stringformat:"s" in clientes_sel %}checked{% endif %}>
+                <span>
+                  <strong>{{ c.numero_cliente }}</strong>
+                  <div class="small text-muted">{{ c.direccion }}{% if c.comuna %} · {{ c.comuna }}{% endif %}</div>
+                </span>
+              </label>
+              {% empty %}
+              <p class="text-muted mb-0 js-lote-clientes-empty">Se cargan al abrir el popup. También puedes pegar números de cuenta abajo.</p>
+              {% endfor %}
+            </div>
+            <label class="form-label mt-3" for="lote_numeros_extra">O pega números de cliente (uno por línea)</label>
+            <textarea name="numeros_extra" id="lote_numeros_extra" class="form-control" rows="3" placeholder="123456&#10;789012">{{ numeros_extra }}</textarea>
+          </section>
+          {% if lote_modal == 'clientes' and resultados %}
+          <div class="table-responsive mt-3">
+            <table class="table align-middle mb-0">
+              <thead class="table-delco">
+                <tr>
+                  <th>Cliente</th>
+                  <th>Formulario</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in resultados %}
+                <tr>
+                  <td>{{ item.cliente }}</td>
+                  <td>{{ item.formulario }}</td>
+                  <td>
+                    {% if item.ok %}
+                    <span class="badge text-bg-success">Enviada</span>
+                    {% if item.precarga %}<div class="small text-muted">Search precargado (CUENTA)</div>{% endif %}
+                    {% else %}
+                    <span class="badge text-bg-danger">Error</span>
+                    <div class="small text-danger">{{ item.error }}</div>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+        <div class="modal-footer delco-import-clientes-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-send me-1"></i>Crear una tarea por cliente
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

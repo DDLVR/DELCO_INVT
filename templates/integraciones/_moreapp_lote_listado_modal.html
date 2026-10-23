@@ -1,0 +1,120 @@
+<div class="modal fade" id="modalLoteListado" tabindex="-1" aria-labelledby="modalLoteListadoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content delco-import-clientes-modal">
+      <div class="modal-header delco-import-clientes-header">
+        <div>
+          <h5 class="modal-title" id="modalLoteListadoLabel">
+            <i class="bi bi-list-check me-2" aria-hidden="true"></i>Listado de tareas
+          </h5>
+          <p class="delco-import-clientes-subtitle mb-0">Formulario · persona o grupo · cantidad · máximo {{ max_lote }} tareas</p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form method="post" action="{% url 'moreapp_tareas_lote_listado' %}" id="formLoteListado">
+        {% csrf_token %}
+        <div class="modal-body">
+          {% if lote_modal == 'listado' and error %}
+          <div class="alert alert-warning js-lote-listado-error">{{ error }}</div>
+          {% else %}
+          <div class="alert alert-warning js-lote-listado-error d-none"></div>
+          {% endif %}
+          <p class="small text-muted" id="js-lote-listado-status">Cada fila crea esa cantidad de tareas para la misma persona o grupo.</p>
+          <section class="delco-import-section">
+            <div class="delco-import-section-label">Mensaje</div>
+            <div class="row g-3">
+              <div class="col-md-8">
+                <label class="form-label" for="listado_mensaje">Mensaje corto</label>
+                <textarea name="mensaje" id="listado_mensaje" class="form-control" rows="2" maxlength="500" required>{{ mensaje|default:"Tarea asignada desde la intranet" }}</textarea>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="listado_fecha_limite">Fecha límite (opcional)</label>
+                <input type="datetime-local" name="fecha_limite" id="listado_fecha_limite" class="form-control" value="{{ fecha_limite }}">
+              </div>
+            </div>
+          </section>
+          <section class="delco-import-section mb-0">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="delco-import-section-label mb-0">Listado</div>
+              <button type="button" class="btn btn-outline-primary btn-sm" id="js-listado-agregar">
+                <i class="bi bi-plus-lg"></i> Agregar fila
+              </button>
+            </div>
+            <div class="table-responsive">
+              <table class="table align-middle mb-0 delco-lote-listado-tabla">
+                <thead class="table-delco">
+                  <tr>
+                    <th>Formulario</th>
+                    <th>Persona o grupo</th>
+                    <th style="width:7.5rem">Cantidad</th>
+                    <th style="width:3rem"></th>
+                  </tr>
+                </thead>
+                <tbody id="js-listado-filas"></tbody>
+              </table>
+            </div>
+          </section>
+          {% if lote_modal == 'listado' and resultados %}
+          <div class="table-responsive mt-3">
+            <table class="table align-middle mb-0">
+              <thead class="table-delco">
+                <tr>
+                  <th>Formulario</th>
+                  <th>Destinatario</th>
+                  <th>Tarea</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for item in resultados %}
+                <tr>
+                  <td>{{ item.formulario }}</td>
+                  <td class="small">{{ item.destinatario }}</td>
+                  <td>{{ item.fila }}</td>
+                  <td>
+                    {% if item.ok %}
+                    <span class="badge text-bg-success">Enviada</span>
+                    {% else %}
+                    <span class="badge text-bg-danger">Error</span>
+                    <div class="small text-danger">{{ item.error }}</div>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% endif %}
+        </div>
+        <div class="modal-footer delco-import-clientes-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-send me-1"></i>Crear tareas del listado
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<template id="tplListadoFila">
+  <tr class="js-listado-fila">
+    <td>
+      <select name="form_id" class="form-select form-select-sm js-listado-form">
+        <option value="">— Formulario —</option>
+      </select>
+    </td>
+    <td>
+      <select name="destinatario" class="form-select form-select-sm js-listado-dest">
+        <option value="">— Persona o grupo —</option>
+      </select>
+    </td>
+    <td>
+      <input type="number" name="cantidad" class="form-control form-control-sm" min="1" max="{{ max_cantidad|default:20 }}" value="1" required>
+    </td>
+    <td class="text-end">
+      <button type="button" class="btn btn-outline-danger btn-sm js-listado-quitar" title="Quitar fila">
+        <i class="bi bi-x-lg"></i>
+      </button>
+    </td>
+  </tr>
+</template>

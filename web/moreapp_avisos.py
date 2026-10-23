@@ -36,6 +36,7 @@ def invalidar_caches_aviso_moreapp() -> None:
         'moreapp:aviso_conteos',
         'moreapp:list_kpis',
         'moreapp:adv_breakdown',
+        'moreapp:tareas_kpis',
     )
 
 
@@ -102,10 +103,24 @@ def construir_aviso_moreapp(request) -> Dict[str, Any]:
         'nuevos': 0,
         'llegaron_hoy': 0,
         'recientes': [],
+        'tareas_alertas': 0,
+        'tareas_creacion': 0,
+        'tareas_completado': 0,
     }
 
     user = getattr(request, 'user', None)
-    if not user or not user.is_authenticated or getattr(user, 'rol', None) not in ROLES_AVISO:
+    if not user or not user.is_authenticated:
+        return vacio
+
+    try:
+        from integraciones.moreapp_tareas_ciclo import conteos_alertas_tareas
+
+        vacio.update(conteos_alertas_tareas(user))
+    except Exception:
+        pass
+
+    if getattr(user, 'rol', None) not in ROLES_AVISO:
+        vacio['activo'] = bool(vacio.get('tareas_alertas'))
         return vacio
 
     try:
@@ -146,11 +161,14 @@ def construir_aviso_moreapp(request) -> Dict[str, Any]:
             })
 
     return {
-        'activo': por_revisar > 0,
+        'activo': por_revisar > 0 or int(vacio.get('tareas_alertas') or 0) > 0,
         'pendientes': int(conteos.get('pendientes') or 0),
         'advertencias': int(conteos.get('advertencias') or 0),
         'por_revisar': por_revisar,
         'nuevos': nuevos,
         'llegaron_hoy': llegaron_hoy,
         'recientes': recientes,
+        'tareas_alertas': int(vacio.get('tareas_alertas') or 0),
+        'tareas_creacion': int(vacio.get('tareas_creacion') or 0),
+        'tareas_completado': int(vacio.get('tareas_completado') or 0),
     }

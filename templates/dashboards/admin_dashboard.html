@@ -14,7 +14,7 @@
     {{ moreapp_formulario_breakdown|json_script:"datos-moreapp-formulario" }}
     {{ moreapp_adv_breakdown|json_script:"datos-moreapp-adv" }}
 
-    {% if moreapp_aviso.activo %}
+    {% if moreapp_aviso.por_revisar %}
     <div class="alert {% if moreapp_aviso.nuevos %}alert-danger{% else %}alert-warning{% endif %} border shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-start gap-3" role="alert">
         <div>
             <div class="fw-semibold mb-1">
@@ -56,6 +56,26 @@
     </div>
     {% endif %}
 
+    {% if moreapp_aviso.tareas_alertas %}
+    <div class="alert alert-info border shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-start gap-3" role="status">
+        <div>
+            <div class="fw-semibold mb-1">
+                <i class="bi bi-send-check me-1"></i>
+                Tareas MoreApp por revisar
+            </div>
+            <div class="small mb-0">
+                {% if moreapp_aviso.tareas_creacion %}Creadas: <strong>{{ moreapp_aviso.tareas_creacion }}</strong>{% endif %}
+                {% if moreapp_aviso.tareas_creacion and moreapp_aviso.tareas_completado %} · {% endif %}
+                {% if moreapp_aviso.tareas_completado %}Completadas: <strong>{{ moreapp_aviso.tareas_completado }}</strong>{% endif %}
+            </div>
+        </div>
+        {% url 'moreapp_tareas_list' as moreapp_tareas_list_url %}
+        {% if moreapp_tareas_list_url %}
+        <a href="{{ moreapp_tareas_list_url }}" class="btn btn-sm btn-info text-dark">Abrir Tareas MoreApp</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <!-- Encabezado: accesos rápidos + alertas de calidad -->
     <div class="card delco-dash-hero shadow-sm mb-3">
         <div class="card-body py-3">
@@ -76,7 +96,7 @@
                 <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-cloud-download"></i> MoreApp</a>
                 <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm delco-dash-btn-outline">
                     <i class="bi bi-list-task"></i> Pendientes MoreApp
-                    {% if moreapp_aviso.activo %}
+                    {% if moreapp_aviso.por_revisar %}
                     <span class="badge {% if moreapp_aviso.nuevos %}bg-danger{% else %}bg-warning text-dark{% endif %} ms-1">{{ moreapp_aviso.por_revisar }}</span>
                     {% endif %}
                 </a>
@@ -235,6 +255,58 @@
             </div>
         </div>
     </div>
+
+    {% if kpis_tareas_moreapp %}
+    <div class="delco-dash-section-title"><i class="bi bi-send-check text-primary"></i> Tareas MoreApp</div>
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+            <a href="{% url 'moreapp_tareas_list' %}" class="text-decoration-none text-reset">
+                <div class="card delco-panel-card h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small mb-1">Abiertas</div>
+                        <div class="delco-kpi-value">{{ kpis_tareas_moreapp.abiertas|default:0 }}</div>
+                        <div class="small text-muted mt-1">Hoy creadas {{ kpis_tareas_moreapp.hoy_creadas|default:0 }}</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="{% url 'moreapp_tareas_list' %}" class="text-decoration-none text-reset">
+                <div class="card delco-panel-card h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small mb-1">Completadas (7 d)</div>
+                        <div class="delco-kpi-value text-success">{{ kpis_tareas_moreapp.d7_completadas|default:0 }}</div>
+                        <div class="small text-muted mt-1">Hoy {{ kpis_tareas_moreapp.hoy_completadas|default:0 }}</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="{% url 'moreapp_tareas_list' %}" class="text-decoration-none text-reset">
+                <div class="card delco-panel-card h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small mb-1">Vencidas</div>
+                        <div class="delco-kpi-value {% if kpis_tareas_moreapp.vencidas %}text-danger{% endif %}">{{ kpis_tareas_moreapp.vencidas|default:0 }}</div>
+                        <div class="small text-muted mt-1">Errores {{ kpis_tareas_moreapp.errores|default:0 }}</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+        <div class="col-6 col-md-3">
+            <a href="{% url 'moreapp_tareas_list' %}" class="text-decoration-none text-reset">
+                <div class="card delco-panel-card h-100">
+                    <div class="card-body py-3">
+                        <div class="text-muted small mb-1">Tiempo medio (30 d)</div>
+                        <div class="delco-kpi-value">
+                            {% if kpis_tareas_moreapp.media_horas != None %}{{ kpis_tareas_moreapp.media_horas }} h{% else %}—{% endif %}
+                        </div>
+                        <div class="small text-muted mt-1">Creadas 30 d {{ kpis_tareas_moreapp.d30_creadas|default:0 }}</div>
+                    </div>
+                </div>
+            </a>
+        </div>
+    </div>
+    {% endif %}
 
     <!-- 3. Operación del día -->
     {% if ordenes_habilitadas and ot_colas or moreapp_pendientes or moreapp_con_advertencia or moreapp_envejecidos %}

@@ -437,9 +437,9 @@ def create_task(form_id: str, payload: Dict[str, Any]) -> Any:
 
 def list_form_tasks(form_id: str, *, page: int = 0) -> Any:
     return _request_json(
-        "GET",
-        f"customers/{get_customer_id()}/{form_id}/tasks",
-        query={"page": page},
+        "POST",
+        f"customers/{get_customer_id()}/{form_id}/tasks/filter/{int(page or 0)}",
+        payload={"pageSize": 20},
     )
 
 

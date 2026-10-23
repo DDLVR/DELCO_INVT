@@ -6,7 +6,9 @@ from .models import (
     MoreAppFuenteFila,
     MoreAppFuenteInterna,
     MoreAppGrupoAlias,
+    MoreAppTareaAlerta,
     MoreAppTareaEnviada,
+    MoreAppTareaEvento,
 )
 
 
@@ -49,7 +51,31 @@ class MoreAppGrupoAliasAdmin(admin.ModelAdmin):
 
 @admin.register(MoreAppTareaEnviada)
 class MoreAppTareaEnviadaAdmin(admin.ModelAdmin):
-    list_display = ("form_name", "mensaje", "envio", "creado_por", "fecha_creacion", "task_id")
-    list_filter = ("envio",)
-    search_fields = ("form_id", "form_name", "mensaje", "task_id")
+    list_display = (
+        "form_name",
+        "mensaje",
+        "estado",
+        "cuenta",
+        "envio",
+        "creado_por",
+        "fecha_creacion",
+        "fecha_completado",
+        "task_id",
+    )
+    list_filter = ("estado", "envio")
+    search_fields = ("form_id", "form_name", "mensaje", "task_id", "cuenta")
+    readonly_fields = ("fecha_creacion", "fecha_asignacion", "fecha_completado", "ultima_sync")
+
+
+@admin.register(MoreAppTareaEvento)
+class MoreAppTareaEventoAdmin(admin.ModelAdmin):
+    list_display = ("tarea", "tipo", "origen", "en")
+    list_filter = ("tipo", "origen")
+    readonly_fields = ("en",)
+
+
+@admin.register(MoreAppTareaAlerta)
+class MoreAppTareaAlertaAdmin(admin.ModelAdmin):
+    list_display = ("tarea", "tipo", "usuario", "broadcast", "leida_en", "fecha_creacion")
+    list_filter = ("tipo", "broadcast")
     readonly_fields = ("fecha_creacion",)

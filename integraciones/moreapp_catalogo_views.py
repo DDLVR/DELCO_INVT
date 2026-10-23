@@ -164,6 +164,17 @@ def _extract_fields(fields: Any, depth: int = 0) -> List[Dict[str, Any]]:
             continue
         props = field.get("properties") if isinstance(field.get("properties"), dict) else {}
         short = _widget_short(str(field.get("widget") or ""))
+        search_cfg = props.get("search") if isinstance(props.get("search"), dict) else {}
+        datasource_id = str(
+            props.get("dataSourceId")
+            or props.get("datasourceId")
+            or props.get("data_source")
+            or props.get("datasource")
+            or search_cfg.get("dataSourceId")
+            or search_cfg.get("datasourceId")
+            or field.get("dataSourceId")
+            or ""
+        ).strip()
         rows.append(
             {
                 "widget": short,
@@ -172,6 +183,7 @@ def _extract_fields(fields: Any, depth: int = 0) -> List[Dict[str, Any]]:
                 "label": props.get("label_text") or props.get("label") or field.get("name") or "Sin etiqueta",
                 "required": bool(props.get("required")),
                 "data_type": (field.get("data") or {}).get("type") or field.get("dataType") or "",
+                "datasource_id": datasource_id,
                 "depth": depth,
             }
         )

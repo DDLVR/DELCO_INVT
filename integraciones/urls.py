@@ -28,7 +28,15 @@ from .moreapp_registros_views import (
     registros_form_view,
     ultimo_registro_view,
 )
-from .moreapp_tareas_views import tarea_campos_view, tarea_crear_view, tareas_list_view
+from .moreapp_tareas_views import (
+    tarea_campos_view,
+    tarea_crear_view,
+    tarea_lote_clientes_view,
+    tarea_lote_csv_view,
+    tarea_lote_listado_view,
+    tarea_lote_plantilla_view,
+    tareas_list_view,
+)
 from .moreapp_visualizacion_views import (
     v1_visualizacion_datasource_detail,
     v1_visualizacion_datasources_list,
@@ -53,6 +61,26 @@ urlpatterns = [
     ),
     path('moreapp/tareas/', tareas_list_view, name='moreapp_tareas_list'),
     path('moreapp/tareas/nueva/', tarea_crear_view, name='moreapp_tarea_crear'),
+    path(
+        'moreapp/tareas/lote/csv/',
+        tarea_lote_csv_view,
+        name='moreapp_tareas_lote_csv',
+    ),
+    path(
+        'moreapp/tareas/lote/csv/plantilla/',
+        tarea_lote_plantilla_view,
+        name='moreapp_tareas_lote_plantilla',
+    ),
+    path(
+        'moreapp/tareas/lote/clientes/',
+        tarea_lote_clientes_view,
+        name='moreapp_tareas_lote_clientes',
+    ),
+    path(
+        'moreapp/tareas/lote/listado/',
+        tarea_lote_listado_view,
+        name='moreapp_tareas_lote_listado',
+    ),
     path(
         'moreapp/tareas/campos/<str:form_id>/',
         tarea_campos_view,

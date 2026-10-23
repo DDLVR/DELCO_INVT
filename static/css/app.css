@@ -2463,6 +2463,43 @@ body.delco-foto-lightbox-open {
   font-weight: 600;
 }
 
+.delco-lote-clientes {
+  max-height: 22rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.65rem;
+  padding: 0.35rem 0.6rem;
+  background: var(--bs-body-bg);
+}
+
+.delco-lote-cliente {
+  border-radius: 0.5rem;
+  padding: 0.45rem 0.4rem;
+}
+
+.delco-lote-cliente + .delco-lote-cliente {
+  border-top: 1px solid var(--bs-border-color);
+}
+
+#modalLoteCsv .modal-body,
+#modalLoteClientes .modal-body {
+  max-height: min(70vh, 40rem);
+}
+
+#modalLoteClientes .delco-tarea-lista {
+  max-height: 12rem;
+}
+
+#modalLoteListado .modal-body {
+  max-height: min(70vh, 40rem);
+}
+
+.delco-lote-listado-tabla select,
+.delco-lote-listado-tabla input[type="number"] {
+  min-width: 0;
+}
+
 .delco-catalogo-hero {
   background: linear-gradient(135deg, rgba(26, 58, 92, 0.08) 0%, rgba(74, 144, 226, 0.08) 100%);
   border: 1px solid var(--bs-border-color);
