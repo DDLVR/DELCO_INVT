@@ -3,25 +3,27 @@
 {% block title %}Tareas MoreApp{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-    <div>
-      <h1 class="h3 mb-1"><i class="bi bi-send-check"></i> Tareas MoreApp</h1>
-      <p class="text-muted mb-0">Envía un formulario a la sección Tareas de la app. El aviso llega en MoreApp, no por correo.</p>
-    </div>
-    <div class="d-flex flex-wrap gap-2">
-      <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteListado">
-        <i class="bi bi-list-check"></i> Listado
-      </button>
-      <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteCsv">
-        <i class="bi bi-file-earmark-spreadsheet"></i> Carga Excel/CSV
-      </button>
-      <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteClientes">
-        <i class="bi bi-buildings"></i> Desde clientes
-      </button>
-      <a href="{% url 'moreapp_tarea_crear' %}" class="btn btn-primary">
-        <i class="bi bi-plus-circle"></i> Nueva tarea
-      </a>
+<div class="container-fluid py-3">
+  <div class="row mb-3">
+    <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div>
+        <h1 class="mb-1"><i class="bi bi-send-check"></i> Tareas MoreApp</h1>
+        <p class="text-muted mb-0">Consulta de tareas enviadas, con contenido rellenado y PDF cuando están completadas. El aviso llega en MoreApp, no por correo.</p>
+      </div>
+      <div class="d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteListado">
+          <i class="bi bi-list-check"></i> Listado
+        </button>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteCsv">
+          <i class="bi bi-file-earmark-spreadsheet"></i> Carga Excel/CSV
+        </button>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteClientes">
+          <i class="bi bi-buildings"></i> Desde clientes
+        </button>
+        <a href="{% url 'moreapp_tarea_crear' %}" class="btn btn-primary">
+          <i class="bi bi-plus-circle"></i> Nueva tarea
+        </a>
+      </div>
     </div>
   </div>
 
@@ -33,114 +35,216 @@
   </div>
   {% endif %}
 
-  {% if kpis_tareas %}
-  <div class="row g-2 mb-3">
-    <div class="col-6 col-md-3">
-      <div class="card delco-panel-card h-100">
-        <div class="card-body py-2">
-          <div class="small text-muted">Abiertas</div>
-          <div class="fs-4 fw-semibold">{{ kpis_tareas.abiertas }}</div>
-          <div class="small text-muted">Hoy {{ kpis_tareas.hoy_creadas }}</div>
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card delco-panel-card h-100 border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="text-muted small">Total filtrado</div>
+          <div class="fs-3 fw-semibold">{{ resumen.total|default:0 }}</div>
         </div>
       </div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="card delco-panel-card h-100">
-        <div class="card-body py-2">
-          <div class="small text-muted">Completadas 7 d</div>
-          <div class="fs-4 fw-semibold text-success">{{ kpis_tareas.d7_completadas }}</div>
-          <div class="small text-muted">Hoy {{ kpis_tareas.hoy_completadas }}</div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card delco-panel-card h-100 border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="text-muted small">Abiertas</div>
+          <div class="fs-3 fw-semibold">{{ resumen.abiertas|default:0 }}</div>
         </div>
       </div>
     </div>
-    <div class="col-6 col-md-3">
-      <div class="card delco-panel-card h-100">
-        <div class="card-body py-2">
-          <div class="small text-muted">Vencidas</div>
-          <div class="fs-4 fw-semibold {% if kpis_tareas.vencidas %}text-danger{% endif %}">{{ kpis_tareas.vencidas }}</div>
-          <div class="small text-muted">Errores {{ kpis_tareas.errores }}</div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card delco-panel-card h-100 border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="text-muted small">Completadas</div>
+          <div class="fs-3 fw-semibold text-success">{{ resumen.completadas|default:0 }}</div>
         </div>
       </div>
     </div>
-    <div class="col-6 col-md-3">
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card delco-panel-card h-100 border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="text-muted small">Con informe</div>
+          <div class="fs-3 fw-semibold">{{ resumen.con_informe|default:0 }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card delco-panel-card h-100 border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="text-muted small">Vencidas</div>
+          <div class="fs-3 fw-semibold {% if kpis_tareas.vencidas %}text-danger{% endif %}">{{ kpis_tareas.vencidas|default:0 }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-xl-2">
+      <div class="card delco-panel-card h-100 border-0 shadow-sm">
+        <div class="card-body py-3">
+          <div class="text-muted small">Errores</div>
+          <div class="fs-3 fw-semibold">{{ resumen.errores|default:0 }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if resumen.por_formulario %}
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
       <div class="card delco-panel-card h-100">
+        <div class="card-header card-header-delco py-2">
+          <strong class="small">Por formulario</strong>
+        </div>
         <div class="card-body py-2">
-          <div class="small text-muted">Tiempo medio 30 d</div>
-          <div class="fs-4 fw-semibold">{% if kpis_tareas.media_horas != None %}{{ kpis_tareas.media_horas }} h{% else %}—{% endif %}</div>
-          <div class="small text-muted">Creadas 30 d {{ kpis_tareas.d30_creadas }}</div>
+          <ul class="list-unstyled mb-0 small">
+            {% for row in resumen.por_formulario %}
+            <li class="d-flex justify-content-between border-bottom py-1">
+              <span>{{ row.form_name }}</span>
+              <span class="badge bg-secondary">{{ row.n }}</span>
+            </li>
+            {% endfor %}
+          </ul>
         </div>
       </div>
     </div>
   </div>
   {% endif %}
 
-  {% if tareas %}
-  <div class="table-responsive">
-    <table class="table align-middle">
-      <thead class="table-delco">
-        <tr>
-          <th>Cuando</th>
-          <th>Formulario</th>
-          <th>Mensaje</th>
-          <th>Destinatarios</th>
-          <th>Envío</th>
-          <th>Límite</th>
-          <th>Estado</th>
-          <th>Historial</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for tarea in tareas %}
-        <tr>
-          <td class="small">{{ tarea.fecha_creacion|date:"d/m/Y H:i" }}</td>
-          <td>
-            {{ tarea.form_name|default:tarea.form_id }}
-            {% if tarea.cuenta %}<div class="small text-muted">CUENTA {{ tarea.cuenta }}</div>{% endif %}
-          </td>
-          <td>{{ tarea.mensaje }}</td>
-          <td class="small">
-            {% if tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% endif %}
-            {% if tarea.grupos_nombres %}<div class="text-muted">Grupos: {{ tarea.grupos_nombres|join:", " }}</div>{% endif %}
-          </td>
-          <td class="small">
-            {% if tarea.envio == 'SCHEDULED' %}
-            Programada {{ tarea.programada_para|date:"d/m/Y H:i"|default:"—" }}
-            {% else %}
-            Al momento
-            {% endif %}
-          </td>
-          <td class="small">{{ tarea.fecha_limite|date:"d/m/Y H:i"|default:"—" }}</td>
-          <td>
-            {% if tarea.estado == 'ERROR' or tarea.error %}
-            <span class="badge text-bg-danger">Error</span>
-            {% if tarea.error %}<div class="small text-danger">{{ tarea.error|truncatechars:80 }}</div>{% endif %}
-            {% elif tarea.estado == 'COMPLETADA' %}
-            <span class="badge text-bg-success">Completada</span>
-            <div class="small text-muted">{{ tarea.fecha_completado|date:"d/m/Y H:i"|default:"" }}</div>
-            {% elif tarea.estado == 'ASIGNADA' %}
-            <span class="badge text-bg-primary">Asignada</span>
-            {% else %}
-            <span class="badge text-bg-secondary">{{ tarea.get_estado_display }}</span>
-            {% endif %}
-          </td>
-          <td class="small">
-            {% for evento in tarea.eventos.all %}
-            <div>{{ evento.get_tipo_display }} · {{ evento.en|date:"d/m H:i" }}</div>
-            {% empty %}
-            <span class="text-muted">—</span>
+  <div class="card delco-panel-card mb-3">
+    <div class="card-body">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Estado</label>
+          <select name="estado" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for value, label in estados_filtro %}
+            <option value="{{ value }}" {% if estado_filtro == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
-          </td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Formulario</label>
+          <select name="formulario" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for nombre in formularios_filtro %}
+            <option value="{{ nombre }}" {% if form_filtro == nombre %}selected{% endif %}>{{ nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">CUENTA</label>
+          <input type="text" name="cuenta" class="form-control form-control-sm" value="{{ cuenta_filtro }}" placeholder="Nº cliente">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Buscar</label>
+          <input type="text" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Mensaje / formulario">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Desde</label>
+          <input type="date" name="fecha_desde" class="form-control form-control-sm" value="{{ fecha_desde }}">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Hasta</label>
+          <input type="date" name="fecha_hasta" class="form-control form-control-sm" value="{{ fecha_hasta }}">
+        </div>
+        <div class="col-12 d-flex flex-wrap gap-2 mt-2">
+          <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
+          <a href="?periodo=7" class="btn btn-sm {% if periodo == '7' %}btn-success{% else %}btn-outline-success{% endif %}">Últimos 7 días</a>
+          <a href="?periodo=30" class="btn btn-sm {% if periodo == '30' %}btn-success{% else %}btn-outline-success{% endif %}">Últimos 30 días</a>
+          <a href="{% url 'moreapp_tareas_list' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+        </div>
+      </form>
+    </div>
   </div>
-  {% else %}
-  <div class="alert alert-light border">
-    Aún no hay tareas enviadas desde la intranet.
-    <a href="{% url 'moreapp_tarea_crear' %}">Crear la primera</a>.
+
+  <div class="card delco-panel-card">
+    <div class="card-header card-header-delco d-flex justify-content-between align-items-center">
+      <strong>Listado</strong>
+      <span class="badge bg-secondary">{{ resumen.total|default:0 }} resultado(s)</span>
+    </div>
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table table-hover mb-0 align-middle">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Formulario</th>
+              <th>Mensaje</th>
+              <th>Estado</th>
+              <th class="d-none d-md-table-cell">CUENTA</th>
+              <th class="d-none d-lg-table-cell">Destinatarios</th>
+              <th class="d-none d-lg-table-cell">Evidencia</th>
+              <th class="d-none d-md-table-cell">Creada</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for tarea in tareas %}
+            <tr>
+              <td><a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="fw-bold text-decoration-none">#{{ tarea.pk }}</a></td>
+              <td>{{ tarea.form_name|default:tarea.form_id }}</td>
+              <td>{{ tarea.mensaje }}</td>
+              <td>
+                {% if tarea.estado == 'ERROR' or tarea.error %}
+                <span class="badge text-bg-danger">Error</span>
+                {% elif tarea.estado == 'COMPLETADA' %}
+                <span class="badge text-bg-success">Completada</span>
+                {% elif tarea.estado == 'ASIGNADA' %}
+                <span class="badge text-bg-primary">Asignada</span>
+                {% else %}
+                <span class="badge text-bg-secondary">{{ tarea.get_estado_display }}</span>
+                {% endif %}
+              </td>
+              <td class="d-none d-md-table-cell">{{ tarea.cuenta|default:"—" }}</td>
+              <td class="d-none d-lg-table-cell small">
+                {% if tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% endif %}
+                {% if tarea.grupos_nombres %}<div class="text-muted">Grupos: {{ tarea.grupos_nombres|join:", " }}</div>{% endif %}
+              </td>
+              <td class="d-none d-lg-table-cell">
+                {% if tarea.integracion_id %}
+                <span class="badge bg-success" title="Informe MoreApp">Informe</span>
+                {% endif %}
+                {% if tarea.puede_pdf %}
+                <span class="badge bg-info text-dark" title="PDF">PDF</span>
+                {% endif %}
+                {% if not tarea.integracion_id and not tarea.puede_pdf %}
+                <span class="text-muted">Sin evidencia</span>
+                {% endif %}
+              </td>
+              <td class="d-none d-md-table-cell">{{ tarea.fecha_creacion|date:"d/m/Y H:i" }}</td>
+              <td class="text-nowrap">
+                <a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i> Ver</a>
+                {% if tarea.puede_pdf %}
+                <a href="{% url 'moreapp_tarea_pdf' tarea.pk %}" class="btn btn-sm btn-outline-danger" title="Ver PDF del contenido rellenado" target="_blank" rel="noopener">
+                  <i class="bi bi-file-earmark-pdf"></i> PDF
+                </a>
+                {% endif %}
+              </td>
+            </tr>
+            {% empty %}
+            <tr>
+              <td colspan="9" class="text-center text-muted py-4">
+                No hay tareas MoreApp con estos filtros.
+                <a href="{% url 'moreapp_tarea_crear' %}">Crear la primera</a>.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% if page_obj and page_obj.paginator.num_pages > 1 %}
+    <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+      <span class="text-muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      <div class="btn-group btn-group-sm">
+        {% if page_obj.has_previous %}
+        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
 </div>
 
 {% include 'integraciones/_moreapp_lote_csv_modal.html' %}

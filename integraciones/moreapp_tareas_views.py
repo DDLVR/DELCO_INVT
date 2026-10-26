@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.contrib import messages
-from django.db.models import Q
+from django.core.paginator import Paginator
+from django.db.models import Count, Q
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods
@@ -351,6 +352,13 @@ def _mensaje_error_tarea(exc: Exception) -> str:
     return text
 
 
+def _error_visible_tarea(raw: str) -> str:
+    text = (raw or "").strip()
+    if not text:
+        return ""
+    return _mensaje_error_tarea(MoreAppApiError(text))
+
+
 def _es_widget(campo: Dict[str, Any], *nombres: str) -> bool:
     widget = str(campo.get("widget") or "").lower()
     compact = "".join(ch for ch in widget if ch.isalnum())
@@ -478,6 +486,22 @@ def _enviar_tarea_registrada(
 
     if not tarea.cuenta:
         tarea.cuenta = cuenta_desde_precarga(data)
+    live = None
+    live_pub = False
+    try:
+        live = get_form(form_id) if form_id else {}
+        if isinstance(live, dict):
+            live_pub = _tiene_version_publicada(live) or _tiene_version_publicada(_form_row(live))
+    except (MoreAppApiConfigError, MoreAppApiError):
+        live = None
+    if isinstance(live, dict) and not live_pub:
+        translated = _mensaje_error_tarea(
+            MoreAppApiError("Could not find published version for this form")
+        )
+        tarea.error = translated
+        tarea.save()
+        registrar_ciclo_envio(tarea)
+        return tarea, translated
     try:
         created = create_task(form_id, payload)
         task_id = ""
@@ -490,10 +514,11 @@ def _enviar_tarea_registrada(
         registrar_ciclo_envio(tarea)
         return tarea, ""
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
-        tarea.error = str(exc)
+        translated = _mensaje_error_tarea(exc)
+        tarea.error = translated
         tarea.save()
         registrar_ciclo_envio(tarea)
-        return tarea, _mensaje_error_tarea(exc)
+        return tarea, translated
 
 
 def _contexto_destinatarios(request):
@@ -555,13 +580,107 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
     user = getattr(request, "user", None)
     context["tareas_aviso"] = conteos_alertas_tareas(user)
     marcar_alertas_leidas(user)
-    tareas = list(
-        MoreAppTareaEnviada.objects.select_related("creado_por").prefetch_related("eventos")[:80]
+
+    estado_filtro = (request.GET.get("estado") or "").strip()
+    form_filtro = (request.GET.get("formulario") or "").strip()
+    cuenta_filtro = (request.GET.get("cuenta") or "").strip()
+    buscar = (request.GET.get("buscar") or "").strip()
+    fecha_desde = (request.GET.get("fecha_desde") or "").strip()
+    fecha_hasta = (request.GET.get("fecha_hasta") or "").strip()
+    periodo = (request.GET.get("periodo") or "").strip().lower()
+
+    qs = MoreAppTareaEnviada.objects.select_related("creado_por", "integracion").prefetch_related("eventos")
+    if estado_filtro:
+        qs = qs.filter(estado=estado_filtro)
+    if form_filtro:
+        qs = qs.filter(Q(form_name=form_filtro) | Q(form_id=form_filtro))
+    if cuenta_filtro:
+        qs = qs.filter(cuenta__icontains=cuenta_filtro)
+    if buscar:
+        qs = qs.filter(
+            Q(mensaje__icontains=buscar)
+            | Q(form_name__icontains=buscar)
+            | Q(cuenta__icontains=buscar)
+            | Q(task_id__icontains=buscar)
+        )
+    ahora = timezone.now()
+    if periodo == "7":
+        qs = qs.filter(fecha_creacion__gte=ahora - timedelta(days=7))
+    elif periodo == "30":
+        qs = qs.filter(fecha_creacion__gte=ahora - timedelta(days=30))
+    else:
+        if fecha_desde:
+            try:
+                d0 = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
+                qs = qs.filter(fecha_creacion__date__gte=d0)
+            except ValueError:
+                fecha_desde = ""
+        if fecha_hasta:
+            try:
+                d1 = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
+                qs = qs.filter(fecha_creacion__date__lte=d1)
+            except ValueError:
+                fecha_hasta = ""
+
+    resumen_estado = {
+        row["estado"]: row["c"] for row in qs.values("estado").annotate(c=Count("id"))
+    }
+    por_formulario = list(
+        qs.exclude(form_name="")
+        .values("form_name")
+        .annotate(n=Count("id"))
+        .order_by("-n")[:8]
     )
+    total = qs.count()
+    con_informe = qs.filter(integracion__isnull=False).count()
+    con_completadas = resumen_estado.get(MoreAppTareaEnviada.ESTADO_COMPLETADA, 0)
+
+    try:
+        per_page = int(request.GET.get("per_page") or 50)
+    except (TypeError, ValueError):
+        per_page = 50
+    if per_page not in (25, 50, 100):
+        per_page = 50
+    page_obj = Paginator(qs, per_page).get_page(request.GET.get("page") or 1)
+    tareas = list(page_obj.object_list)
     for tarea in tareas:
         tarea.grupos_nombres = _nombres_grupos_guardados(tarea.grupos)
-    context["tareas"] = tareas
-    context["kpis_tareas"] = kpis_tareas()
+        tarea.tiene_contenido = bool(tarea.integracion_id) or tarea.estado == MoreAppTareaEnviada.ESTADO_COMPLETADA
+        tarea.puede_pdf = tarea.estado == MoreAppTareaEnviada.ESTADO_COMPLETADA
+
+    query_params = request.GET.copy()
+    query_params.pop("page", None)
+    formularios_filtro = list(
+        MoreAppTareaEnviada.objects.exclude(form_name="")
+        .values_list("form_name", flat=True)
+        .distinct()
+        .order_by("form_name")
+    )
+    context.update(
+        {
+            "tareas": tareas,
+            "page_obj": page_obj,
+            "query_string": query_params.urlencode(),
+            "kpis_tareas": kpis_tareas(),
+            "estado_filtro": estado_filtro,
+            "form_filtro": form_filtro,
+            "cuenta_filtro": cuenta_filtro,
+            "buscar": buscar,
+            "fecha_desde": fecha_desde,
+            "fecha_hasta": fecha_hasta,
+            "periodo": periodo,
+            "formularios_filtro": formularios_filtro,
+            "estados_filtro": MoreAppTareaEnviada.ESTADO_CHOICES,
+            "resumen": {
+                "total": total,
+                "abiertas": resumen_estado.get(MoreAppTareaEnviada.ESTADO_ASIGNADA, 0),
+                "completadas": con_completadas,
+                "errores": resumen_estado.get(MoreAppTareaEnviada.ESTADO_ERROR, 0),
+                "con_informe": con_informe,
+                "por_formulario": por_formulario,
+            },
+        }
+    )
     return render(request, "integraciones/moreapp_tareas.html", context)
 
 
@@ -606,6 +725,55 @@ def _payload_lote_clientes(context: Dict[str, Any]) -> Dict[str, Any]:
 @admin_or_administrativo
 def tareas_list_view(request):
     return _render_tareas_list(request)
+
+
+@require_GET
+@admin_or_administrativo
+def tarea_detalle_view(request, pk: int):
+    from .moreapp_tareas_pdf import campos_rellenados_tarea, tarea_permite_pdf
+
+    tarea = get_object_or_404(
+        MoreAppTareaEnviada.objects.select_related("creado_por", "integracion").prefetch_related("eventos"),
+        pk=pk,
+    )
+    tarea.grupos_nombres = _nombres_grupos_guardados(tarea.grupos)
+    registro = tarea.integracion
+    error_visible = _error_visible_tarea(tarea.error)
+    submission_id = ""
+    if registro is not None:
+        submission_id = str(registro.moreapp_submission_id or "").strip()
+        if len(submission_id) < 8:
+            submission_id = ""
+    return render(
+        request,
+        "integraciones/moreapp_tarea_detalle.html",
+        {
+            "tarea": tarea,
+            "error_visible": error_visible,
+            "campos_rellenados": campos_rellenados_tarea(tarea),
+            "puede_pdf": tarea_permite_pdf(tarea),
+            "registro": registro,
+            "submission_id": submission_id,
+        },
+    )
+
+
+@require_GET
+@admin_or_administrativo
+def tarea_pdf_view(request, pk: int):
+    from .moreapp_tareas_pdf import pdf_bytes_tarea, tarea_permite_pdf
+
+    tarea = get_object_or_404(
+        MoreAppTareaEnviada.objects.select_related("integracion"),
+        pk=pk,
+    )
+    if not tarea_permite_pdf(tarea):
+        messages.warning(request, "El PDF está disponible cuando la tarea ya está completada.")
+        return redirect("moreapp_tarea_detalle", pk=tarea.pk)
+    pdf_bytes, nombre = pdf_bytes_tarea(tarea)
+    response = HttpResponse(pdf_bytes, content_type="application/pdf")
+    response["Content-Disposition"] = 'inline; filename="%s"' % nombre.replace('"', "")
+    return response
 
 
 @require_GET

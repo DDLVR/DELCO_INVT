@@ -1027,6 +1027,8 @@ class MoreAppApiModulosTests(TestCase):
         self.client.login(username=self.tecnico.rut, password=self.password)
         self.assertEqual(self.client.get(reverse('moreapp_tareas_list')).status_code, 403)
         self.assertEqual(self.client.get(reverse('moreapp_tarea_crear')).status_code, 403)
+        self.assertEqual(self.client.get(reverse('moreapp_tarea_detalle', args=[1])).status_code, 403)
+        self.assertEqual(self.client.get(reverse('moreapp_tarea_pdf', args=[1])).status_code, 403)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -1863,3 +1865,48 @@ class MoreAppTareaCicloTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, 'Asignada')
         self.assertFalse(MoreAppTareaAlerta.objects.filter(leida_en__isnull=True).exists())
+
+    def test_listado_tiene_formato_terminados_y_acciones(self):
+        tarea = self._tarea()
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_tareas_list'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('Listado', body)
+        self.assertIn('Filtrar', body)
+        self.assertIn(reverse('moreapp_tarea_detalle', args=[tarea.pk]), body)
+        self.assertIn('> Ver</a>', body)
+
+    def test_detalle_muestra_contenido_rellenado_y_pdf(self):
+        from ordenes_trabajo.models import IntegracionMoreApp
+        from integraciones.models import MoreAppTareaEvento
+        from integraciones.moreapp_tareas_ciclo import completar_tarea
+
+        tarea = self._tarea()
+        registro = IntegracionMoreApp.objects.create(
+            moreapp_submission_id='sub-detalle-1',
+            nombre_formulario='Instalacion',
+            estado_sincronizacion='PROCESADO',
+            datos_recibidos={'data': {'lectura': '1234'}},
+            datos_procesados={'cliente_codigo': '1001', 'actividad': 'Cambio medidor'},
+        )
+        completar_tarea(tarea, origen=MoreAppTareaEvento.ORIGEN_INFORME, integracion=registro)
+        self.client.login(username=self.admin.rut, password=self.password)
+        detalle = self.client.get(reverse('moreapp_tarea_detalle', args=[tarea.pk]))
+        self.assertEqual(detalle.status_code, 200)
+        body = detalle.content.decode('utf-8')
+        self.assertIn('Contenido rellenado', body)
+        self.assertIn('1001', body)
+        self.assertIn('Cambio medidor', body)
+        self.assertIn(reverse('moreapp_tarea_pdf', args=[tarea.pk]), body)
+        pdf = self.client.get(reverse('moreapp_tarea_pdf', args=[tarea.pk]))
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+        self.assertTrue(pdf.content.startswith(b'%PDF'))
+
+    def test_pdf_solo_si_completada(self):
+        tarea = self._tarea()
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_tarea_pdf', args=[tarea.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse('moreapp_tarea_detalle', args=[tarea.pk]))

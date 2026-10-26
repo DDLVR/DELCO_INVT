@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+
+{% block title %}Tarea MoreApp #{{ tarea.pk }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+  <div class="row mb-4 align-items-start">
+    <div class="col">
+      <h1 class="mb-1">
+        <i class="bi bi-send-check"></i> Tarea #{{ tarea.pk }}
+        {% if tarea.estado == 'ERROR' or tarea.error %}
+        <span class="badge text-bg-danger">Error</span>
+        {% elif tarea.estado == 'COMPLETADA' %}
+        <span class="badge text-bg-success">Completada</span>
+        {% elif tarea.estado == 'ASIGNADA' %}
+        <span class="badge text-bg-primary">Asignada</span>
+        {% else %}
+        <span class="badge text-bg-secondary">{{ tarea.get_estado_display }}</span>
+        {% endif %}
+      </h1>
+      <p class="text-muted mb-0">{{ tarea.form_name|default:tarea.form_id }}</p>
+    </div>
+    <div class="col-auto d-flex flex-wrap gap-2">
+      {% if puede_pdf %}
+      <a href="{% url 'moreapp_tarea_pdf' tarea.pk %}" class="btn btn-outline-danger" target="_blank" rel="noopener">
+        <i class="bi bi-file-earmark-pdf"></i> Ver PDF
+      </a>
+      {% endif %}
+      {% if registro %}
+      <a href="{% url 'reportes_moreapp_detalle' registro.pk %}" class="btn btn-outline-primary">
+        <i class="bi bi-file-earmark-text"></i> Informe MoreApp
+      </a>
+      {% endif %}
+      {% if submission_id and tarea.form_id %}
+      <a href="{% url 'moreapp_api_registro' tarea.form_id submission_id %}" class="btn btn-outline-secondary">
+        <i class="bi bi-ui-checks"></i> Contenido MoreApp
+      </a>
+      {% endif %}
+      <a href="{% url 'moreapp_tareas_list' %}" class="btn btn-secondary">
+        <i class="bi bi-arrow-left"></i> Volver
+      </a>
+    </div>
+  </div>
+
+  {% if error_visible %}
+  <div class="alert alert-danger">{{ error_visible }}</div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-lg-7">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header card-header-delco py-2">
+          <h6 class="mb-0"><i class="bi bi-clipboard-data"></i> Contenido rellenado</h6>
+        </div>
+        <div class="card-body">
+          {% if campos_rellenados %}
+          <dl class="row mb-0">
+            {% for campo in campos_rellenados %}
+            <dt class="col-sm-4">{{ campo.label }}</dt>
+            <dd class="col-sm-8">{{ campo.text }}</dd>
+            {% endfor %}
+          </dl>
+          {% else %}
+          <p class="text-muted mb-0">
+            {% if tarea.estado == 'COMPLETADA' %}
+            La tarea está completada, pero aún no hay un informe emparejado con campos para mostrar.
+            {% else %}
+            Cuando el formulario se complete en MoreApp, aquí aparece el contenido rellenado.
+            {% endif %}
+          </p>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header card-header-delco py-2">
+          <h6 class="mb-0"><i class="bi bi-clock-history"></i> Historial</h6>
+        </div>
+        <div class="card-body">
+          {% for evento in tarea.eventos.all %}
+          <div class="d-flex justify-content-between border-bottom py-2">
+            <span>{{ evento.get_tipo_display }} <span class="text-muted small">· {{ evento.get_origen_display }}</span></span>
+            <span class="small text-muted">{{ evento.en|date:"d/m/Y H:i" }}</span>
+          </div>
+          {% empty %}
+          <p class="text-muted mb-0">Sin eventos.</p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-5">
+      <div class="card shadow-sm mb-4 delco-panel-card">
+        <div class="card-header card-header-delco py-2">
+          <h6 class="mb-0">Datos de la tarea</h6>
+        </div>
+        <div class="card-body">
+          <dl class="row mb-0">
+            <dt class="col-sm-5">Mensaje</dt>
+            <dd class="col-sm-7">{{ tarea.mensaje|default:"—" }}</dd>
+            <dt class="col-sm-5">CUENTA</dt>
+            <dd class="col-sm-7">{{ tarea.cuenta|default:"—" }}</dd>
+            <dt class="col-sm-5">Destinatarios</dt>
+            <dd class="col-sm-7">
+              {% if tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% else %}—{% endif %}
+              {% if tarea.grupos_nombres %}<div class="small text-muted">Grupos: {{ tarea.grupos_nombres|join:", " }}</div>{% endif %}
+            </dd>
+            <dt class="col-sm-5">Envío</dt>
+            <dd class="col-sm-7">
+              {% if tarea.envio == 'SCHEDULED' %}
+              Programada {{ tarea.programada_para|date:"d/m/Y H:i"|default:"—" }}
+              {% else %}
+              Al momento
+              {% endif %}
+            </dd>
+            <dt class="col-sm-5">Límite</dt>
+            <dd class="col-sm-7">{{ tarea.fecha_limite|date:"d/m/Y H:i"|default:"—" }}</dd>
+            <dt class="col-sm-5">Creada</dt>
+            <dd class="col-sm-7">{{ tarea.fecha_creacion|date:"d/m/Y H:i" }}</dd>
+            <dt class="col-sm-5">Completada</dt>
+            <dd class="col-sm-7">{{ tarea.fecha_completado|date:"d/m/Y H:i"|default:"—" }}</dd>
+            <dt class="col-sm-5">Creada por</dt>
+            <dd class="col-sm-7">{{ tarea.creado_por.nombre_interno|default:"—" }}</dd>
+            {% if tarea.ubicacion %}
+            <dt class="col-sm-5">Ubicación</dt>
+            <dd class="col-sm-7">{{ tarea.ubicacion }}</dd>
+            {% endif %}
+          </dl>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

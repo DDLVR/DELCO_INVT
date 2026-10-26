@@ -31,10 +31,12 @@ from .moreapp_registros_views import (
 from .moreapp_tareas_views import (
     tarea_campos_view,
     tarea_crear_view,
+    tarea_detalle_view,
     tarea_lote_clientes_view,
     tarea_lote_csv_view,
     tarea_lote_listado_view,
     tarea_lote_plantilla_view,
+    tarea_pdf_view,
     tareas_list_view,
 )
 from .moreapp_visualizacion_views import (
@@ -61,6 +63,8 @@ urlpatterns = [
     ),
     path('moreapp/tareas/', tareas_list_view, name='moreapp_tareas_list'),
     path('moreapp/tareas/nueva/', tarea_crear_view, name='moreapp_tarea_crear'),
+    path('moreapp/tareas/<int:pk>/', tarea_detalle_view, name='moreapp_tarea_detalle'),
+    path('moreapp/tareas/<int:pk>/pdf/', tarea_pdf_view, name='moreapp_tarea_pdf'),
     path(
         'moreapp/tareas/lote/csv/',
         tarea_lote_csv_view,
