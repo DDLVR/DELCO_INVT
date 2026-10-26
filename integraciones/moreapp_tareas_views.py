@@ -593,6 +593,8 @@ def _cliente_por_cuenta(numero: str) -> Optional[Cliente]:
 
 
 def _sugerencias_proyecto() -> List[str]:
+    if "proyecto_carga_administrativa" not in _nombres_campos_tarea():
+        return []
     return list(
         MoreAppTareaEnviada.objects.exclude(proyecto_carga_administrativa="")
         .values_list("proyecto_carga_administrativa", flat=True)
@@ -659,10 +661,31 @@ def _colas_conteo_tareas() -> Dict[str, int]:
     }
 
 
+def _nombres_campos_tarea() -> set:
+    return {f.name for f in MoreAppTareaEnviada._meta.get_fields()}
+
+
+def _relaciones_fk_tarea(*nombres: str) -> List[str]:
+    existentes = {
+        f.name
+        for f in MoreAppTareaEnviada._meta.get_fields()
+        if getattr(f, "is_relation", False)
+        and not getattr(f, "many_to_many", False)
+        and not getattr(f, "one_to_many", False)
+    }
+    return [nombre for nombre in nombres if nombre in existentes]
+
+
+def _qs_tareas_con_relaciones():
+    related = _relaciones_fk_tarea("creado_por", "integracion", "cliente")
+    qs = MoreAppTareaEnviada.objects.select_related(*related) if related else MoreAppTareaEnviada.objects.all()
+    if "eventos" in _nombres_campos_tarea():
+        qs = qs.prefetch_related("eventos")
+    return qs
+
+
 def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True):
-    qs = MoreAppTareaEnviada.objects.select_related(
-        "creado_por", "integracion", "cliente"
-    ).prefetch_related("eventos")
+    qs = _qs_tareas_con_relaciones()
     if not aplicar_filtros:
         return qs
 
@@ -695,27 +718,29 @@ def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True):
         qs = qs.filter(estado=estado_filtro)
     if form_filtro:
         qs = qs.filter(Q(form_name=form_filtro) | Q(form_id=form_filtro))
+    campos = _nombres_campos_tarea()
     if cuenta_filtro:
-        qs = qs.filter(
-            Q(cuenta__icontains=cuenta_filtro)
-            | Q(cliente__numero_cliente__icontains=cuenta_filtro)
-        )
-    if tipo_filtro:
+        q_cuenta = Q(cuenta__icontains=cuenta_filtro)
+        if "cliente" in campos:
+            q_cuenta |= Q(cliente__numero_cliente__icontains=cuenta_filtro)
+        qs = qs.filter(q_cuenta)
+    if tipo_filtro and "tipo_trabajo" in campos:
         qs = qs.filter(tipo_trabajo=tipo_filtro)
-    if proyecto_filtro:
+    if proyecto_filtro and "proyecto_carga_administrativa" in campos:
         qs = qs.filter(proyecto_carga_administrativa__icontains=proyecto_filtro)
     if destinatario_filtro:
         qs = qs.filter(destinatarios__icontains=destinatario_filtro)
     if buscar:
-        qs = qs.filter(
+        q_buscar = (
             Q(mensaje__icontains=buscar)
-            | Q(titulo__icontains=buscar)
             | Q(form_name__icontains=buscar)
             | Q(cuenta__icontains=buscar)
             | Q(task_id__icontains=buscar)
-            | Q(proyecto_carga_administrativa__icontains=buscar)
-            | Q(observaciones__icontains=buscar)
         )
+        for extra in ("titulo", "proyecto_carga_administrativa", "observaciones"):
+            if extra in campos:
+                q_buscar |= Q(**{"%s__icontains" % extra: buscar})
+        qs = qs.filter(q_buscar)
     ahora = timezone.now()
     if periodo == "7":
         qs = qs.filter(fecha_creacion__gte=ahora - timedelta(days=7))
@@ -901,7 +926,7 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
             "proyecto_filtro": proyecto_filtro,
             "destinatario_filtro": destinatario_filtro,
             "colas_conteo": _colas_conteo_tareas(),
-            "tipos_trabajo": MoreAppTareaEnviada.TIPO_TRABAJO_CHOICES,
+            "tipos_trabajo": getattr(MoreAppTareaEnviada, "TIPO_TRABAJO_CHOICES", ()),
             "formularios_filtro": formularios_filtro,
             "estados_filtro": MoreAppTareaEnviada.ESTADO_CHOICES,
             "resumen": {
@@ -1191,12 +1216,7 @@ def tarea_revisar_view(request, pk: int):
 def tarea_detalle_view(request, pk: int):
     from .moreapp_tareas_pdf import campos_rellenados_tarea, tarea_permite_pdf
 
-    tarea = get_object_or_404(
-        MoreAppTareaEnviada.objects.select_related(
-            "creado_por", "integracion", "cliente"
-        ).prefetch_related("eventos"),
-        pk=pk,
-    )
+    tarea = get_object_or_404(_qs_tareas_con_relaciones(), pk=pk)
     from .moreapp_tareas_ciclo import intervalo_auto_sync_tareas
 
     refresh_seconds = intervalo_auto_sync_tareas()
