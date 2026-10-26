@@ -1022,6 +1022,12 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn(reverse('moreapp_tareas_lote_csv'), body)
         self.assertIn(reverse('moreapp_tareas_lote_clientes'), body)
         self.assertIn(reverse('moreapp_tareas_lote_listado'), body)
+        self.assertIn(reverse('moreapp_tareas_exportar'), body)
+        self.assertIn('Exportar filtradas', body)
+        self.assertIn('cola=en_campo', body)
+        self.assertIn('Nueva tarea', body)
+        self.assertIn(reverse('moreapp_tareas_estado'), body)
+        self.assertNotIn('window.location.reload()', body)
 
     def test_tecnico_no_accede_tareas(self):
         self.client.login(username=self.tecnico.rut, password=self.password)
@@ -1031,6 +1037,10 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(self.client.get(reverse('moreapp_tarea_pdf', args=[1])).status_code, 403)
         self.assertEqual(self.client.post(reverse('moreapp_tareas_sincronizar')).status_code, 403)
         self.assertEqual(self.client.post(reverse('moreapp_tarea_revisar', args=[1])).status_code, 403)
+        self.assertEqual(self.client.get(reverse('moreapp_tareas_exportar')).status_code, 403)
+        self.assertEqual(self.client.post(reverse('moreapp_tarea_observaciones', args=[1])).status_code, 403)
+        self.assertEqual(self.client.post(reverse('moreapp_tarea_eliminar', args=[1])).status_code, 403)
+        self.assertEqual(self.client.get(reverse('moreapp_tareas_estado')).status_code, 403)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -1068,6 +1078,9 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Fecha y hora programadas', body)
         self.assertIn('Pin, firma, catálogo, dibujo y archivo no se pueden precargar', body)
         self.assertNotIn('No se pudieron cargar grupos', body)
+        self.assertIn('Datos del trabajo', body)
+        self.assertIn('Tipo de trabajo', body)
+        self.assertIn('Proyecto / Carga administrativa', body)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -2001,3 +2014,123 @@ class MoreAppTareaCicloTests(TestCase):
         resp = self.client.get(reverse('moreapp_tarea_pdf', args=[tarea.pk]))
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp.url, reverse('moreapp_tarea_detalle', args=[tarea.pk]))
+
+    def test_listado_y_detalle_operativos_tipo_ot(self):
+        from clientes.models import Cliente
+        from integraciones.models import MoreAppTareaEnviada
+
+        cliente = Cliente.objects.create(
+            numero_cliente='CLI-TAREA-001',
+            direccion='Calle Tarea 1',
+            comuna='Santiago',
+            tipo_suministro='ELECTRICO',
+            sector='CENTRO',
+            customer_name='Cliente Tarea',
+            installation_address='Inst Tarea 1',
+            meter_manufacturer_id='TEST',
+            meter_serial_n_1='SER-TAREA-001',
+            activo=True,
+        )
+        tarea = self._tarea(
+            titulo='Instalación medidor',
+            tipo_trabajo='INSTALACION',
+            cliente=cliente,
+            proyecto_carga_administrativa='Carga Norte',
+            observaciones='Llevar llave',
+            cuenta=cliente.numero_cliente,
+        )
+        self.client.login(username=self.admin.rut, password=self.password)
+        listing = self.client.get(reverse('moreapp_tareas_list') + '?cola=en_campo')
+        self.assertEqual(listing.status_code, 200)
+        list_body = listing.content.decode('utf-8')
+        self.assertIn('Instalación medidor', list_body)
+        self.assertIn('Carga Norte', list_body)
+        self.assertIn(reverse('moreapp_tareas_exportar'), list_body)
+        detalle = self.client.get(reverse('moreapp_tarea_detalle', args=[tarea.pk]))
+        self.assertEqual(detalle.status_code, 200)
+        detalle_body = detalle.content.decode('utf-8')
+        self.assertIn('Instalación', detalle_body)
+        self.assertIn('CLI-TAREA-001', detalle_body)
+        self.assertIn('Carga Norte', detalle_body)
+        self.assertIn('Llevar llave', detalle_body)
+        self.assertIn(reverse('moreapp_tarea_observaciones', args=[tarea.pk]), detalle_body)
+        self.assertIn(reverse('moreapp_tarea_eliminar', args=[tarea.pk]), detalle_body)
+        saved = self.client.post(
+            reverse('moreapp_tarea_observaciones', args=[tarea.pk]),
+            {'observaciones': 'Ya avisaron al cliente'},
+        )
+        self.assertEqual(saved.status_code, 302)
+        tarea.refresh_from_db()
+        self.assertEqual(tarea.observaciones, 'Ya avisaron al cliente')
+        export = self.client.get(reverse('moreapp_tareas_exportar') + '?filtrar=1&cola=en_campo')
+        self.assertEqual(export.status_code, 200)
+        self.assertIn(
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            export['Content-Type'],
+        )
+        self.assertTrue(export.content[:2] == b'PK')
+        deleted = self.client.post(reverse('moreapp_tarea_eliminar', args=[tarea.pk]))
+        self.assertEqual(deleted.status_code, 302)
+        self.assertFalse(MoreAppTareaEnviada.objects.filter(pk=tarea.pk).exists())
+
+    def test_estado_json_actualiza_sin_recargar(self):
+        from django.core.cache import cache
+        from integraciones.models import MoreAppTareaEnviada
+        from integraciones.moreapp_tareas_ciclo import _CACHE_TAREAS_AUTO_SYNC
+
+        tarea = self._tarea()
+        cache.delete(_CACHE_TAREAS_AUTO_SYNC)
+        self.client.login(username=self.admin.rut, password=self.password)
+        listing = self.client.get(reverse('moreapp_tareas_list'))
+        self.assertEqual(listing.status_code, 200)
+        list_body = listing.content.decode('utf-8')
+        self.assertIn(reverse('moreapp_tareas_estado'), list_body)
+        self.assertNotIn('window.location.reload()', list_body)
+        detalle_abierta = self.client.get(reverse('moreapp_tarea_detalle', args=[tarea.pk]))
+        self.assertEqual(detalle_abierta.status_code, 200)
+        detalle_abierta_body = detalle_abierta.content.decode('utf-8')
+        self.assertIn(reverse('moreapp_tareas_estado'), detalle_abierta_body)
+        self.assertNotIn('window.location.reload()', detalle_abierta_body)
+        cache.delete(_CACHE_TAREAS_AUTO_SYNC)
+        with override_settings(MOREAPP_API_ENABLED=True, MOREAPP_API_KEY='test-key', MOREAPP_CUSTOMER_ID='123'):
+            with mock.patch(
+                'integraciones.moreapp_api.list_form_tasks',
+                return_value=[{'id': 'task-ciclo-1', 'status': 'COMPLETED'}],
+            ):
+                resp = self.client.get(
+                    reverse('moreapp_tareas_estado') + '?ids=%s' % tarea.pk
+                )
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload['ok'])
+        self.assertEqual(payload['tareas'][0]['id'], tarea.pk)
+        self.assertEqual(payload['tareas'][0]['estado'], MoreAppTareaEnviada.ESTADO_COMPLETADA)
+        tarea.refresh_from_db()
+        self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_COMPLETADA)
+        detalle = self.client.get(reverse('moreapp_tarea_detalle', args=[tarea.pk]))
+        self.assertNotIn('window.location.reload()', detalle.content.decode('utf-8'))
+
+    def test_boton_revisar_usa_json_sin_recargar(self):
+        from django.core.cache import cache
+        from integraciones.models import MoreAppTareaEnviada
+        from integraciones.moreapp_tareas_ciclo import _CACHE_TAREAS_AUTO_SYNC
+
+        tarea = self._tarea()
+        cache.delete(_CACHE_TAREAS_AUTO_SYNC)
+        self.client.login(username=self.admin.rut, password=self.password)
+        with override_settings(MOREAPP_API_ENABLED=True, MOREAPP_API_KEY='test-key', MOREAPP_CUSTOMER_ID='123'):
+            with mock.patch(
+                'integraciones.moreapp_api.list_form_tasks',
+                return_value=[{'id': 'task-ciclo-1', 'status': 'COMPLETED'}],
+            ):
+                resp = self.client.get(
+                    reverse('moreapp_tareas_estado') + '?force=1&ids=%s' % tarea.pk
+                )
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload['ok'])
+        self.assertEqual(payload['aviso']['tipo'], 'success')
+        self.assertIn('completada', payload['aviso']['mensaje'].lower())
+        self.assertEqual(payload['tareas'][0]['estado'], MoreAppTareaEnviada.ESTADO_COMPLETADA)
+        tarea.refresh_from_db()
+        self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_COMPLETADA)

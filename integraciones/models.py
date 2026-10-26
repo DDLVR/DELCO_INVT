@@ -142,9 +142,41 @@ class MoreAppTareaEnviada(models.Model):
         (ESTADO_COMPLETADA, "Completada"),
     ]
 
+    TIPO_TRABAJO_CHOICES = [
+        ("INSTALACION", "Instalación"),
+        ("CAMBIO", "Cambio de equipo"),
+        ("RETIRO", "Retiro"),
+        ("MANTENCION", "Mantención"),
+        ("REPARACION", "Reparación"),
+        ("INSPECCION", "Inspección"),
+        ("CONFIGURACION", "Configuración"),
+        ("OTRO", "Otro"),
+    ]
+
     form_id = models.CharField(max_length=80)
     form_name = models.CharField(max_length=255, blank=True)
     task_id = models.CharField(max_length=80, blank=True)
+    titulo = models.CharField(max_length=200, blank=True)
+    tipo_trabajo = models.CharField(
+        max_length=30,
+        choices=TIPO_TRABAJO_CHOICES,
+        blank=True,
+        db_index=True,
+    )
+    cliente = models.ForeignKey(
+        "clientes.Cliente",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tareas_moreapp",
+    )
+    proyecto_carga_administrativa = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    observaciones = models.TextField(blank=True)
     mensaje = models.CharField(max_length=500)
     destinatarios = models.JSONField(default=list, blank=True)
     grupos = models.JSONField(default=list, blank=True)

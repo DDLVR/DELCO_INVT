@@ -33,7 +33,63 @@
     </div>
 
     <div class="card delco-panel-card mb-3">
-      <div class="card-header">2. Destinatarios</div>
+      <div class="card-header">2. Datos del trabajo</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label" for="titulo">Título</label>
+            <input type="text" name="titulo" id="titulo" class="form-control" maxlength="200" value="{{ titulo }}" placeholder="Ej: Instalación medidor casa 12">
+            <small class="text-muted">Si lo dejas vacío se usa el mensaje corto.</small>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label" for="tipo_trabajo">Tipo de trabajo</label>
+            <select name="tipo_trabajo" id="tipo_trabajo" class="form-select">
+              <option value="">— Sin tipo —</option>
+              {% for tipo_code, tipo_nombre in tipos_trabajo %}
+              <option value="{{ tipo_code }}" {% if tipo_trabajo == tipo_code %}selected{% endif %}>{{ tipo_nombre }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label">Cliente</label>
+            <input type="hidden" name="cliente" id="crearClienteId" value="{{ cliente_id }}">
+            <div class="delco-ac mb-2"
+                 data-ac-url="{{ delco_api.buscar_clientes }}"
+                 data-ac-hidden="#crearClienteId"
+                 data-ac-select="#crearClienteSelect"
+                 data-ac-min="2">
+              <input type="text" class="form-control delco-ac-input" id="crearClienteSearch" placeholder="Escribe Nº, nombre, comuna o dirección..." value="{{ cliente_label }}" autocomplete="off">
+              <div class="delco-ac-results list-group shadow-sm d-none"></div>
+            </div>
+            <select id="crearClienteSelect" class="form-select">
+              <option value="">— O elige de la lista —</option>
+              {% for cliente in clientes %}
+              <option value="{{ cliente.id }}" {% if cliente_id == cliente.id|stringformat:"s" %}selected{% endif %}>
+                {{ cliente.numero_cliente }}{% if cliente.comuna %} · {{ cliente.comuna }}{% endif %}
+              </option>
+              {% endfor %}
+            </select>
+            <small class="text-muted">Opcional. Asocia la tarea a un cliente de la intranet.</small>
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="crearProyectoCarga">Proyecto / Carga administrativa</label>
+            <input type="text" name="proyecto_carga_administrativa" id="crearProyectoCarga" class="form-control" list="listaProyectosCarga" maxlength="255" value="{{ proyecto_carga_administrativa }}" placeholder="Ej: Proyecto Norte, Carga SCi4 marzo…">
+            <datalist id="listaProyectosCarga">
+              {% for p in sugerencias_proyecto %}
+              <option value="{{ p }}">
+              {% endfor %}
+            </datalist>
+          </div>
+          <div class="col-12">
+            <label class="form-label" for="observaciones">Observaciones</label>
+            <textarea name="observaciones" id="observaciones" class="form-control" rows="3" placeholder="Instrucciones especiales o detalles del trabajo…">{{ observaciones }}</textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card delco-panel-card mb-3">
+      <div class="card-header">3. Destinatarios</div>
       <div class="card-body">
         <p class="small text-muted">Asigna a uno o varios usuarios, o a un grupo.</p>
         <div class="row g-3">
@@ -76,7 +132,7 @@
     </div>
 
     <div class="card delco-panel-card mb-3">
-      <div class="card-header">3. Mensaje</div>
+      <div class="card-header">4. Mensaje</div>
       <div class="card-body">
         <label class="form-label" for="mensaje">Mensaje corto</label>
         <textarea name="mensaje" id="mensaje" class="form-control" rows="2" maxlength="500" required>{{ mensaje }}</textarea>
@@ -84,7 +140,7 @@
     </div>
 
     <div class="card delco-panel-card mb-3">
-      <div class="card-header">4. Cuándo llega</div>
+      <div class="card-header">5. Cuándo llega</div>
       <div class="card-body">
         <div class="row g-3">
           <div class="col-md-4">
@@ -107,7 +163,7 @@
     </div>
 
     <div class="card delco-panel-card mb-3">
-      <div class="card-header">5. Ubicación</div>
+      <div class="card-header">6. Ubicación</div>
       <div class="card-body">
         <p class="small text-muted">Opcional. En la app se ve dónde hay que hacer el trabajo.</p>
         <div class="row g-3">
@@ -128,7 +184,7 @@
     </div>
 
     <div class="card delco-panel-card mb-3">
-      <div class="card-header">6. Precargar campos</div>
+      <div class="card-header">7. Precargar campos</div>
       <div class="card-body">
         <p class="small text-muted mb-3">Rellena de antemano lo que ya conoces (cliente, dirección, n° de orden). Pin, firma, catálogo, dibujo y archivo no se pueden precargar.</p>
         <div id="js-campos-precarga" class="row g-2">

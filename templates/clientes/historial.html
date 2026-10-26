@@ -683,6 +683,7 @@
   </div>
 
   {# ── Órdenes de trabajo ── #}
+  {% if ordenes_habilitadas %}
   <div class="card border-0 shadow-sm mb-4">
     <div class="card-header bg-body d-flex justify-content-between align-items-center">
       <strong><i class="bi bi-clipboard-check me-1"></i> Órdenes de trabajo</strong>
@@ -741,6 +742,7 @@
       </div>
     </div>
   </div>
+  {% endif %}
 
   {# ── Cargas administrativas ── #}
   <div class="card border-0 shadow-sm mb-4">

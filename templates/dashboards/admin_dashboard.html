@@ -49,9 +49,11 @@
             <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm {% if moreapp_aviso.nuevos %}btn-danger{% else %}btn-warning{% endif %}">
                 Abrir cola Pendientes MoreApp
             </a>
+            {% if ordenes_habilitadas %}
             <a href="{% url 'ordenes_list' %}?cola=validar" class="btn btn-sm btn-outline-secondary">
                 OT por validar
             </a>
+            {% endif %}
         </div>
     </div>
     {% endif %}
@@ -137,7 +139,7 @@
                         </div>
                         {% endfor %}
                     </div>
-                    {% if ordenes_cerradas_sin_ejecutar %}
+                    {% if ordenes_habilitadas and ordenes_cerradas_sin_ejecutar %}
                     <div class="small text-muted mt-2">
                         Además: <strong>{{ ordenes_cerradas_sin_ejecutar }}</strong> OT cerradas sin ejecutar
                         (ver reportes operativos).

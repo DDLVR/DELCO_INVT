@@ -102,6 +102,7 @@ TEMPLATES = [
                 'web.context_processors.moreapp_aviso',
                 'web.context_processors.delco_api_urls',
                 'web.context_processors.delco_static_version',
+                'web.context_processors.ordenes_trabajo_flags',
             ],
         },
     },
@@ -228,7 +229,8 @@ MOREAPP_AUTO_SYNC_INTERVAL_SECONDS = int(os.getenv('MOREAPP_AUTO_SYNC_INTERVAL_S
 # Consulta automática del estado COMPLETED de tareas asignadas (MoreApp REST).
 MOREAPP_TAREAS_AUTO_SYNC_SECONDS = int(os.getenv('MOREAPP_TAREAS_AUTO_SYNC_SECONDS', '20'))
 MOREAPP_AUTO_REFRESH_SECONDS = int(os.getenv('MOREAPP_AUTO_REFRESH_SECONDS', '300'))
-ORDENES_TRABAJO_HABILITADAS = os.getenv('ORDENES_TRABAJO_HABILITADAS', 'true').strip().lower() == 'true'
+# Oculto hasta nuevo aviso: Tareas MoreApp es el flujo operativo. true para reactivar menú/dashboard.
+ORDENES_TRABAJO_HABILITADAS = os.getenv('ORDENES_TRABAJO_HABILITADAS', 'false').strip().lower() == 'true'
 MOREAPP_INCREMENTAL_SCAN_ENABLED = os.getenv('MOREAPP_INCREMENTAL_SCAN_ENABLED', 'true').strip().lower() == 'true'
 MOREAPP_INCREMENTAL_LOOKBACK = int(os.getenv('MOREAPP_INCREMENTAL_LOOKBACK', '2'))
 # Límites para sync por HTTP (evitar Request Timeout del hosting)

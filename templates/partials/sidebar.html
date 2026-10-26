@@ -13,16 +13,10 @@
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'inventario_list' %}active bg-primary text-white{% endif %}" href="{% url 'inventario_list' %}">
         <i class="bi bi-box me-2"></i> Inventario
       </a>
-      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name in 'ordenes_list,orden_crear,orden_detalle,cambiar_estado_orden,ordenes_terminadas,moreapp_tareas_list,moreapp_tarea_crear,moreapp_tarea_detalle,moreapp_tarea_pdf,moreapp_tareas_sincronizar,moreapp_tarea_revisar,moreapp_tareas_lote_csv,moreapp_tareas_lote_clientes,moreapp_tareas_lote_listado,moreapp_tareas_lote_plantilla' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
-        <i class="bi bi-clipboard-check me-2"></i> Órdenes de trabajo
-      </a>
-      <a class="list-group-item list-group-item-action app-nav-link ps-4 small {% if request.resolver_match.url_name == 'ordenes_terminadas' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_terminadas' %}">
-        <i class="bi bi-check2-circle me-2"></i> Trabajos terminados
-      </a>
       {% if user.rol in 'ADMIN,ADMINISTRATIVO' %}
       {% url 'moreapp_tareas_list' as moreapp_tareas_list_url %}
       {% if moreapp_tareas_list_url %}
-      <a class="list-group-item list-group-item-action app-nav-link ps-4 small {% if request.resolver_match.url_name == 'moreapp_tareas_list' or request.resolver_match.url_name == 'moreapp_tarea_crear' or request.resolver_match.url_name == 'moreapp_tarea_detalle' or request.resolver_match.url_name == 'moreapp_tarea_pdf' or request.resolver_match.url_name == 'moreapp_tareas_sincronizar' or request.resolver_match.url_name == 'moreapp_tarea_revisar' or request.resolver_match.url_name == 'moreapp_tareas_lote_csv' or request.resolver_match.url_name == 'moreapp_tareas_lote_clientes' or request.resolver_match.url_name == 'moreapp_tareas_lote_listado' or request.resolver_match.url_name == 'moreapp_tareas_lote_plantilla' %}active bg-primary text-white{% endif %}" href="{{ moreapp_tareas_list_url }}">
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name in 'moreapp_tareas_list,moreapp_tarea_crear,moreapp_tarea_detalle,moreapp_tarea_pdf,moreapp_tareas_sincronizar,moreapp_tarea_revisar,moreapp_tareas_lote_csv,moreapp_tareas_lote_clientes,moreapp_tareas_lote_listado,moreapp_tareas_lote_plantilla,moreapp_tareas_exportar,moreapp_tarea_observaciones,moreapp_tarea_eliminar' %}active bg-primary text-white{% endif %}" href="{{ moreapp_tareas_list_url }}">
         <i class="bi bi-send-check me-2"></i> Tareas MoreApp
         {% if moreapp_aviso.tareas_alertas %}
         <span class="badge {% if moreapp_aviso.tareas_completado %}bg-success{% else %}bg-primary{% endif %} ms-1">{{ moreapp_aviso.tareas_alertas }}</span>
@@ -30,12 +24,20 @@
       </a>
       {% endif %}
       {% endif %}
+      {% if ordenes_habilitadas %}
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name in 'ordenes_list,orden_crear,orden_detalle,cambiar_estado_orden,ordenes_terminadas' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_list' %}">
+        <i class="bi bi-clipboard-check me-2"></i> Órdenes de trabajo
+      </a>
+      <a class="list-group-item list-group-item-action app-nav-link ps-4 small {% if request.resolver_match.url_name == 'ordenes_terminadas' %}active bg-primary text-white{% endif %}" href="{% url 'ordenes_terminadas' %}">
+        <i class="bi bi-check2-circle me-2"></i> Trabajos terminados
+      </a>
       {% if user.rol in 'ADMIN,ADMINISTRATIVO,GERENCIA,AUDITOR' %}
       {% url 'comprobantes_cambio_list' as comprobantes_cambio_url %}
       {% if comprobantes_cambio_url %}
       <a class="list-group-item list-group-item-action app-nav-link ps-4 small {% if request.resolver_match.url_name == 'comprobantes_cambio_list' %}active bg-primary text-white{% endif %}" href="{{ comprobantes_cambio_url }}">
         <i class="bi bi-file-earmark-medical me-2"></i> Comprobantes cambio
       </a>
+      {% endif %}
       {% endif %}
       {% endif %}
     {% endif %}

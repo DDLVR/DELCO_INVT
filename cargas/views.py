@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -333,27 +334,32 @@ def cargas_hub_view(request):
         .annotate(_prio=PRIORIDAD_ORDER)
         .order_by('-_prio', '-fecha_creacion')[:10]
     )
-    return render(request, 'cargas/hub.html', {
-        'contadores': contadores,
-        'mias': mias,
-        'sin_asignar': sin_asignar,
-        'colas_rapidas': [
+    colas_rapidas = [
+        {
+            'label': 'Pendientes SCi4',
+            'url': reverse('clientes_list') + '?alarma=pendiente_sci4',
+            'icon': 'bi-cloud-arrow-up',
+        },
+        {
+            'label': 'Pendientes MoreApp',
+            'url': reverse('pendientes_operativos'),
+            'icon': 'bi-list-check',
+        },
+    ]
+    if getattr(settings, 'ORDENES_TRABAJO_HABILITADAS', False):
+        colas_rapidas.insert(
+            0,
             {
                 'label': 'OT por validar',
                 'url': reverse('ordenes_list') + '?cola=validar',
                 'icon': 'bi-clipboard-check',
             },
-            {
-                'label': 'Pendientes SCi4',
-                'url': reverse('clientes_list') + '?alarma=pendiente_sci4',
-                'icon': 'bi-cloud-arrow-up',
-            },
-            {
-                'label': 'Pendientes MoreApp',
-                'url': reverse('pendientes_operativos'),
-                'icon': 'bi-list-check',
-            },
-        ],
+        )
+    return render(request, 'cargas/hub.html', {
+        'contadores': contadores,
+        'mias': mias,
+        'sin_asignar': sin_asignar,
+        'colas_rapidas': colas_rapidas,
     })
 
 

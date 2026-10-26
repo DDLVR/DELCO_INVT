@@ -312,7 +312,9 @@ def build_panel_alarmas_analistas() -> List[Dict[str, Any]]:
     IP / medidor repetido, OT sin responder, posibles duplicados, ejecutado sin actualizar.
     Cada ítem lleva al listado filtrado (no a descarga Excel).
     """
-    return [
+    from django.conf import settings
+
+    items = [
         {
             'key': 'ip_duplicada',
             'label': 'IP repetida',
@@ -327,35 +329,43 @@ def build_panel_alarmas_analistas() -> List[Dict[str, Any]]:
             'severity': 'danger',
             'url': _url_listado_clientes('medidor_duplicado'),
         },
-        {
-            'key': 'ot_sin_responder',
-            'label': 'OT sin responder',
-            'count': count_clientes_ot_sin_responder(),
-            'severity': 'warning',
-            'url': _url_listado_ordenes('ot_sin_responder'),
-        },
-        {
-            'key': 'posibles_duplicados',
-            'label': 'Posibles duplicados',
-            'count': count_clientes_reincidentes(),
-            'severity': 'warning',
-            'url': _url_listado_clientes('posibles_duplicados'),
-        },
-        {
-            'key': 'ejecutado_no_actualizado',
-            'label': 'Ejecutado, no actualizado en sistema',
-            'count': count_clientes_ejecutado_no_actualizado(),
-            'severity': 'danger',
-            'url': _url_listado_clientes('ejecutado_no_actualizado'),
-        },
-        {
-            'key': 'pendiente_sci4',
-            'label': 'Pendiente SCi4',
-            'count': count_clientes_sin_actualizacion_sci4(),
-            'severity': 'warning',
-            'url': _url_listado_clientes('pendiente_sci4'),
-        },
     ]
+    if getattr(settings, 'ORDENES_TRABAJO_HABILITADAS', False):
+        items.append(
+            {
+                'key': 'ot_sin_responder',
+                'label': 'OT sin responder',
+                'count': count_clientes_ot_sin_responder(),
+                'severity': 'warning',
+                'url': _url_listado_ordenes('ot_sin_responder'),
+            }
+        )
+    items.extend(
+        [
+            {
+                'key': 'posibles_duplicados',
+                'label': 'Posibles duplicados',
+                'count': count_clientes_reincidentes(),
+                'severity': 'warning',
+                'url': _url_listado_clientes('posibles_duplicados'),
+            },
+            {
+                'key': 'ejecutado_no_actualizado',
+                'label': 'Ejecutado, no actualizado en sistema',
+                'count': count_clientes_ejecutado_no_actualizado(),
+                'severity': 'danger',
+                'url': _url_listado_clientes('ejecutado_no_actualizado'),
+            },
+            {
+                'key': 'pendiente_sci4',
+                'label': 'Pendiente SCi4',
+                'count': count_clientes_sin_actualizacion_sci4(),
+                'severity': 'warning',
+                'url': _url_listado_clientes('pendiente_sci4'),
+            },
+        ]
+    )
+    return items
 
 
 def build_kpis_tareas_moreapp() -> Dict[str, Any]:

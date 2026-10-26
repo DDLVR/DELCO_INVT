@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.urls import NoReverseMatch, reverse
 
 from .moreapp_avisos import construir_aviso_moreapp
@@ -23,6 +24,13 @@ def _safe_reverse(name, fallback=None):
 def moreapp_aviso(request):
     """Expone moreapp_aviso en todos los templates (badge sidebar / banners)."""
     return {'moreapp_aviso': construir_aviso_moreapp(request)}
+
+
+def ordenes_trabajo_flags(request):
+    """Expone si el menú de Órdenes de trabajo está visible."""
+    return {
+        'ordenes_habilitadas': getattr(settings, 'ORDENES_TRABAJO_HABILITADAS', False),
+    }
 
 
 def delco_api_urls(request):

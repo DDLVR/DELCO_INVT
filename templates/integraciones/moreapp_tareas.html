@@ -8,10 +8,10 @@
     <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
       <div>
         <h1 class="mb-1"><i class="bi bi-send-check"></i> Tareas MoreApp</h1>
-        <p class="text-muted mb-0">Consulta de tareas enviadas, con contenido rellenado y PDF cuando están completadas. El estado de las asignadas se actualiza cada {{ tareas_auto_refresh_seconds|default:20 }} segundos mientras esta pantalla está abierta. El aviso llega en MoreApp, no por correo.</p>
+        <p class="text-muted mb-0">Planifica, asigna y da seguimiento a las tareas. El aviso llega en MoreApp, no por correo. El estado se consulta cada {{ tareas_auto_refresh_seconds|default:20 }} segundos, sin recargar la página.</p>
       </div>
       <div class="d-flex flex-wrap gap-2">
-        <form method="post" action="{% url 'moreapp_tareas_sincronizar' %}" class="d-inline">
+        <form method="post" action="{% url 'moreapp_tareas_sincronizar' %}" class="d-inline" id="js-form-revisar-estado">
           {% csrf_token %}
           <button type="submit" class="btn btn-outline-success" title="Consulta en MoreApp si las tareas asignadas ya se terminaron">
             <i class="bi bi-arrow-repeat"></i> Revisar estado
@@ -21,12 +21,32 @@
           <i class="bi bi-list-check"></i> Listado
         </button>
         <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteCsv">
-          <i class="bi bi-file-earmark-spreadsheet"></i> Carga Excel/CSV
+          <i class="bi bi-upload"></i> Importar Excel
         </button>
         <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteClientes">
           <i class="bi bi-buildings"></i> Desde clientes
         </button>
-        <a href="{% url 'moreapp_tarea_crear' %}" class="btn btn-primary">
+        <div class="btn-group">
+          <a href="{% url 'moreapp_tareas_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}" class="btn btn-info">
+            <i class="bi bi-download"></i> Exportar filtradas
+          </a>
+          <button type="button" class="btn btn-info dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="visually-hidden">Más opciones</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+              <a class="dropdown-item" href="{% url 'moreapp_tareas_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}">
+                Exportar filtradas
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="{% url 'moreapp_tareas_exportar' %}?todas=1">
+                Exportar todas
+              </a>
+            </li>
+          </ul>
+        </div>
+        <a href="{% url 'moreapp_tarea_crear' %}" class="btn btn-success">
           <i class="bi bi-plus-circle"></i> Nueva tarea
         </a>
       </div>
@@ -46,7 +66,7 @@
       <div class="card delco-panel-card h-100 border-0 shadow-sm">
         <div class="card-body py-3">
           <div class="text-muted small">Total filtrado</div>
-          <div class="fs-3 fw-semibold">{{ resumen.total|default:0 }}</div>
+          <div class="fs-3 fw-semibold" data-kpi="resumen.total">{{ resumen.total|default:0 }}</div>
         </div>
       </div>
     </div>
@@ -54,7 +74,7 @@
       <div class="card delco-panel-card h-100 border-0 shadow-sm">
         <div class="card-body py-3">
           <div class="text-muted small">Abiertas</div>
-          <div class="fs-3 fw-semibold">{{ resumen.abiertas|default:0 }}</div>
+          <div class="fs-3 fw-semibold" data-kpi="resumen.abiertas">{{ resumen.abiertas|default:0 }}</div>
         </div>
       </div>
     </div>
@@ -62,7 +82,7 @@
       <div class="card delco-panel-card h-100 border-0 shadow-sm">
         <div class="card-body py-3">
           <div class="text-muted small">Completadas</div>
-          <div class="fs-3 fw-semibold text-success">{{ resumen.completadas|default:0 }}</div>
+          <div class="fs-3 fw-semibold text-success" data-kpi="resumen.completadas">{{ resumen.completadas|default:0 }}</div>
         </div>
       </div>
     </div>
@@ -70,7 +90,7 @@
       <div class="card delco-panel-card h-100 border-0 shadow-sm">
         <div class="card-body py-3">
           <div class="text-muted small">Con informe</div>
-          <div class="fs-3 fw-semibold">{{ resumen.con_informe|default:0 }}</div>
+          <div class="fs-3 fw-semibold" data-kpi="resumen.con_informe">{{ resumen.con_informe|default:0 }}</div>
         </div>
       </div>
     </div>
@@ -78,7 +98,7 @@
       <div class="card delco-panel-card h-100 border-0 shadow-sm">
         <div class="card-body py-3">
           <div class="text-muted small">Vencidas</div>
-          <div class="fs-3 fw-semibold {% if kpis_tareas.vencidas %}text-danger{% endif %}">{{ kpis_tareas.vencidas|default:0 }}</div>
+          <div class="fs-3 fw-semibold {% if kpis_tareas.vencidas %}text-danger{% endif %}" data-kpi="kpis.vencidas">{{ kpis_tareas.vencidas|default:0 }}</div>
         </div>
       </div>
     </div>
@@ -86,9 +106,33 @@
       <div class="card delco-panel-card h-100 border-0 shadow-sm">
         <div class="card-body py-3">
           <div class="text-muted small">Errores</div>
-          <div class="fs-3 fw-semibold">{{ resumen.errores|default:0 }}</div>
+          <div class="fs-3 fw-semibold" data-kpi="resumen.errores">{{ resumen.errores|default:0 }}</div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <div class="row mb-3">
+    <div class="col-12">
+      <div class="d-flex flex-wrap gap-2">
+        <a href="{% url 'moreapp_tareas_list' %}" class="btn btn-sm {% if not cola_filtro %}btn-primary{% else %}btn-outline-primary{% endif %}">Todas</a>
+        <a href="?cola=pendientes" class="btn btn-sm {% if cola_filtro == 'pendientes' %}btn-warning{% elif colas_conteo.pendientes %}btn-outline-warning{% else %}btn-outline-secondary opacity-50{% endif %}">
+          Sin asignar <span class="badge bg-dark" data-cola-count="pendientes">{{ colas_conteo.pendientes|default:0 }}</span>
+        </a>
+        <a href="?cola=en_campo" class="btn btn-sm {% if cola_filtro == 'en_campo' %}btn-info{% elif colas_conteo.en_campo %}btn-outline-info{% else %}btn-outline-secondary opacity-50{% endif %}">
+          En campo <span class="badge bg-dark" data-cola-count="en_campo">{{ colas_conteo.en_campo|default:0 }}</span>
+        </a>
+        <a href="?cola=completadas" class="btn btn-sm {% if cola_filtro == 'completadas' %}btn-success{% elif colas_conteo.completadas %}btn-outline-success{% else %}btn-outline-secondary opacity-50{% endif %}">
+          Completadas <span class="badge bg-dark" data-cola-count="completadas">{{ colas_conteo.completadas|default:0 }}</span>
+        </a>
+        <a href="?cola=vencidas" class="btn btn-sm {% if cola_filtro == 'vencidas' %}btn-danger{% elif colas_conteo.vencidas %}btn-outline-danger{% else %}btn-outline-secondary opacity-50{% endif %}">
+          Vencidas <span class="badge bg-dark" data-cola-count="vencidas">{{ colas_conteo.vencidas|default:0 }}</span>
+        </a>
+        <a href="?cola=errores" class="btn btn-sm {% if cola_filtro == 'errores' %}btn-dark{% elif colas_conteo.errores %}btn-outline-dark{% else %}btn-outline-secondary opacity-50{% endif %}">
+          Con error <span class="badge bg-dark" data-cola-count="errores">{{ colas_conteo.errores|default:0 }}</span>
+        </a>
+      </div>
+      <p class="text-muted small mt-2 mb-0">Flujo: Delco crea la tarea → MoreApp avisa al destinatario → el formulario se completa en la app → Delco revisa el contenido y el PDF.</p>
     </div>
   </div>
 
@@ -136,12 +180,29 @@
           </select>
         </div>
         <div class="col-md-2">
+          <label class="form-label small mb-1">Tipo de trabajo</label>
+          <select name="tipo_trabajo" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for tipo_code, tipo_nombre in tipos_trabajo %}
+            <option value="{{ tipo_code }}" {% if tipo_filtro == tipo_code %}selected{% endif %}>{{ tipo_nombre }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-md-2">
           <label class="form-label small mb-1">CUENTA</label>
           <input type="text" name="cuenta" class="form-control form-control-sm" value="{{ cuenta_filtro }}" placeholder="Nº cliente">
         </div>
         <div class="col-md-2">
+          <label class="form-label small mb-1">Proyecto / Carga</label>
+          <input type="text" name="proyecto_carga" class="form-control form-control-sm" value="{{ proyecto_filtro }}" placeholder="Filtrar proyecto…">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label small mb-1">Destinatario</label>
+          <input type="text" name="destinatario" class="form-control form-control-sm" value="{{ destinatario_filtro }}" placeholder="Correo MoreApp">
+        </div>
+        <div class="col-md-2">
           <label class="form-label small mb-1">Buscar</label>
-          <input type="text" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Mensaje / formulario">
+          <input type="text" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Título, mensaje, proyecto…">
         </div>
         <div class="col-md-2">
           <label class="form-label small mb-1">Desde</label>
@@ -164,18 +225,20 @@
   <div class="card delco-panel-card">
     <div class="card-header card-header-delco d-flex justify-content-between align-items-center">
       <strong>Listado</strong>
-      <span class="badge bg-secondary">{{ resumen.total|default:0 }} resultado(s)</span>
+      <span class="badge bg-secondary"><span data-kpi="resumen.total">{{ resumen.total|default:0 }}</span> resultado(s)</span>
     </div>
     <div class="card-body p-0">
       <div class="table-responsive">
-        <table class="table table-hover mb-0 align-middle">
+        <table class="table table-hover mb-0 align-middle" data-cola-filtro="{{ cola_filtro|default:'' }}">
           <thead>
             <tr>
               <th>ID</th>
+              <th>Título / Mensaje</th>
               <th>Formulario</th>
-              <th>Mensaje</th>
               <th>Estado</th>
+              <th class="d-none d-md-table-cell">Tipo</th>
               <th class="d-none d-md-table-cell">CUENTA</th>
+              <th class="d-none d-lg-table-cell">Proyecto</th>
               <th class="d-none d-lg-table-cell">Destinatarios</th>
               <th class="d-none d-lg-table-cell">Evidencia</th>
               <th class="d-none d-md-table-cell">Creada</th>
@@ -184,11 +247,16 @@
           </thead>
           <tbody>
             {% for tarea in tareas %}
-            <tr>
+            <tr data-tarea-id="{{ tarea.pk }}" data-estado="{{ tarea.estado }}">
               <td><a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="fw-bold text-decoration-none">#{{ tarea.pk }}</a></td>
-              <td>{{ tarea.form_name|default:tarea.form_id }}</td>
-              <td>{{ tarea.mensaje }}</td>
               <td>
+                <div class="fw-semibold">{{ tarea.titulo|default:tarea.mensaje }}</div>
+                {% if tarea.titulo and tarea.mensaje and tarea.titulo != tarea.mensaje %}
+                <div class="small text-muted">{{ tarea.mensaje }}</div>
+                {% endif %}
+              </td>
+              <td>{{ tarea.form_name|default:tarea.form_id }}</td>
+              <td class="js-tarea-estado">
                 {% if tarea.estado == 'ERROR' or tarea.error %}
                 <span class="badge text-bg-danger">Error</span>
                 {% elif tarea.estado == 'COMPLETADA' %}
@@ -199,12 +267,20 @@
                 <span class="badge text-bg-secondary">{{ tarea.get_estado_display }}</span>
                 {% endif %}
               </td>
-              <td class="d-none d-md-table-cell">{{ tarea.cuenta|default:"—" }}</td>
+              <td class="d-none d-md-table-cell">{{ tarea.get_tipo_trabajo_display|default:"—" }}</td>
+              <td class="d-none d-md-table-cell">
+                {% if tarea.cliente %}
+                <a href="{% url 'cliente_historial' tarea.cliente.id %}">{{ tarea.cuenta|default:tarea.cliente.numero_cliente }}</a>
+                {% else %}
+                {{ tarea.cuenta|default:"—" }}
+                {% endif %}
+              </td>
+              <td class="d-none d-lg-table-cell">{{ tarea.proyecto_carga_administrativa|default:"—" }}</td>
               <td class="d-none d-lg-table-cell small">
                 {% if tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% endif %}
                 {% if tarea.grupos_nombres %}<div class="text-muted">Grupos: {{ tarea.grupos_nombres|join:", " }}</div>{% endif %}
               </td>
-              <td class="d-none d-lg-table-cell">
+              <td class="d-none d-lg-table-cell js-tarea-evidencia">
                 {% if tarea.integracion_id %}
                 <span class="badge bg-success" title="Informe MoreApp">Informe</span>
                 {% endif %}
@@ -216,10 +292,10 @@
                 {% endif %}
               </td>
               <td class="d-none d-md-table-cell">{{ tarea.fecha_creacion|date:"d/m/Y H:i" }}</td>
-              <td class="text-nowrap">
+              <td class="text-nowrap js-tarea-acciones">
                 <a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i> Ver</a>
                 {% if tarea.puede_pdf %}
-                <a href="{% url 'moreapp_tarea_pdf' tarea.pk %}" class="btn btn-sm btn-outline-danger" title="Ver PDF del contenido rellenado" target="_blank" rel="noopener">
+                <a href="{% url 'moreapp_tarea_pdf' tarea.pk %}" class="btn btn-sm btn-outline-danger js-tarea-pdf" title="Ver PDF del contenido rellenado" target="_blank" rel="noopener">
                   <i class="bi bi-file-earmark-pdf"></i> PDF
                 </a>
                 {% endif %}
@@ -227,7 +303,7 @@
             </tr>
             {% empty %}
             <tr>
-              <td colspan="9" class="text-center text-muted py-4">
+              <td colspan="11" class="text-center text-muted py-4">
                 No hay tareas MoreApp con estos filtros.
                 <a href="{% url 'moreapp_tarea_crear' %}">Crear la primera</a>.
               </td>
@@ -263,11 +339,128 @@
 (function () {
   var refreshSeconds = Number({{ tareas_auto_refresh_seconds|default:20 }}) || 20;
   if (refreshSeconds < 20) refreshSeconds = 20;
-  window.setInterval(function () {
-    if (document.hidden) return;
-    if (document.querySelector('.modal.show')) return;
-    window.location.reload();
-  }, refreshSeconds * 1000);
+  var estadoUrl = "{% url 'moreapp_tareas_estado' %}";
+  var labels = { ERROR: 'Error', PENDIENTE: 'Pendiente', ASIGNADA: 'Asignada', COMPLETADA: 'Completada' };
+  var inFlight = false;
+
+  function badgeEstado(estado, label) {
+    if (estado === 'ERROR') return '<span class="badge text-bg-danger">Error</span>';
+    if (estado === 'COMPLETADA') return '<span class="badge text-bg-success">Completada</span>';
+    if (estado === 'ASIGNADA') return '<span class="badge text-bg-primary">Asignada</span>';
+    return '<span class="badge text-bg-secondary">' + (label || labels[estado] || estado || '—') + '</span>';
+  }
+
+  function evidenciaHtml(tarea) {
+    var html = '';
+    if (tarea.tiene_informe) html += '<span class="badge bg-success" title="Informe MoreApp">Informe</span> ';
+    if (tarea.puede_pdf) html += '<span class="badge bg-info text-dark" title="PDF">PDF</span>';
+    return html.trim() || '<span class="text-muted">Sin evidencia</span>';
+  }
+
+  function visibleSegunFiltro(estado, cola, estadoFiltro) {
+    if (estadoFiltro && estado !== estadoFiltro) return false;
+    if (cola === 'pendientes') return estado === 'PENDIENTE';
+    if (cola === 'en_campo' || cola === 'vencidas') return estado === 'ASIGNADA';
+    if (cola === 'completadas') return estado === 'COMPLETADA';
+    if (cola === 'errores') return estado === 'ERROR';
+    return true;
+  }
+
+  function setText(selector, value) {
+    document.querySelectorAll(selector).forEach(function (el) {
+      el.textContent = value;
+    });
+  }
+
+  function actualizar(data) {
+    if (!data || !data.ok) return;
+    var tabla = document.querySelector('table[data-cola-filtro]');
+    var cola = tabla ? (tabla.getAttribute('data-cola-filtro') || '') : '';
+    var estadoFiltro = (new URLSearchParams(window.location.search).get('estado') || '').trim();
+    (data.tareas || []).forEach(function (tarea) {
+      var row = document.querySelector('tr[data-tarea-id="' + tarea.id + '"]');
+      if (!row) return;
+      row.setAttribute('data-estado', tarea.estado || '');
+      var estadoCelda = row.querySelector('.js-tarea-estado');
+      if (estadoCelda) estadoCelda.innerHTML = badgeEstado(tarea.estado, tarea.estado_label);
+      var evidencia = row.querySelector('.js-tarea-evidencia');
+      if (evidencia) evidencia.innerHTML = evidenciaHtml(tarea);
+      var acciones = row.querySelector('.js-tarea-acciones');
+      if (acciones && tarea.puede_pdf && tarea.pdf_url && !acciones.querySelector('.js-tarea-pdf')) {
+        acciones.insertAdjacentHTML(
+          'beforeend',
+          ' <a href="' + tarea.pdf_url + '" class="btn btn-sm btn-outline-danger js-tarea-pdf" title="Ver PDF del contenido rellenado" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> PDF</a>'
+        );
+      }
+      if (!visibleSegunFiltro(tarea.estado, cola, estadoFiltro)) row.remove();
+    });
+    if (data.resumen) {
+      setText('[data-kpi="resumen.total"]', data.resumen.total || 0);
+      setText('[data-kpi="resumen.abiertas"]', data.resumen.abiertas || 0);
+      setText('[data-kpi="resumen.completadas"]', data.resumen.completadas || 0);
+      setText('[data-kpi="resumen.con_informe"]', data.resumen.con_informe || 0);
+      setText('[data-kpi="resumen.errores"]', data.resumen.errores || 0);
+    }
+    if (data.kpis) {
+      var vencidas = data.kpis.vencidas || 0;
+      document.querySelectorAll('[data-kpi="kpis.vencidas"]').forEach(function (el) {
+        el.textContent = vencidas;
+        el.classList.toggle('text-danger', vencidas > 0);
+      });
+    }
+    if (data.colas) {
+      Object.keys(data.colas).forEach(function (key) {
+        setText('[data-cola-count="' + key + '"]', data.colas[key] || 0);
+      });
+    }
+  }
+
+  function toastAviso(aviso) {
+    if (!aviso || !aviso.mensaje || typeof window.showToast !== 'function') return;
+    window.showToast(aviso.mensaje, aviso.tipo || 'info');
+  }
+
+  function consultar(opts) {
+    opts = opts || {};
+    var force = !!opts.force;
+    var boton = opts.button || null;
+    if (inFlight) return;
+    if (!force) {
+      if (document.hidden) return;
+      if (document.querySelector('.modal.show')) return;
+    }
+    var ids = Array.prototype.map.call(document.querySelectorAll('tr[data-tarea-id]'), function (row) {
+      return row.getAttribute('data-tarea-id');
+    }).filter(Boolean);
+    var params = new URLSearchParams(window.location.search);
+    if (ids.length) params.set('ids', ids.join(','));
+    if (force) params.set('force', '1');
+    inFlight = true;
+    if (boton) boton.disabled = true;
+    fetch(estadoUrl + '?' + params.toString(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (resp) { return resp.json().then(function (data) { return { okHttp: resp.ok, data: data }; }); })
+      .then(function (pack) {
+        actualizar(pack.data);
+        if (force) toastAviso((pack.data && pack.data.aviso) || { tipo: 'danger', mensaje: 'No se pudo consultar MoreApp.' });
+      })
+      .catch(function () {
+        if (force) toastAviso({ tipo: 'danger', mensaje: 'No se pudo consultar MoreApp.' });
+      })
+      .then(function () {
+        inFlight = false;
+        if (boton) boton.disabled = false;
+      });
+  }
+
+  var formRevisar = document.getElementById('js-form-revisar-estado');
+  if (formRevisar) {
+    formRevisar.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      consultar({ force: true, button: formRevisar.querySelector('button[type="submit"]') });
+    });
+  }
+
+  window.setInterval(function () { consultar(); }, refreshSeconds * 1000);
 })();
 (function () {
   var csvModal = document.getElementById('modalLoteCsv');

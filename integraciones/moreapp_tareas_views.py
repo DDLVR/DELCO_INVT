@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.contrib import messages
@@ -454,6 +455,11 @@ def _enviar_tarea_registrada(
     lng: str = "",
     user=None,
     cuenta: str = "",
+    titulo: str = "",
+    tipo_trabajo: str = "",
+    cliente=None,
+    proyecto_carga: str = "",
+    observaciones: str = "",
 ) -> Tuple[MoreAppTareaEnviada, str]:
     payload = _payload_tarea(
         recipients=all_recipients,
@@ -481,9 +487,23 @@ def _enviar_tarea_registrada(
         datos_precarga=data,
         creado_por=user,
         cuenta=(cuenta or "")[:80],
+        titulo=(titulo or mensaje or "")[:200],
+        tipo_trabajo=tipo_trabajo if tipo_trabajo in {
+            code for code, _label in MoreAppTareaEnviada.TIPO_TRABAJO_CHOICES
+        } else "",
+        proyecto_carga_administrativa=(proyecto_carga or "")[:255],
+        observaciones=observaciones or "",
+        cliente=cliente,
     )
     from .moreapp_tareas_ciclo import cuenta_desde_precarga, registrar_ciclo_envio
 
+    if cliente is not None:
+        if not tarea.cuenta:
+            tarea.cuenta = (cliente.numero_cliente or "")[:80]
+        if not tarea.ubicacion:
+            tarea.ubicacion = " ".join(
+                part for part in (cliente.direccion, getattr(cliente, "comuna", "") or "") if part
+            ).strip()[:255]
     if not tarea.cuenta:
         tarea.cuenta = cuenta_desde_precarga(data)
     live = None
@@ -555,6 +575,228 @@ def _clientes_para_lote() -> List[Cliente]:
     )
 
 
+def _cliente_por_id(raw) -> Optional[Cliente]:
+    try:
+        pk = int(raw or 0)
+    except (TypeError, ValueError):
+        return None
+    if pk <= 0:
+        return None
+    return Cliente.objects.filter(pk=pk).first()
+
+
+def _cliente_por_cuenta(numero: str) -> Optional[Cliente]:
+    numero = (numero or "").strip()
+    if not numero:
+        return None
+    return Cliente.objects.filter(activo=True, numero_cliente=numero).first()
+
+
+def _sugerencias_proyecto() -> List[str]:
+    return list(
+        MoreAppTareaEnviada.objects.exclude(proyecto_carga_administrativa="")
+        .values_list("proyecto_carga_administrativa", flat=True)
+        .distinct()
+        .order_by("proyecto_carga_administrativa")[:40]
+    )
+
+
+def _fecha_corta(valor) -> str:
+    if not valor:
+        return ""
+    try:
+        local = timezone.localtime(valor)
+    except (ValueError, TypeError, OverflowError):
+        local = valor
+    return local.strftime("%d/%m/%Y %H:%M")
+
+
+def _payload_estado_tarea(tarea: MoreAppTareaEnviada, *, detalle: bool = False) -> Dict[str, Any]:
+    from .moreapp_tareas_pdf import campos_rellenados_tarea, tarea_permite_pdf
+
+    puede_pdf = tarea_permite_pdf(tarea)
+    registro = getattr(tarea, "integracion", None)
+    submission_id = ""
+    if registro is not None:
+        submission_id = str(registro.moreapp_submission_id or "").strip()
+        if len(submission_id) < 8:
+            submission_id = ""
+    payload: Dict[str, Any] = {
+        "id": tarea.pk,
+        "estado": tarea.estado,
+        "estado_label": tarea.get_estado_display(),
+        "puede_pdf": puede_pdf,
+        "tiene_informe": bool(tarea.integracion_id),
+        "pdf_url": reverse("moreapp_tarea_pdf", args=[tarea.pk]) if puede_pdf else "",
+        "fecha_completado": _fecha_corta(tarea.fecha_completado),
+        "ultima_sync": _fecha_corta(tarea.ultima_sync),
+    }
+    if detalle:
+        payload["campos_rellenados"] = campos_rellenados_tarea(tarea)
+        payload["informe_url"] = (
+            reverse("reportes_moreapp_detalle", args=[registro.pk]) if registro is not None else ""
+        )
+        payload["contenido_url"] = (
+            reverse("moreapp_api_registro", args=[tarea.form_id, submission_id])
+            if submission_id and tarea.form_id
+            else ""
+        )
+    return payload
+
+
+def _colas_conteo_tareas() -> Dict[str, int]:
+    ahora = timezone.now()
+    qs = MoreAppTareaEnviada.objects.all()
+    return {
+        "pendientes": qs.filter(estado=MoreAppTareaEnviada.ESTADO_PENDIENTE).count(),
+        "en_campo": qs.filter(estado=MoreAppTareaEnviada.ESTADO_ASIGNADA).count(),
+        "completadas": qs.filter(estado=MoreAppTareaEnviada.ESTADO_COMPLETADA).count(),
+        "errores": qs.filter(estado=MoreAppTareaEnviada.ESTADO_ERROR).count(),
+        "vencidas": qs.filter(
+            estado=MoreAppTareaEnviada.ESTADO_ASIGNADA,
+            fecha_limite__lt=ahora,
+        ).count(),
+    }
+
+
+def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True):
+    qs = MoreAppTareaEnviada.objects.select_related(
+        "creado_por", "integracion", "cliente"
+    ).prefetch_related("eventos")
+    if not aplicar_filtros:
+        return qs
+
+    estado_filtro = (request.GET.get("estado") or "").strip()
+    form_filtro = (request.GET.get("formulario") or "").strip()
+    cuenta_filtro = (request.GET.get("cuenta") or "").strip()
+    buscar = (request.GET.get("buscar") or "").strip()
+    fecha_desde = (request.GET.get("fecha_desde") or "").strip()
+    fecha_hasta = (request.GET.get("fecha_hasta") or "").strip()
+    periodo = (request.GET.get("periodo") or "").strip().lower()
+    cola_filtro = (request.GET.get("cola") or "").strip().lower()
+    tipo_filtro = (request.GET.get("tipo_trabajo") or "").strip()
+    proyecto_filtro = (request.GET.get("proyecto_carga") or "").strip()
+    destinatario_filtro = (request.GET.get("destinatario") or "").strip()
+
+    if cola_filtro == "pendientes":
+        qs = qs.filter(estado=MoreAppTareaEnviada.ESTADO_PENDIENTE)
+    elif cola_filtro == "en_campo":
+        qs = qs.filter(estado=MoreAppTareaEnviada.ESTADO_ASIGNADA)
+    elif cola_filtro == "completadas":
+        qs = qs.filter(estado=MoreAppTareaEnviada.ESTADO_COMPLETADA)
+    elif cola_filtro == "errores":
+        qs = qs.filter(estado=MoreAppTareaEnviada.ESTADO_ERROR)
+    elif cola_filtro == "vencidas":
+        qs = qs.filter(
+            estado=MoreAppTareaEnviada.ESTADO_ASIGNADA,
+            fecha_limite__lt=timezone.now(),
+        )
+    if estado_filtro:
+        qs = qs.filter(estado=estado_filtro)
+    if form_filtro:
+        qs = qs.filter(Q(form_name=form_filtro) | Q(form_id=form_filtro))
+    if cuenta_filtro:
+        qs = qs.filter(
+            Q(cuenta__icontains=cuenta_filtro)
+            | Q(cliente__numero_cliente__icontains=cuenta_filtro)
+        )
+    if tipo_filtro:
+        qs = qs.filter(tipo_trabajo=tipo_filtro)
+    if proyecto_filtro:
+        qs = qs.filter(proyecto_carga_administrativa__icontains=proyecto_filtro)
+    if destinatario_filtro:
+        qs = qs.filter(destinatarios__icontains=destinatario_filtro)
+    if buscar:
+        qs = qs.filter(
+            Q(mensaje__icontains=buscar)
+            | Q(titulo__icontains=buscar)
+            | Q(form_name__icontains=buscar)
+            | Q(cuenta__icontains=buscar)
+            | Q(task_id__icontains=buscar)
+            | Q(proyecto_carga_administrativa__icontains=buscar)
+            | Q(observaciones__icontains=buscar)
+        )
+    ahora = timezone.now()
+    if periodo == "7":
+        qs = qs.filter(fecha_creacion__gte=ahora - timedelta(days=7))
+    elif periodo == "30":
+        qs = qs.filter(fecha_creacion__gte=ahora - timedelta(days=30))
+    else:
+        if fecha_desde:
+            try:
+                d0 = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
+                qs = qs.filter(fecha_creacion__date__gte=d0)
+            except ValueError:
+                pass
+        if fecha_hasta:
+            try:
+                d1 = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
+                qs = qs.filter(fecha_creacion__date__lte=d1)
+            except ValueError:
+                pass
+    return qs
+
+
+def _exportar_tareas_excel(tareas: List[MoreAppTareaEnviada]):
+    import openpyxl
+    from openpyxl.styles import Font
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Tareas MoreApp"
+    headers = [
+        "ID",
+        "Titulo",
+        "Mensaje",
+        "Formulario",
+        "Tipo",
+        "Estado",
+        "CUENTA",
+        "Cliente",
+        "Direccion",
+        "Comuna",
+        "Proyecto",
+        "Destinatarios",
+        "Ubicacion",
+        "Fecha creacion",
+        "Fecha asignacion",
+        "Fecha limite",
+        "Fecha completado",
+        "Creada por",
+        "Observaciones",
+    ]
+    ws.append(headers)
+    for cell in ws[1]:
+        cell.font = Font(bold=True)
+    tipos = dict(MoreAppTareaEnviada.TIPO_TRABAJO_CHOICES)
+    for tarea in tareas:
+        cliente = tarea.cliente
+        ws.append(
+            [
+                tarea.pk,
+                tarea.titulo or "",
+                tarea.mensaje or "",
+                tarea.form_name or tarea.form_id,
+                tipos.get(tarea.tipo_trabajo, tarea.tipo_trabajo or ""),
+                tarea.get_estado_display(),
+                tarea.cuenta or (cliente.numero_cliente if cliente else ""),
+                (getattr(cliente, "customer_name", None) or "") if cliente else "",
+                (cliente.direccion if cliente else "") or "",
+                (cliente.comuna if cliente else "") or "",
+                tarea.proyecto_carga_administrativa or "",
+                ", ".join(tarea.destinatarios or []),
+                tarea.ubicacion or "",
+                tarea.fecha_creacion.strftime("%d/%m/%Y %H:%M") if tarea.fecha_creacion else "",
+                tarea.fecha_asignacion.strftime("%d/%m/%Y %H:%M") if tarea.fecha_asignacion else "",
+                tarea.fecha_limite.strftime("%d/%m/%Y %H:%M") if tarea.fecha_limite else "",
+                tarea.fecha_completado.strftime("%d/%m/%Y %H:%M") if tarea.fecha_completado else "",
+                getattr(tarea.creado_por, "nombre_interno", "") or "",
+                tarea.observaciones or "",
+            ]
+        )
+    return wb
+
+
 def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote_modal: str = ""):
     context = dict(extra or {})
     context.setdefault("formularios", [])
@@ -599,39 +841,12 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
     fecha_desde = (request.GET.get("fecha_desde") or "").strip()
     fecha_hasta = (request.GET.get("fecha_hasta") or "").strip()
     periodo = (request.GET.get("periodo") or "").strip().lower()
+    cola_filtro = (request.GET.get("cola") or "").strip().lower()
+    tipo_filtro = (request.GET.get("tipo_trabajo") or "").strip()
+    proyecto_filtro = (request.GET.get("proyecto_carga") or "").strip()
+    destinatario_filtro = (request.GET.get("destinatario") or "").strip()
 
-    qs = MoreAppTareaEnviada.objects.select_related("creado_por", "integracion").prefetch_related("eventos")
-    if estado_filtro:
-        qs = qs.filter(estado=estado_filtro)
-    if form_filtro:
-        qs = qs.filter(Q(form_name=form_filtro) | Q(form_id=form_filtro))
-    if cuenta_filtro:
-        qs = qs.filter(cuenta__icontains=cuenta_filtro)
-    if buscar:
-        qs = qs.filter(
-            Q(mensaje__icontains=buscar)
-            | Q(form_name__icontains=buscar)
-            | Q(cuenta__icontains=buscar)
-            | Q(task_id__icontains=buscar)
-        )
-    ahora = timezone.now()
-    if periodo == "7":
-        qs = qs.filter(fecha_creacion__gte=ahora - timedelta(days=7))
-    elif periodo == "30":
-        qs = qs.filter(fecha_creacion__gte=ahora - timedelta(days=30))
-    else:
-        if fecha_desde:
-            try:
-                d0 = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
-                qs = qs.filter(fecha_creacion__date__gte=d0)
-            except ValueError:
-                fecha_desde = ""
-        if fecha_hasta:
-            try:
-                d1 = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
-                qs = qs.filter(fecha_creacion__date__lte=d1)
-            except ValueError:
-                fecha_hasta = ""
+    qs = _queryset_tareas_filtrado(request)
 
     resumen_estado = {
         row["estado"]: row["c"] for row in qs.values("estado").annotate(c=Count("id"))
@@ -681,6 +896,12 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
             "fecha_desde": fecha_desde,
             "fecha_hasta": fecha_hasta,
             "periodo": periodo,
+            "cola_filtro": cola_filtro,
+            "tipo_filtro": tipo_filtro,
+            "proyecto_filtro": proyecto_filtro,
+            "destinatario_filtro": destinatario_filtro,
+            "colas_conteo": _colas_conteo_tareas(),
+            "tipos_trabajo": MoreAppTareaEnviada.TIPO_TRABAJO_CHOICES,
             "formularios_filtro": formularios_filtro,
             "estados_filtro": MoreAppTareaEnviada.ESTADO_CHOICES,
             "resumen": {
@@ -783,6 +1004,157 @@ def tareas_sincronizar_view(request):
     return redirect("moreapp_tareas_list")
 
 
+def _aviso_sync_listado(stats: Dict[str, Any]) -> Dict[str, str]:
+    completadas = int(stats.get("completadas") or 0)
+    errores = int(stats.get("errores") or 0)
+    if completadas:
+        return {
+            "tipo": "success",
+            "mensaje": "MoreApp reportó %s tarea%s terminada%s. Ya aparecen como completadas."
+            % (
+                completadas,
+                "" if completadas == 1 else "s",
+                "" if completadas == 1 else "s",
+            ),
+        }
+    if errores:
+        return {
+            "tipo": "warning",
+            "mensaje": "No se pudo consultar %s formulario%s en MoreApp."
+            % (errores, "" if errores == 1 else "s"),
+        }
+    return {
+        "tipo": "info",
+        "mensaje": "Ninguna tarea asignada aparece como terminada en MoreApp. Siguen en curso.",
+    }
+
+
+def _aviso_sync_detalle(tarea: MoreAppTareaEnviada, result: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    result = result or {}
+    if result.get("error"):
+        return {"tipo": "danger", "mensaje": str(result["error"])}
+    if tarea.estado == MoreAppTareaEnviada.ESTADO_COMPLETADA:
+        return {
+            "tipo": "success",
+            "mensaje": "El destinatario ya terminó esta tarea en MoreApp. Quedó marcada como completada.",
+        }
+    if result.get("found"):
+        return {
+            "tipo": "info",
+            "mensaje": "Sigue asignada en MoreApp (%s). Aún no la terminan."
+            % _etiqueta_estado_moreapp(result.get("status") or ""),
+        }
+    return {
+        "tipo": "warning",
+        "mensaje": "MoreApp no devolvió esta tarea. Puede seguir pendiente o el aviso no llegó a crearse.",
+    }
+
+
+@require_GET
+@admin_or_administrativo
+def tareas_estado_view(request):
+    """Sincroniza MoreApp y devuelve solo el estado de las tareas visibles."""
+    from django.core.cache import cache
+
+    from .moreapp_tareas_ciclo import (
+        _CACHE_TAREAS_AUTO_SYNC,
+        intervalo_auto_sync_tareas,
+        kpis_tareas,
+        revisar_tarea_desde_api,
+        sincronizar_tareas_desde_api,
+        sincronizar_tareas_si_corresponde,
+    )
+
+    pk_raw = (request.GET.get("pk") or "").strip()
+    ids_raw = (request.GET.get("ids") or "").strip()
+    force = (request.GET.get("force") or "").strip().lower() in ("1", "true", "yes")
+    try:
+        if pk_raw:
+            if force:
+                try:
+                    sincronizar_tareas_desde_api()
+                except (MoreAppApiConfigError, MoreAppApiError) as exc:
+                    return JsonResponse(
+                        {"ok": False, "aviso": {"tipo": "danger", "mensaje": str(exc)}},
+                        status=400,
+                    )
+            else:
+                sincronizar_tareas_si_corresponde()
+            tarea = get_object_or_404(
+                MoreAppTareaEnviada.objects.select_related("integracion"),
+                pk=int(pk_raw),
+            )
+            result: Dict[str, Any] = {}
+            if tarea.estado == MoreAppTareaEnviada.ESTADO_ASIGNADA and (tarea.task_id or "").strip():
+                try:
+                    result = revisar_tarea_desde_api(tarea) or {}
+                    tarea.refresh_from_db()
+                except (MoreAppApiConfigError, MoreAppApiError) as exc:
+                    result = {"error": str(exc)}
+            payload = {
+                "ok": True,
+                "tarea": _payload_estado_tarea(tarea, detalle=True),
+            }
+            if force:
+                payload["aviso"] = _aviso_sync_detalle(tarea, result)
+            return JsonResponse(payload)
+        ids = []
+        for raw in ids_raw.split(","):
+            raw = raw.strip()
+            if raw.isdigit():
+                ids.append(int(raw))
+            if len(ids) >= 100:
+                break
+        if force:
+            try:
+                stats = sincronizar_tareas_desde_api() or {}
+            except (MoreAppApiConfigError, MoreAppApiError) as exc:
+                return JsonResponse(
+                    {"ok": False, "aviso": {"tipo": "danger", "mensaje": str(exc)}},
+                    status=400,
+                )
+            cache.set(
+                _CACHE_TAREAS_AUTO_SYNC,
+                timezone.now().timestamp(),
+                timeout=max(intervalo_auto_sync_tareas() * 2, 120),
+            )
+        else:
+            stats = sincronizar_tareas_si_corresponde() or {}
+        qs = MoreAppTareaEnviada.objects.select_related("integracion")
+        if ids:
+            qs = qs.filter(pk__in=ids)
+        else:
+            qs = qs.none()
+        filtrado = _queryset_tareas_filtrado(request)
+        resumen_estado = {
+            row["estado"]: row["c"] for row in filtrado.values("estado").annotate(c=Count("id"))
+        }
+        payload = {
+            "ok": True,
+            "stats": {
+                "completadas": int(stats.get("completadas") or 0),
+                "revisadas": int(stats.get("revisadas") or 0),
+            },
+            "kpis": {
+                "vencidas": kpis_tareas().get("vencidas") or 0,
+            },
+            "colas": _colas_conteo_tareas(),
+            "resumen": {
+                "total": filtrado.count(),
+                "abiertas": resumen_estado.get(MoreAppTareaEnviada.ESTADO_ASIGNADA, 0),
+                "completadas": resumen_estado.get(MoreAppTareaEnviada.ESTADO_COMPLETADA, 0),
+                "errores": resumen_estado.get(MoreAppTareaEnviada.ESTADO_ERROR, 0),
+                "con_informe": filtrado.filter(integracion__isnull=False).count(),
+            },
+            "tareas": [_payload_estado_tarea(tarea) for tarea in qs],
+        }
+        if force:
+            payload["aviso"] = _aviso_sync_listado(stats)
+        return JsonResponse(payload)
+    except (TypeError, ValueError):
+        return JsonResponse({"ok": False, "error": "Identificador inválido."}, status=400)
+
+
 @require_POST
 @admin_or_administrativo
 def tarea_revisar_view(request, pk: int):
@@ -820,7 +1192,9 @@ def tarea_detalle_view(request, pk: int):
     from .moreapp_tareas_pdf import campos_rellenados_tarea, tarea_permite_pdf
 
     tarea = get_object_or_404(
-        MoreAppTareaEnviada.objects.select_related("creado_por", "integracion").prefetch_related("eventos"),
+        MoreAppTareaEnviada.objects.select_related(
+            "creado_por", "integracion", "cliente"
+        ).prefetch_related("eventos"),
         pk=pk,
     )
     from .moreapp_tareas_ciclo import intervalo_auto_sync_tareas
@@ -879,6 +1253,66 @@ def tarea_pdf_view(request, pk: int):
     return response
 
 
+@admin_or_administrativo
+def tareas_exportar_view(request):
+    filter_keys = (
+        "estado",
+        "formulario",
+        "cuenta",
+        "buscar",
+        "cola",
+        "tipo_trabajo",
+        "proyecto_carga",
+        "destinatario",
+        "fecha_desde",
+        "fecha_hasta",
+        "periodo",
+    )
+    tiene_filtros = any((request.GET.get(k) or "").strip() for k in filter_keys)
+    forzar_filtrar = request.GET.get("filtrar") == "1"
+    exportar_todas = request.GET.get("todas") == "1"
+    usar_filtros = (not exportar_todas) and (forzar_filtrar or tiene_filtros)
+    qs = _queryset_tareas_filtrado(request, aplicar_filtros=usar_filtros)
+    wb = _exportar_tareas_excel(list(qs[:5000]))
+    stream = BytesIO()
+    wb.save(stream)
+    stream.seek(0)
+    from web.services.export_filenames import nombre_exportacion_con_fecha
+
+    filename = nombre_exportacion_con_fecha("tareas_moreapp.xlsx")
+    response = HttpResponse(
+        stream.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = 'attachment; filename="%s"' % filename
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+@require_POST
+@admin_or_administrativo
+def tarea_observaciones_view(request, pk: int):
+    tarea = get_object_or_404(MoreAppTareaEnviada, pk=pk)
+    tarea.observaciones = (request.POST.get("observaciones") or "").strip()
+    tarea.save(update_fields=["observaciones"])
+    messages.success(request, "Observaciones guardadas.")
+    return redirect("moreapp_tarea_detalle", pk=tarea.pk)
+
+
+@require_POST
+@admin_or_administrativo
+def tarea_eliminar_view(request, pk: int):
+    tarea = get_object_or_404(MoreAppTareaEnviada, pk=pk)
+    numero = tarea.pk
+    tarea.delete()
+    messages.success(
+        request,
+        "Se eliminó la tarea #%s de la intranet. Si ya estaba en MoreApp, revócala allí."
+        % numero,
+    )
+    return redirect("moreapp_tareas_list")
+
+
 @require_GET
 @admin_or_administrativo
 def tarea_campos_view(request, form_id: str):
@@ -911,6 +1345,17 @@ def tarea_crear_view(request):
         "longitud": (request.POST.get("longitud") or "").strip(),
         "usuarios_sel": [item.strip() for item in request.POST.getlist("usuarios") if item.strip()],
         "grupos_sel": [item.strip() for item in request.POST.getlist("grupos") if item.strip()],
+        "titulo": (request.POST.get("titulo") or "").strip(),
+        "tipo_trabajo": (request.POST.get("tipo_trabajo") or "").strip(),
+        "cliente_id": (request.POST.get("cliente") or "").strip(),
+        "cliente_label": (request.POST.get("cliente_label") or "").strip(),
+        "proyecto_carga_administrativa": (
+            request.POST.get("proyecto_carga_administrativa") or ""
+        ).strip(),
+        "observaciones": (request.POST.get("observaciones") or "").strip(),
+        "tipos_trabajo": MoreAppTareaEnviada.TIPO_TRABAJO_CHOICES,
+        "clientes": _clientes_para_lote(),
+        "sugerencias_proyecto": _sugerencias_proyecto(),
     }
     try:
         context["formularios"] = _formularios_activos()
@@ -976,13 +1421,18 @@ def tarea_crear_view(request):
     if not all_recipients:
         messages.error(request, "El grupo elegido no tiene usuarios MoreApp activos con correo.")
         return render(request, "integraciones/moreapp_tarea_crear.html", context)
+    titulo = (context.get("titulo") or "").strip()
+    if not mensaje and titulo:
+        mensaje = titulo[:500]
+        context["mensaje"] = mensaje
     if not mensaje:
-        messages.error(request, "Escribe un mensaje corto para quien reciba la tarea.")
+        messages.error(request, "Escribe un título o un mensaje corto para quien reciba la tarea.")
         return render(request, "integraciones/moreapp_tarea_crear.html", context)
     if envio == "SCHEDULED" and programada is None:
         messages.error(request, "Indica la fecha y hora programadas de envío.")
         return render(request, "integraciones/moreapp_tarea_crear.html", context)
 
+    cliente = _cliente_por_id(context.get("cliente_id"))
     tarea, error = _enviar_tarea_registrada(
         form_id=form_id,
         form_name=nombres.get(form_id) or form_id,
@@ -998,6 +1448,11 @@ def tarea_crear_view(request):
         lat=context["latitud"],
         lng=context["longitud"],
         user=request.user,
+        titulo=titulo,
+        tipo_trabajo=context.get("tipo_trabajo") or "",
+        cliente=cliente,
+        proyecto_carga=context.get("proyecto_carga_administrativa") or "",
+        observaciones=context.get("observaciones") or "",
     )
     if error:
         messages.error(request, error)
@@ -1104,14 +1559,9 @@ def tarea_lote_csv_view(request):
             mensaje = ("%s · %s" % (mensaje, cliente))[:500]
         limite = _dt_from_local(parse_fecha_lote(fila.get("fecha") or ""))
         ubicacion, lat, lng = parse_ubicacion_lote(fila.get("ubicacion") or "")
-        if cliente and not ubicacion:
-            ficha = (
-                Cliente.objects.filter(activo=True, numero_cliente=cliente)
-                .only("direccion")
-                .first()
-            )
-            if ficha:
-                ubicacion = ficha.direccion
+        ficha = _cliente_por_cuenta(cliente) if cliente else None
+        if ficha and not ubicacion:
+            ubicacion = ficha.direccion
         campos = _campos_formulario(form_id, campos_cache)
         data = _precarga_search_cliente(campos, cliente, ds_cache)
         _tarea, error = _enviar_tarea_registrada(
@@ -1128,6 +1578,7 @@ def tarea_lote_csv_view(request):
             lng=lng,
             user=request.user,
             cuenta=cliente,
+            cliente=ficha,
         )
         resultado["ok"] = not error
         resultado["precarga"] = bool(data)
@@ -1259,6 +1710,7 @@ def tarea_lote_clientes_view(request):
             ubicacion=ubicacion,
             user=request.user,
             cuenta=numero,
+            cliente=cliente,
         )
         ok = not error
         if ok:
