@@ -372,6 +372,38 @@ def revisar_tarea_desde_api(tarea: MoreAppTareaEnviada) -> Dict[str, Any]:
     return result
 
 
+_CACHE_TAREAS_AUTO_SYNC = "moreapp:tareas_auto_sync_ts"
+
+
+def intervalo_auto_sync_tareas() -> int:
+    from django.conf import settings
+
+    intervalo = int(getattr(settings, "MOREAPP_TAREAS_AUTO_SYNC_SECONDS", 20) or 20)
+    if intervalo < 20:
+        intervalo = 20
+    return intervalo
+
+
+def sincronizar_tareas_si_corresponde(*, force: bool = False) -> Optional[Dict[str, int]]:
+    """Consulta MoreApp y cierra tareas terminadas, con un intervalo para no repetir en cada clic."""
+    from django.conf import settings
+    from django.core.cache import cache
+
+    if not force and not getattr(settings, "MOREAPP_API_ENABLED", False):
+        return None
+    intervalo = intervalo_auto_sync_tareas()
+    if not force:
+        ahora = timezone.now().timestamp()
+        ultimo = cache.get(_CACHE_TAREAS_AUTO_SYNC)
+        if ultimo and (ahora - float(ultimo)) < intervalo:
+            return None
+        cache.set(_CACHE_TAREAS_AUTO_SYNC, ahora, timeout=max(intervalo * 2, 120))
+    try:
+        return sincronizar_tareas_desde_api()
+    except Exception:
+        return None
+
+
 def sincronizar_tareas_desde_api(max_pages: int = 8) -> Dict[str, int]:
     from .moreapp_api import MoreAppApiConfigError, MoreAppApiError, list_form_tasks
 

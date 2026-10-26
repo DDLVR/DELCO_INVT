@@ -1863,6 +1863,41 @@ class MoreAppTareaCicloTests(TestCase):
         self.assertFalse(result['completada'])
         self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_ASIGNADA)
 
+    def test_listado_actualiza_estado_sin_boton(self):
+        from django.core.cache import cache
+        from integraciones.models import MoreAppTareaEnviada
+        from integraciones.moreapp_tareas_ciclo import _CACHE_TAREAS_AUTO_SYNC
+
+        tarea = self._tarea()
+        cache.delete(_CACHE_TAREAS_AUTO_SYNC)
+        self.client.login(username=self.admin.rut, password=self.password)
+        with override_settings(MOREAPP_API_ENABLED=True, MOREAPP_API_KEY='test-key', MOREAPP_CUSTOMER_ID='123'):
+            with mock.patch(
+                'integraciones.moreapp_api.list_form_tasks',
+                return_value=[{'id': 'task-ciclo-1', 'status': 'COMPLETED'}],
+            ):
+                resp = self.client.get(reverse('moreapp_tareas_list'))
+        self.assertEqual(resp.status_code, 200)
+        tarea.refresh_from_db()
+        self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_COMPLETADA)
+        self.assertIn('Completada', resp.content.decode('utf-8'))
+
+    def test_detalle_actualiza_estado_al_abrir(self):
+        from integraciones.models import MoreAppTareaEnviada
+
+        tarea = self._tarea()
+        self.client.login(username=self.admin.rut, password=self.password)
+        with override_settings(MOREAPP_API_ENABLED=True, MOREAPP_API_KEY='test-key', MOREAPP_CUSTOMER_ID='123'):
+            with mock.patch(
+                'integraciones.moreapp_api.list_form_tasks',
+                return_value=[{'id': 'task-ciclo-1', 'status': 'COMPLETED'}],
+            ):
+                resp = self.client.get(reverse('moreapp_tarea_detalle', args=[tarea.pk]))
+        self.assertEqual(resp.status_code, 200)
+        tarea.refresh_from_db()
+        self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_COMPLETADA)
+        self.assertIn('Completada', resp.content.decode('utf-8'))
+
     def test_listado_y_detalle_ofrecen_revisar_estado(self):
         tarea = self._tarea()
         self.client.login(username=self.admin.rut, password=self.password)

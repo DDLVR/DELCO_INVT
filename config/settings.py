@@ -225,6 +225,8 @@ MOREAPP_WEBHOOK_REALTIME_ENABLED = os.getenv('MOREAPP_WEBHOOK_REALTIME_ENABLED',
 # Activar solo si hace falta: MOREAPP_AUTO_SYNC_ENABLED=true. Preferir botón manual / cron.
 MOREAPP_AUTO_SYNC_ENABLED = os.getenv('MOREAPP_AUTO_SYNC_ENABLED', 'false').strip().lower() == 'true'
 MOREAPP_AUTO_SYNC_INTERVAL_SECONDS = int(os.getenv('MOREAPP_AUTO_SYNC_INTERVAL_SECONDS', '300'))
+# Consulta automática del estado COMPLETED de tareas asignadas (MoreApp REST).
+MOREAPP_TAREAS_AUTO_SYNC_SECONDS = int(os.getenv('MOREAPP_TAREAS_AUTO_SYNC_SECONDS', '20'))
 MOREAPP_AUTO_REFRESH_SECONDS = int(os.getenv('MOREAPP_AUTO_REFRESH_SECONDS', '300'))
 ORDENES_TRABAJO_HABILITADAS = os.getenv('ORDENES_TRABAJO_HABILITADAS', 'true').strip().lower() == 'true'
 MOREAPP_INCREMENTAL_SCAN_ENABLED = os.getenv('MOREAPP_INCREMENTAL_SCAN_ENABLED', 'true').strip().lower() == 'true'

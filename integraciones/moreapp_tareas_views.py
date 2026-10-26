@@ -575,7 +575,18 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
     context.setdefault("max_cantidad", MAX_CANTIDAD)
     context.setdefault("max_filas_listado", MAX_FILAS_LISTADO)
     context["lote_modal"] = lote_modal or context.get("lote_modal") or (request.GET.get("lote") or "").strip()
-    from .moreapp_tareas_ciclo import conteos_alertas_tareas, kpis_tareas, marcar_alertas_leidas
+    from .moreapp_tareas_ciclo import (
+        conteos_alertas_tareas,
+        intervalo_auto_sync_tareas,
+        kpis_tareas,
+        marcar_alertas_leidas,
+        sincronizar_tareas_si_corresponde,
+    )
+
+    try:
+        sincronizar_tareas_si_corresponde()
+    except Exception:
+        pass
 
     user = getattr(request, "user", None)
     context["tareas_aviso"] = conteos_alertas_tareas(user)
@@ -662,6 +673,7 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
             "page_obj": page_obj,
             "query_string": query_params.urlencode(),
             "kpis_tareas": kpis_tareas(),
+            "tareas_auto_refresh_seconds": intervalo_auto_sync_tareas(),
             "estado_filtro": estado_filtro,
             "form_filtro": form_filtro,
             "cuenta_filtro": cuenta_filtro,
@@ -811,6 +823,21 @@ def tarea_detalle_view(request, pk: int):
         MoreAppTareaEnviada.objects.select_related("creado_por", "integracion").prefetch_related("eventos"),
         pk=pk,
     )
+    from .moreapp_tareas_ciclo import intervalo_auto_sync_tareas
+
+    refresh_seconds = intervalo_auto_sync_tareas()
+    if tarea.estado == MoreAppTareaEnviada.ESTADO_ASIGNADA and (tarea.task_id or "").strip():
+        reciente = False
+        if tarea.ultima_sync:
+            reciente = (timezone.now() - tarea.ultima_sync).total_seconds() < refresh_seconds
+        if not reciente:
+            try:
+                from .moreapp_tareas_ciclo import revisar_tarea_desde_api
+
+                revisar_tarea_desde_api(tarea)
+                tarea.refresh_from_db()
+            except (MoreAppApiConfigError, MoreAppApiError):
+                pass
     tarea.grupos_nombres = _nombres_grupos_guardados(tarea.grupos)
     registro = tarea.integracion
     error_visible = _error_visible_tarea(tarea.error)
@@ -829,6 +856,7 @@ def tarea_detalle_view(request, pk: int):
             "puede_pdf": tarea_permite_pdf(tarea),
             "registro": registro,
             "submission_id": submission_id,
+            "tareas_auto_refresh_seconds": refresh_seconds,
         },
     )
 

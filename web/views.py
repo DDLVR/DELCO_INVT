@@ -310,6 +310,12 @@ def dashboard_view(request):
     # ADMIN y ADMINISTRATIVO: Vista general de todo
     if rol in ['ADMIN', 'ADMINISTRATIVO']:
         sync_stats = _ejecutar_autosync_moreapp_si_corresponde()
+        try:
+            from integraciones.moreapp_tareas_ciclo import sincronizar_tareas_si_corresponde
+
+            sincronizar_tareas_si_corresponde()
+        except Exception:
+            logger.exception('Fallo al actualizar estado de tareas MoreApp')
         if sync_stats and int(sync_stats.get('nuevos') or 0) > 0:
             messages.info(
                 request,

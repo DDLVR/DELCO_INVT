@@ -142,3 +142,18 @@
   </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+{% if tarea.estado == 'ASIGNADA' %}
+<script>
+(function () {
+  var refreshSeconds = Number({{ tareas_auto_refresh_seconds|default:20 }}) || 20;
+  if (refreshSeconds < 20) refreshSeconds = 20;
+  window.setInterval(function () {
+    if (document.hidden) return;
+    window.location.reload();
+  }, refreshSeconds * 1000);
+})();
+</script>
+{% endif %}
+{% endblock %}
