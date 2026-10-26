@@ -1029,6 +1029,8 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(self.client.get(reverse('moreapp_tarea_crear')).status_code, 403)
         self.assertEqual(self.client.get(reverse('moreapp_tarea_detalle', args=[1])).status_code, 403)
         self.assertEqual(self.client.get(reverse('moreapp_tarea_pdf', args=[1])).status_code, 403)
+        self.assertEqual(self.client.post(reverse('moreapp_tareas_sincronizar')).status_code, 403)
+        self.assertEqual(self.client.post(reverse('moreapp_tarea_revisar', args=[1])).status_code, 403)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -1829,6 +1831,60 @@ class MoreAppTareaCicloTests(TestCase):
             stats = sincronizar_tareas_desde_api()
         tarea.refresh_from_db()
         self.assertEqual(stats['completadas'], 1)
+        self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_COMPLETADA)
+
+    def test_revisar_api_completa_si_moreapp_dice_completed(self):
+        from integraciones.models import MoreAppTareaEnviada
+        from integraciones.moreapp_tareas_ciclo import revisar_tarea_desde_api
+
+        tarea = self._tarea()
+        with mock.patch(
+            'integraciones.moreapp_api.list_form_tasks',
+            return_value=[{'id': 'task-ciclo-1', 'status': 'COMPLETED'}],
+        ):
+            result = revisar_tarea_desde_api(tarea)
+        tarea.refresh_from_db()
+        self.assertTrue(result['found'])
+        self.assertTrue(result['completada'])
+        self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_COMPLETADA)
+
+    def test_revisar_api_deja_asignada_si_sigue_en_curso(self):
+        from integraciones.models import MoreAppTareaEnviada
+        from integraciones.moreapp_tareas_ciclo import revisar_tarea_desde_api
+
+        tarea = self._tarea()
+        with mock.patch(
+            'integraciones.moreapp_api.list_form_tasks',
+            return_value=[{'id': 'task-ciclo-1', 'status': 'IN_PROGRESS'}],
+        ):
+            result = revisar_tarea_desde_api(tarea)
+        tarea.refresh_from_db()
+        self.assertTrue(result['found'])
+        self.assertFalse(result['completada'])
+        self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_ASIGNADA)
+
+    def test_listado_y_detalle_ofrecen_revisar_estado(self):
+        tarea = self._tarea()
+        self.client.login(username=self.admin.rut, password=self.password)
+        listing = self.client.get(reverse('moreapp_tareas_list'))
+        self.assertEqual(listing.status_code, 200)
+        self.assertIn(reverse('moreapp_tareas_sincronizar'), listing.content.decode('utf-8'))
+        detalle = self.client.get(reverse('moreapp_tarea_detalle', args=[tarea.pk]))
+        self.assertEqual(detalle.status_code, 200)
+        self.assertIn(reverse('moreapp_tarea_revisar', args=[tarea.pk]), detalle.content.decode('utf-8'))
+
+    def test_post_revisar_marca_completada(self):
+        from integraciones.models import MoreAppTareaEnviada
+
+        tarea = self._tarea()
+        self.client.login(username=self.admin.rut, password=self.password)
+        with mock.patch(
+            'integraciones.moreapp_api.list_form_tasks',
+            return_value=[{'id': 'task-ciclo-1', 'status': 'COMPLETED'}],
+        ):
+            resp = self.client.post(reverse('moreapp_tarea_revisar', args=[tarea.pk]))
+        self.assertEqual(resp.status_code, 302)
+        tarea.refresh_from_db()
         self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_COMPLETADA)
 
     def test_navbar_creador_y_broadcast(self):

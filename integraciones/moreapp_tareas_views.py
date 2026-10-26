@@ -12,7 +12,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from clientes.models import Cliente
 from web.decorators import admin_or_administrativo
@@ -725,6 +725,81 @@ def _payload_lote_clientes(context: Dict[str, Any]) -> Dict[str, Any]:
 @admin_or_administrativo
 def tareas_list_view(request):
     return _render_tareas_list(request)
+
+
+def _etiqueta_estado_moreapp(status: str) -> str:
+    raw = (status or "").strip().lower()
+    return {
+        "in_progress": "en curso",
+        "completed": "completada",
+        "revoked": "revocada",
+        "declined": "rechazada",
+    }.get(raw) or (status or "en curso")
+
+
+@require_POST
+@admin_or_administrativo
+def tareas_sincronizar_view(request):
+    from .moreapp_tareas_ciclo import sincronizar_tareas_desde_api
+
+    try:
+        stats = sincronizar_tareas_desde_api()
+    except (MoreAppApiConfigError, MoreAppApiError) as exc:
+        messages.error(request, str(exc))
+        return redirect("moreapp_tareas_list")
+    if stats.get("completadas"):
+        messages.success(
+            request,
+            "MoreApp reportó %s tarea%s terminada%s. Ya aparecen como completadas."
+            % (
+                stats["completadas"],
+                "" if stats["completadas"] == 1 else "s",
+                "" if stats["completadas"] == 1 else "s",
+            ),
+        )
+    else:
+        messages.info(
+            request,
+            "Ninguna tarea asignada aparece como terminada en MoreApp. Siguen en curso.",
+        )
+    if stats.get("errores"):
+        messages.warning(
+            request,
+            "No se pudo consultar %s formulario%s en MoreApp."
+            % (stats["errores"], "" if stats["errores"] == 1 else "s"),
+        )
+    return redirect("moreapp_tareas_list")
+
+
+@require_POST
+@admin_or_administrativo
+def tarea_revisar_view(request, pk: int):
+    from .moreapp_tareas_ciclo import revisar_tarea_desde_api
+
+    tarea = get_object_or_404(MoreAppTareaEnviada, pk=pk)
+    if tarea.estado == MoreAppTareaEnviada.ESTADO_COMPLETADA:
+        messages.info(request, "Esta tarea ya está marcada como completada.")
+        return redirect("moreapp_tarea_detalle", pk=tarea.pk)
+    result = revisar_tarea_desde_api(tarea)
+    if result.get("error"):
+        messages.error(request, result["error"])
+    elif result.get("completada"):
+        messages.success(
+            request,
+            "El destinatario ya terminó esta tarea en MoreApp. Quedó marcada como completada.",
+        )
+    elif result.get("found"):
+        messages.info(
+            request,
+            "Sigue asignada en MoreApp (%s). Aún no la terminan."
+            % _etiqueta_estado_moreapp(result.get("status") or ""),
+        )
+    else:
+        messages.warning(
+            request,
+            "MoreApp no devolvió esta tarea. Puede seguir pendiente o el aviso no llegó a crearse.",
+        )
+    return redirect("moreapp_tarea_detalle", pk=tarea.pk)
 
 
 @require_GET

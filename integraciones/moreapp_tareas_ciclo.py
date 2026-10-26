@@ -320,6 +320,58 @@ def _tarea_api_completada(item: Dict[str, Any]) -> bool:
     return False
 
 
+def consultar_estado_tarea_api(tarea: MoreAppTareaEnviada, max_pages: int = 8) -> Dict[str, Any]:
+    """Busca la tarea en MoreApp y dice si el destinatario ya la terminó."""
+    from .moreapp_api import MoreAppApiConfigError, MoreAppApiError, list_form_tasks
+
+    result: Dict[str, Any] = {
+        "found": False,
+        "status": "",
+        "completada": False,
+        "error": "",
+        "item": None,
+    }
+    if not (tarea.form_id or "").strip() or not (tarea.task_id or "").strip():
+        result["error"] = "Esta tarea no tiene un ID de MoreApp para consultar."
+        return result
+    wanted = str(tarea.task_id).strip()
+    page = 0
+    try:
+        while page < max_pages:
+            raw = list_form_tasks(tarea.form_id, page=page)
+            items = _items_tareas(raw)
+            if not items:
+                break
+            for item in items:
+                if _task_id_item(item) == wanted:
+                    result["found"] = True
+                    result["status"] = _task_status_item(item)
+                    result["completada"] = _tarea_api_completada(item)
+                    result["item"] = item
+                    return result
+            if len(items) < 20:
+                break
+            page += 1
+    except (MoreAppApiConfigError, MoreAppApiError) as exc:
+        result["error"] = str(exc)[:240]
+    return result
+
+
+def revisar_tarea_desde_api(tarea: MoreAppTareaEnviada) -> Dict[str, Any]:
+    """Consulta MoreApp y, si está COMPLETED, marca la tarea local."""
+    result = consultar_estado_tarea_api(tarea)
+    MoreAppTareaEnviada.objects.filter(pk=tarea.pk).update(ultima_sync=timezone.now())
+    if result.get("completada") and result.get("found"):
+        completar_tarea(
+            tarea,
+            origen=MoreAppTareaEvento.ORIGEN_API,
+            detalle={"task_id": tarea.task_id, "status": result.get("status") or ""},
+            cuando=_task_completed_at(result.get("item") or {}),
+        )
+        tarea.refresh_from_db()
+    return result
+
+
 def sincronizar_tareas_desde_api(max_pages: int = 8) -> Dict[str, int]:
     from .moreapp_api import MoreAppApiConfigError, MoreAppApiError, list_form_tasks
 

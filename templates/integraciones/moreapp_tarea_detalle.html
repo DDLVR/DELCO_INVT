@@ -21,6 +21,14 @@
       <p class="text-muted mb-0">{{ tarea.form_name|default:tarea.form_id }}</p>
     </div>
     <div class="col-auto d-flex flex-wrap gap-2">
+      {% if tarea.estado == 'ASIGNADA' %}
+      <form method="post" action="{% url 'moreapp_tarea_revisar' tarea.pk %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-outline-success" title="Consulta en MoreApp si el destinatario ya la terminó">
+          <i class="bi bi-arrow-repeat"></i> ¿Ya la terminaron?
+        </button>
+      </form>
+      {% endif %}
       {% if puede_pdf %}
       <a href="{% url 'moreapp_tarea_pdf' tarea.pk %}" class="btn btn-outline-danger" target="_blank" rel="noopener">
         <i class="bi bi-file-earmark-pdf"></i> Ver PDF
@@ -119,6 +127,8 @@
             <dd class="col-sm-7">{{ tarea.fecha_creacion|date:"d/m/Y H:i" }}</dd>
             <dt class="col-sm-5">Completada</dt>
             <dd class="col-sm-7">{{ tarea.fecha_completado|date:"d/m/Y H:i"|default:"—" }}</dd>
+            <dt class="col-sm-5">Última revisión</dt>
+            <dd class="col-sm-7">{{ tarea.ultima_sync|date:"d/m/Y H:i"|default:"—" }}</dd>
             <dt class="col-sm-5">Creada por</dt>
             <dd class="col-sm-7">{{ tarea.creado_por.nombre_interno|default:"—" }}</dd>
             {% if tarea.ubicacion %}
