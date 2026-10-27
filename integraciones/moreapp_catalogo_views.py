@@ -10,6 +10,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.db.models import Count
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -17,6 +18,7 @@ from django.views.decorators.http import require_POST
 from web.decorators import admin_only, admin_or_formulario_asignado
 
 from .models import MoreAppFormularioOculto, MoreAppFuenteInterna
+from .moreapp_cuentas import aplicar_vinculos_a_usuarios, guardar_vinculo, listar_tecnicos_moreapp
 from .moreapp_asignaciones import asignaciones_por_form, enriquecer_fila, usuarios_asignables
 
 from .moreapp_api import (
@@ -943,16 +945,22 @@ def catalogo_usuarios_view(request):
     query = (request.GET.get("query") or "").strip()
     context = {
         "usuarios": [],
+        "tecnicos": [],
         "error": "",
         "query": query,
         "tiene_filtros": bool(query),
         "activos": 0,
         "deshabilitados": 0,
+        "enlazados": 0,
         "seccion_usuarios": "moreapp",
     }
     try:
+        tecnicos = listar_tecnicos_moreapp()
         raw = list_users()
-        rows = [_user_row(item) for item in _as_list(raw) if isinstance(item, dict)]
+        rows = aplicar_vinculos_a_usuarios(
+            [_user_row(item) for item in _as_list(raw) if isinstance(item, dict)],
+            tecnicos=tecnicos,
+        )
         if query:
             needle = _fold_text(query)
             rows = [
@@ -961,14 +969,68 @@ def catalogo_usuarios_view(request):
                 if needle in _fold_text(row.get("nombre"))
                 or needle in _fold_text(row.get("email"))
                 or needle in _fold_text(row.get("username"))
+                or needle in _fold_text(row.get("tecnico_nombre"))
             ]
         context["usuarios"] = rows
         context["activos"] = sum(1 for row in rows if not row.get("disabled"))
         context["deshabilitados"] = sum(1 for row in rows if row.get("disabled"))
+        context["enlazados"] = sum(1 for row in rows if row.get("enlazado"))
+        context["tecnicos"] = tecnicos
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
         messages.error(request, str(exc))
+        context["tecnicos"] = listar_tecnicos_moreapp()
     return render(request, "integraciones/moreapp_usuarios.html", context)
+
+
+def _es_ajax_catalogo(request) -> bool:
+    return (
+        (request.headers.get("X-Requested-With") or "") == "XMLHttpRequest"
+        or "application/json" in (request.headers.get("Accept") or "").lower()
+    )
+
+
+@admin_only
+@require_POST
+def catalogo_usuarios_vincular_view(request):
+    email = (request.POST.get("email") or "").strip()
+    tecnico_id = (request.POST.get("tecnico_id") or "").strip()
+    tecnico_nombre = (request.POST.get("tecnico_nombre") or "").strip()
+    moreapp_user_id = (request.POST.get("moreapp_user_id") or "").strip()
+    moreapp_nombre = (request.POST.get("moreapp_nombre") or "").strip()
+    obj, error = guardar_vinculo(
+        email=email,
+        tecnico_entry_id=tecnico_id,
+        tecnico_nombre=tecnico_nombre,
+        moreapp_user_id=moreapp_user_id,
+        moreapp_nombre=moreapp_nombre,
+        actualizado_por=request.user,
+    )
+    if error:
+        if _es_ajax_catalogo(request):
+            return JsonResponse({"ok": False, "error": error}, status=400)
+        messages.error(request, error)
+        return redirect("usuarios_moreapp")
+    if obj is not None:
+        nombre = obj.tecnico_nombre
+        mensaje = "La cuenta %s quedó enlazada con %s." % (email, nombre)
+        tecnico_id_out = obj.tecnico_entry_id
+    else:
+        nombre = ""
+        mensaje = "Se quitó el técnico de %s." % email
+        tecnico_id_out = ""
+    if _es_ajax_catalogo(request):
+        return JsonResponse(
+            {
+                "ok": True,
+                "email": (email or "").strip().lower(),
+                "tecnico_id": tecnico_id_out or None,
+                "tecnico_nombre": nombre,
+                "mensaje": mensaje,
+            }
+        )
+    messages.success(request, mensaje)
+    return redirect("usuarios_moreapp")
 
 
 @admin_only

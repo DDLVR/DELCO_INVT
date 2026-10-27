@@ -1,0 +1,49 @@
+<div class="row g-3 delco-respuestas">
+  {% for campo in campos %}
+  <div class="col-12 {% if campo.wide or campo.children or campo.rows or campo.files %}col-lg-12{% else %}col-lg-6{% endif %}">
+    <div class="delco-campo">
+      <div class="delco-campo-label">{{ campo.label }}</div>
+      <div class="delco-campo-value">
+        {% if campo.text %}
+        <div>{{ campo.text|linebreaksbr }}</div>
+        {% elif not campo.files and not campo.children and not campo.rows %}
+        <span class="text-muted">—</span>
+        {% endif %}
+        {% if campo.files %}
+        <div class="delco-campo-galeria {% if campo.files|length > 1 %}mt-2{% elif campo.text %}mt-2{% endif %}">
+          {% for archivo in campo.files %}
+            {% if archivo.is_image and archivo.url %}
+            <a class="delco-campo-foto" href="{{ archivo.url }}" data-delco-lightbox data-title="{{ campo.label }}" target="_blank" rel="noopener">
+              <img src="{{ archivo.url }}" alt="{{ campo.label }}" loading="lazy">
+              <span>{{ archivo.name|default:campo.label }}</span>
+            </a>
+            {% elif archivo.url %}
+            <a class="delco-campo-file" href="{{ archivo.url }}" target="_blank" rel="noopener">
+              <i class="bi bi-paperclip"></i> {{ archivo.name|default:campo.label }}
+            </a>
+            {% elif archivo.id %}
+            <div class="delco-campo-file text-muted">{{ archivo.id }}</div>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if campo.children %}
+        <div class="delco-respuesta-grupo mt-2">
+          {% include "integraciones/_moreapp_respuestas.html" with campos=campo.children %}
+        </div>
+        {% endif %}
+        {% if campo.rows %}
+        <div class="delco-respuesta-filas mt-2">
+          {% for fila in campo.rows %}
+          <div class="delco-respuesta-fila">
+            <div class="delco-campo-label mb-2">Ítem {{ forloop.counter }}</div>
+            {% include "integraciones/_moreapp_respuestas.html" with campos=fila %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>

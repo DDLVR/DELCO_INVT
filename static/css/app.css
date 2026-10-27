@@ -1400,6 +1400,43 @@ td.cliente-numero-duplicado strong {
   margin-top: 0.25rem;
 }
 
+.delco-import-col-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  width: 100%;
+  margin-bottom: 0.35rem;
+}
+
+.delco-import-col-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: var(--bs-secondary-bg);
+  color: var(--bs-body-color);
+  border: 1px solid var(--bs-border-color);
+}
+
+.delco-import-col-chip.is-required {
+  background: rgba(15, 113, 115, 0.12);
+  border-color: rgba(15, 113, 115, 0.35);
+  color: #0f7173;
+}
+
+.delco-import-col-chip.is-required::after {
+  content: " *";
+  font-weight: 700;
+}
+
+[data-bs-theme="dark"] .delco-import-col-chip.is-required {
+  background: rgba(15, 113, 115, 0.22);
+  color: #9ee3e4;
+}
+
 .delco-import-results .alert {
   margin-bottom: 0.5rem;
 }
@@ -2304,6 +2341,25 @@ input[type="file"].form-control,
   text-decoration: none;
 }
 
+.delco-respuesta-grupo,
+.delco-respuesta-filas {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.delco-respuesta-fila {
+  padding: 0.75rem;
+  border: 1px dashed var(--bs-border-color);
+  border-radius: 0.85rem;
+  background: var(--bs-tertiary-bg);
+}
+
+.delco-respuesta-grupo .delco-campo,
+.delco-respuesta-fila .delco-campo {
+  background: var(--bs-body-bg);
+}
+
 body.delco-foto-lightbox-open {
   overflow: hidden;
 }
@@ -2483,7 +2539,8 @@ body.delco-foto-lightbox-open {
 }
 
 #modalLoteCsv .modal-body,
-#modalLoteClientes .modal-body {
+#modalLoteClientes .modal-body,
+#modalNuevaTarea .modal-body {
   max-height: min(70vh, 40rem);
 }
 
@@ -2750,4 +2807,8 @@ body.delco-foto-lightbox-open {
 
 .delco-ds-panel > summary::-webkit-details-marker {
   display: none;
+}
+
+.delco-vincular-tecnico {
+  min-width: 14rem;
 }

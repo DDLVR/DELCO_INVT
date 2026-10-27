@@ -1,13 +1,13 @@
 {% extends 'base.html' %}
 
-{% block title %}Usuario MoreApp{% endblock %}
+{% block title %}Cuentas MoreApp{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
   <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
     <div>
-      <h1 class="h3 mb-1"><i class="bi bi-people"></i> Usuarios MoreApp</h1>
-      <p class="text-muted mb-0">Cuentas de la plataforma MoreApp. Las listas de Técnicos y Certelec Técnicos están en el menú. No se copian a la intranet.</p>
+      <h1 class="h3 mb-1"><i class="bi bi-people"></i> Cuentas MoreApp</h1>
+      <p class="text-muted mb-0">Listado de correos MoreApp. Asigna a mano un técnico de la data source Técnicos a cada cuenta. En las tareas se elige el nombre del técnico; el correo se usa por detrás. No se copian a la intranet.</p>
     </div>
     <a href="{% url 'moreapp_api_catalogo' %}" class="btn btn-outline-secondary btn-sm">Catálogo MoreApp</a>
   </div>
@@ -17,19 +17,25 @@
   {% endif %}
 
   <div class="row g-2 mb-3">
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Usuarios visibles</div>
+        <div class="text-muted small">Cuentas visibles</div>
         <div class="fs-4 fw-semibold">{{ usuarios|length }}</div>
       </div></div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
       <div class="card delco-panel-card"><div class="card-body py-3">
         <div class="text-muted small">Activos</div>
         <div class="fs-4 fw-semibold text-success">{{ activos }}</div>
       </div></div>
     </div>
-    <div class="col-md-4">
+    <div class="col-md-3">
+      <div class="card delco-panel-card"><div class="card-body py-3">
+        <div class="text-muted small">Enlazados</div>
+        <div class="fs-4 fw-semibold text-primary">{{ enlazados }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-3">
       <div class="card delco-panel-card"><div class="card-body py-3">
         <div class="text-muted small">Deshabilitados</div>
         <div class="fs-4 fw-semibold">{{ deshabilitados }}</div>
@@ -41,8 +47,8 @@
     <div class="card-body">
       <form method="get" class="row g-2 align-items-end">
         <div class="col-md-8">
-          <label class="form-label">Nombre o correo</label>
-          <input type="text" name="query" class="form-control" value="{{ query }}" placeholder="Ej. juan, @delcochile">
+          <label class="form-label">Nombre, correo o técnico</label>
+          <input type="text" name="query" class="form-control" value="{{ query }}" placeholder="Ej. juan, @delcochile, ALEXANDER">
         </div>
         <div class="col-md-4">
           <button type="submit" class="btn btn-primary w-100">Filtrar</button>
@@ -57,24 +63,26 @@
   </div>
 
   <div class="card shadow-sm delco-panel-card">
+    {% csrf_token %}
+    {% if not tecnicos %}
+    <div class="px-3 pt-3 small text-warning">No se pudieron cargar los técnicos de la data source MoreApp. El cruce usa esas filas.</div>
+    {% endif %}
     <div class="table-responsive">
-      <table class="table table-sm table-hover mb-0">
+      <table class="table table-sm table-hover mb-0 align-middle">
         <thead>
           <tr>
-            <th>Tipo</th>
-            <th>Usuario</th>
-            <th>Correo</th>
+            <th>Correo MoreApp</th>
+            <th>Usuario MoreApp</th>
             <th>Estado</th>
-            <th>Correo validado</th>
-            <th>Grupos</th>
+            <th>Técnico MoreApp</th>
+            <th>Cruce</th>
           </tr>
         </thead>
         <tbody>
           {% for usuario in usuarios %}
-          <tr>
-            <td><span class="badge bg-info text-dark">MoreApp</span></td>
-            <td>{{ usuario.username|default:usuario.nombre|default:"—" }}</td>
+          <tr class="js-cuenta-moreapp" data-email="{{ usuario.email }}">
             <td>{{ usuario.email|default:"—" }}</td>
+            <td>{{ usuario.username|default:usuario.nombre_moreapp|default:"—" }}</td>
             <td>
               {% if usuario.disabled %}
               <span class="badge bg-secondary">Deshabilitado</span>
@@ -82,15 +90,100 @@
               <span class="badge bg-success">Activo</span>
               {% endif %}
             </td>
-            <td>{% if usuario.email_validated %}Sí{% else %}No{% endif %}</td>
-            <td class="small">{% if usuario.groups_count %}{{ usuario.groups_count }}{% else %}0{% endif %}</td>
+            <td>
+              <select class="form-select form-select-sm js-vincular-tecnico delco-vincular-tecnico"
+                      data-email="{{ usuario.email }}"
+                      data-user-id="{{ usuario.id }}"
+                      data-nombre="{{ usuario.nombre_moreapp|default:usuario.username }}">
+                <option value="">— Sin técnico —</option>
+                {% for tecnico in tecnicos %}
+                <option value="{{ tecnico.id }}" data-nombre="{{ tecnico.nombre }}" {% if usuario.tecnico_id == tecnico.id %}selected{% endif %}>{{ tecnico.nombre }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>
+              {% if usuario.enlazado %}
+              <span class="badge bg-success js-vinculo-estado">Enlazado</span>
+              {% else %}
+              <span class="badge bg-secondary js-vinculo-estado">Sin técnico</span>
+              {% endif %}
+            </td>
           </tr>
           {% empty %}
-          <tr><td colspan="6" class="text-muted p-3">No hay usuarios MoreApp para mostrar.</td></tr>
+          <tr><td colspan="5" class="text-muted p-3">No hay usuarios MoreApp para mostrar.</td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var csrf = document.querySelector('[name=csrfmiddlewaretoken]');
+  var url = '{% url "usuarios_moreapp_vincular" %}';
+  document.querySelectorAll('.js-vincular-tecnico').forEach(function (select) {
+    select.addEventListener('change', function () {
+      var row = select.closest('tr');
+      var token = csrf && csrf.value || '';
+      var body = new FormData();
+      body.append('csrfmiddlewaretoken', token);
+      var chosen = select.options[select.selectedIndex];
+      body.append('email', select.getAttribute('data-email') || '');
+      body.append('tecnico_id', select.value || '');
+      body.append('tecnico_nombre', chosen ? (chosen.getAttribute('data-nombre') || chosen.text) : '');
+      body.append('moreapp_user_id', select.getAttribute('data-user-id') || '');
+      body.append('moreapp_nombre', select.getAttribute('data-nombre') || '');
+      select.disabled = true;
+      fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json',
+          'X-CSRFToken': token
+        },
+        body: body
+      }).then(function (resp) {
+        return resp.json().then(function (data) {
+          return { ok: resp.ok, data: data };
+        });
+      }).then(function (res) {
+        select.disabled = false;
+        if (!res.data || !res.data.ok) {
+          if (window.showToast) showToast((res.data && res.data.error) || 'No se pudo guardar el enlace.', 'danger');
+          return;
+        }
+        if (window.showToast) showToast(res.data.mensaje || 'Enlace guardado.', 'success');
+        var badge = row && row.querySelector('.js-vinculo-estado');
+        if (badge) {
+          if (res.data.tecnico_id) {
+            badge.className = 'badge bg-success js-vinculo-estado';
+            badge.textContent = 'Enlazado';
+          } else {
+            badge.className = 'badge bg-secondary js-vinculo-estado';
+            badge.textContent = 'Sin técnico';
+          }
+        }
+        if (res.data.tecnico_id) {
+          document.querySelectorAll('.js-vincular-tecnico').forEach(function (other) {
+            if (other !== select && other.value === String(res.data.tecnico_id)) {
+              other.value = '';
+              var otherBadge = other.closest('tr') && other.closest('tr').querySelector('.js-vinculo-estado');
+              if (otherBadge) {
+                otherBadge.className = 'badge bg-secondary js-vinculo-estado';
+                otherBadge.textContent = 'Sin técnico';
+              }
+            }
+          });
+        }
+      }).catch(function () {
+        select.disabled = false;
+        if (window.showToast) showToast('No se pudo guardar el enlace.', 'danger');
+      });
+    });
+  });
+})();
+</script>
 {% endblock %}

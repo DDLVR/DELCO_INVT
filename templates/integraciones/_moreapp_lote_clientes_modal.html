@@ -18,7 +18,7 @@
           {% else %}
           <div class="alert alert-warning js-lote-clientes-error d-none"></div>
           {% endif %}
-          <p class="small text-muted" id="js-lote-clientes-status">Elige formulario, destinatario MoreApp y clientes. Si el Search coincide con CUENTA, se precarga.</p>
+          <p class="small text-muted" id="js-lote-clientes-status">Elige formulario, técnico y clientes. Si el Search coincide con CUENTA, se precarga.</p>
           <section class="delco-import-section">
             <div class="delco-import-section-label">1. Formulario</div>
             <label class="form-label visually-hidden" for="lote_form_id">Formulario a llenar</label>
@@ -33,14 +33,16 @@
             <div class="delco-import-section-label">2. Destinatarios MoreApp</div>
             <div class="row g-3">
               <div class="col-lg-7">
-                <div class="fw-semibold small mb-2">Usuarios</div>
+                <div class="fw-semibold small mb-2">Técnicos</div>
                 <div class="delco-tarea-lista" id="js-lote-usuarios">
                   {% for u in usuarios %}
                   <label class="d-flex gap-2 align-items-start py-1">
                     <input class="form-check-input mt-1" type="checkbox" name="usuarios" value="{{ u.email }}" {% if u.email in usuarios_sel %}checked{% endif %}>
                     <span>
                       {{ u.nombre|default:u.email }}
+                      {% if not u.enlazado %}
                       <div class="small text-muted">{{ u.email }}</div>
+                      {% endif %}
                     </span>
                   </label>
                   {% empty %}

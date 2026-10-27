@@ -33,6 +33,7 @@ from .moreapp_tareas_views import (
     tarea_crear_view,
     tarea_detalle_view,
     tarea_eliminar_view,
+    tareas_eliminar_masivo_view,
     tarea_lote_clientes_view,
     tarea_lote_csv_view,
     tarea_lote_listado_view,
@@ -72,6 +73,7 @@ urlpatterns = [
     path('moreapp/tareas/sincronizar/', tareas_sincronizar_view, name='moreapp_tareas_sincronizar'),  # POST: revisar estado en MoreApp
     path('moreapp/tareas/estado/', tareas_estado_view, name='moreapp_tareas_estado'),
     path('moreapp/tareas/exportar/', tareas_exportar_view, name='moreapp_tareas_exportar'),
+    path('moreapp/tareas/eliminar/', tareas_eliminar_masivo_view, name='moreapp_tareas_eliminar_masivo'),
     path('moreapp/tareas/<int:pk>/', tarea_detalle_view, name='moreapp_tarea_detalle'),
     path('moreapp/tareas/<int:pk>/pdf/', tarea_pdf_view, name='moreapp_tarea_pdf'),
     path('moreapp/tareas/<int:pk>/revisar/', tarea_revisar_view, name='moreapp_tarea_revisar'),

@@ -17,7 +17,11 @@ from .views import (
 )
 from reportes.views import reportes_hub_view, reportes_export_view
 from catalogos.views import catalogo_diagnostico_list_view
-from integraciones.moreapp_catalogo_views import catalogo_usuarios_fuente_view, catalogo_usuarios_view
+from integraciones.moreapp_catalogo_views import (
+    catalogo_usuarios_fuente_view,
+    catalogo_usuarios_view,
+    catalogo_usuarios_vincular_view,
+)
 from cargas.views import (
     cargas_hub_view,
     cargas_list_view,
@@ -104,6 +108,7 @@ urlpatterns = [
     # Usuarios (internos: solo ADMIN; MoreApp en vivo: cuentas, Técnicos y Certelec Técnicos)
     path('usuarios/', usuarios_list_view, name='usuarios_list'),
     path('usuarios/moreapp/', catalogo_usuarios_view, name='usuarios_moreapp'),
+    path('usuarios/moreapp/vincular/', catalogo_usuarios_vincular_view, name='usuarios_moreapp_vincular'),
     path('usuarios/moreapp/tecnicos/', catalogo_usuarios_fuente_view, {'fuente': 'tecnicos'}, name='usuarios_moreapp_tecnicos'),
     path('usuarios/moreapp/certelec/', catalogo_usuarios_fuente_view, {'fuente': 'certelec'}, name='usuarios_moreapp_certelec'),
     path('usuarios/crear/', usuario_crear_view, name='usuario_crear'),

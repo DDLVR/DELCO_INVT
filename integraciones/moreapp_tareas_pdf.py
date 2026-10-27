@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.utils.text import get_valid_filename
 
 from .models import MoreAppTareaEnviada
+from .moreapp_cuentas import etiquetas_destinatarios
 
 _SKIP_PROCESADOS = {
     "resultado_operativo",
@@ -204,7 +205,7 @@ def generar_pdf_tarea(tarea: MoreAppTareaEnviada) -> bytes:
         ["Creada", _fmt(tarea.fecha_creacion)],
         ["Asignada", _fmt(tarea.fecha_asignacion)],
         ["Completada", _fmt(tarea.fecha_completado)],
-        ["Destinatarios", ", ".join(tarea.destinatarios or []) or "—"],
+        ["Destinatarios", ", ".join(getattr(tarea, "destinatarios_visibles", None) or etiquetas_destinatarios(tarea.destinatarios or [])) or "—"],
     ]
     table = Table(meta, colWidths=[4 * cm, 13 * cm])
     table.setStyle(

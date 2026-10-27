@@ -50,7 +50,7 @@
       <a href="{% url 'moreapp_tareas_list' %}" class="btn btn-secondary">
         <i class="bi bi-arrow-left"></i> Volver
       </a>
-      <form method="post" action="{% url 'moreapp_tarea_eliminar' tarea.pk %}" class="d-inline" onsubmit="return confirm('¿Eliminar la tarea #{{ tarea.pk }} de la intranet?');">
+      <form method="post" action="{% url 'moreapp_tarea_eliminar' tarea.pk %}" class="d-inline" id="js-form-eliminar-tarea">
         {% csrf_token %}
         <button type="submit" class="btn btn-outline-danger">
           <i class="bi bi-trash"></i> Eliminar
@@ -70,13 +70,8 @@
           <h6 class="mb-0"><i class="bi bi-clipboard-data"></i> Contenido rellenado</h6>
         </div>
         <div class="card-body" id="js-campos-rellenados">
-          {% if campos_rellenados %}
-          <dl class="row mb-0">
-            {% for campo in campos_rellenados %}
-            <dt class="col-sm-4">{{ campo.label }}</dt>
-            <dd class="col-sm-8">{{ campo.text }}</dd>
-            {% endfor %}
-          </dl>
+          {% if respuestas %}
+          {% include "integraciones/_moreapp_respuestas.html" with campos=respuestas %}
           {% else %}
           <p class="text-muted mb-0">
             {% if tarea.estado == 'COMPLETADA' %}
@@ -134,7 +129,7 @@
             <dd class="col-sm-7">{{ tarea.proyecto_carga_administrativa|default:"—" }}</dd>
             <dt class="col-sm-5">Destinatarios</dt>
             <dd class="col-sm-7">
-              {% if tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% else %}—{% endif %}
+              {% if tarea.destinatarios_visibles %}{{ tarea.destinatarios_visibles|join:", " }}{% elif tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% else %}—{% endif %}
               {% if tarea.grupos_nombres %}<div class="small text-muted">Grupos: {{ tarea.grupos_nombres|join:", " }}</div>{% endif %}
             </dd>
             <dt class="col-sm-5">Envío</dt>
@@ -212,13 +207,61 @@
     acciones.insertBefore(link, volver || acciones.firstChild);
   }
 
-  function pintarCampos(campos) {
+  function esc(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function pintarCampo(campo) {
+    var wide = campo.wide || (campo.children && campo.children.length) || (campo.rows && campo.rows.length) || (campo.files && campo.files.length);
+    var html = '<div class="col-12' + (wide ? ' col-lg-12' : ' col-lg-6') + '"><div class="delco-campo">';
+    html += '<div class="delco-campo-label">' + esc(campo.label) + '</div><div class="delco-campo-value">';
+    if (campo.text) html += '<div>' + esc(campo.text).replace(/\n/g, '<br>') + '</div>';
+    else if (!(campo.files && campo.files.length) && !(campo.children && campo.children.length) && !(campo.rows && campo.rows.length)) {
+      html += '<span class="text-muted">—</span>';
+    }
+    if (campo.files && campo.files.length) {
+      html += '<div class="delco-campo-galeria mt-2">';
+      campo.files.forEach(function (archivo) {
+        if (archivo.is_image && archivo.url) {
+          html += '<a class="delco-campo-foto" href="' + esc(archivo.url) + '" target="_blank" rel="noopener"><img src="' + esc(archivo.url) + '" alt=""><span>' + esc(archivo.name || campo.label) + '</span></a>';
+        } else if (archivo.url) {
+          html += '<a class="delco-campo-file" href="' + esc(archivo.url) + '" target="_blank" rel="noopener">' + esc(archivo.name || campo.label) + '</a>';
+        } else if (archivo.id) {
+          html += '<div class="delco-campo-file text-muted">' + esc(archivo.id) + '</div>';
+        }
+      });
+      html += '</div>';
+    }
+    if (campo.children && campo.children.length) {
+      html += '<div class="delco-respuesta-grupo mt-2">' + pintarLista(campo.children) + '</div>';
+    }
+    if (campo.rows && campo.rows.length) {
+      html += '<div class="delco-respuesta-filas mt-2">';
+      campo.rows.forEach(function (fila, idx) {
+        html += '<div class="delco-respuesta-fila"><div class="delco-campo-label mb-2">Ítem ' + (idx + 1) + '</div>' + pintarLista(fila) + '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div></div></div>';
+    return html;
+  }
+
+  function pintarLista(campos) {
+    return '<div class="row g-3 delco-respuestas">' + (campos || []).map(pintarCampo).join('') + '</div>';
+  }
+
+  function pintarCampos(campos, respuestas) {
     var box = document.getElementById('js-campos-rellenados');
-    if (!box || !campos || !campos.length) return;
+    if (!box) return;
+    if (respuestas && respuestas.length) {
+      box.innerHTML = pintarLista(respuestas);
+      return;
+    }
+    if (!campos || !campos.length) return;
     var html = '<dl class="row mb-0">';
     campos.forEach(function (campo) {
-      html += '<dt class="col-sm-4">' + String(campo.label || '').replace(/</g, '') + '</dt>';
-      html += '<dd class="col-sm-8">' + String(campo.text || '').replace(/</g, '') + '</dd>';
+      html += '<dt class="col-sm-4">' + esc(campo.label) + '</dt>';
+      html += '<dd class="col-sm-8">' + esc(campo.text) + '</dd>';
     });
     html += '</dl>';
     box.innerHTML = html;
@@ -242,7 +285,7 @@
     if (tarea.contenido_url) {
       ensureLink('js-tarea-contenido', tarea.contenido_url, 'btn btn-outline-secondary', '<i class="bi bi-ui-checks"></i> Contenido MoreApp');
     }
-    pintarCampos(tarea.campos_rellenados);
+    pintarCampos(tarea.campos_rellenados, tarea.respuestas);
     if (tarea.estado !== 'ASIGNADA') {
       var revisar = document.getElementById('js-tarea-revisar');
       if (revisar) revisar.remove();
@@ -291,4 +334,31 @@
 })();
 </script>
 {% endif %}
+{% if fotos_count %}
+{% include "integraciones/_moreapp_fotos_lightbox.html" %}
+{% endif %}
+<script>
+(function () {
+  var form = document.getElementById('js-form-eliminar-tarea');
+  if (!form) return;
+  form.addEventListener('submit', function (ev) {
+    if (form.dataset.confirmed === '1') return;
+    ev.preventDefault();
+    var go = function () {
+      form.dataset.confirmed = '1';
+      form.submit();
+    };
+    if (typeof window.showConfirm === 'function') {
+      window.showConfirm(
+        'Se quitará la tarea #{{ tarea.pk }} de la intranet. Si ya está en MoreApp, revócala allí.',
+        'Eliminar tarea',
+        'Sí, eliminar',
+        'Cancelar'
+      ).then(function (ok) { if (ok) go(); });
+    } else if (window.confirm('¿Eliminar la tarea #{{ tarea.pk }}?')) {
+      go();
+    }
+  });
+})();
+</script>
 {% endblock %}

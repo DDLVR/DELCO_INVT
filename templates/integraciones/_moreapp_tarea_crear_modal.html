@@ -1,0 +1,158 @@
+<div class="modal fade" id="modalNuevaTarea" tabindex="-1" aria-labelledby="modalNuevaTareaLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content delco-import-clientes-modal">
+      <div class="modal-header delco-import-clientes-header">
+        <div>
+          <h5 class="modal-title" id="modalNuevaTareaLabel">
+            <i class="bi bi-plus-circle me-2" aria-hidden="true"></i>Nueva tarea MoreApp
+          </h5>
+          <p class="delco-import-clientes-subtitle mb-0">El aviso llega en la app, no por correo</p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <form method="post" action="{% url 'moreapp_tarea_crear' %}" id="formNuevaTarea">
+        {% csrf_token %}
+        <div class="modal-body">
+          <div class="alert alert-warning js-crear-error d-none"></div>
+          <p class="small text-muted" id="js-crear-status">Elige formulario, datos del trabajo y técnicos.</p>
+
+          <section class="delco-import-section">
+            <div class="delco-import-section-label">1. Formulario</div>
+            <label class="form-label" for="crear_form_id">Formulario a llenar</label>
+            <select name="form_id" id="crear_form_id" class="form-select" required>
+              <option value="">— Elige un formulario —</option>
+            </select>
+            <p class="small text-muted mb-0 mt-2">Solo aparecen formularios publicados. Los destinatarios ya deben tener acceso en MoreApp.</p>
+          </section>
+
+          <section class="delco-import-section">
+            <div class="delco-import-section-label">2. Datos del trabajo</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label" for="crear_titulo">Título</label>
+                <input type="text" name="titulo" id="crear_titulo" class="form-control" maxlength="200" placeholder="Ej: Instalación medidor casa 12">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label" for="crear_tipo_trabajo">Tipo de trabajo</label>
+                <select name="tipo_trabajo" id="crear_tipo_trabajo" class="form-select">
+                  <option value="">— Sin tipo —</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label">Cliente</label>
+                <input type="hidden" name="cliente" id="crearClienteIdPopup" value="">
+                <div class="delco-ac mb-2"
+                     data-ac-url="{{ delco_api.buscar_clientes|default:'/api/buscar-clientes/' }}"
+                     data-ac-hidden="#crearClienteIdPopup"
+                     data-ac-select="#crearClienteSelectPopup"
+                     data-ac-min="2">
+                  <input type="text" class="form-control delco-ac-input" name="cliente_label" id="crearClienteSearchPopup" placeholder="Escribe Nº, nombre, comuna o dirección..." autocomplete="off">
+                  <div class="delco-ac-results list-group shadow-sm d-none"></div>
+                </div>
+                <select id="crearClienteSelectPopup" class="form-select">
+                  <option value="">— O elige de la lista —</option>
+                </select>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="crear_proyecto">Proyecto / Carga administrativa</label>
+                <input type="text" name="proyecto_carga_administrativa" id="crear_proyecto" class="form-control" list="listaProyectosCargaNueva" maxlength="255" placeholder="Ej: Proyecto Norte…">
+                <datalist id="listaProyectosCargaNueva"></datalist>
+              </div>
+              <div class="col-12">
+                <label class="form-label" for="crear_observaciones">Observaciones</label>
+                <textarea name="observaciones" id="crear_observaciones" class="form-control" rows="2" placeholder="Instrucciones especiales o detalles del trabajo…"></textarea>
+              </div>
+            </div>
+          </section>
+
+          <section class="delco-import-section">
+            <div class="delco-import-section-label">3. Destinatarios</div>
+            <div class="row g-3">
+              <div class="col-lg-7">
+                <div class="fw-semibold small mb-2">Técnicos</div>
+                <div class="delco-tarea-lista" id="js-crear-usuarios">
+                  <p class="text-muted mb-0">Se cargan al abrir el popup.</p>
+                </div>
+              </div>
+              <div class="col-lg-5">
+                <div class="fw-semibold small mb-2">Grupos</div>
+                <div class="delco-tarea-lista" id="js-crear-grupos">
+                  <p class="text-muted mb-0">Se cargan al abrir el popup.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="delco-import-section">
+            <div class="delco-import-section-label">4. Mensaje y cuándo llega</div>
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label" for="crear_mensaje">Mensaje corto</label>
+                <textarea name="mensaje" id="crear_mensaje" class="form-control" rows="2" maxlength="500"></textarea>
+                <small class="text-muted">Si lo dejas vacío se usa el título.</small>
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="crear_envio">Envío</label>
+                <select name="envio" id="crear_envio" class="form-select">
+                  <option value="IMMEDIATE" selected>Al momento</option>
+                  <option value="SCHEDULED">Fecha y hora programadas</option>
+                </select>
+              </div>
+              <div class="col-md-4 js-crear-programada d-none">
+                <label class="form-label" for="crear_programada_para">Programada para</label>
+                <input type="datetime-local" name="programada_para" id="crear_programada_para" class="form-control">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label" for="crear_fecha_limite">Fecha límite (opcional)</label>
+                <input type="datetime-local" name="fecha_limite" id="crear_fecha_limite" class="form-control">
+              </div>
+            </div>
+          </section>
+
+          <section class="delco-import-section">
+            <div class="delco-import-section-label">5. Ubicación</div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label" for="crear_ubicacion">Lugar</label>
+                <input type="text" name="ubicacion" id="crear_ubicacion" class="form-control" placeholder="Dirección o nombre del sitio">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="crear_latitud">Latitud</label>
+                <input type="text" name="latitud" id="crear_latitud" class="form-control">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label" for="crear_longitud">Longitud</label>
+                <input type="text" name="longitud" id="crear_longitud" class="form-control">
+              </div>
+            </div>
+          </section>
+
+          <section class="delco-import-section mb-0">
+            <div class="delco-import-section-label">6. Precargar campos</div>
+            <p class="small text-muted mb-2">Rellena lo que ya conoces. Pin, firma, catálogo, dibujo y archivo no se pueden precargar.</p>
+            <div id="js-crear-campos" class="row g-2">
+              <div class="col-12 text-muted small">Elige un formulario para ver los campos disponibles.</div>
+            </div>
+          </section>
+
+          <div class="delco-import-progress mt-3" style="display:none;">
+            <div class="d-flex justify-content-between mb-1">
+              <small class="delco-import-progress-label text-muted">Enviando a MoreApp...</small>
+              <small class="delco-import-progress-pct fw-semibold">0%</small>
+            </div>
+            <div class="progress" style="height:10px;">
+              <div class="progress-bar progress-bar-striped progress-bar-animated delco-import-progress-bar" role="progressbar" style="width:0%; font-size:0;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <p class="small text-muted mb-0 mt-2">No cierres esta ventana mientras se crea la tarea.</p>
+          </div>
+        </div>
+        <div class="modal-footer delco-import-clientes-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success" id="btnNuevaTareaSubmit">
+            <i class="bi bi-send me-1"></i>Crear tarea
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

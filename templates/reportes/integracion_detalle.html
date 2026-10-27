@@ -188,6 +188,17 @@
   </div>
   {% endif %}
 
+  {% if respuestas_formulario %}
+  <div class="card shadow-sm mb-4 delco-panel-card">
+    <div class="card-header card-header-delco py-2">
+      <h6 class="mb-0"><i class="bi bi-ui-checks"></i> Respuestas del formulario</h6>
+    </div>
+    <div class="card-body">
+      {% include "integraciones/_moreapp_respuestas.html" with campos=respuestas_formulario %}
+    </div>
+  </div>
+  {% endif %}
+
   <div class="row g-4">
 
     <!-- Columna izquierda: datos clave -->
@@ -853,6 +864,10 @@
 
 </div>
 {% endwith %}
+
+{% if fotos_respuestas_count %}
+{% include "integraciones/_moreapp_fotos_lightbox.html" %}
+{% endif %}
 
 {% if registro_delete_url %}
 <script>

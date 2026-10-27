@@ -128,6 +128,38 @@ class MoreAppGrupoAlias(models.Model):
         return "%s · %s" % (self.nombre, self.group_id)
 
 
+class MoreAppCuentaTecnico(models.Model):
+    """Cruce manual: un correo MoreApp queda asignado a un técnico de la data source Técnicos."""
+
+    email = models.EmailField(unique=True)
+    moreapp_user_id = models.CharField(max_length=80, blank=True)
+    moreapp_nombre = models.CharField(max_length=255, blank=True)
+    tecnico_entry_id = models.CharField(max_length=80, unique=True)
+    tecnico_nombre = models.CharField(max_length=255)
+    actualizado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="moreapp_cuentas_enlazadas",
+    )
+    fecha_actualizacion = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Cuenta MoreApp de técnico"
+        verbose_name_plural = "Cuentas MoreApp de técnicos"
+        ordering = ["email"]
+
+    def save(self, *args, **kwargs):
+        self.email = (self.email or "").strip().lower()
+        self.tecnico_entry_id = (self.tecnico_entry_id or "").strip()
+        self.tecnico_nombre = (self.tecnico_nombre or "").strip()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return "%s · %s" % (self.email, self.tecnico_nombre or self.tecnico_entry_id)
+
+
 class MoreAppTareaEnviada(models.Model):
     """Tarea creada en MoreApp desde la intranet (aviso en la app, no por correo)."""
 

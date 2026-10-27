@@ -232,7 +232,31 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('9852366', body)
         self.assertIn('Medidor ok', body)
         self.assertIn('7f555c8d-6a67-439c-ad41-da32206657b9', body)
+        self.assertIn('Respuestas del formulario', body)
         self.assertNotIn('test-key', body)
+
+    def test_respuestas_completas_conservan_grupos_y_fotos(self):
+        from integraciones.moreapp_respuestas import respuestas_desde_data
+
+        campos = respuestas_desde_data(
+            {
+                'Search': {'CUENTA': '1001', 'NOMBRE': 'Cliente Norte', 'DIRECCION': 'Calle 1'},
+                'equipos': [{'serie': 'ABC-1', 'marca': 'Elster'}, {'serie': 'ABC-2', 'marca': 'Itron'}],
+                'fachada': 'gridfs://registrationFiles/7f555c8d-6a67-439c-ad41-da32206657b9',
+                'location': {'lat': -33.4, 'lng': -70.6, 'formattedValue': 'Santiago'},
+            },
+            labels={'Search': 'Cliente', 'equipos': 'Equipos', 'fachada': 'Foto fachada', 'location': 'Ubicación'},
+        )
+        by_key = {item['key']: item for item in campos}
+        self.assertEqual(by_key['Search']['label'], 'Cliente')
+        hijos = {item['key']: item['text'] for item in by_key['Search']['children']}
+        self.assertEqual(hijos['CUENTA'], '1001')
+        self.assertEqual(hijos['NOMBRE'], 'Cliente Norte')
+        self.assertEqual(len(by_key['equipos']['rows']), 2)
+        self.assertEqual(by_key['equipos']['rows'][0][0]['text'], 'ABC-1')
+        self.assertTrue(by_key['fachada']['files'])
+        self.assertIn('7f555c8d-6a67-439c-ad41-da32206657b9', by_key['fachada']['files'][0]['id'])
+        self.assertIn('Santiago', by_key['location']['text'])
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -564,8 +588,8 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Usuario MoreApp', body)
         self.assertIn('Usuario interno', body)
         self.assertIn('No se copian a la intranet', body)
-        self.assertNotIn('vincular técnico', body.lower())
-        self.assertNotIn('mapear usuario', body.lower())
+        self.assertIn('Técnico MoreApp', body)
+        self.assertIn('js-vincular-tecnico', body)
         self.assertIn('navUsuariosMoreapp-', body)
         self.assertIn('Técnicos', body)
         self.assertIn('Certelec Técnicos', body)
@@ -1019,15 +1043,22 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('data-bs-target="#modalLoteCsv"', body)
         self.assertIn('data-bs-target="#modalLoteClientes"', body)
         self.assertIn('data-bs-target="#modalLoteListado"', body)
+        self.assertIn('data-bs-target="#modalNuevaTarea"', body)
+        self.assertIn('modalNuevaTarea', body)
         self.assertIn(reverse('moreapp_tareas_lote_csv'), body)
         self.assertIn(reverse('moreapp_tareas_lote_clientes'), body)
         self.assertIn(reverse('moreapp_tareas_lote_listado'), body)
         self.assertIn(reverse('moreapp_tareas_exportar'), body)
+        self.assertIn('delco-import-progress', body)
+        self.assertIn('ejecutarImportacionExcel', body)
         self.assertIn('Exportar filtradas', body)
         self.assertIn('cola=en_campo', body)
         self.assertIn('Nueva tarea', body)
         self.assertIn(reverse('moreapp_tareas_estado'), body)
-        self.assertNotIn('window.location.reload()', body)
+        self.assertIn('consultar({ force: true', body)
+        self.assertIn('js-tarea-eliminar', body)
+        self.assertIn('btnEliminarTareasSel', body)
+        self.assertIn(reverse('moreapp_tareas_eliminar_masivo'), body)
 
     def test_tecnico_no_accede_tareas(self):
         self.client.login(username=self.tecnico.rut, password=self.password)
@@ -1040,6 +1071,7 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(self.client.get(reverse('moreapp_tareas_exportar')).status_code, 403)
         self.assertEqual(self.client.post(reverse('moreapp_tarea_observaciones', args=[1])).status_code, 403)
         self.assertEqual(self.client.post(reverse('moreapp_tarea_eliminar', args=[1])).status_code, 403)
+        self.assertEqual(self.client.post(reverse('moreapp_tareas_eliminar_masivo')).status_code, 403)
         self.assertEqual(self.client.get(reverse('moreapp_tareas_estado')).status_code, 403)
 
     @override_settings(
@@ -1278,6 +1310,37 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Instalar medidor', list_body)
         self.assertIn('aviso llega en MoreApp, no por correo', list_body)
 
+        ajax_fail = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': 'abc123abc123abc123abc123',
+                'mensaje': 'Ir a terreno',
+                'envio': 'IMMEDIATE',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(ajax_fail.status_code, 400)
+        self.assertFalse(ajax_fail.json()['success'])
+
+        mocked_create.reset_mock()
+        mocked_create.return_value = {'id': 'task-ajax'}
+        ajax_ok = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': 'abc123abc123abc123abc123',
+                'mensaje': 'Instalar ajax',
+                'envio': 'IMMEDIATE',
+                'usuarios': ['campo@more.app'],
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(ajax_ok.status_code, 200)
+        ajax_payload = ajax_ok.json()
+        self.assertTrue(ajax_payload['success'])
+        self.assertIn('Tarea creada', ajax_payload['message'])
+
     @override_settings(
         MOREAPP_API_ENABLED=True,
         MOREAPP_API_KEY='test-key',
@@ -1496,6 +1559,27 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('Formulario no encontrado', body)
         self.assertIn('modalLoteCsv', body)
         self.assertIn("var open = 'csv'", body)
+
+        mocked_create.side_effect = [{'id': 'task-csv-3'}, {'id': 'task-csv-4'}]
+        ajax = self.client.post(
+            reverse('moreapp_tareas_lote_csv'),
+            {
+                'archivo': SimpleUploadedFile(
+                    'lote.csv',
+                    csv_body.encode('utf-8'),
+                    content_type='text/csv',
+                )
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(ajax.status_code, 200)
+        payload = ajax.json()
+        self.assertFalse(payload['success'])
+        self.assertEqual(payload['exitosas'], 2)
+        self.assertEqual(payload['fallidas'], 1)
+        self.assertEqual(len(payload['resultados']), 3)
+        self.assertIn('Formulario no encontrado', payload['resultados'][2]['error'])
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -1736,6 +1820,126 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(total, 1)
         self.assertEqual(rows[0]['formulario'], 'Instalacion')
         self.assertEqual(rows[0]['destinatario'], 'campo@more.app')
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch(
+        'integraciones.moreapp_cuentas.listar_tecnicos_moreapp',
+        return_value=[{'id': '1', 'nombre': 'ALEXANDER ANDRES GONTHIER'}],
+    )
+    def test_vincular_cuenta_moreapp_con_tecnico(self, _mocked_tecnicos):
+        from integraciones.models import MoreAppCuentaTecnico
+
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.post(
+            reverse('usuarios_moreapp_vincular'),
+            {
+                'email': 'campo@more.app',
+                'tecnico_id': '1',
+                'tecnico_nombre': 'ALEXANDER ANDRES GONTHIER',
+                'moreapp_user_id': 'u1',
+                'moreapp_nombre': 'Tecnico More',
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload['ok'])
+        self.assertEqual(payload['tecnico_id'], '1')
+        self.assertEqual(payload['tecnico_nombre'], 'ALEXANDER ANDRES GONTHIER')
+        vinculo = MoreAppCuentaTecnico.objects.get(email='campo@more.app')
+        self.assertEqual(vinculo.tecnico_entry_id, '1')
+        self.assertEqual(vinculo.tecnico_nombre, 'ALEXANDER ANDRES GONTHIER')
+        self.assertEqual(vinculo.moreapp_user_id, 'u1')
+
+    def test_tecnico_no_vincula_cuenta_moreapp(self):
+        self.client.login(username=self.tecnico.rut, password=self.password)
+        resp = self.client.post(
+            reverse('usuarios_moreapp_vincular'),
+            {'email': 'campo@more.app', 'tecnico_id': str(self.tecnico.pk)},
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_resolver_destinatario_por_nombre_tecnico(self):
+        from integraciones.models import MoreAppCuentaTecnico
+        from integraciones.moreapp_tareas_lote import resolver_destinatario
+
+        MoreAppCuentaTecnico.objects.create(
+            email='campo@more.app',
+            tecnico_entry_id='1',
+            tecnico_nombre='ALEXANDER ANDRES GONTHIER',
+            moreapp_nombre='Tecnico More',
+        )
+        usuarios = [{'email': 'campo@more.app', 'nombre': 'Tecnico More', 'username': 'campo'}]
+        emails, grupos, error = resolver_destinatario('ALEXANDER ANDRES GONTHIER', usuarios, [])
+        self.assertEqual(emails, ['campo@more.app'])
+        self.assertEqual(grupos, [])
+        self.assertEqual(error, '')
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_lote_json_muestra_nombre_tecnico_enlazado(self, mocked_forms, mocked_users):
+        from integraciones.models import MoreAppCuentaTecnico
+
+        mocked_forms.return_value = [
+            {
+                'id': 'abc123abc123abc123abc123',
+                'name': 'Instalacion',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+            }
+        ]
+        mocked_users.return_value = [
+            {
+                'id': 'u1',
+                'emailAddress': 'campo@more.app',
+                'disabled': False,
+                'settings': {'displayName': 'Tecnico More'},
+                'groups': [],
+            }
+        ]
+        MoreAppCuentaTecnico.objects.create(
+            email='campo@more.app',
+            tecnico_entry_id='1',
+            tecnico_nombre='ALEXANDER ANDRES GONTHIER',
+        )
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_tareas_lote_clientes'), {'json': '1'})
+        self.assertEqual(resp.status_code, 200)
+        usuario = resp.json()['usuarios'][0]
+        self.assertEqual(usuario['email'], 'campo@more.app')
+        self.assertEqual(usuario['nombre'], 'ALEXANDER ANDRES GONTHIER')
+        self.assertEqual(usuario['tecnico_nombre'], 'ALEXANDER ANDRES GONTHIER')
+        self.assertTrue(usuario['enlazado'])
+
+    def test_listado_tareas_muestra_nombre_tecnico(self):
+        from integraciones.models import MoreAppCuentaTecnico, MoreAppTareaEnviada
+        from integraciones.moreapp_cuentas import anotar_destinatarios_visibles, etiquetas_destinatarios
+
+        MoreAppCuentaTecnico.objects.create(
+            email='campo@more.app',
+            tecnico_entry_id='1',
+            tecnico_nombre='ALEXANDER ANDRES GONTHIER',
+        )
+        tarea = MoreAppTareaEnviada.objects.create(
+            form_id='abc123abc123abc123abc123',
+            form_name='Instalacion',
+            mensaje='Visita',
+            destinatarios=['campo@more.app'],
+            creado_por=self.admin,
+        )
+        self.assertEqual(etiquetas_destinatarios(tarea.destinatarios), ['ALEXANDER ANDRES GONTHIER'])
+        anotar_destinatarios_visibles([tarea])
+        self.assertEqual(tarea.destinatarios_visibles, ['ALEXANDER ANDRES GONTHIER'])
 
 
 class MoreAppTareaCicloTests(TestCase):
@@ -1991,7 +2195,11 @@ class MoreAppTareaCicloTests(TestCase):
             moreapp_submission_id='sub-detalle-1',
             nombre_formulario='Instalacion',
             estado_sincronizacion='PROCESADO',
-            datos_recibidos={'data': {'lectura': '1234'}},
+            datos_recibidos={'data': {
+                'lectura': '1234',
+                'Search': {'CUENTA': '1001', 'NOMBRE': 'Cliente Norte'},
+                'fachada': 'gridfs://registrationFiles/7f555c8d-6a67-439c-ad41-da32206657b9',
+            }},
             datos_procesados={'cliente_codigo': '1001', 'actividad': 'Cambio medidor'},
         )
         completar_tarea(tarea, origen=MoreAppTareaEvento.ORIGEN_INFORME, integracion=registro)
@@ -2002,6 +2210,8 @@ class MoreAppTareaCicloTests(TestCase):
         self.assertIn('Contenido rellenado', body)
         self.assertIn('1001', body)
         self.assertIn('Cambio medidor', body)
+        self.assertIn('Cliente Norte', body)
+        self.assertIn('7f555c8d-6a67-439c-ad41-da32206657b9', body)
         self.assertIn(reverse('moreapp_tarea_pdf', args=[tarea.pk]), body)
         pdf = self.client.get(reverse('moreapp_tarea_pdf', args=[tarea.pk]))
         self.assertEqual(pdf.status_code, 200)
@@ -2072,6 +2282,26 @@ class MoreAppTareaCicloTests(TestCase):
         deleted = self.client.post(reverse('moreapp_tarea_eliminar', args=[tarea.pk]))
         self.assertEqual(deleted.status_code, 302)
         self.assertFalse(MoreAppTareaEnviada.objects.filter(pk=tarea.pk).exists())
+
+        extra = self._tarea(titulo='Otra para borrar', cuenta=cliente.numero_cliente)
+        extra2 = self._tarea(titulo='Tercera para borrar', cuenta=cliente.numero_cliente)
+        ajax_one = self.client.post(
+            reverse('moreapp_tarea_eliminar', args=[extra.pk]),
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(ajax_one.status_code, 200)
+        self.assertTrue(ajax_one.json()['success'])
+        self.assertFalse(MoreAppTareaEnviada.objects.filter(pk=extra.pk).exists())
+        masivo = self.client.post(
+            reverse('moreapp_tareas_eliminar_masivo'),
+            {'ids': [extra2.pk]},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(masivo.status_code, 200)
+        self.assertTrue(masivo.json()['success'])
+        self.assertFalse(MoreAppTareaEnviada.objects.filter(pk=extra2.pk).exists())
 
     def test_estado_json_actualiza_sin_recargar(self):
         from django.core.cache import cache

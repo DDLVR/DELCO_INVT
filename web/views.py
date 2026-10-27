@@ -6191,6 +6191,9 @@ def reportes_moreapp_detalle(request, pk):
                     getattr(registro, 'pk', None),
                 )
 
+    from integraciones.moreapp_respuestas import contar_archivos, respuestas_desde_registro
+
+    respuestas_formulario = respuestas_desde_registro(registro) or []
     return render(request, 'reportes/integracion_detalle.html', {
         'registro': registro,
         'registro_delete_url': registro_delete_url,
@@ -6206,6 +6209,8 @@ def reportes_moreapp_detalle(request, pk):
         'moreapp_geo': moreapp_geo,
         'moreapp_fotos': moreapp_fotos,
         'moreapp_fotos_disponibles': sum(1 for f in moreapp_fotos if f.get('disponible')),
+        'respuestas_formulario': respuestas_formulario,
+        'fotos_respuestas_count': contar_archivos(respuestas_formulario),
     })
 
 

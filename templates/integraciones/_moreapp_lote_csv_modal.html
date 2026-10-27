@@ -31,51 +31,75 @@
               <i class="bi bi-download"></i> Descargar plantilla Excel
             </a>
           </section>
-          <section class="delco-import-section mb-0">
+          <section class="delco-import-section">
             <div class="delco-import-section-label">2. Columnas</div>
-            <p class="small text-muted mb-2">
-              Cabeceras: <code>formulario</code>, <code>destinatario</code>, <code>mensaje</code>, <code>fecha</code>, <code>ubicacion</code>, <code>cliente</code>.
-              El destinatario es un correo MoreApp o el nombre de un grupo. Si el Search coincide con <strong>CUENTA</strong>, se precarga.
+            <div class="delco-import-col-chips" aria-label="Columnas del archivo">
+              <span class="delco-import-col-chip is-required">formulario</span>
+              <span class="delco-import-col-chip is-required">destinatario</span>
+              <span class="delco-import-col-chip">mensaje</span>
+              <span class="delco-import-col-chip">fecha</span>
+              <span class="delco-import-col-chip">ubicacion</span>
+              <span class="delco-import-col-chip">cliente</span>
+            </div>
+            <p class="small text-muted mb-0">
+              Destinatario: nombre del técnico enlazado, correo MoreApp o nombre de grupo. Cliente: número de CUENTA; si el Search coincide, se precarga.
             </p>
           </section>
-          {% if lote_modal == 'csv' and resultados %}
-          <div class="table-responsive mt-3">
-            <table class="table align-middle mb-0">
-              <thead class="table-delco">
-                <tr>
-                  <th>Fila</th>
-                  <th>Formulario</th>
-                  <th>Destinatario</th>
-                  <th>Cliente</th>
-                  <th>Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in resultados %}
-                <tr>
-                  <td>{{ item.fila }}</td>
-                  <td>{{ item.formulario }}</td>
-                  <td class="small">{{ item.destinatario }}</td>
-                  <td>{{ item.cliente|default:"—" }}</td>
-                  <td>
-                    {% if item.ok %}
-                    <span class="badge text-bg-success">Enviada</span>
-                    {% if item.precarga %}<div class="small text-muted">Search precargado</div>{% endif %}
-                    {% else %}
-                    <span class="badge text-bg-danger">Error</span>
-                    <div class="small text-danger">{{ item.error }}</div>
-                    {% endif %}
-                  </td>
-                </tr>
-                {% endfor %}
-              </tbody>
-            </table>
+
+          <div class="delco-import-progress mt-3" style="display:none;">
+            <div class="d-flex justify-content-between mb-1">
+              <small class="delco-import-progress-label text-muted">Preparando importación...</small>
+              <small class="delco-import-progress-pct fw-semibold">0%</small>
+            </div>
+            <div class="progress" style="height:10px;">
+              <div class="progress-bar progress-bar-striped progress-bar-animated delco-import-progress-bar" role="progressbar" style="width:0%; font-size:0;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <p class="small text-muted mb-0 mt-2">Primero se sube el archivo y después cada fila se envía a MoreApp. No cierres esta ventana.</p>
           </div>
-          {% endif %}
+
+          <div id="loteCsvResultados" class="delco-import-results mt-3"{% if lote_modal != 'csv' or not resultados %} style="display:none;"{% endif %}>
+            <div id="loteCsvMensaje" class="alert mb-2{% if lote_modal == 'csv' and resultados %}{% if error %} alert-warning{% else %} alert-info{% endif %}{% endif %}">
+              {% if lote_modal == 'csv' and resultados %}Revisa el detalle de cada fila.{% endif %}
+            </div>
+            <div class="table-responsive">
+              <table class="table align-middle mb-0">
+                <thead class="table-delco">
+                  <tr>
+                    <th>Fila</th>
+                    <th>Formulario</th>
+                    <th>Destinatario</th>
+                    <th>Cliente</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody id="loteCsvResultadosBody">
+                  {% if lote_modal == 'csv' and resultados %}
+                  {% for item in resultados %}
+                  <tr>
+                    <td>{{ item.fila }}</td>
+                    <td>{{ item.formulario }}</td>
+                    <td class="small">{{ item.destinatario }}</td>
+                    <td>{{ item.cliente|default:"—" }}</td>
+                    <td>
+                      {% if item.ok %}
+                      <span class="badge text-bg-success">Enviada</span>
+                      {% if item.precarga %}<div class="small text-muted">Search precargado</div>{% endif %}
+                      {% else %}
+                      <span class="badge text-bg-danger">Error</span>
+                      <div class="small text-danger">{{ item.error }}</div>
+                      {% endif %}
+                    </td>
+                  </tr>
+                  {% endfor %}
+                  {% endif %}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
         <div class="modal-footer delco-import-clientes-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary">
+          <button type="submit" class="btn btn-primary" id="btnLoteCsvSubmit">
             <i class="bi bi-send me-1"></i>Validar y enviar
           </button>
         </div>

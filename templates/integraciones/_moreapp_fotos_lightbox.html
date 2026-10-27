@@ -1,0 +1,76 @@
+<div class="delco-foto-lightbox" id="delcoFotoLightbox" hidden>
+  <div class="delco-foto-lightbox-bar">
+    <h2 class="h6 mb-0" id="delcoFotoLightboxTitle">Evidencia</h2>
+    <button type="button" class="btn-close btn-close-white" data-delco-foto-close aria-label="Cerrar"></button>
+  </div>
+  <button type="button" class="delco-foto-nav delco-foto-prev d-none" data-delco-foto-prev aria-label="Foto anterior">
+    <i class="bi bi-chevron-left"></i>
+  </button>
+  <img class="delco-foto-lightbox-img" alt="">
+  <button type="button" class="delco-foto-nav delco-foto-next d-none" data-delco-foto-next aria-label="Foto siguiente">
+    <i class="bi bi-chevron-right"></i>
+  </button>
+</div>
+<script>
+(function () {
+  var thumbs = Array.prototype.slice.call(document.querySelectorAll('[data-delco-lightbox]'));
+  var box = document.getElementById('delcoFotoLightbox');
+  if (!thumbs.length || !box) return;
+  document.body.appendChild(box);
+  var img = box.querySelector('.delco-foto-lightbox-img');
+  var title = document.getElementById('delcoFotoLightboxTitle');
+  var prevBtn = box.querySelector('[data-delco-foto-prev]');
+  var nextBtn = box.querySelector('[data-delco-foto-next]');
+  var closeBtn = box.querySelector('[data-delco-foto-close]');
+  var index = 0;
+
+  function show(i) {
+    index = (i + thumbs.length) % thumbs.length;
+    var link = thumbs[index];
+    var thumb = link.querySelector('img');
+    img.src = (thumb && thumb.currentSrc) || link.getAttribute('href');
+    img.alt = link.getAttribute('data-title') || '';
+    title.textContent = link.getAttribute('data-title') || 'Evidencia';
+    var many = thumbs.length > 1;
+    prevBtn.classList.toggle('d-none', !many);
+    nextBtn.classList.toggle('d-none', !many);
+  }
+
+  function openAt(i) {
+    show(i);
+    box.hidden = false;
+    document.body.classList.add('delco-foto-lightbox-open');
+    closeBtn.focus();
+  }
+
+  function closeBox() {
+    box.hidden = true;
+    document.body.classList.remove('delco-foto-lightbox-open');
+  }
+
+  thumbs.forEach(function (link, i) {
+    link.addEventListener('click', function (event) {
+      event.preventDefault();
+      openAt(i);
+    });
+  });
+  prevBtn.addEventListener('click', function (event) {
+    event.stopPropagation();
+    show(index - 1);
+  });
+  nextBtn.addEventListener('click', function (event) {
+    event.stopPropagation();
+    show(index + 1);
+  });
+  closeBtn.addEventListener('click', closeBox);
+  box.addEventListener('click', function (event) {
+    if (event.target === box) closeBox();
+  });
+  document.addEventListener('keydown', function (event) {
+    if (box.hidden) return;
+    if (event.key === 'Escape') closeBox();
+    if (event.key === 'ArrowLeft') show(index - 1);
+    if (event.key === 'ArrowRight') show(index + 1);
+  });
+})();
+</script>

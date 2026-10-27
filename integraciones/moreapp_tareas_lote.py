@@ -221,7 +221,7 @@ def plantilla_xlsx() -> bytes:
 
     ayudas = {
         "formulario": "Nombre o ID del formulario publicado en MoreApp.",
-        "destinatario": "Correo de un usuario MoreApp, o el nombre del grupo.",
+        "destinatario": "Nombre del técnico enlazado, correo MoreApp, o el nombre del grupo.",
         "mensaje": "Texto corto que ve quien recibe la tarea.",
         "fecha": "Fecha límite opcional, por ejemplo 2026-10-23 09:00.",
         "ubicacion": "Dirección, o latitud y longitud separadas por coma.",
@@ -318,8 +318,23 @@ def resolver_destinatario(
         email = str(user.get("email") or "").strip()
         nombre = str(user.get("nombre") or "").strip()
         username = str(user.get("username") or "").strip()
-        if email and (_norm(nombre) == folded or _norm(username) == folded):
+        tecnico_nombre = str(user.get("tecnico_nombre") or "").strip()
+        if email and (
+            _norm(nombre) == folded
+            or _norm(username) == folded
+            or (tecnico_nombre and _norm(tecnico_nombre) == folded)
+        ):
             return [email], [], ""
+    from .moreapp_cuentas import email_por_nombre_tecnico
+
+    linked = email_por_nombre_tecnico(raw)
+    if linked:
+        wanted = linked.lower()
+        for user in usuarios:
+            email = str(user.get("email") or "").strip()
+            if email.lower() == wanted:
+                return [email], [], ""
+        return [], [], "El técnico %s está enlazado a %s, que no está activo en MoreApp." % (raw, linked)
     return [], [], "No se reconoció el destinatario %s." % raw
 
 

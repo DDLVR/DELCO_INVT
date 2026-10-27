@@ -49,9 +49,9 @@
           </ul>
         </div>
         {% endif %}
-        <a href="{% url 'moreapp_tarea_crear' %}" class="btn btn-success">
+        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNuevaTarea">
           <i class="bi bi-plus-circle"></i> Nueva tarea
-        </a>
+        </button>
       </div>
     </div>
   </div>
@@ -201,7 +201,7 @@
         </div>
         <div class="col-md-2">
           <label class="form-label small mb-1">Destinatario</label>
-          <input type="text" name="destinatario" class="form-control form-control-sm" value="{{ destinatario_filtro }}" placeholder="Correo MoreApp">
+          <input type="text" name="destinatario" class="form-control form-control-sm" value="{{ destinatario_filtro }}" placeholder="Técnico o correo">
         </div>
         <div class="col-md-2">
           <label class="form-label small mb-1">Buscar</label>
@@ -226,8 +226,17 @@
   </div>
 
   <div class="card delco-panel-card">
-    <div class="card-header card-header-delco d-flex justify-content-between align-items-center">
-      <strong>Listado</strong>
+    <div class="card-header card-header-delco d-flex justify-content-between align-items-center flex-wrap gap-2">
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <strong>Listado</strong>
+        {% url 'moreapp_tareas_eliminar_masivo' as moreapp_tareas_eliminar_masivo_url %}
+        {% if moreapp_tareas_eliminar_masivo_url %}
+        <button type="button" class="btn btn-sm btn-outline-danger" id="btnEliminarTareasSel" data-url="{{ moreapp_tareas_eliminar_masivo_url }}" disabled>
+          <i class="bi bi-trash"></i> Eliminar seleccionadas
+        </button>
+        <span class="small text-muted" id="tareasSelLabel">0 seleccionadas</span>
+        {% endif %}
+      </div>
       <span class="badge bg-secondary"><span data-kpi="resumen.total">{{ resumen.total|default:0 }}</span> resultado(s)</span>
     </div>
     <div class="card-body p-0">
@@ -235,6 +244,9 @@
         <table class="table table-hover mb-0 align-middle" data-cola-filtro="{{ cola_filtro|default:'' }}">
           <thead>
             <tr>
+              <th style="width:2rem;">
+                <input type="checkbox" class="form-check-input" id="checkAllTareas" title="Seleccionar todas" aria-label="Seleccionar todas">
+              </th>
               <th>ID</th>
               <th>Título / Mensaje</th>
               <th>Formulario</th>
@@ -251,6 +263,9 @@
           <tbody>
             {% for tarea in tareas %}
             <tr data-tarea-id="{{ tarea.pk }}" data-estado="{{ tarea.estado }}">
+              <td>
+                <input type="checkbox" class="form-check-input js-tarea-check" value="{{ tarea.pk }}" aria-label="Seleccionar tarea {{ tarea.pk }}">
+              </td>
               <td><a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="fw-bold text-decoration-none">#{{ tarea.pk }}</a></td>
               <td>
                 <div class="fw-semibold">{{ tarea.titulo|default:tarea.mensaje }}</div>
@@ -280,7 +295,7 @@
               </td>
               <td class="d-none d-lg-table-cell">{{ tarea.proyecto_carga_administrativa|default:"—" }}</td>
               <td class="d-none d-lg-table-cell small">
-                {% if tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% endif %}
+                {% if tarea.destinatarios_visibles %}{{ tarea.destinatarios_visibles|join:", " }}{% elif tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% endif %}
                 {% if tarea.grupos_nombres %}<div class="text-muted">Grupos: {{ tarea.grupos_nombres|join:", " }}</div>{% endif %}
               </td>
               <td class="d-none d-lg-table-cell js-tarea-evidencia">
@@ -302,13 +317,19 @@
                   <i class="bi bi-file-earmark-pdf"></i> PDF
                 </a>
                 {% endif %}
+                {% url 'moreapp_tarea_eliminar' tarea.pk as moreapp_tarea_eliminar_url %}
+                {% if moreapp_tarea_eliminar_url %}
+                <button type="button" class="btn btn-sm btn-outline-danger js-tarea-eliminar" data-url="{{ moreapp_tarea_eliminar_url }}" data-id="{{ tarea.pk }}" data-titulo="{{ tarea.titulo|default:tarea.mensaje|truncatechars:60 }}" title="Eliminar">
+                  <i class="bi bi-trash"></i>
+                </button>
+                {% endif %}
               </td>
             </tr>
             {% empty %}
             <tr>
-              <td colspan="11" class="text-center text-muted py-4">
+              <td colspan="12" class="text-center text-muted py-4">
                 No hay tareas MoreApp con estos filtros.
-                <a href="{% url 'moreapp_tarea_crear' %}">Crear la primera</a>.
+                <a href="#" data-bs-toggle="modal" data-bs-target="#modalNuevaTarea">Crear la primera</a>.
               </td>
             </tr>
             {% endfor %}
@@ -335,6 +356,7 @@
 {% include 'integraciones/_moreapp_lote_csv_modal.html' %}
 {% include 'integraciones/_moreapp_lote_clientes_modal.html' %}
 {% include 'integraciones/_moreapp_lote_listado_modal.html' %}
+{% include 'integraciones/_moreapp_tarea_crear_modal.html' %}
 {% endblock %}
 
 {% block extra_js %}
@@ -465,17 +487,150 @@
     });
   }
 
+  function csrfTareas() {
+    var el = document.querySelector('#js-form-revisar-estado [name=csrfmiddlewaretoken]');
+    if (el && el.value) return el.value;
+    var match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function checksTareas() {
+    return Array.prototype.slice.call(document.querySelectorAll('.js-tarea-check'));
+  }
+
+  function actualizarSeleccionTareas() {
+    var checks = checksTareas();
+    var sel = checks.filter(function (el) { return el.checked; });
+    var btn = document.getElementById('btnEliminarTareasSel');
+    var label = document.getElementById('tareasSelLabel');
+    var all = document.getElementById('checkAllTareas');
+    if (btn) btn.disabled = !sel.length;
+    if (label) label.textContent = sel.length + ' seleccionada' + (sel.length === 1 ? '' : 's');
+    if (all) {
+      all.checked = checks.length > 0 && sel.length === checks.length;
+      all.indeterminate = sel.length > 0 && sel.length < checks.length;
+    }
+  }
+
+  function quitarFilasTareas(ids) {
+    var set = {};
+    (ids || []).forEach(function (id) { set[String(id)] = true; });
+    document.querySelectorAll('tr[data-tarea-id]').forEach(function (row) {
+      if (set[row.getAttribute('data-tarea-id')]) row.remove();
+    });
+    var totalEl = document.querySelector('[data-kpi="resumen.total"]');
+    if (totalEl) {
+      var left = document.querySelectorAll('tr[data-tarea-id]').length;
+      totalEl.textContent = String(left);
+    }
+    actualizarSeleccionTareas();
+  }
+
+  function postEliminarTareas(url, ids) {
+    var body = new FormData();
+    body.append('csrfmiddlewaretoken', csrfTareas());
+    (ids || []).forEach(function (id) { body.append('ids', id); });
+    return fetch(url, {
+      method: 'POST',
+      body: body,
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+    }).then(function (resp) {
+      return resp.json().then(function (data) { return { okHttp: resp.ok, data: data }; });
+    });
+  }
+
+  document.addEventListener('change', function (ev) {
+    if (ev.target && (ev.target.id === 'checkAllTareas' || ev.target.classList.contains('js-tarea-check'))) {
+      if (ev.target.id === 'checkAllTareas') {
+        checksTareas().forEach(function (el) { el.checked = ev.target.checked; });
+      }
+      actualizarSeleccionTareas();
+    }
+  });
+
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('.js-tarea-eliminar');
+    if (!btn) return;
+    var url = btn.getAttribute('data-url') || '';
+    var id = btn.getAttribute('data-id') || '';
+    var titulo = btn.getAttribute('data-titulo') || ('#' + id);
+    if (!url || !id) return;
+    var go = function () {
+      postEliminarTareas(url, [id]).then(function (pack) {
+        var data = pack.data || {};
+        if (pack.okHttp && data.success) {
+          quitarFilasTareas(data.ids && data.ids.length ? data.ids : [id]);
+          if (window.showToast) window.showToast(data.message || 'Tarea eliminada.', 'success');
+        } else if (window.showToast) {
+          window.showToast(data.message || 'No se pudo eliminar la tarea.', 'danger', 0);
+        }
+      }).catch(function () {
+        if (window.showToast) window.showToast('No se pudo eliminar la tarea.', 'danger', 0);
+      });
+    };
+    if (typeof window.showConfirm === 'function') {
+      window.showConfirm(
+        'Se quitará #' + id + (titulo ? ' (' + titulo + ')' : '') + ' de la intranet. Si ya está en MoreApp, revócala allí.',
+        'Eliminar tarea',
+        'Sí, eliminar',
+        'Cancelar'
+      ).then(function (ok) { if (ok) go(); });
+    } else if (window.confirm('¿Eliminar la tarea #' + id + '?')) {
+      go();
+    }
+  });
+
+  var btnMasivo = document.getElementById('btnEliminarTareasSel');
+  if (btnMasivo) {
+    btnMasivo.addEventListener('click', function () {
+      var ids = checksTareas().filter(function (el) { return el.checked; }).map(function (el) { return el.value; });
+      var url = btnMasivo.getAttribute('data-url') || '';
+      if (!ids.length || !url) {
+        if (window.showToast) window.showToast('Selecciona al menos una tarea.', 'warning');
+        return;
+      }
+      var go = function () {
+        postEliminarTareas(url, ids).then(function (pack) {
+          var data = pack.data || {};
+          if (pack.okHttp && data.success) {
+            quitarFilasTareas(data.ids && data.ids.length ? data.ids : ids);
+            if (window.showToast) window.showToast(data.message || 'Tareas eliminadas.', 'success');
+          } else if (window.showToast) {
+            window.showToast(data.message || 'No se pudieron eliminar las tareas.', 'danger', 0);
+          }
+        }).catch(function () {
+          if (window.showToast) window.showToast('No se pudieron eliminar las tareas.', 'danger', 0);
+        });
+      };
+      if (typeof window.showConfirm === 'function') {
+        window.showConfirm(
+          'Se eliminarán ' + ids.length + ' tarea(s) de la intranet. Si ya estaban en MoreApp, revócalas allí.',
+          'Eliminar seleccionadas',
+          'Sí, eliminar',
+          'Cancelar'
+        ).then(function (ok) { if (ok) go(); });
+      } else if (window.confirm('¿Eliminar ' + ids.length + ' tarea(s)?')) {
+        go();
+      }
+    });
+  }
+  actualizarSeleccionTareas();
+
   window.setInterval(function () { consultar(); }, refreshSeconds * 1000);
 })();
 (function () {
   var csvModal = document.getElementById('modalLoteCsv');
   var clientesModal = document.getElementById('modalLoteClientes');
   var listadoModal = document.getElementById('modalLoteListado');
+  var nuevaModal = document.getElementById('modalNuevaTarea');
   var open = '{{ lote_modal|default:""|escapejs }}';
   var jsonUrl = "{% url 'moreapp_tareas_lote_clientes' %}?json=1";
   var listadoJsonUrl = "{% url 'moreapp_tareas_lote_listado' %}?json=1";
+  var camposUrl = "{% url 'moreapp_tarea_campos' 'FORM_ID' %}";
   var loaded = false;
   var listadoCatalogo = null;
+  var nuevaLoaded = false;
   var maxFilasListado = Number({{ max_filas_listado|default:15 }}) || 15;
 
   function mount(modal) {
@@ -484,9 +639,12 @@
   mount(csvModal);
   mount(clientesModal);
   mount(listadoModal);
+  mount(nuevaModal);
 
   var archivo = document.getElementById('archivoLoteCsv');
   var archivoNombre = document.getElementById('archivoLoteCsvNombre');
+  var formCsv = document.getElementById('formLoteCsv');
+  var btnCsv = document.getElementById('btnLoteCsvSubmit');
   if (archivo && archivoNombre) {
     archivo.addEventListener('change', function () {
       var file = archivo.files && archivo.files[0];
@@ -494,6 +652,75 @@
       if (archivo.closest('.delco-import-file-zone')) {
         archivo.closest('.delco-import-file-zone').classList.toggle('has-file', !!file);
       }
+    });
+  }
+
+  function pintarResultadosCsv(data) {
+    var box = document.getElementById('loteCsvResultados');
+    var msg = document.getElementById('loteCsvMensaje');
+    var body = document.getElementById('loteCsvResultadosBody');
+    if (!box || !msg || !body) return;
+    var exitosas = Number(data.exitosas || 0);
+    var fallidas = Number(data.fallidas || 0);
+    var ok = !!data.success;
+    msg.className = 'alert mb-2 ' + (ok ? 'alert-success' : (exitosas ? 'alert-warning' : 'alert-danger'));
+    msg.textContent = data.message || (ok ? 'Tareas enviadas.' : 'Revisa el archivo.');
+    body.innerHTML = (data.resultados || []).map(function (item) {
+      var estado = item.ok
+        ? '<span class="badge text-bg-success">Enviada</span>' + (item.precarga ? '<div class="small text-muted">Search precargado</div>' : '')
+        : '<span class="badge text-bg-danger">Error</span><div class="small text-danger">' + escapeHtml(item.error || '') + '</div>';
+      return '<tr><td>' + escapeHtml(item.fila) + '</td><td>' + escapeHtml(item.formulario) +
+        '</td><td class="small">' + escapeHtml(item.destinatario) + '</td><td>' +
+        escapeHtml(item.cliente || '—') + '</td><td>' + estado + '</td></tr>';
+    }).join('');
+    box.style.display = 'block';
+    if (window.showToast) {
+      window.showToast(
+        data.message || (ok ? 'Se enviaron ' + exitosas + ' tareas.' : 'Revisa el detalle del lote.'),
+        ok ? 'success' : (exitosas ? 'warning' : 'danger'),
+        ok ? 6000 : 0
+      );
+    }
+    if (ok) {
+      window.setTimeout(function () { window.location.reload(); }, 1800);
+    }
+  }
+
+  if (csvModal) {
+    csvModal.addEventListener('show.bs.modal', function () {
+      var progress = csvModal.querySelector('.delco-import-progress');
+      if (progress && csvModal.dataset.importing !== '1') progress.style.display = 'none';
+    });
+  }
+  if (formCsv) {
+    formCsv.addEventListener('submit', function (ev) {
+      if (typeof window.ejecutarImportacionExcel !== 'function') return;
+      ev.preventDefault();
+      if (!archivo || !archivo.files || !archivo.files.length) {
+        if (window.showToast) window.showToast('Selecciona un archivo CSV o Excel antes de enviar.', 'warning');
+        return;
+      }
+      window.ejecutarImportacionExcel({
+        url: formCsv.getAttribute('action'),
+        form: formCsv,
+        fileInput: archivo,
+        submitBtn: btnCsv,
+        modalEl: csvModal,
+        onSuccess: function (data) {
+          if (csvModal) csvModal.dataset.importing = '0';
+          pintarResultadosCsv(data || {});
+        },
+        onError: function (err, data) {
+          if (csvModal) csvModal.dataset.importing = '0';
+          pintarResultadosCsv({
+            success: false,
+            message: (data && data.message) || (err && err.message) || 'No se pudo importar el archivo.',
+            exitosas: (data && data.exitosas) || 0,
+            fallidas: (data && data.fallidas) || 0,
+            resultados: (data && data.resultados) || []
+          });
+        }
+      }).catch(function () {});
     });
   }
 
@@ -538,8 +765,8 @@
     }
     box.innerHTML = items.map(function (item) {
       var value = name === 'grupos' ? (item.id || '') : (item.email || '');
-      var title = name === 'grupos' ? (item.nombre || value) : (item.nombre || item.email || '');
-      var extra = name === 'grupos' ? (item.detalle || '') : (item.email || '');
+      var title = name === 'grupos' ? (item.nombre || value) : (item.tecnico_nombre || item.nombre || item.email || '');
+      var extra = name === 'grupos' ? (item.detalle || '') : (item.tecnico_nombre ? '' : (item.email || ''));
       var checked = chosen.indexOf(String(value)) !== -1 ? ' checked' : '';
       return '<label class="d-flex gap-2 align-items-start py-1">' +
         '<input class="form-check-input mt-1" type="checkbox" name="' + name + '" value="' + escapeHtml(value) + '"' + checked + '>' +
@@ -592,11 +819,11 @@
         }
         loaded = true;
         fillSelect(select, data.formularios || []);
-        fillChecks(document.getElementById('js-lote-usuarios'), data.usuarios || [], 'usuarios', [], 'No hay usuarios MoreApp activos.');
+        fillChecks(document.getElementById('js-lote-usuarios'), data.usuarios || [], 'usuarios', [], 'No hay cuentas MoreApp activas.');
         fillChecks(document.getElementById('js-lote-grupos'), data.grupos || [], 'grupos', [], 'No hay grupos para mostrar.');
         fillClientes(document.getElementById('js-lista-clientes'), data.clientes || [], []);
         if (status) {
-          status.textContent = 'Elige formulario, destinatario MoreApp y clientes. Si el Search coincide con CUENTA, se precarga.';
+          status.textContent = 'Elige formulario, técnico y clientes. Si el Search coincide con CUENTA, se precarga.';
         }
       })
       .catch(function () {
@@ -615,11 +842,11 @@
   function fillDestinoSelect(select, data) {
     if (!select) return;
     var current = select.value || '';
-    var html = '<option value="">— Persona o grupo —</option>';
-    html += '<optgroup label="Usuarios">';
+    var html = '<option value="">— Técnico o grupo —</option>';
+    html += '<optgroup label="Técnicos">';
     (data.usuarios || []).forEach(function (item) {
       var value = 'user:' + (item.email || '');
-      var label = item.nombre || item.email || '';
+      var label = item.tecnico_nombre || item.nombre || item.email || '';
       html += '<option value="' + escapeHtml(value) + '"' + (current === value ? ' selected' : '') + '>' +
         escapeHtml(label) + '</option>';
     });
@@ -739,6 +966,214 @@
     });
   }
 
+  function setCrearProgress(pct, text) {
+    var wrap = document.querySelector('#modalNuevaTarea .delco-import-progress');
+    var bar = document.querySelector('#modalNuevaTarea .delco-import-progress-bar');
+    var label = document.querySelector('#modalNuevaTarea .delco-import-progress-label');
+    var pctEl = document.querySelector('#modalNuevaTarea .delco-import-progress-pct');
+    if (wrap) wrap.style.display = 'block';
+    var value = Math.max(0, Math.min(100, Math.round(pct)));
+    if (bar) {
+      bar.style.width = value + '%';
+      bar.setAttribute('aria-valuenow', value);
+    }
+    if (pctEl) pctEl.textContent = value + '%';
+    if (label && text) label.textContent = text;
+  }
+
+  function renderCamposCrear(campos) {
+    var box = document.getElementById('js-crear-campos');
+    if (!box) return;
+    if (!campos || !campos.length) {
+      box.innerHTML = '<div class="col-12 text-muted small">Este formulario no tiene campos que se puedan precargar.</div>';
+      return;
+    }
+    box.innerHTML = campos.map(function (campo) {
+      var key = String(campo.key || '');
+      var label = String(campo.label || key);
+      return '<div class="col-md-6"><label class="form-label small">' + escapeHtml(label) +
+        '</label><input type="text" class="form-control" name="prefill__' + escapeHtml(key) + '"></div>';
+    }).join('');
+  }
+
+  function loadCamposCrear() {
+    var select = document.getElementById('crear_form_id');
+    var box = document.getElementById('js-crear-campos');
+    if (!select || !box) return;
+    var id = select.value;
+    if (!id) {
+      box.innerHTML = '<div class="col-12 text-muted small">Elige un formulario para ver los campos disponibles.</div>';
+      return;
+    }
+    box.innerHTML = '<div class="col-12 text-muted small">Cargando campos…</div>';
+    fetch(camposUrl.replace('FORM_ID', encodeURIComponent(id)), { credentials: 'same-origin' })
+      .then(function (resp) { return resp.json(); })
+      .then(function (data) {
+        if (data && data.ok) renderCamposCrear(data.campos || []);
+        else box.innerHTML = '<div class="col-12 text-danger small">' + escapeHtml((data && data.error) || 'No se pudieron leer los campos.') + '</div>';
+      })
+      .catch(function () {
+        box.innerHTML = '<div class="col-12 text-danger small">No se pudieron leer los campos.</div>';
+      });
+  }
+
+  function toggleProgramadaCrear() {
+    var envio = document.getElementById('crear_envio');
+    var box = document.querySelector('.js-crear-programada');
+    if (!envio || !box) return;
+    box.classList.toggle('d-none', envio.value !== 'SCHEDULED');
+  }
+
+  function loadNuevaModal() {
+    var status = document.getElementById('js-crear-status');
+    var errBox = document.querySelector('#modalNuevaTarea .js-crear-error');
+    var formSelect = document.getElementById('crear_form_id');
+    if (nuevaLoaded && formSelect && formSelect.options.length > 1) return;
+    if (status) status.textContent = 'Cargando formularios y técnicos…';
+    fetch(jsonUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (resp) { return resp.json().then(function (data) { return { ok: resp.ok, data: data }; }); })
+      .then(function (pack) {
+        var data = pack.data || {};
+        if (!pack.ok || data.ok === false) {
+          if (errBox) {
+            errBox.textContent = data.error || 'No se pudieron cargar los datos.';
+            errBox.classList.remove('d-none');
+          }
+          if (status) status.textContent = 'No se pudo cargar el popup. Cierra y vuelve a intentar.';
+          return;
+        }
+        nuevaLoaded = true;
+        fillSelect(formSelect, data.formularios || []);
+        var tipo = document.getElementById('crear_tipo_trabajo');
+        if (tipo) {
+          var current = tipo.value || '';
+          tipo.innerHTML = '<option value="">— Sin tipo —</option>';
+          (data.tipos_trabajo || []).forEach(function (item) {
+            var opt = document.createElement('option');
+            opt.value = item.id || '';
+            opt.textContent = item.name || item.id || '';
+            if (String(opt.value) === String(current)) opt.selected = true;
+            tipo.appendChild(opt);
+          });
+        }
+        fillChecks(document.getElementById('js-crear-usuarios'), data.usuarios || [], 'usuarios', [], 'No hay cuentas MoreApp activas.');
+        fillChecks(document.getElementById('js-crear-grupos'), data.grupos || [], 'grupos', [], 'No hay grupos para mostrar.');
+        var clienteSel = document.getElementById('crearClienteSelectPopup');
+        if (clienteSel) {
+          var chosen = clienteSel.value || '';
+          clienteSel.innerHTML = '<option value="">— O elige de la lista —</option>';
+          (data.clientes || []).forEach(function (item) {
+            var opt = document.createElement('option');
+            opt.value = item.id || '';
+            opt.textContent = (item.numero_cliente || '') + (item.comuna ? ' · ' + item.comuna : '');
+            if (String(opt.value) === String(chosen)) opt.selected = true;
+            clienteSel.appendChild(opt);
+          });
+        }
+        var lista = document.getElementById('listaProyectosCargaNueva');
+        if (lista) {
+          lista.innerHTML = (data.sugerencias_proyecto || []).map(function (item) {
+            return '<option value="' + escapeHtml(item) + '">';
+          }).join('');
+        }
+        if (status) status.textContent = 'Elige formulario, datos del trabajo y técnicos.';
+      })
+      .catch(function () {
+        if (errBox) {
+          errBox.textContent = 'No se pudieron cargar los datos.';
+          errBox.classList.remove('d-none');
+        }
+      });
+  }
+
+  if (nuevaModal) {
+    nuevaModal.addEventListener('show.bs.modal', loadNuevaModal);
+    if (!nuevaModal.dataset.importGuardBound) {
+      nuevaModal.addEventListener('hide.bs.modal', function (ev) {
+        if (nuevaModal.dataset.importing === '1') {
+          ev.preventDefault();
+          ev.stopPropagation();
+        }
+      });
+      nuevaModal.dataset.importGuardBound = '1';
+    }
+  }
+  var crearFormSelect = document.getElementById('crear_form_id');
+  if (crearFormSelect) crearFormSelect.addEventListener('change', loadCamposCrear);
+  var crearEnvio = document.getElementById('crear_envio');
+  if (crearEnvio) crearEnvio.addEventListener('change', toggleProgramadaCrear);
+  var crearClienteSel = document.getElementById('crearClienteSelectPopup');
+  var crearClienteHidden = document.getElementById('crearClienteIdPopup');
+  if (crearClienteSel && crearClienteHidden) {
+    crearClienteSel.addEventListener('change', function () {
+      crearClienteHidden.value = crearClienteSel.value || '';
+    });
+  }
+  toggleProgramadaCrear();
+
+  var formNueva = document.getElementById('formNuevaTarea');
+  var btnNueva = document.getElementById('btnNuevaTareaSubmit');
+  if (formNueva) {
+    formNueva.addEventListener('submit', function (ev) {
+      ev.preventDefault();
+      var errBox = document.querySelector('#modalNuevaTarea .js-crear-error');
+      if (errBox) {
+        errBox.classList.add('d-none');
+        errBox.textContent = '';
+      }
+      var original = btnNueva ? btnNueva.innerHTML : '';
+      if (btnNueva) {
+        btnNueva.disabled = true;
+        btnNueva.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Creando...';
+      }
+      if (nuevaModal) nuevaModal.dataset.importing = '1';
+      setCrearProgress(18, 'Validando datos...');
+      var timer = window.setInterval(function () {
+        var pctEl = document.querySelector('#modalNuevaTarea .delco-import-progress-pct');
+        var now = pctEl ? parseInt(pctEl.textContent, 10) || 18 : 18;
+        if (now < 92) setCrearProgress(now + 2, 'Creando la tarea en MoreApp...');
+      }, 280);
+      fetch(formNueva.getAttribute('action'), {
+        method: 'POST',
+        body: new FormData(formNueva),
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+      })
+        .then(function (resp) { return resp.json().then(function (data) { return { okHttp: resp.ok, data: data }; }); })
+        .then(function (pack) {
+          window.clearInterval(timer);
+          var data = pack.data || {};
+          if (pack.okHttp && data.success) {
+            setCrearProgress(100, 'Tarea creada');
+            if (window.showToast) window.showToast(data.message || 'Tarea creada.', 'success', 5000);
+            window.setTimeout(function () { window.location.reload(); }, 900);
+            return;
+          }
+          setCrearProgress(0, 'No se pudo crear');
+          if (errBox) {
+            errBox.textContent = data.message || data.error || 'No se pudo crear la tarea.';
+            errBox.classList.remove('d-none');
+          }
+          if (window.showToast) window.showToast(data.message || 'No se pudo crear la tarea.', 'danger', 0);
+        })
+        .catch(function () {
+          window.clearInterval(timer);
+          setCrearProgress(0, 'Error de conexión');
+          if (errBox) {
+            errBox.textContent = 'No se pudo conectar con el servidor.';
+            errBox.classList.remove('d-none');
+          }
+        })
+        .then(function () {
+          if (nuevaModal) nuevaModal.dataset.importing = '0';
+          if (btnNueva) {
+            btnNueva.disabled = false;
+            btnNueva.innerHTML = original || 'Crear tarea';
+          }
+        });
+    });
+  }
+
   bindFiltro();
 
   if (open === 'csv' && csvModal && window.bootstrap) {
@@ -749,6 +1184,9 @@
   }
   if (open === 'listado' && listadoModal && window.bootstrap) {
     window.bootstrap.Modal.getOrCreateInstance(listadoModal).show();
+  }
+  if (open === 'nueva' && nuevaModal && window.bootstrap) {
+    window.bootstrap.Modal.getOrCreateInstance(nuevaModal).show();
   }
 })();
 </script>

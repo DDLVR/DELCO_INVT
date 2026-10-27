@@ -30,6 +30,12 @@ from .moreapp_api import (
     list_users,
 )
 from .moreapp_catalogo_views import _as_list, _extract_version_fields, _form_row, _user_row
+from .moreapp_cuentas import (
+    anotar_destinatarios_visibles,
+    aplicar_vinculos_a_usuarios,
+    emails_que_coinciden_tecnico,
+    etiquetas_destinatarios,
+)
 from .moreapp_http import assert_safe_id
 from .moreapp_registros_views import _campos_desde_formulario
 from .moreapp_tareas_lote import (
@@ -279,7 +285,7 @@ def _usuarios_moreapp() -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
         if row.get("disabled") or not row.get("email"):
             continue
         rows.append(row)
-    return rows, _grupos_desde_usuarios(raw)
+    return aplicar_vinculos_a_usuarios(rows), _grupos_desde_usuarios(raw)
 
 
 def _items_de_lista(raw: Any, extra_keys: Tuple[str, ...] = ()) -> List[Any]:
@@ -634,7 +640,10 @@ def _payload_estado_tarea(tarea: MoreAppTareaEnviada, *, detalle: bool = False) 
         "ultima_sync": _fecha_corta(tarea.ultima_sync),
     }
     if detalle:
+        from .moreapp_respuestas import respuestas_desde_registro
+
         payload["campos_rellenados"] = campos_rellenados_tarea(tarea)
+        payload["respuestas"] = respuestas_desde_registro(registro) if registro is not None else []
         payload["informe_url"] = (
             reverse("reportes_moreapp_detalle", args=[registro.pk]) if registro is not None else ""
         )
@@ -729,7 +738,10 @@ def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True):
     if proyecto_filtro and "proyecto_carga_administrativa" in campos:
         qs = qs.filter(proyecto_carga_administrativa__icontains=proyecto_filtro)
     if destinatario_filtro:
-        qs = qs.filter(destinatarios__icontains=destinatario_filtro)
+        q_dest = Q(destinatarios__icontains=destinatario_filtro)
+        for email in emails_que_coinciden_tecnico(destinatario_filtro):
+            q_dest |= Q(destinatarios__icontains=email)
+        qs = qs.filter(q_dest)
     if buscar:
         q_buscar = (
             Q(mensaje__icontains=buscar)
@@ -809,7 +821,7 @@ def _exportar_tareas_excel(tareas: List[MoreAppTareaEnviada]):
                 (cliente.direccion if cliente else "") or "",
                 (cliente.comuna if cliente else "") or "",
                 tarea.proyecto_carga_administrativa or "",
-                ", ".join(tarea.destinatarios or []),
+                ", ".join(etiquetas_destinatarios(tarea.destinatarios or [])),
                 tarea.ubicacion or "",
                 tarea.fecha_creacion.strftime("%d/%m/%Y %H:%M") if tarea.fecha_creacion else "",
                 tarea.fecha_asignacion.strftime("%d/%m/%Y %H:%M") if tarea.fecha_asignacion else "",
@@ -898,6 +910,7 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
         tarea.grupos_nombres = _nombres_grupos_guardados(tarea.grupos)
         tarea.tiene_contenido = bool(tarea.integracion_id) or tarea.estado == MoreAppTareaEnviada.ESTADO_COMPLETADA
         tarea.puede_pdf = tarea.estado == MoreAppTareaEnviada.ESTADO_COMPLETADA
+    anotar_destinatarios_visibles(tareas)
 
     query_params = request.GET.copy()
     query_params.pop("page", None)
@@ -942,6 +955,76 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
     return render(request, "integraciones/moreapp_tareas.html", context)
 
 
+def _es_ajax(request) -> bool:
+    return (
+        (request.headers.get("X-Requested-With") or "") == "XMLHttpRequest"
+        or "application/json" in (request.headers.get("Accept") or "").lower()
+    )
+
+
+def _payload_lote_csv(
+    *,
+    message: str,
+    success: bool,
+    enviadas: int = 0,
+    fallidas: int = 0,
+    resultados: Optional[List[Dict[str, Any]]] = None,
+    error: str = "",
+    archivo_nombre: str = "",
+    truncado: bool = False,
+) -> Dict[str, Any]:
+    return {
+        "success": success,
+        "ok": success,
+        "message": message,
+        "exitosas": enviadas,
+        "fallidas": fallidas,
+        "resultados": resultados or [],
+        "error": error,
+        "archivo_nombre": archivo_nombre,
+        "truncado": truncado,
+    }
+
+
+def _respuesta_lote_csv(
+    request,
+    *,
+    message: str,
+    success: bool,
+    enviadas: int = 0,
+    fallidas: int = 0,
+    resultados: Optional[List[Dict[str, Any]]] = None,
+    error: str = "",
+    archivo_nombre: str = "",
+    truncado: bool = False,
+    status: int = 200,
+    context: Optional[Dict[str, Any]] = None,
+):
+    payload = _payload_lote_csv(
+        message=message,
+        success=success,
+        enviadas=enviadas,
+        fallidas=fallidas,
+        resultados=resultados,
+        error=error,
+        archivo_nombre=archivo_nombre,
+        truncado=truncado,
+    )
+    if _es_ajax(request):
+        return JsonResponse(payload, status=status)
+    if success and not fallidas:
+        messages.success(request, message)
+        return redirect("moreapp_tareas_list")
+    if enviadas:
+        messages.warning(request, message)
+    else:
+        messages.error(request, message)
+    ctx = dict(context or {})
+    ctx["resultados"] = resultados or []
+    ctx["archivo_nombre"] = archivo_nombre
+    return _render_tareas_list(request, ctx, lote_modal="csv")
+
+
 def _payload_lote_clientes(context: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "ok": not bool(context.get("error")),
@@ -957,6 +1040,8 @@ def _payload_lote_clientes(context: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "email": item.get("email") or "",
                 "nombre": item.get("nombre") or item.get("email") or "",
+                "tecnico_nombre": item.get("tecnico_nombre") or "",
+                "enlazado": bool(item.get("enlazado")),
             }
             for item in context.get("usuarios") or []
         ],
@@ -977,6 +1062,11 @@ def _payload_lote_clientes(context: Dict[str, Any]) -> Dict[str, Any]:
             }
             for cliente in context.get("clientes") or []
         ],
+        "tipos_trabajo": [
+            {"id": code, "name": label}
+            for code, label in getattr(MoreAppTareaEnviada, "TIPO_TRABAJO_CHOICES", ())
+        ],
+        "sugerencias_proyecto": list(context.get("sugerencias_proyecto") or _sugerencias_proyecto()),
     }
 
 
@@ -1214,6 +1304,7 @@ def tarea_revisar_view(request, pk: int):
 @require_GET
 @admin_or_administrativo
 def tarea_detalle_view(request, pk: int):
+    from .moreapp_respuestas import contar_archivos, respuestas_desde_registro
     from .moreapp_tareas_pdf import campos_rellenados_tarea, tarea_permite_pdf
 
     tarea = get_object_or_404(_qs_tareas_con_relaciones(), pk=pk)
@@ -1233,6 +1324,7 @@ def tarea_detalle_view(request, pk: int):
             except (MoreAppApiConfigError, MoreAppApiError):
                 pass
     tarea.grupos_nombres = _nombres_grupos_guardados(tarea.grupos)
+    anotar_destinatarios_visibles([tarea])
     registro = tarea.integracion
     error_visible = _error_visible_tarea(tarea.error)
     submission_id = ""
@@ -1240,6 +1332,12 @@ def tarea_detalle_view(request, pk: int):
         submission_id = str(registro.moreapp_submission_id or "").strip()
         if len(submission_id) < 8:
             submission_id = ""
+    respuestas = respuestas_desde_registro(registro) if registro is not None else []
+    if not respuestas:
+        respuestas = [
+            {"key": item["label"], "label": item["label"], "text": item["text"], "files": [], "children": [], "rows": [], "wide": False}
+            for item in campos_rellenados_tarea(tarea)
+        ]
     return render(
         request,
         "integraciones/moreapp_tarea_detalle.html",
@@ -1247,6 +1345,8 @@ def tarea_detalle_view(request, pk: int):
             "tarea": tarea,
             "error_visible": error_visible,
             "campos_rellenados": campos_rellenados_tarea(tarea),
+            "respuestas": respuestas,
+            "fotos_count": contar_archivos(respuestas),
             "puede_pdf": tarea_permite_pdf(tarea),
             "registro": registro,
             "submission_id": submission_id,
@@ -1319,18 +1419,72 @@ def tarea_observaciones_view(request, pk: int):
     return redirect("moreapp_tarea_detalle", pk=tarea.pk)
 
 
+def _respuesta_eliminar(request, *, message: str, ids: List[int], success: bool = True, status: int = 200):
+    if _es_ajax(request):
+        return JsonResponse(
+            {"success": success, "ok": success, "message": message, "ids": ids},
+            status=status,
+        )
+    if success:
+        messages.success(request, message)
+    else:
+        messages.warning(request, message)
+    return redirect("moreapp_tareas_list")
+
+
 @require_POST
 @admin_or_administrativo
 def tarea_eliminar_view(request, pk: int):
     tarea = get_object_or_404(MoreAppTareaEnviada, pk=pk)
     numero = tarea.pk
     tarea.delete()
-    messages.success(
+    return _respuesta_eliminar(
         request,
-        "Se eliminó la tarea #%s de la intranet. Si ya estaba en MoreApp, revócala allí."
-        % numero,
+        message="Se eliminó la tarea #%s de la intranet. Si ya estaba en MoreApp, revócala allí." % numero,
+        ids=[numero],
     )
-    return redirect("moreapp_tareas_list")
+
+
+@require_POST
+@admin_or_administrativo
+def tareas_eliminar_masivo_view(request):
+    ids: List[int] = []
+    for raw in request.POST.getlist("ids"):
+        try:
+            pk = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if pk > 0:
+            ids.append(pk)
+    ids = list(dict.fromkeys(ids))
+    if not ids:
+        return _respuesta_eliminar(
+            request,
+            message="Selecciona al menos una tarea para eliminar.",
+            ids=[],
+            success=False,
+            status=400,
+        )
+    existentes = list(
+        MoreAppTareaEnviada.objects.filter(pk__in=ids).values_list("pk", flat=True)
+    )
+    if not existentes:
+        return _respuesta_eliminar(
+            request,
+            message="No se encontraron las tareas seleccionadas.",
+            ids=[],
+            success=False,
+            status=404,
+        )
+    MoreAppTareaEnviada.objects.filter(pk__in=existentes).delete()
+    return _respuesta_eliminar(
+        request,
+        message=(
+            "Se eliminaron %s tarea(s) de la intranet. Si ya estaban en MoreApp, revócalas allí."
+            % len(existentes)
+        ),
+        ids=existentes,
+    )
 
 
 @require_GET
@@ -1384,10 +1538,25 @@ def tarea_crear_view(request):
         context["grupos"] = grupos
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
+        if request.method == "POST" and _es_ajax(request):
+            return JsonResponse(
+                {"success": False, "ok": False, "message": str(exc), "error": str(exc)},
+                status=400,
+            )
         messages.error(request, str(exc))
         return render(request, "integraciones/moreapp_tarea_crear.html", context)
 
     if request.method != "POST":
+        return render(request, "integraciones/moreapp_tarea_crear.html", context)
+
+    def _fail_crear(msg: str, status: int = 400):
+        context["error"] = msg
+        if _es_ajax(request):
+            return JsonResponse(
+                {"success": False, "ok": False, "message": msg, "error": msg},
+                status=status,
+            )
+        messages.error(request, msg)
         return render(request, "integraciones/moreapp_tarea_crear.html", context)
 
     form_id = context["form_id"]
@@ -1420,17 +1589,13 @@ def tarea_crear_view(request):
 
     elegido = next((item for item in context["formularios"] if str(item.get("id") or "") == form_id), None)
     if not form_id:
-        messages.error(request, "Elige el formulario que hay que llenar.")
-        return render(request, "integraciones/moreapp_tarea_crear.html", context)
+        return _fail_crear("Elige el formulario que hay que llenar.")
     if not elegido or not _tiene_version_publicada(elegido):
-        messages.error(
-            request,
-            "Ese formulario no tiene una versión publicada en MoreApp. Elige uno publicado o publícalo primero.",
+        return _fail_crear(
+            "Ese formulario no tiene una versión publicada en MoreApp. Elige uno publicado o publícalo primero."
         )
-        return render(request, "integraciones/moreapp_tarea_crear.html", context)
     if not recipients and not groups:
-        messages.error(request, "Asigna la tarea a uno o varios usuarios, o a un grupo.")
-        return render(request, "integraciones/moreapp_tarea_crear.html", context)
+        return _fail_crear("Asigna la tarea a uno o varios usuarios, o a un grupo.")
     group_emails = _emails_de_grupos(context["usuarios"], groups)
     all_recipients: List[str] = []
     seen_emails = set()
@@ -1439,18 +1604,15 @@ def tarea_crear_view(request):
             seen_emails.add(email)
             all_recipients.append(email)
     if not all_recipients:
-        messages.error(request, "El grupo elegido no tiene usuarios MoreApp activos con correo.")
-        return render(request, "integraciones/moreapp_tarea_crear.html", context)
+        return _fail_crear("El grupo elegido no tiene usuarios MoreApp activos con correo.")
     titulo = (context.get("titulo") or "").strip()
     if not mensaje and titulo:
         mensaje = titulo[:500]
         context["mensaje"] = mensaje
     if not mensaje:
-        messages.error(request, "Escribe un título o un mensaje corto para quien reciba la tarea.")
-        return render(request, "integraciones/moreapp_tarea_crear.html", context)
+        return _fail_crear("Escribe un título o un mensaje corto para quien reciba la tarea.")
     if envio == "SCHEDULED" and programada is None:
-        messages.error(request, "Indica la fecha y hora programadas de envío.")
-        return render(request, "integraciones/moreapp_tarea_crear.html", context)
+        return _fail_crear("Indica la fecha y hora programadas de envío.")
 
     cliente = _cliente_por_id(context.get("cliente_id"))
     tarea, error = _enviar_tarea_registrada(
@@ -1475,13 +1637,21 @@ def tarea_crear_view(request):
         observaciones=context.get("observaciones") or "",
     )
     if error:
-        messages.error(request, error)
-        return render(request, "integraciones/moreapp_tarea_crear.html", context)
-
-    messages.success(
-        request,
-        "Tarea creada. MoreApp avisa dentro de la app (no por correo) y aparece en Tareas del celular o tablet.",
+        return _fail_crear(error)
+    ok_msg = (
+        "Tarea creada. MoreApp avisa dentro de la app (no por correo) y aparece en Tareas del celular o tablet."
     )
+    if _es_ajax(request):
+        return JsonResponse(
+            {
+                "success": True,
+                "ok": True,
+                "message": ok_msg,
+                "id": tarea.pk,
+                "redirect": reverse("moreapp_tareas_list"),
+            }
+        )
+    messages.success(request, ok_msg)
     return redirect("moreapp_tareas_list")
 
 
@@ -1504,29 +1674,48 @@ def tarea_lote_csv_view(request):
     context = _contexto_destinatarios(request)
     context["archivo_nombre"] = ""
     if context["error"]:
-        return _render_tareas_list(request, context, lote_modal="csv")
+        return _respuesta_lote_csv(
+            request,
+            message=context["error"],
+            success=False,
+            error=context["error"],
+            status=400,
+            context=context,
+        )
 
     archivo = request.FILES.get("archivo")
     if not archivo:
-        messages.error(request, "Sube un archivo CSV o Excel con las columnas del lote.")
-        return _render_tareas_list(request, context, lote_modal="csv")
+        return _respuesta_lote_csv(
+            request,
+            message="Sube un archivo CSV o Excel con las columnas del lote.",
+            success=False,
+            status=400,
+            context=context,
+        )
 
     context["archivo_nombre"] = str(getattr(archivo, "name", "") or "")
     try:
         filas, total_filas = parse_lote_archivo(context["archivo_nombre"], archivo.read())
     except ValueError as exc:
-        messages.error(request, str(exc))
-        return _render_tareas_list(request, context, lote_modal="csv")
+        return _respuesta_lote_csv(
+            request,
+            message=str(exc),
+            success=False,
+            archivo_nombre=context["archivo_nombre"],
+            status=400,
+            context=context,
+        )
 
     if not filas:
-        messages.error(request, "El archivo no tiene filas para enviar.")
-        return _render_tareas_list(request, context, lote_modal="csv")
-    if total_filas > MAX_LOTE:
-        messages.warning(
+        return _respuesta_lote_csv(
             request,
-            "El archivo tiene %s filas. Solo se enviarán las primeras %s."
-            % (total_filas, MAX_LOTE),
+            message="El archivo no tiene filas para enviar.",
+            success=False,
+            archivo_nombre=context["archivo_nombre"],
+            status=400,
+            context=context,
         )
+    truncado = total_filas > MAX_LOTE
 
     campos_cache: Dict[str, List[Dict[str, Any]]] = {}
     ds_cache: Dict[str, List[Dict[str, Any]]] = {}
@@ -1610,16 +1799,43 @@ def tarea_lote_csv_view(request):
     context["resultados"] = resultados
     fallidas = len(resultados) - enviadas
     if enviadas and not fallidas:
-        messages.success(request, "Se enviaron %s tareas a MoreApp." % enviadas)
-        return redirect("moreapp_tareas_list")
-    if enviadas:
-        messages.warning(
+        mensaje = "Se enviaron %s tareas a MoreApp." % enviadas
+        if truncado:
+            mensaje += " El archivo tenía %s filas; solo se procesaron las primeras %s." % (
+                total_filas,
+                MAX_LOTE,
+            )
+        return _respuesta_lote_csv(
             request,
-            "Se enviaron %s tareas. %s filas quedaron con error." % (enviadas, fallidas),
+            message=mensaje,
+            success=True,
+            enviadas=enviadas,
+            fallidas=0,
+            resultados=resultados,
+            archivo_nombre=context["archivo_nombre"],
+            truncado=truncado,
+            context=context,
         )
+    if enviadas:
+        mensaje = "Se enviaron %s tareas. %s filas quedaron con error." % (enviadas, fallidas)
     else:
-        messages.error(request, "No se pudo enviar ninguna tarea. Revisa el detalle del lote.")
-    return _render_tareas_list(request, context, lote_modal="csv")
+        mensaje = "No se pudo enviar ninguna tarea. Revisa el detalle del lote."
+    if truncado:
+        mensaje += " El archivo tenía %s filas; solo se procesaron las primeras %s." % (
+            total_filas,
+            MAX_LOTE,
+        )
+    return _respuesta_lote_csv(
+        request,
+        message=mensaje,
+        success=False,
+        enviadas=enviadas,
+        fallidas=fallidas,
+        resultados=resultados,
+        archivo_nombre=context["archivo_nombre"],
+        truncado=truncado,
+        context=context,
+    )
 
 
 def _clientes_lote(request) -> Tuple[List[Cliente], int]:

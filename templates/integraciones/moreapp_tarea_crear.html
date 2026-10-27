@@ -94,18 +94,20 @@
         <p class="small text-muted">Asigna a uno o varios usuarios, o a un grupo.</p>
         <div class="row g-3">
           <div class="col-lg-7">
-            <div class="fw-semibold small mb-2">Usuarios MoreApp</div>
+            <div class="fw-semibold small mb-2">Técnicos</div>
             <div class="delco-tarea-lista">
               {% for u in usuarios %}
               <label class="d-flex gap-2 align-items-start py-1">
                 <input class="form-check-input mt-1" type="checkbox" name="usuarios" value="{{ u.email }}" {% if u.email in usuarios_sel %}checked{% endif %}>
                 <span>
                   {{ u.nombre|default:u.email }}
+                  {% if not u.enlazado %}
                   <div class="small text-muted">{{ u.email }}</div>
+                  {% endif %}
                 </span>
               </label>
               {% empty %}
-              <p class="text-muted mb-0">No hay usuarios MoreApp activos.</p>
+              <p class="text-muted mb-0">No hay cuentas MoreApp activas.</p>
               {% endfor %}
             </div>
           </div>

@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import (
+    MoreAppCuentaTecnico,
     MoreAppFormularioAsignado,
     MoreAppFormularioOculto,
     MoreAppFuenteFila,
@@ -46,6 +47,13 @@ class MoreAppFuenteFilaAdmin(admin.ModelAdmin):
 class MoreAppGrupoAliasAdmin(admin.ModelAdmin):
     list_display = ("nombre", "group_id", "actualizado_por", "fecha_actualizacion")
     search_fields = ("nombre", "group_id")
+    readonly_fields = ("fecha_actualizacion",)
+
+
+@admin.register(MoreAppCuentaTecnico)
+class MoreAppCuentaTecnicoAdmin(admin.ModelAdmin):
+    list_display = ("email", "tecnico_nombre", "tecnico_entry_id", "moreapp_nombre", "actualizado_por", "fecha_actualizacion")
+    search_fields = ("email", "moreapp_nombre", "tecnico_nombre", "tecnico_entry_id")
     readonly_fields = ("fecha_actualizacion",)
 
 

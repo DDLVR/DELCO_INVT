@@ -30,6 +30,7 @@ from .moreapp_api import (
 from .moreapp_catalogo_views import _extract_version_fields, _fold_text, _form_row, _pretty
 from .moreapp_fechas import format_moreapp_when, iso_day_moreapp
 from .moreapp_http import assert_safe_id
+from .moreapp_respuestas import campo_tiene_valor, contar_archivos, respuestas_desde_data
 
 _PAGE_SIZE = 20
 _EXPORT_PAGE_SIZE = 50
@@ -703,9 +704,10 @@ def registro_detail_view(request, form_id: str, submission_id: str):
         info = item.get("info") if isinstance(item.get("info"), dict) else {}
         usuarios = _usuarios_por_email([info.get("userId") or "", info.get("email") or "", info.get("userName") or ""])
         created, tecnico, status, cliente = _info_meta(item, usuarios)
-        campos = _detail_fields(item, labels)
-        campos_con_valor = [c for c in campos if c.get("text") or c.get("files")]
-        fotos_count = sum(len(c.get("files") or []) for c in campos)
+        data = item.get("data") if isinstance(item.get("data"), dict) else {}
+        campos = respuestas_desde_data(data, labels=labels, incluir_vacios=True)
+        campos_con_valor = [c for c in campos if campo_tiene_valor(c)]
+        fotos_count = contar_archivos(campos)
         context.update(
             {
                 "formulario": formulario_row,
