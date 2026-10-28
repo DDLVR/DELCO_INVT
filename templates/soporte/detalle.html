@@ -3,20 +3,31 @@
 {% block title %}Ticket #{{ ticket.id }}{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 900px;">
-  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-    <div>
-      <a href="{% url 'soporte_list' %}" class="btn btn-sm btn-outline-secondary mb-2">← Lista</a>
-      <h1 class="h3 mb-1">Ticket #{{ ticket.id }} — {{ ticket.titulo }}</h1>
-      <div class="d-flex flex-wrap gap-2">
-        <span class="badge bg-secondary">{{ ticket.get_categoria_display }}</span>
-        <span class="badge {% if ticket.prioridad == 'CRITICA' %}bg-danger{% elif ticket.prioridad == 'ALTA' %}bg-warning text-dark{% elif ticket.prioridad == 'MEDIA' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
-          {{ ticket.get_prioridad_display }}
-        </span>
-        <span class="badge bg-dark">{{ ticket.get_estado_display }}</span>
+<div class="container-fluid py-4 delco-catalogo" style="max-width: 960px;">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Soporte</p>
+        <h1 class="h3 mb-1">Ticket #{{ ticket.id }} — {{ ticket.titulo }}</h1>
+        <div class="d-flex flex-wrap gap-2">
+          <span class="badge bg-secondary">{{ ticket.get_categoria_display }}</span>
+          <span class="badge {% if ticket.prioridad == 'CRITICA' %}bg-danger{% elif ticket.prioridad == 'ALTA' %}bg-warning text-dark{% elif ticket.prioridad == 'MEDIA' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
+            {{ ticket.get_prioridad_display }}
+          </span>
+          <span class="badge bg-dark">{{ ticket.get_estado_display }}</span>
+        </div>
+      </div>
+      <div class="delco-action-bar">
+        <a href="{% url 'soporte_crear' %}" class="delco-action-btn is-add">
+          <span class="delco-action-btn-icon"><i class="bi bi-plus-lg"></i></span>
+          Nuevo
+        </a>
+        <a href="{% url 'soporte_list' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+          Lista
+        </a>
       </div>
     </div>
-    <a href="{% url 'soporte_crear' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nuevo</a>
   </div>
 
   <div class="card delco-panel-card shadow-sm mb-3">

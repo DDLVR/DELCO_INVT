@@ -3,18 +3,26 @@
 {% block title %}{{ formulario.name|default:"Formulario MoreApp" }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="mb-3 d-flex flex-wrap gap-2">
-    <a href="{% url 'moreapp_formularios_list' %}" class="btn btn-outline-secondary btn-sm">&larr; Volver a formularios asignados</a>
-    <a href="{% url 'moreapp_api_form_registros' form_id %}" class="btn btn-primary btn-sm">Ver registros</a>
-  </div>
-
-  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-    <div>
-      <h1 class="h3 mb-1">{{ formulario.name|default:"Formulario" }}</h1>
-      <p class="text-muted mb-0">Plantilla de terreno · {{ formulario.status|default:"—" }}</p>
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <div class="delco-action-bar mb-2">
+          <a href="{% url 'moreapp_formularios_list' %}" class="delco-action-btn is-help">
+            <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+            Volver
+          </a>
+          <a href="{% url 'moreapp_api_form_registros' form_id %}" class="delco-action-btn is-add">
+            <span class="delco-action-btn-icon"><i class="bi bi-collection"></i></span>
+            Registros
+          </a>
+        </div>
+        <p class="delco-catalogo-kicker mb-1">Formulario MoreApp</p>
+        <h1 class="h3 mb-1">{{ formulario.name|default:"Formulario" }}</h1>
+        <p class="text-muted mb-0">Plantilla de terreno · {{ formulario.status|default:"—" }}</p>
+      </div>
+      <span class="badge rounded-pill bg-{{ formulario.status_badge|default:'secondary' }} fs-6">{{ formulario.status|default:"—" }}</span>
     </div>
-    <span class="badge bg-{{ formulario.status_badge|default:'secondary' }} fs-6">{{ formulario.status|default:"—" }}</span>
   </div>
 
   {% if error %}
@@ -23,35 +31,47 @@
 
   <div class="row g-2 mb-3">
     <div class="col-6 col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Campos</div>
-        <div class="fs-4 fw-semibold">{{ campos|length }}</div>
-      </div></div>
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-input-cursor-text"></i></span>
+        <div>
+          <div class="text-muted small">Campos</div>
+          <div class="fs-4 fw-semibold">{{ campos|length }}</div>
+        </div>
+      </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Obligatorios</div>
-        <div class="fs-4 fw-semibold">{{ campos_requeridos }}</div>
-      </div></div>
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-warn"><i class="bi bi-asterisk"></i></span>
+        <div>
+          <div class="text-muted small">Obligatorios</div>
+          <div class="fs-4 fw-semibold">{{ campos_requeridos }}</div>
+        </div>
+      </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Fotos</div>
-        <div class="fs-4 fw-semibold">{{ fotos }}</div>
-      </div></div>
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-info"><i class="bi bi-camera"></i></span>
+        <div>
+          <div class="text-muted small">Fotos</div>
+          <div class="fs-4 fw-semibold">{{ fotos }}</div>
+        </div>
+      </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Firmas</div>
-        <div class="fs-4 fw-semibold">{{ firmas }}</div>
-      </div></div>
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-pen"></i></span>
+        <div>
+          <div class="text-muted small">Firmas</div>
+          <div class="fs-4 fw-semibold">{{ firmas }}</div>
+        </div>
+      </div>
     </div>
   </div>
 
   <div class="row g-3">
     <div class="col-lg-4">
-      <div class="card shadow-sm delco-panel-card h-100">
-        <div class="card-header fw-semibold">Versiones</div>
+      <div class="delco-catalogo-panel h-100">
+        <div class="delco-catalogo-panel-head">Versiones</div>
         <div class="table-responsive">
           <table class="table table-sm mb-0">
             <thead>
@@ -81,8 +101,8 @@
       </div>
     </div>
     <div class="col-lg-8">
-      <div class="card shadow-sm delco-panel-card h-100">
-        <div class="card-header fw-semibold">Campos que llena el técnico</div>
+      <div class="delco-catalogo-panel h-100">
+        <div class="delco-catalogo-panel-head">Campos que llena el técnico</div>
         <div class="table-responsive">
           <table class="table table-sm table-hover mb-0">
             <thead>

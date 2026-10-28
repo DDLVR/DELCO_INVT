@@ -1162,6 +1162,171 @@ class MoreAppApiModulosTests(TestCase):
         MOREAPP_API_KEY='test-key',
         MOREAPP_CUSTOMER_ID='123',
     )
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_administrativo_solo_asigna_formularios_propios(self, mocked_forms, mocked_users):
+        from integraciones.models import MoreAppFormularioAsignado, MoreAppTareaEnviada
+
+        mocked_forms.return_value = [
+            {
+                'id': 'abc123abc123abc123abc123',
+                'name': 'Instalacion',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+            },
+            {
+                'id': 'def123def123def123def123',
+                'name': 'Retiro',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': 'ver456ver456ver456ver456'},
+            },
+        ]
+        mocked_users.return_value = [
+            {'id': 'u1', 'emailAddress': 'campo@more.app', 'disabled': False}
+        ]
+        adminis = Usuario.objects.create_user(
+            rut='67676767-6',
+            email='adm-tareas@delco.cl',
+            password=self.password,
+            nombre='Adm',
+            apellido='Tareas',
+            nombre_interno='adm_tareas',
+            rol='ADMINISTRATIVO',
+            is_active=True,
+        )
+        MoreAppFormularioAsignado.objects.create(
+            usuario=adminis,
+            form_id='abc123abc123abc123abc123',
+            form_name='Instalacion',
+        )
+        self.client.login(username=adminis.rut, password=self.password)
+        payload = self.client.get(reverse('moreapp_tareas_lote_clientes'), {'json': '1'}).json()
+        nombres = [item['name'] for item in payload['formularios']]
+        self.assertIn('Instalacion', nombres)
+        self.assertNotIn('Retiro', nombres)
+
+        blocked = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': 'def123def123def123def123',
+                'mensaje': 'No debe salir',
+                'envio': 'IMMEDIATE',
+                'usuarios': ['campo@more.app'],
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(blocked.status_code, 400)
+        self.assertIn('asignado', blocked.json()['error'].lower())
+        self.assertFalse(MoreAppTareaEnviada.objects.exists())
+
+        campos = self.client.get(
+            reverse('moreapp_tarea_campos', args=['def123def123def123def123'])
+        )
+        self.assertEqual(campos.status_code, 403)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.create_task')
+    @mock.patch('integraciones.moreapp_tareas_views.get_form')
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_administrativo_crea_tarea_en_formulario_asignado(
+        self, mocked_forms, mocked_users, mocked_get_form, mocked_create
+    ):
+        from integraciones.models import MoreAppFormularioAsignado, MoreAppTareaEnviada
+
+        form = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Instalacion',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_forms.return_value = [
+            form,
+            {
+                'id': 'def123def123def123def123',
+                'name': 'Retiro',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': 'ver456ver456ver456ver456'},
+            },
+        ]
+        mocked_users.return_value = [
+            {'id': 'u1', 'emailAddress': 'campo@more.app', 'disabled': False}
+        ]
+        mocked_get_form.return_value = form
+        mocked_create.return_value = {'id': 'task-asig-1'}
+        adminis = Usuario.objects.create_user(
+            rut='68686868-6',
+            email='adm-asig@delco.cl',
+            password=self.password,
+            nombre='Adm',
+            apellido='Asig',
+            nombre_interno='adm_asig',
+            rol='ADMINISTRATIVO',
+            is_active=True,
+        )
+        MoreAppFormularioAsignado.objects.create(
+            usuario=adminis,
+            form_id='abc123abc123abc123abc123',
+            form_name='Instalacion',
+        )
+        self.client.login(username=adminis.rut, password=self.password)
+        resp = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': 'abc123abc123abc123abc123',
+                'mensaje': 'Visita asignada',
+                'envio': 'IMMEDIATE',
+                'usuarios': ['campo@more.app'],
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertTrue(body.get('ok') or body.get('success'))
+        mocked_create.assert_called_once()
+        self.assertTrue(MoreAppTareaEnviada.objects.filter(mensaje='Visita asignada').exists())
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_admin_ve_todos_los_formularios_en_tareas(self, mocked_forms, mocked_users):
+        mocked_forms.return_value = [
+            {
+                'id': 'abc123abc123abc123abc123',
+                'name': 'Instalacion',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+            },
+            {
+                'id': 'def123def123def123def123',
+                'name': 'Retiro',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': 'ver456ver456ver456ver456'},
+            },
+        ]
+        mocked_users.return_value = [
+            {'id': 'u1', 'emailAddress': 'campo@more.app', 'disabled': False}
+        ]
+        self.client.login(username=self.admin.rut, password=self.password)
+        payload = self.client.get(reverse('moreapp_tareas_lote_clientes'), {'json': '1'}).json()
+        nombres = [item['name'] for item in payload['formularios']]
+        self.assertEqual(nombres, ['Instalacion', 'Retiro'])
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
     @mock.patch('integraciones.moreapp_tareas_views.group_names_by_id')
     @mock.patch('integraciones.moreapp_tareas_views.list_users')
     @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
@@ -1303,7 +1468,7 @@ class MoreAppApiModulosTests(TestCase):
         self.assertTrue(tarea.eventos.filter(tipo='CREADA').exists())
         self.assertTrue(tarea.eventos.filter(tipo='ASIGNADA').exists())
         self.assertTrue(tarea.alertas.filter(tipo='CREACION', usuario=self.admin, broadcast=False).exists())
-        self.assertTrue(tarea.alertas.filter(tipo='CREACION', broadcast=True).exists())
+        self.assertFalse(tarea.alertas.filter(tipo='CREACION', broadcast=True).exists())
         listing = self.client.get(reverse('moreapp_tareas_list'))
         self.assertEqual(listing.status_code, 200)
         list_body = listing.content.decode('utf-8')
@@ -2016,7 +2181,14 @@ class MoreAppTareaCicloTests(TestCase):
         self.assertEqual(otra.estado, MoreAppTareaEnviada.ESTADO_ASIGNADA)
         self.assertEqual(tarea.integracion_id, registro.pk)
         self.assertTrue(tarea.eventos.filter(tipo='COMPLETADA').exists())
-        self.assertTrue(tarea.alertas.filter(tipo=MoreAppTareaAlerta.TIPO_COMPLETADO, broadcast=True).exists())
+        self.assertTrue(
+            tarea.alertas.filter(
+                tipo=MoreAppTareaAlerta.TIPO_COMPLETADO,
+                usuario=self.admin,
+                broadcast=False,
+            ).exists()
+        )
+        self.assertFalse(tarea.alertas.filter(tipo=MoreAppTareaAlerta.TIPO_COMPLETADO, broadcast=True).exists())
         self.assertIsNone(intentar_completar_por_informe(registro))
 
     def test_informe_sin_match_no_altera_tareas(self):
@@ -2139,7 +2311,7 @@ class MoreAppTareaCicloTests(TestCase):
         tarea.refresh_from_db()
         self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_COMPLETADA)
 
-    def test_navbar_creador_y_broadcast(self):
+    def test_navbar_alerta_personal_del_creador(self):
         from web.moreapp_avisos import construir_aviso_moreapp
         from django.test import RequestFactory
         from django.contrib.sessions.middleware import SessionMiddleware
@@ -2159,20 +2331,94 @@ class MoreAppTareaCicloTests(TestCase):
         aviso_tec = _aviso(self.tecnico)
         self.assertGreaterEqual(aviso_creador['tareas_creacion'], 1)
         self.assertGreaterEqual(aviso_creador['tareas_alertas'], 1)
-        self.assertGreaterEqual(aviso_admin['tareas_creacion'], 1)
-        self.assertGreaterEqual(aviso_admin['tareas_alertas'], 1)
+        self.assertEqual(aviso_admin['tareas_creacion'], 0)
+        self.assertEqual(aviso_admin['tareas_alertas'], 0)
         self.assertEqual(aviso_tec['tareas_alertas'], 0)
 
-    def test_abrir_listado_marca_alertas_leidas(self):
+    def test_abrir_listado_no_marca_alertas_leidas(self):
         from integraciones.models import MoreAppTareaAlerta
 
         self._tarea()
         self.assertTrue(MoreAppTareaAlerta.objects.filter(leida_en__isnull=True).exists())
         self.client.login(username=self.admin.rut, password=self.password)
-        resp = self.client.get(reverse('moreapp_tareas_list'))
+        resp = self.client.get(reverse('moreapp_notificaciones'))
         self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, 'Asignada')
-        self.assertFalse(MoreAppTareaAlerta.objects.filter(leida_en__isnull=True).exists())
+        data = resp.json()
+        self.assertTrue(data.get('ok'))
+        self.assertGreaterEqual(data.get('tareas_alertas') or 0, 1)
+        self.assertTrue(MoreAppTareaAlerta.objects.filter(leida_en__isnull=True).exists())
+
+    def test_completado_notifica_al_administrativo_asignador(self):
+        from integraciones.models import MoreAppTareaAlerta, MoreAppTareaEvento
+        from integraciones.moreapp_tareas_ciclo import completar_tarea
+
+        tarea = self._tarea(creado_por=self.administrativo, task_id='task-adm-1')
+        completar_tarea(tarea, origen=MoreAppTareaEvento.ORIGEN_INTRANET)
+        self.assertTrue(
+            tarea.alertas.filter(
+                tipo=MoreAppTareaAlerta.TIPO_COMPLETADO,
+                usuario=self.administrativo,
+                broadcast=False,
+                leida_en__isnull=True,
+            ).exists()
+        )
+        self.assertFalse(
+            tarea.alertas.filter(tipo=MoreAppTareaAlerta.TIPO_COMPLETADO, usuario=self.admin).exists()
+        )
+
+    def test_inbox_json_listar_y_marcar(self):
+        from integraciones.models import MoreAppTareaAlerta, MoreAppTareaEvento
+        from integraciones.moreapp_tareas_ciclo import completar_tarea
+
+        tarea = self._tarea(creado_por=self.administrativo)
+        completar_tarea(tarea, origen=MoreAppTareaEvento.ORIGEN_INTRANET)
+        alerta = MoreAppTareaAlerta.objects.get(
+            tarea=tarea,
+            tipo=MoreAppTareaAlerta.TIPO_COMPLETADO,
+            usuario=self.administrativo,
+        )
+        self.client.login(username=self.administrativo.rut, password=self.password)
+        listing = self.client.get(reverse('moreapp_notificaciones'))
+        self.assertEqual(listing.status_code, 200)
+        data = listing.json()
+        self.assertTrue(data.get('ok'))
+        self.assertGreaterEqual(data.get('tareas_completado') or 0, 1)
+        ids = [item['id'] for item in data.get('items') or []]
+        self.assertIn(alerta.pk, ids)
+        leer = self.client.post(
+            reverse('moreapp_notificaciones_leer'),
+            data={'id': alerta.pk},
+            content_type='application/json',
+        )
+        self.assertEqual(leer.status_code, 200)
+        alerta.refresh_from_db()
+        self.assertIsNotNone(alerta.leida_en)
+        self.assertGreaterEqual(len(leer.json().get('items') or []), 1)
+        todas = self.client.post(
+            reverse('moreapp_notificaciones_leer'),
+            data={'todas': 1},
+            content_type='application/json',
+        )
+        self.assertEqual(todas.status_code, 200)
+        self.assertEqual(todas.json().get('tareas_alertas'), 0)
+
+    def test_inbox_no_duplica_personal_y_broadcast(self):
+        from integraciones.models import MoreAppTareaAlerta
+
+        tarea = self._tarea()
+        MoreAppTareaAlerta.objects.create(
+            tarea=tarea,
+            tipo=MoreAppTareaAlerta.TIPO_CREACION,
+            broadcast=True,
+        )
+        self.client.login(username=self.admin.rut, password=self.password)
+        data = self.client.get(reverse('moreapp_notificaciones')).json()
+        mismas = [
+            item
+            for item in data.get('items') or []
+            if item.get('tarea_id') == tarea.pk and item.get('tipo') == 'CREACION'
+        ]
+        self.assertEqual(len(mismas), 1)
 
     def test_listado_tiene_formato_terminados_y_acciones(self):
         tarea = self._tarea()

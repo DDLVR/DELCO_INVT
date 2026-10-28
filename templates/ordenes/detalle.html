@@ -4,22 +4,24 @@
 {% block title %}Orden #{{ orden.id }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-5">
-    <!-- Encabezado -->
-    <div class="row mb-4">
-        <div class="col-12 d-flex justify-content-between align-items-center">
-            <h1>
-                <i class="bi bi-clipboard-check"></i> Orden #{{ orden.id }}
-                {% badge_ot orden.estado orden.get_estado_display %}
-            </h1>
-            <div class="d-flex flex-wrap gap-2">
+<div class="container-fluid py-4 delco-catalogo">
+    <div class="delco-catalogo-hero mb-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <p class="delco-catalogo-kicker mb-1">Órdenes</p>
+                <h1 class="h3 mb-1">Orden #{{ orden.id }}</h1>
+                <div class="mt-1">{% badge_ot orden.estado orden.get_estado_display %}</div>
+            </div>
+            <div class="delco-action-bar">
                 {% if puede_descargar_pdf_completado %}
-                <a href="{% url 'orden_pdf_completado' orden.id %}" class="btn btn-outline-danger">
-                    <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
+                <a href="{% url 'orden_pdf_completado' orden.id %}" class="delco-action-btn is-danger">
+                    <span class="delco-action-btn-icon"><i class="bi bi-file-earmark-pdf"></i></span>
+                    PDF
                 </a>
                 {% endif %}
-                <a href="{% if volver_url %}{{ volver_url }}{% else %}{% url 'ordenes_list' %}{% endif %}" class="btn btn-secondary">
-                    <i class="bi bi-arrow-left"></i> {{ volver_label|default:"Volver" }}
+                <a href="{% if volver_url %}{{ volver_url }}{% else %}{% url 'ordenes_list' %}{% endif %}" class="delco-action-btn is-help">
+                    <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+                    {{ volver_label|default:"Volver" }}
                 </a>
             </div>
         </div>

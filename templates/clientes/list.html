@@ -4,61 +4,64 @@
 {% block title %}Gestion de Clientes{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="row mb-4">
-    <div class="col-12">
-      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-        <div>
-          <h1>Gestión de Clientes</h1>
-          <p class="text-muted mb-0">
-            Administra la ficha de cada cliente: datos de instalación, medidor, conexión y estado operativo.
-            <span class="mx-2">|</span>
-            Clientes: <strong id="totalClientesVisibles">{{ total_clientes }}</strong>
-            <span class="mx-2">|</span>
-            <span class="{% if total_numeros_duplicados %}text-danger fw-semibold{% else %}text-muted{% endif %}">
-              <i class="bi bi-exclamation-triangle{% if not total_numeros_duplicados %} d-none{% endif %}"></i>
-              Duplicados: <strong id="totalClientesDuplicados">{{ total_numeros_duplicados }}</strong>
-            </span>
-          </p>
-        </div>
-        <div class="d-flex gap-2 flex-wrap">
-          {% if puede_editar %}
-            <a href="{% url 'cliente_crear' %}" class="btn btn-primary">
-              <i class="bi bi-plus-circle"></i> Nuevo Cliente
-            </a>
-            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarClientes">
-              <i class="bi bi-upload me-1" aria-hidden="true"></i>Importar clientes
-            </button>
-            <button type="button" class="btn btn-danger" id="btnEliminarSeleccionadosClientes">
-              <i class="bi bi-trash"></i> Eliminar seleccionados
-            </button>
-          {% endif %}
-          <div class="btn-group">
-            <button type="button" class="btn btn-info dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-              <i class="bi bi-download"></i> Exportar
-            </button>
-            <ul class="dropdown-menu dropdown-menu-end" style="min-width: 320px;">
-              <li>
-                <a class="dropdown-item py-2 text-wrap" href="{% url 'clientes_exportar' %}?{{ query_string }}">
-                  <div><i class="bi bi-funnel me-1"></i><strong>Solo los filtrados</strong></div>
-                  <small class="text-muted">Los clientes que ves en la lista, con los filtros aplicados. Formato reimportable.</small>
-                </a>
-              </li>
-              <li>
-                <a class="dropdown-item py-2 text-wrap" href="{% url 'clientes_exportar' %}?modo=padron">
-                  <div><i class="bi bi-people me-1"></i><strong>Todos los clientes</strong></div>
-                  <small class="text-muted">El padrón completo, ignorando los filtros. Formato reimportable.</small>
-                </a>
-              </li>
-              <li><hr class="dropdown-divider"></li>
-              <li>
-                <a class="dropdown-item py-2 text-wrap" href="{% url 'clientes_exportar' %}?modo=completo{% if query_string %}&{{ query_string }}{% endif %}">
-                  <div><i class="bi bi-file-earmark-spreadsheet me-1"></i><strong>Clientes completos</strong></div>
-                  <small class="text-muted">Respeta los filtros e incluye toda la información disponible de cada cliente en una sola hoja.</small>
-                </a>
-              </li>
-            </ul>
-          </div>
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Clientes</p>
+        <h1 class="h3 mb-1">Gestión de Clientes</h1>
+        <p class="text-muted mb-0">
+          Ficha de instalación, medidor, conexión y estado.
+          <span class="mx-1">·</span>
+          Clientes: <strong id="totalClientesVisibles">{{ total_clientes }}</strong>
+          <span class="mx-1">·</span>
+          <span class="{% if total_numeros_duplicados %}text-danger fw-semibold{% else %}text-muted{% endif %}">
+            <i class="bi bi-exclamation-triangle{% if not total_numeros_duplicados %} d-none{% endif %}"></i>
+            Duplicados: <strong id="totalClientesDuplicados">{{ total_numeros_duplicados }}</strong>
+          </span>
+        </p>
+      </div>
+      <div class="delco-action-bar">
+        {% if puede_editar %}
+        <a href="{% url 'cliente_crear' %}" class="delco-action-btn is-add">
+          <span class="delco-action-btn-icon"><i class="bi bi-plus-lg"></i></span>
+          Nuevo cliente
+        </a>
+        <button type="button" class="delco-action-btn is-import" data-bs-toggle="modal" data-bs-target="#modalImportarClientes">
+          <span class="delco-action-btn-icon"><i class="bi bi-upload"></i></span>
+          Importar
+        </button>
+        <button type="button" class="delco-action-btn is-danger" id="btnEliminarSeleccionadosClientes">
+          <span class="delco-action-btn-icon"><i class="bi bi-trash"></i></span>
+          Eliminar
+        </button>
+        {% endif %}
+        <div class="dropdown">
+          <button type="button" class="delco-action-btn is-export" data-bs-toggle="dropdown" aria-expanded="false">
+            <span class="delco-action-btn-icon"><i class="bi bi-download"></i></span>
+            Exportar
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end" style="min-width: 320px;">
+            <li>
+              <a class="dropdown-item py-2 text-wrap" href="{% url 'clientes_exportar' %}?{{ query_string }}">
+                <div><i class="bi bi-funnel me-1"></i><strong>Solo los filtrados</strong></div>
+                <small class="text-muted">Los clientes que ves en la lista, con los filtros aplicados. Formato reimportable.</small>
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item py-2 text-wrap" href="{% url 'clientes_exportar' %}?modo=padron">
+                <div><i class="bi bi-people me-1"></i><strong>Todos los clientes</strong></div>
+                <small class="text-muted">El padrón completo, ignorando los filtros. Formato reimportable.</small>
+              </a>
+            </li>
+            <li><hr class="dropdown-divider"></li>
+            <li>
+              <a class="dropdown-item py-2 text-wrap" href="{% url 'clientes_exportar' %}?modo=completo{% if query_string %}&{{ query_string }}{% endif %}">
+                <div><i class="bi bi-file-earmark-spreadsheet me-1"></i><strong>Clientes completos</strong></div>
+                <small class="text-muted">Respeta los filtros e incluye toda la información disponible de cada cliente en una sola hoja.</small>
+              </a>
+            </li>
+          </ul>
         </div>
       </div>
     </div>

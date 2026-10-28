@@ -5,13 +5,14 @@
 
 {% block content %}
 {# Calcular el número total de columnas según el tipo #}
-<div class="container-fluid py-3">
-    <div class="row mb-4">
-        <div class="col-12 d-flex justify-content-between align-items-center">
+<div class="container-fluid py-4 delco-catalogo">
+    <div class="delco-catalogo-hero mb-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div>
-                <h1 class="mb-1">{{ titulo }}</h1>
+                <p class="delco-catalogo-kicker mb-1">Inventario</p>
+                <h1 class="h3 mb-1">{{ titulo }}</h1>
                 {% if tipo == 'medidor' %}
-                <div class="d-flex gap-2">
+                <div class="d-flex flex-wrap gap-2">
                     <span class="badge bg-secondary">Directos: {{ total_medidores_directos }}</span>
                     <span class="badge bg-primary">Indirectos: {{ total_medidores_indirectos }}</span>
                 </div>
@@ -35,41 +36,48 @@
                     Haz clic en una categoría de estado para filtrar. Las SIM <strong>Devuelta</strong> suelen venir sin IP / entrega / cliente.
                 </p>
                 {% elif tipo == 'todos' %}
-                <div class="text-muted small">Vista consolidada de medidores, SIM y módems en una sola lista.</div>
+                <p class="text-muted small mb-0">Vista consolidada de medidores, SIM y módems en una sola lista.</p>
                 {% else %}
                 <p class="text-muted small mb-0">Consulta stock, estados y ubicación de equipos en bodega o en terreno.</p>
                 {% endif %}
             </div>
-            <div class="btn-group" role="group">
+            <div class="delco-action-bar delco-inv-actions" role="group" aria-label="Acciones de inventario">
                 {% if tipo == 'todos' %}
-                <a href="{% url 'inventario_list' %}?tipo=medidor" class="btn btn-outline-primary">
-                    <i class="bi bi-speedometer2"></i> Gestionar medidores
+                <a href="{% url 'inventario_list' %}?tipo=medidor" class="delco-inv-btn is-add">
+                    <span class="delco-inv-btn-icon"><i class="bi bi-speedometer2"></i></span>
+                    Gestionar medidores
                 </a>
-                <a href="{% url 'inventario_list' %}?tipo=sim" class="btn btn-outline-info">
-                    <i class="bi bi-sim"></i> Gestionar SIM
+                <a href="{% url 'inventario_list' %}?tipo=sim" class="delco-inv-btn is-export">
+                    <span class="delco-inv-btn-icon"><i class="bi bi-sim"></i></span>
+                    Gestionar SIM
                 </a>
-                <a href="{% url 'inventario_list' %}?tipo=modem" class="btn btn-outline-secondary">
-                    <i class="bi bi-router"></i> Gestionar módems
+                <a href="{% url 'inventario_list' %}?tipo=modem" class="delco-inv-btn is-help">
+                    <span class="delco-inv-btn-icon"><i class="bi bi-router"></i></span>
+                    Gestionar módems
                 </a>
                 {% else %}
                 {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
-                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarEquipo">
-                    <i class="bi bi-plus-circle"></i> Agregar equipo
+                <button type="button" class="delco-inv-btn is-add" data-bs-toggle="modal" data-bs-target="#modalAgregarEquipo">
+                    <span class="delco-inv-btn-icon"><i class="bi bi-plus-lg"></i></span>
+                    Agregar equipo
+                </button>
+                <button type="button" class="delco-inv-btn is-import" data-bs-toggle="modal" data-bs-target="#modalImportar">
+                    <span class="delco-inv-btn-icon"><i class="bi bi-upload"></i></span>
+                    Importar Excel
                 </button>
                 {% endif %}
-                {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
-                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportar">
-                    <i class="bi bi-upload"></i> Importar Excel
+                <button type="button" class="delco-inv-btn is-export" id="btnExportar">
+                    <span class="delco-inv-btn-icon"><i class="bi bi-download"></i></span>
+                    Exportar Excel
                 </button>
-                {% endif %}
-                <button type="button" class="btn btn-info" id="btnExportar">
-                    <i class="bi bi-download"></i> Exportar Excel
+                <button type="button" class="delco-inv-btn is-full" id="btnExportarCompleto" title="Exportación temporal con todos los campos del inventario">
+                    <span class="delco-inv-btn-icon"><i class="bi bi-archive"></i></span>
+                    <span class="delco-inv-label-lg">Exportar completo</span>
+                    <span class="delco-inv-label-sm">Completo</span>
                 </button>
-                <button type="button" class="btn btn-warning" id="btnExportarCompleto" title="Exportación temporal con todos los campos del inventario">
-                    <i class="bi bi-file-earmark-zip"></i> Exportar completo
-                </button>
-                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalAyudaFormato" title="Ver formato de importación">
-                    <i class="bi bi-info-circle"></i> Formato
+                <button type="button" class="delco-inv-btn is-help" data-bs-toggle="modal" data-bs-target="#modalAyudaFormato" title="Ver formato de importación">
+                    <span class="delco-inv-btn-icon"><i class="bi bi-info-lg"></i></span>
+                    Formato
                 </button>
                 {% endif %}
             </div>

@@ -18,6 +18,25 @@
       <ul class="navbar-nav ms-auto">
         {% if user.is_authenticated %}
           <li class="nav-item d-flex align-items-center">
+            {% url 'moreapp_notificaciones' as moreapp_notif_url %}
+            {% url 'moreapp_notificaciones_leer' as moreapp_notif_leer_url %}
+            {% if moreapp_notif_url and user.rol == 'ADMIN' or moreapp_notif_url and user.rol == 'ADMINISTRATIVO' %}
+            <div class="dropdown me-2" id="delcoNotif" data-url-list="{{ moreapp_notif_url }}" data-url-leer="{{ moreapp_notif_leer_url|default:'' }}">
+              <button type="button" class="btn btn-sm btn-outline-light position-relative" id="delcoNotifToggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" title="Notificaciones" aria-label="Notificaciones">
+                <i class="bi bi-bell-fill" id="delcoNotifIcon"></i>
+                <span class="delco-notif-badge{% if not moreapp_aviso.tareas_alertas %} d-none{% endif %}" id="delcoNotifBadge">{{ moreapp_aviso.tareas_alertas|default:0 }}</span>
+              </button>
+              <div class="dropdown-menu dropdown-menu-end delco-notif-menu p-0" aria-labelledby="delcoNotifToggle">
+                <div class="delco-notif-head">
+                  <strong>Notificaciones</strong>
+                  <button type="button" class="btn btn-link btn-sm py-0 text-decoration-none" id="delcoNotifLeerTodas">Marcar leídas</button>
+                </div>
+                <div class="delco-notif-list" id="delcoNotifList">
+                  <p class="text-muted small mb-0 px-3 py-3">Cargando…</p>
+                </div>
+              </div>
+            </div>
+            {% endif %}
             <button type="button" class="btn btn-sm btn-outline-light me-2" id="delcoThemeToggle" title="Cambiar tema claro/oscuro" aria-label="Cambiar tema">
               <i class="bi bi-moon-stars-fill" id="delcoThemeIcon"></i>
             </button>
@@ -154,5 +173,124 @@ document.getElementById('guardarPerfil').addEventListener('click', function(e) {
     showToast('Error al guardar los cambios.', 'danger');
   });
 });
+
+(function () {
+  var root = document.getElementById('delcoNotif');
+  if (!root) return;
+  var listUrl = root.getAttribute('data-url-list') || '';
+  var leerUrl = root.getAttribute('data-url-leer') || '';
+  var listEl = document.getElementById('delcoNotifList');
+  var badgeEl = document.getElementById('delcoNotifBadge');
+  var leerTodasBtn = document.getElementById('delcoNotifLeerTodas');
+  var loaded = false;
+
+  function csrfToken() {
+    var field = document.querySelector('[name="csrfmiddlewaretoken"]');
+    if (field && field.value) return field.value;
+    var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function escapeHtml(value) {
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function pintarBadge(n) {
+    var count = parseInt(n, 10) || 0;
+    if (!badgeEl) return;
+    badgeEl.textContent = count > 99 ? '99+' : String(count);
+    badgeEl.classList.toggle('d-none', count <= 0);
+  }
+
+  function pintarLista(items) {
+    if (!listEl) return;
+    if (!items || !items.length) {
+      listEl.innerHTML = '<p class="text-muted small mb-0 px-3 py-3">No hay notificaciones guardadas.</p>';
+      return;
+    }
+    listEl.innerHTML = items.map(function (item) {
+      var unread = item.leida ? '' : ' is-unread';
+      var icon = item.tipo === 'COMPLETADO' ? 'bi-check2-circle text-success' : 'bi-send text-primary';
+      var href = item.url || '#';
+      return (
+        '<a class="delco-notif-item' + unread + '" href="' + escapeHtml(href) + '" data-id="' + escapeHtml(item.id) + '">' +
+          '<span class="delco-notif-icon"><i class="bi ' + icon + '"></i></span>' +
+          '<span class="delco-notif-body">' +
+            '<span class="delco-notif-title">' + escapeHtml(item.titulo || 'Notificación') + '</span>' +
+            '<span class="delco-notif-text">' + escapeHtml(item.texto || '') + '</span>' +
+            '<span class="delco-notif-date">' + escapeHtml(item.fecha || '') + '</span>' +
+          '</span>' +
+        '</a>'
+      );
+    }).join('');
+  }
+
+  function cargar() {
+    if (!listUrl) return Promise.resolve();
+    return fetch(listUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+      .then(function (resp) { return resp.json(); })
+      .then(function (data) {
+        if (!data || !data.ok) return;
+        loaded = true;
+        pintarBadge(data.tareas_alertas);
+        pintarLista(data.items || []);
+      })
+      .catch(function () {
+        if (listEl && !loaded) {
+          listEl.innerHTML = '<p class="text-muted small mb-0 px-3 py-3">No se pudieron cargar las notificaciones.</p>';
+        }
+      });
+  }
+
+  function marcar(payload) {
+    if (!leerUrl) return Promise.resolve();
+    return fetch(leerUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken(),
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload || {})
+    }).then(function (resp) { return resp.json(); }).then(function (data) {
+      if (!data || !data.ok) return data;
+      pintarBadge(data.tareas_alertas);
+      pintarLista(data.items || []);
+      return data;
+    });
+  }
+
+  var toggle = document.getElementById('delcoNotifToggle');
+  if (toggle) {
+    toggle.addEventListener('shown.bs.dropdown', function () {
+      cargar();
+    });
+  }
+  if (listEl) {
+    listEl.addEventListener('click', function (ev) {
+      var item = ev.target.closest('.delco-notif-item');
+      if (!item) return;
+      var id = item.getAttribute('data-id');
+      if (!id || item.classList.contains('is-unread') === false) return;
+      marcar({ id: id });
+    });
+  }
+  if (leerTodasBtn) {
+    leerTodasBtn.addEventListener('click', function (ev) {
+      ev.preventDefault();
+      marcar({ todas: 1 });
+    });
+  }
+  cargar();
+  setInterval(function () {
+    if (document.hidden) return;
+    cargar();
+  }, 40000);
+})();
 </script>
 {% endif %}

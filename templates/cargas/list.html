@@ -4,44 +4,58 @@
 {% block title %}Listado de cargas{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-    <div>
-      <h1 class="h3 mb-1"><i class="bi bi-list-task"></i> Cargas administrativas</h1>
-      <p class="text-muted mb-0">Abiertas: {{ contadores.abiertas }} · Sin asignar: {{ contadores.sin_asignar }} · Mías: {{ contadores.mias }}</p>
-    </div>
-    <div class="d-flex flex-wrap gap-2">
-      <a href="{% url 'cargas_hub' %}" class="btn btn-outline-secondary">Hub</a>
-      <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarCargas">
-        <i class="bi bi-file-earmark-excel"></i> Importar Excel
-      </button>
-      <div class="btn-group">
-        <a href="{% url 'cargas_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}" class="btn btn-info">
-          <i class="bi bi-download"></i> Exportar filtradas
-        </a>
-        <button type="button" class="btn btn-info dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
-          <span class="visually-hidden">Más opciones de exportación</span>
-        </button>
-        <ul class="dropdown-menu dropdown-menu-end">
-          <li>
-            <a class="dropdown-item" href="{% url 'cargas_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}">
-              Exportar filtradas
-            </a>
-          </li>
-          <li>
-            <a class="dropdown-item" href="{% url 'cargas_exportar' %}?todas=1">
-              Exportar todas
-            </a>
-          </li>
-        </ul>
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Cargas</p>
+        <h1 class="h3 mb-1">Cargas administrativas</h1>
+        <p class="text-muted mb-0">Abiertas: {{ contadores.abiertas }} · Sin asignar: {{ contadores.sin_asignar }} · Mías: {{ contadores.mias }}</p>
       </div>
-      <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevaCarga">
-        <i class="bi bi-plus-lg"></i> Nueva
-      </button>
-      <form method="post" action="{% url 'cargas_generar_pendientes' %}">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-warning text-dark"><i class="bi bi-lightning"></i> Generar desde pendientes</button>
-      </form>
+      <div class="delco-action-bar">
+        <button type="button" class="delco-action-btn is-add" data-bs-toggle="modal" data-bs-target="#modalNuevaCarga">
+          <span class="delco-action-btn-icon"><i class="bi bi-plus-lg"></i></span>
+          Nueva
+        </button>
+        <button type="button" class="delco-action-btn is-import" data-bs-toggle="modal" data-bs-target="#modalImportarCargas">
+          <span class="delco-action-btn-icon"><i class="bi bi-upload"></i></span>
+          Importar Excel
+        </button>
+        <div class="delco-action-split">
+          <a href="{% url 'cargas_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}" class="delco-action-btn is-export">
+            <span class="delco-action-btn-icon"><i class="bi bi-download"></i></span>
+            <span class="delco-action-label-lg">Exportar</span>
+            <span class="delco-action-label-sm">Excel</span>
+          </a>
+          <button type="button" class="delco-action-btn is-export delco-action-caret" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-chevron-down"></i>
+            <span class="visually-hidden">Más opciones de exportación</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li>
+              <a class="dropdown-item" href="{% url 'cargas_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}">
+                Exportar filtradas
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="{% url 'cargas_exportar' %}?todas=1">
+                Exportar todas
+              </a>
+            </li>
+          </ul>
+        </div>
+        <form method="post" action="{% url 'cargas_generar_pendientes' %}">
+          {% csrf_token %}
+          <button type="submit" class="delco-action-btn is-full">
+            <span class="delco-action-btn-icon"><i class="bi bi-lightning"></i></span>
+            Generar
+          </button>
+        </form>
+        <a href="{% url 'cargas_hub' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-kanban"></i></span>
+          Hub
+        </a>
+      </div>
     </div>
   </div>
 

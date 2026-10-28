@@ -2073,30 +2073,10 @@ input[type="file"].form-control,
   }
 }
 
-/* Registros MoreApp */
-.delco-registros-hero,
-.delco-registro-detail-hero {
-  background: linear-gradient(135deg, rgba(26, 58, 92, 0.08) 0%, rgba(74, 144, 226, 0.08) 100%);
-  border: 1px solid var(--bs-border-color);
-  border-radius: 1rem;
-  padding: 1.15rem 1.25rem;
-}
-
-[data-bs-theme="dark"] .delco-registros-hero,
-[data-bs-theme="dark"] .delco-registro-detail-hero {
-  background: linear-gradient(135deg, rgba(74, 144, 226, 0.12) 0%, rgba(26, 58, 92, 0.28) 100%);
-}
-
+/* Registros MoreApp — hero y filtros unificados con .delco-catalogo-* */
 .delco-registros-status {
   font-weight: 600;
   letter-spacing: 0.03em;
-}
-
-.delco-registros-filters {
-  background: var(--bs-card-bg, var(--bs-body-bg));
-  border: 1px solid var(--bs-border-color);
-  border-radius: 1rem;
-  padding: 1rem 1.15rem;
 }
 
 .delco-registros-count {
@@ -2557,14 +2537,18 @@ body.delco-foto-lightbox-open {
   min-width: 0;
 }
 
-.delco-catalogo-hero {
+.delco-catalogo-hero,
+.delco-registros-hero,
+.delco-registro-detail-hero {
   background: linear-gradient(135deg, rgba(26, 58, 92, 0.08) 0%, rgba(74, 144, 226, 0.08) 100%);
   border: 1px solid var(--bs-border-color);
   border-radius: 1.1rem;
   padding: 1.2rem 1.3rem;
 }
 
-[data-bs-theme="dark"] .delco-catalogo-hero {
+[data-bs-theme="dark"] .delco-catalogo-hero,
+[data-bs-theme="dark"] .delco-registros-hero,
+[data-bs-theme="dark"] .delco-registro-detail-hero {
   background: linear-gradient(135deg, rgba(74, 144, 226, 0.12) 0%, rgba(26, 58, 92, 0.28) 100%);
 }
 
@@ -2615,7 +2599,18 @@ body.delco-foto-lightbox-open {
   color: var(--bs-secondary-color);
 }
 
-.delco-catalogo-filters {
+.delco-catalogo-stat-icon.is-danger {
+  background: rgba(220, 53, 69, 0.12);
+  color: #b02a37;
+}
+
+.delco-catalogo-stat-icon.is-warn {
+  background: rgba(255, 193, 7, 0.18);
+  color: #997404;
+}
+
+.delco-catalogo-filters,
+.delco-registros-filters {
   background: var(--bs-card-bg, var(--bs-body-bg));
   border: 1px solid var(--bs-border-color);
   border-radius: 1.1rem;
@@ -2670,7 +2665,15 @@ body.delco-foto-lightbox-open {
   padding: 0.28rem 0.75rem;
   font-size: 0.82rem;
   line-height: 1.3;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+a.delco-catalogo-chip:hover {
+  color: var(--bs-body-color);
 }
 
 .delco-catalogo-chip:hover {
@@ -2682,6 +2685,10 @@ body.delco-foto-lightbox-open {
   background: linear-gradient(135deg, var(--delco-primary) 0%, var(--delco-secondary) 100%);
   border-color: transparent;
   color: #fff;
+}
+
+.delco-catalogo-chip.is-active .badge {
+  background: rgba(255, 255, 255, 0.22) !important;
 }
 
 .delco-catalogo-card {
@@ -2738,6 +2745,7 @@ body.delco-foto-lightbox-open {
   gap: 0.25rem;
   font-size: 0.82rem;
   color: var(--bs-secondary-color);
+  overflow-wrap: anywhere;
 }
 
 .delco-catalogo-empty {
@@ -2811,4 +2819,576 @@ body.delco-foto-lightbox-open {
 
 .delco-vincular-tecnico {
   min-width: 14rem;
+}
+
+.delco-catalogo-panel {
+  background: var(--bs-card-bg, var(--bs-body-bg));
+  border: 1px solid var(--bs-border-color);
+  border-radius: 1.1rem;
+  overflow: hidden;
+  box-shadow: 0 0.3rem 0.9rem rgba(15, 36, 56, 0.04);
+}
+
+.delco-catalogo-panel-head {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.85rem 1.1rem;
+  border-bottom: 1px solid var(--bs-border-color);
+  font-weight: 600;
+}
+
+.delco-catalogo-panel-head:has(> :nth-child(2)) {
+  justify-content: space-between;
+}
+
+.delco-catalogo-panel-head .h6,
+.delco-catalogo-panel-head strong {
+  margin: 0;
+}
+
+.delco-catalogo-panel > .delco-catalogo-panel-head:last-child {
+  border-bottom: 0;
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.delco-catalogo-panel-body {
+  padding: 1.15rem 1.25rem;
+}
+
+.delco-catalogo-panel .table {
+  margin-bottom: 0;
+}
+
+.delco-catalogo-panel thead th {
+  background: var(--bs-tertiary-bg);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.delco-registro-stat {
+  align-items: center;
+  box-shadow: 0 0.3rem 0.9rem rgba(15, 36, 56, 0.04);
+}
+
+.delco-catalogo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.delco-catalogo-chip-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.delco-catalogo-chip-row .delco-catalogo-chips {
+  min-width: 0;
+  flex: 1;
+}
+
+.delco-cell-wrap {
+  white-space: normal !important;
+  min-width: 8rem;
+  max-width: 18rem;
+}
+
+@media (hover: none) {
+  .delco-catalogo-chip:hover,
+  .delco-catalogo-card:hover,
+  .delco-registro-card:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .container-fluid.delco-catalogo,
+  .container-fluid.delco-registros {
+    padding-top: 0.85rem;
+    padding-bottom: 1rem;
+  }
+
+  .delco-catalogo-hero,
+  .delco-registros-hero,
+  .delco-registro-detail-hero {
+    padding: 0.9rem 0.95rem;
+    border-radius: 0.9rem;
+  }
+
+  .delco-catalogo-hero .h3,
+  .delco-registros-hero .h3,
+  .delco-registro-detail-hero .h3 {
+    font-size: 1.2rem;
+  }
+
+  .delco-catalogo-actions {
+    width: 100%;
+  }
+
+  .delco-catalogo-actions > .btn,
+  .delco-catalogo-actions > form,
+  .delco-catalogo-actions > .btn-group {
+    flex: 1 1 calc(50% - 0.5rem);
+    min-width: 0;
+  }
+
+  .delco-catalogo-actions > form .btn {
+    width: 100%;
+  }
+
+  .delco-catalogo-actions > .btn-group > .btn:not(.dropdown-toggle) {
+    flex: 1;
+  }
+
+  .delco-catalogo-actions > .btn-success {
+    flex: 1 1 100%;
+    order: -1;
+  }
+
+  .delco-catalogo-stat {
+    padding: 0.7rem 0.75rem;
+    gap: 0.55rem;
+    border-radius: 0.85rem;
+  }
+
+  .delco-catalogo-stat-icon {
+    width: 2.05rem;
+    height: 2.05rem;
+    border-radius: 0.7rem;
+  }
+
+  .delco-catalogo-stat .fs-4 {
+    font-size: 1.2rem !important;
+    line-height: 1.2;
+  }
+
+  .delco-catalogo-filters,
+  .delco-registros-filters {
+    padding: 0.8rem 0.85rem 0.9rem;
+    border-radius: 0.9rem;
+  }
+
+  .delco-catalogo-chip-row .delco-catalogo-chips,
+  .delco-catalogo-filters .delco-catalogo-chips,
+  .delco-catalogo-hero .delco-catalogo-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    padding-bottom: 0.15rem;
+  }
+
+  .delco-catalogo-chip-row .delco-catalogo-chips::-webkit-scrollbar,
+  .delco-catalogo-filters .delco-catalogo-chips::-webkit-scrollbar,
+  .delco-catalogo-hero .delco-catalogo-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .delco-catalogo-chip {
+    flex: 0 0 auto;
+    min-height: 2.15rem;
+    padding: 0.38rem 0.8rem;
+  }
+
+  .delco-catalogo-panel-head,
+  .delco-catalogo-panel-body,
+  .delco-catalogo-card-body {
+    padding-left: 0.85rem;
+    padding-right: 0.85rem;
+  }
+
+  .delco-catalogo-panel-body {
+    padding-top: 0.9rem;
+    padding-bottom: 0.9rem;
+  }
+
+  .delco-vincular-tecnico {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .delco-catalogo-panel .js-cuenta-moreapp {
+    display: block;
+    padding: 0.75rem 0.85rem;
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .delco-catalogo-panel .js-cuenta-moreapp td {
+    display: block;
+    width: 100%;
+    max-width: none;
+    white-space: normal;
+    padding: 0.15rem 0;
+    border: 0;
+  }
+
+  .delco-catalogo-panel thead:has(+ tbody .js-cuenta-moreapp) {
+    display: none;
+  }
+
+  .delco-cell-wrap {
+    max-width: 11rem;
+  }
+
+  .delco-catalogo-panel .js-tarea-acciones .btn {
+    min-height: 34px;
+  }
+
+  .delco-lote-listado-tabla thead {
+    display: none;
+  }
+
+  .delco-lote-listado-tabla,
+  .delco-lote-listado-tabla tbody,
+  .delco-lote-listado-tabla tr,
+  .delco-lote-listado-tabla td {
+    display: block;
+    width: 100%;
+  }
+
+  .delco-lote-listado-tabla tr {
+    padding: 0.7rem 0;
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .delco-lote-listado-tabla td {
+    padding: 0.25rem 0;
+    white-space: normal;
+  }
+
+  .delco-lote-listado-tabla td:last-child {
+    text-align: right;
+  }
+
+  .modal-fullscreen-sm-down .modal-body {
+    padding: 0.9rem 0.95rem;
+  }
+}
+
+/* Campana de notificaciones (navbar, junto al modo oscuro) */
+.delco-notif-badge {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  background: #dc3545;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  line-height: 1.1rem;
+  text-align: center;
+}
+
+.delco-notif-menu {
+  width: min(22rem, 92vw);
+  max-height: min(70vh, 28rem);
+  overflow: hidden;
+  border: 1px solid var(--bs-border-color);
+  box-shadow: 0 0.75rem 1.5rem rgba(15, 23, 42, 0.18);
+}
+
+.delco-notif-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.7rem 0.9rem 0.55rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.delco-notif-list {
+  max-height: min(58vh, 22rem);
+  overflow-y: auto;
+}
+
+.delco-notif-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.7rem 0.9rem;
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.delco-notif-item:last-child {
+  border-bottom: 0;
+}
+
+.delco-notif-item:hover {
+  background: var(--bs-tertiary-bg);
+  color: inherit;
+}
+
+.delco-notif-item.is-unread {
+  background: rgba(13, 110, 253, 0.08);
+}
+
+.delco-notif-icon {
+  flex: 0 0 auto;
+  font-size: 1.1rem;
+  line-height: 1.2;
+  margin-top: 0.1rem;
+}
+
+.delco-notif-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+}
+
+.delco-notif-title {
+  font-weight: 600;
+  font-size: 0.86rem;
+}
+
+.delco-notif-text,
+.delco-notif-date {
+  font-size: 0.78rem;
+  color: var(--bs-secondary-color);
+}
+
+.delco-notif-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+@media (max-width: 575.98px) {
+  .delco-notif-menu {
+    width: min(94vw, 22rem);
+  }
+}
+
+/* Pastillas de acción (inventario y resto de secciones) */
+.delco-inv-actions,
+.delco-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.delco-action-bar > form,
+.delco-action-bar > .ficha-actions-view,
+.delco-action-bar > .ficha-actions-edit {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.delco-inv-btn,
+.delco-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  border: 0;
+  border-radius: 0.9rem;
+  padding: 0.38rem 0.9rem 0.38rem 0.38rem;
+  font-weight: 600;
+  font-size: 0.86rem;
+  line-height: 1.15;
+  white-space: nowrap;
+  text-decoration: none;
+  color: #fff;
+  box-shadow: 0 0.35rem 0.85rem rgba(15, 36, 56, 0.12);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.delco-inv-btn-icon,
+.delco-action-btn-icon {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.22);
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+
+.delco-inv-btn.is-add,
+.delco-action-btn.is-add {
+  background: linear-gradient(135deg, #1a3a5c 0%, #2c5282 100%);
+}
+
+.delco-inv-btn.is-import,
+.delco-action-btn.is-import {
+  background: linear-gradient(135deg, #146c43 0%, #198754 100%);
+}
+
+.delco-inv-btn.is-export,
+.delco-action-btn.is-export {
+  background: linear-gradient(135deg, #087990 0%, #0dcaf0 100%);
+  color: #04262e;
+}
+
+.delco-inv-btn.is-export .delco-inv-btn-icon,
+.delco-action-btn.is-export .delco-action-btn-icon,
+.delco-action-btn.is-export .delco-inv-btn-icon {
+  background: rgba(4, 38, 46, 0.12);
+}
+
+.delco-inv-btn.is-full,
+.delco-action-btn.is-full {
+  background: linear-gradient(135deg, #cc9a06 0%, #ffc107 100%);
+  color: #3d2e00;
+}
+
+.delco-inv-label-sm,
+.delco-action-label-sm {
+  display: none;
+}
+
+.delco-inv-btn.is-full .delco-inv-btn-icon,
+.delco-action-btn.is-full .delco-action-btn-icon,
+.delco-action-btn.is-full .delco-inv-btn-icon {
+  background: rgba(61, 46, 0, 0.12);
+}
+
+.delco-inv-btn.is-help,
+.delco-action-btn.is-help,
+.delco-action-btn.is-nav {
+  background: var(--bs-body-bg);
+  color: var(--delco-primary);
+  border: 1px solid var(--bs-border-color);
+  box-shadow: 0 0.2rem 0.5rem rgba(15, 36, 56, 0.06);
+}
+
+.delco-inv-btn.is-help .delco-inv-btn-icon,
+.delco-action-btn.is-help .delco-action-btn-icon,
+.delco-action-btn.is-nav .delco-action-btn-icon,
+.delco-action-btn.is-help .delco-inv-btn-icon {
+  background: rgba(74, 144, 226, 0.14);
+  color: var(--delco-accent);
+}
+
+.delco-action-btn.is-danger {
+  background: linear-gradient(135deg, #a71d2a 0%, #dc3545 100%);
+}
+
+.delco-inv-btn:hover,
+.delco-inv-btn:focus-visible,
+.delco-action-btn:hover,
+.delco-action-btn:focus-visible {
+  color: inherit;
+  filter: brightness(1.05);
+  transform: translateY(-1px);
+  box-shadow: 0 0.5rem 1.1rem rgba(15, 36, 56, 0.16);
+}
+
+.delco-inv-btn.is-help:hover,
+.delco-inv-btn.is-help:focus-visible,
+.delco-action-btn.is-help:hover,
+.delco-action-btn.is-help:focus-visible,
+.delco-action-btn.is-nav:hover,
+.delco-action-btn.is-nav:focus-visible {
+  color: var(--delco-primary);
+  border-color: var(--delco-accent);
+}
+
+.delco-action-split {
+  display: inline-flex;
+  align-items: stretch;
+  border-radius: 0.9rem;
+  overflow: hidden;
+  box-shadow: 0 0.35rem 0.85rem rgba(15, 36, 56, 0.12);
+}
+
+.delco-action-split .delco-action-btn,
+.delco-action-split .delco-inv-btn {
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.delco-action-split > :first-child {
+  border-radius: 0.9rem 0 0 0.9rem;
+}
+
+.delco-action-split .delco-action-caret {
+  padding-left: 0.4rem;
+  padding-right: 0.65rem;
+  border-left: 1px solid rgba(4, 38, 46, 0.18);
+  border-radius: 0 0.9rem 0.9rem 0;
+}
+
+[data-bs-theme="dark"] .delco-inv-btn.is-help,
+[data-bs-theme="dark"] .delco-action-btn.is-help,
+[data-bs-theme="dark"] .delco-action-btn.is-nav {
+  background: var(--bs-tertiary-bg);
+  color: var(--bs-body-color);
+}
+
+[data-bs-theme="dark"] .delco-inv-btn.is-export,
+[data-bs-theme="dark"] .delco-inv-btn.is-full,
+[data-bs-theme="dark"] .delco-action-btn.is-export,
+[data-bs-theme="dark"] .delco-action-btn.is-full {
+  color: #0b1220;
+}
+
+@media (hover: none) {
+  .delco-inv-btn:hover,
+  .delco-action-btn:hover {
+    transform: none;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .delco-inv-actions,
+  .delco-action-bar {
+    width: 100%;
+    max-width: none;
+    justify-content: stretch;
+  }
+
+  .delco-inv-btn,
+  .delco-action-btn,
+  .delco-action-bar > form,
+  .delco-action-split {
+    flex: 1 1 calc(50% - 0.55rem);
+    min-width: calc(50% - 0.55rem);
+  }
+
+  .delco-inv-btn,
+  .delco-action-btn {
+    justify-content: flex-start;
+    font-size: 0.8rem;
+    padding-right: 0.65rem;
+  }
+
+  .delco-action-bar > form .delco-action-btn,
+  .delco-action-bar > form .delco-inv-btn,
+  .delco-action-split .delco-action-btn:first-child {
+    width: 100%;
+  }
+
+  .delco-inv-btn.is-add,
+  .delco-action-btn.is-add {
+    flex: 1 1 100%;
+    order: -1;
+    justify-content: center;
+  }
+
+  .delco-inv-label-lg,
+  .delco-action-label-lg {
+    display: none;
+  }
+
+  .delco-inv-label-sm,
+  .delco-action-label-sm {
+    display: inline;
+  }
 }

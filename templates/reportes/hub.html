@@ -3,21 +3,26 @@
 {% block title %}Reportes operativos{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-    <div class="mb-4 d-flex justify-content-between align-items-start flex-wrap gap-2">
-        <div>
-            <h2 class="mb-1">Reportes operativos</h2>
-            <p class="text-muted mb-0">
-                Informes de OT y alertas de terreno. Exporta en Excel o PDF.
-                Los filtros se aplican a trabajos y clientes con actividad operativa.
-            </p>
+<div class="container-fluid py-4 delco-catalogo">
+    <div class="delco-catalogo-hero mb-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <p class="delco-catalogo-kicker mb-1">Reportes</p>
+                <h1 class="h3 mb-1">Reportes operativos</h1>
+                <p class="text-muted mb-0">
+                    Informes de OT y alertas de terreno. Exporta en Excel o PDF.
+                </p>
+            </div>
+            {% if mostrar_catalogo %}
+            <div class="delco-catalogo-stat">
+                <span class="delco-catalogo-stat-icon"><i class="bi bi-table"></i></span>
+                <div>
+                    <div class="text-muted small">Total filas</div>
+                    <div class="fs-4 fw-semibold">{{ total_registros_catalogo|default:0 }}</div>
+                </div>
+            </div>
+            {% endif %}
         </div>
-        {% if mostrar_catalogo %}
-        <div class="text-end">
-            <div class="small text-muted">Total filas (con filtros)</div>
-            <div class="fs-4 fw-semibold text-primary">{{ total_registros_catalogo|default:0 }}</div>
-        </div>
-        {% endif %}
     </div>
 
     {% if not mostrar_catalogo %}

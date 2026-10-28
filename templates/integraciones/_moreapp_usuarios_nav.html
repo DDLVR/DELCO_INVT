@@ -1,0 +1,14 @@
+{% url 'usuarios_moreapp' as url_cuentas %}
+{% url 'usuarios_moreapp_tecnicos' as url_tecnicos %}
+{% url 'usuarios_moreapp_certelec' as url_certelec %}
+<nav class="delco-catalogo-chips mt-3" aria-label="Secciones de usuarios MoreApp">
+  {% if url_cuentas %}
+  <a class="delco-catalogo-chip {% if seccion_usuarios == 'moreapp' %}is-active{% endif %}" href="{{ url_cuentas }}">Cuentas</a>
+  {% endif %}
+  {% if url_tecnicos %}
+  <a class="delco-catalogo-chip {% if seccion_usuarios == 'tecnicos' %}is-active{% endif %}" href="{{ url_tecnicos }}">Técnicos</a>
+  {% endif %}
+  {% if url_certelec %}
+  <a class="delco-catalogo-chip {% if seccion_usuarios == 'certelec' %}is-active{% endif %}" href="{{ url_certelec }}">Certelec Técnicos</a>
+  {% endif %}
+</nav>

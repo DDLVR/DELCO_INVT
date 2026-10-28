@@ -304,7 +304,7 @@ class MoreAppTareaEvento(models.Model):
 
 
 class MoreAppTareaAlerta(models.Model):
-    """Alerta de creación o completado: personal al creador y broadcast al navbar."""
+    """Notificación persistente por perfil (campana). El asignador recibe el completado."""
 
     TIPO_CREACION = "CREACION"
     TIPO_COMPLETADO = "COMPLETADO"

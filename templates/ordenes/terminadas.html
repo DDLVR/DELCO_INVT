@@ -4,20 +4,23 @@
 {% block title %}Trabajos terminados{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-    <div class="row mb-3">
-        <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+<div class="container-fluid py-4 delco-catalogo">
+    <div class="delco-catalogo-hero mb-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
             <div>
-                <h1 class="mb-1"><i class="bi bi-check2-circle"></i> Trabajos terminados</h1>
+                <p class="delco-catalogo-kicker mb-1">Operación</p>
+                <h1 class="h3 mb-1">Trabajos terminados</h1>
                 <p class="text-muted mb-0">Consulta de órdenes realizadas, validadas o finalizadas, con resumen y filtros.</p>
             </div>
-            <div class="d-flex flex-wrap gap-2">
-                <a href="{% url 'ordenes_list' %}" class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-left"></i> Volver a órdenes
+            <div class="delco-action-bar">
+                <a href="{% url 'ordenes_list' %}" class="delco-action-btn is-help">
+                    <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+                    Volver
                 </a>
                 {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
-                <a href="{% url 'ordenes_exportar' %}?filtrar=1&estado=FINALIZADA" class="btn btn-outline-info">
-                    <i class="bi bi-download"></i> Exportar finalizadas
+                <a href="{% url 'ordenes_exportar' %}?filtrar=1&estado=FINALIZADA" class="delco-action-btn is-export">
+                    <span class="delco-action-btn-icon"><i class="bi bi-download"></i></span>
+                    Exportar
                 </a>
                 {% endif %}
             </div>

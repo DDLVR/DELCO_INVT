@@ -1,12 +1,12 @@
 <div class="modal fade" id="modalLoteListado" tabindex="-1" aria-labelledby="modalLoteListadoLabel" aria-hidden="true">
-  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable modal-fullscreen-sm-down">
     <div class="modal-content delco-import-clientes-modal">
       <div class="modal-header delco-import-clientes-header">
         <div>
           <h5 class="modal-title" id="modalLoteListadoLabel">
             <i class="bi bi-list-check me-2" aria-hidden="true"></i>Listado de tareas
           </h5>
-          <p class="delco-import-clientes-subtitle mb-0">Formulario · persona o grupo · cantidad · máximo {{ max_lote }} tareas</p>
+          <p class="delco-import-clientes-subtitle mb-0">Formulario · técnico o grupo · cantidad · máximo {{ max_lote }} tareas</p>
         </div>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
@@ -18,9 +18,9 @@
           {% else %}
           <div class="alert alert-warning js-lote-listado-error d-none"></div>
           {% endif %}
-          <p class="small text-muted" id="js-lote-listado-status">Cada fila crea esa cantidad de tareas para la misma persona o grupo.</p>
+          <p class="small text-muted" id="js-lote-listado-status">Cada fila crea esa cantidad de tareas para el mismo técnico o grupo.</p>
           <section class="delco-import-section">
-            <div class="delco-import-section-label">Mensaje</div>
+            <div class="delco-import-section-label">1. Mensaje</div>
             <div class="row g-3">
               <div class="col-md-8">
                 <label class="form-label" for="listado_mensaje">Mensaje corto</label>
@@ -34,7 +34,7 @@
           </section>
           <section class="delco-import-section mb-0">
             <div class="d-flex justify-content-between align-items-center mb-2">
-              <div class="delco-import-section-label mb-0">Listado</div>
+              <div class="delco-import-section-label mb-0">2. Listado</div>
               <button type="button" class="btn btn-outline-primary btn-sm" id="js-listado-agregar">
                 <i class="bi bi-plus-lg"></i> Agregar fila
               </button>

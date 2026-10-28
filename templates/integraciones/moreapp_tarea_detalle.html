@@ -3,11 +3,13 @@
 {% block title %}Tarea MoreApp #{{ tarea.pk }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="row mb-4 align-items-start">
-    <div class="col">
-      <h1 class="mb-1">
-        <i class="bi bi-send-check"></i> Tarea #{{ tarea.pk }}
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+    <div>
+      <p class="delco-catalogo-kicker mb-1">Tareas MoreApp</p>
+      <h1 class="h3 mb-1">
+        Tarea #{{ tarea.pk }}
         <span id="js-tarea-estado-badge">
         {% if tarea.estado == 'ERROR' or tarea.error %}
         <span class="badge text-bg-danger">Error</span>
@@ -23,39 +25,46 @@
       <p class="mb-0 fw-semibold">{{ tarea.titulo|default:tarea.mensaje }}</p>
       <p class="text-muted mb-0">{{ tarea.form_name|default:tarea.form_id }}{% if tarea.get_tipo_trabajo_display %} · {{ tarea.get_tipo_trabajo_display }}{% endif %}</p>
     </div>
-    <div class="col-auto d-flex flex-wrap gap-2" id="js-tarea-acciones">
+    <div class="delco-action-bar" id="js-tarea-acciones">
       {% if tarea.estado == 'ASIGNADA' %}
-      <form method="post" action="{% url 'moreapp_tarea_revisar' tarea.pk %}" class="d-inline" id="js-tarea-revisar">
+      <form method="post" action="{% url 'moreapp_tarea_revisar' tarea.pk %}" id="js-tarea-revisar">
         {% csrf_token %}
-        <button type="submit" class="btn btn-outline-success" title="Consulta en MoreApp si el destinatario ya la terminó">
-          <i class="bi bi-arrow-repeat"></i> ¿Ya la terminaron?
+        <button type="submit" class="delco-action-btn is-import" title="Consulta en MoreApp si el destinatario ya la terminó">
+          <span class="delco-action-btn-icon"><i class="bi bi-arrow-repeat"></i></span>
+          Revisar
         </button>
       </form>
       {% endif %}
       {% if puede_pdf %}
-      <a href="{% url 'moreapp_tarea_pdf' tarea.pk %}" class="btn btn-outline-danger" target="_blank" rel="noopener" id="js-tarea-pdf">
-        <i class="bi bi-file-earmark-pdf"></i> Ver PDF
+      <a href="{% url 'moreapp_tarea_pdf' tarea.pk %}" class="delco-action-btn is-danger" target="_blank" rel="noopener" id="js-tarea-pdf">
+        <span class="delco-action-btn-icon"><i class="bi bi-file-earmark-pdf"></i></span>
+        PDF
       </a>
       {% endif %}
       {% if registro %}
-      <a href="{% url 'reportes_moreapp_detalle' registro.pk %}" class="btn btn-outline-primary" id="js-tarea-informe">
-        <i class="bi bi-file-earmark-text"></i> Informe MoreApp
+      <a href="{% url 'reportes_moreapp_detalle' registro.pk %}" class="delco-action-btn is-help" id="js-tarea-informe">
+        <span class="delco-action-btn-icon"><i class="bi bi-file-earmark-text"></i></span>
+        Informe
       </a>
       {% endif %}
       {% if submission_id and tarea.form_id %}
-      <a href="{% url 'moreapp_api_registro' tarea.form_id submission_id %}" class="btn btn-outline-secondary" id="js-tarea-contenido">
-        <i class="bi bi-ui-checks"></i> Contenido MoreApp
+      <a href="{% url 'moreapp_api_registro' tarea.form_id submission_id %}" class="delco-action-btn is-help" id="js-tarea-contenido">
+        <span class="delco-action-btn-icon"><i class="bi bi-ui-checks"></i></span>
+        Contenido
       </a>
       {% endif %}
-      <a href="{% url 'moreapp_tareas_list' %}" class="btn btn-secondary">
-        <i class="bi bi-arrow-left"></i> Volver
+      <a href="{% url 'moreapp_tareas_list' %}" class="delco-action-btn is-help" id="js-tarea-volver">
+        <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+        Volver
       </a>
-      <form method="post" action="{% url 'moreapp_tarea_eliminar' tarea.pk %}" class="d-inline" id="js-form-eliminar-tarea">
+      <form method="post" action="{% url 'moreapp_tarea_eliminar' tarea.pk %}" id="js-form-eliminar-tarea">
         {% csrf_token %}
-        <button type="submit" class="btn btn-outline-danger">
-          <i class="bi bi-trash"></i> Eliminar
+        <button type="submit" class="delco-action-btn is-danger">
+          <span class="delco-action-btn-icon"><i class="bi bi-trash"></i></span>
+          Eliminar
         </button>
       </form>
+    </div>
     </div>
   </div>
 
@@ -65,11 +74,9 @@
 
   <div class="row g-4">
     <div class="col-lg-7">
-      <div class="card shadow-sm mb-4 delco-panel-card">
-        <div class="card-header card-header-delco py-2">
-          <h6 class="mb-0"><i class="bi bi-clipboard-data"></i> Contenido rellenado</h6>
-        </div>
-        <div class="card-body" id="js-campos-rellenados">
+      <div class="delco-catalogo-panel mb-4">
+        <div class="delco-catalogo-panel-head"><span><i class="bi bi-clipboard-data me-1"></i> Contenido rellenado</span></div>
+        <div class="delco-catalogo-panel-body" id="js-campos-rellenados">
           {% if respuestas %}
           {% include "integraciones/_moreapp_respuestas.html" with campos=respuestas %}
           {% else %}
@@ -84,11 +91,9 @@
         </div>
       </div>
 
-      <div class="card shadow-sm mb-4 delco-panel-card">
-        <div class="card-header card-header-delco py-2">
-          <h6 class="mb-0"><i class="bi bi-clock-history"></i> Historial</h6>
-        </div>
-        <div class="card-body">
+      <div class="delco-catalogo-panel mb-4">
+        <div class="delco-catalogo-panel-head"><span><i class="bi bi-clock-history me-1"></i> Historial</span></div>
+        <div class="delco-catalogo-panel-body">
           {% for evento in tarea.eventos.all %}
           <div class="d-flex justify-content-between border-bottom py-2">
             <span>{{ evento.get_tipo_display }} <span class="text-muted small">· {{ evento.get_origen_display }}</span></span>
@@ -102,11 +107,9 @@
     </div>
 
     <div class="col-lg-5">
-      <div class="card shadow-sm mb-4 delco-panel-card">
-        <div class="card-header card-header-delco py-2">
-          <h6 class="mb-0">Datos de la tarea</h6>
-        </div>
-        <div class="card-body">
+      <div class="delco-catalogo-panel mb-4">
+        <div class="delco-catalogo-panel-head">Datos de la tarea</div>
+        <div class="delco-catalogo-panel-body">
           <dl class="row mb-0">
             <dt class="col-sm-5">Título</dt>
             <dd class="col-sm-7">{{ tarea.titulo|default:"—" }}</dd>
@@ -158,11 +161,9 @@
         </div>
       </div>
 
-      <div class="card shadow-sm mb-4 delco-panel-card">
-        <div class="card-header card-header-delco py-2">
-          <h6 class="mb-0"><i class="bi bi-chat-left-text"></i> Observaciones</h6>
-        </div>
-        <div class="card-body">
+      <div class="delco-catalogo-panel mb-4">
+        <div class="delco-catalogo-panel-head"><span><i class="bi bi-chat-left-text me-1"></i> Observaciones</span></div>
+        <div class="delco-catalogo-panel-body">
           <form method="post" action="{% url 'moreapp_tarea_observaciones' tarea.pk %}">
             {% csrf_token %}
             <textarea name="observaciones" class="form-control mb-2" rows="4" placeholder="Instrucciones o notas del trabajo…">{{ tarea.observaciones }}</textarea>
@@ -203,7 +204,7 @@
     link.target = '_blank';
     link.rel = 'noopener';
     link.innerHTML = html;
-    var volver = acciones.querySelector('a.btn-secondary');
+    var volver = document.getElementById('js-tarea-volver') || acciones.querySelector('a.is-help');
     acciones.insertBefore(link, volver || acciones.firstChild);
   }
 
@@ -277,13 +278,13 @@
     var sync = document.getElementById('js-ultima-sync');
     if (sync && tarea.ultima_sync) sync.textContent = tarea.ultima_sync;
     if (tarea.puede_pdf && tarea.pdf_url) {
-      ensureLink('js-tarea-pdf', tarea.pdf_url, 'btn btn-outline-danger', '<i class="bi bi-file-earmark-pdf"></i> Ver PDF');
+      ensureLink('js-tarea-pdf', tarea.pdf_url, 'delco-action-btn is-danger', '<span class="delco-action-btn-icon"><i class="bi bi-file-earmark-pdf"></i></span> PDF');
     }
     if (tarea.informe_url) {
-      ensureLink('js-tarea-informe', tarea.informe_url, 'btn btn-outline-primary', '<i class="bi bi-file-earmark-text"></i> Informe MoreApp');
+      ensureLink('js-tarea-informe', tarea.informe_url, 'delco-action-btn is-help', '<span class="delco-action-btn-icon"><i class="bi bi-file-earmark-text"></i></span> Informe');
     }
     if (tarea.contenido_url) {
-      ensureLink('js-tarea-contenido', tarea.contenido_url, 'btn btn-outline-secondary', '<i class="bi bi-ui-checks"></i> Contenido MoreApp');
+      ensureLink('js-tarea-contenido', tarea.contenido_url, 'delco-action-btn is-help', '<span class="delco-action-btn-icon"><i class="bi bi-ui-checks"></i></span> Contenido');
     }
     pintarCampos(tarea.campos_rellenados, tarea.respuestas);
     if (tarea.estado !== 'ASIGNADA') {

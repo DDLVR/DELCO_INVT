@@ -4,34 +4,44 @@
 {% block title %}ID {{ carga.id }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
-    <div>
-      <a href="{% url 'cargas_list' %}" class="small text-decoration-none">&larr; Volver al listado</a>
-      <h1 class="h3 mb-1">ID {{ carga.id }}</h1>
-      <p class="mb-0">
-        {% if carga.cliente %}
-        Cliente <a href="{% url 'cliente_historial' carga.cliente_id %}">{{ carga.cliente.numero_cliente }}</a>
-        {% if carga.cliente.customer_name %} — {{ carga.cliente.customer_name }}{% endif %}
-        {% else %}
-        {{ carga.titulo }}
-        {% endif %}
-      </p>
-    </div>
-    <div class="d-flex flex-wrap gap-2 align-items-center">
-      {% badge_carga_estado carga.estado carga.get_estado_display %}
-      <span class="badge bg-secondary">{{ carga.get_tipo_display }}</span>
-      {% badge_prioridad carga.prioridad carga.get_prioridad_display %}
-      <a href="{% url 'cargas_pdf' carga.id %}" class="btn btn-sm btn-outline-danger" title="Descargar PDF con datos de la carga">
-        <i class="bi bi-file-earmark-pdf"></i> Descargar PDF
-      </a>
-      <button type="button"
-              class="btn btn-sm btn-outline-danger"
-              id="btnEliminarCargaDetalle"
-              data-url="{% url 'cargas_eliminar' carga.id %}"
-              data-adjuntos="{{ adjuntos|length }}">
-        <i class="bi bi-trash"></i> Eliminar
-      </button>
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Cargas</p>
+        <h1 class="h3 mb-1">ID {{ carga.id }}</h1>
+        <p class="text-muted mb-2">
+          {% if carga.cliente %}
+          Cliente <a href="{% url 'cliente_historial' carga.cliente_id %}">{{ carga.cliente.numero_cliente }}</a>
+          {% if carga.cliente.customer_name %} — {{ carga.cliente.customer_name }}{% endif %}
+          {% else %}
+          {{ carga.titulo }}
+          {% endif %}
+        </p>
+        <div class="d-flex flex-wrap gap-2">
+          {% badge_carga_estado carga.estado carga.get_estado_display %}
+          <span class="badge bg-secondary">{{ carga.get_tipo_display }}</span>
+          {% badge_prioridad carga.prioridad carga.get_prioridad_display %}
+        </div>
+      </div>
+      <div class="delco-action-bar">
+        <a href="{% url 'cargas_pdf' carga.id %}" class="delco-action-btn is-danger" title="Descargar PDF con datos de la carga">
+          <span class="delco-action-btn-icon"><i class="bi bi-file-earmark-pdf"></i></span>
+          PDF
+        </a>
+        <button type="button"
+                class="delco-action-btn is-danger"
+                id="btnEliminarCargaDetalle"
+                data-url="{% url 'cargas_eliminar' carga.id %}"
+                data-adjuntos="{{ adjuntos|length }}">
+          <span class="delco-action-btn-icon"><i class="bi bi-trash"></i></span>
+          Eliminar
+        </button>
+        <a href="{% url 'cargas_list' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+          Volver
+        </a>
+      </div>
     </div>
   </div>
 

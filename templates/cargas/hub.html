@@ -4,21 +4,31 @@
 {% block title %}Cargas administrativas{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-    <div>
-      <h1 class="h3 mb-1"><i class="bi bi-kanban"></i> Cargas administrativas</h1>
-      <p class="text-muted mb-0">Distribuye y sigue verificaciones y validaciones de oficina.</p>
-    </div>
-    <div class="d-flex flex-wrap gap-2">
-      <a href="{% url 'cargas_list' %}" class="btn btn-outline-secondary">Ver todas</a>
-      <a href="{% url 'cargas_list' %}?nueva=1" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nueva carga</a>
-      <form method="post" action="{% url 'cargas_generar_pendientes' %}" class="d-inline">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-warning text-dark">
-          <i class="bi bi-lightning"></i> Generar desde pendientes
-        </button>
-      </form>
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Cargas</p>
+        <h1 class="h3 mb-1">Cargas administrativas</h1>
+        <p class="text-muted mb-0">Distribuye y sigue verificaciones y validaciones de oficina.</p>
+      </div>
+      <div class="delco-action-bar">
+        <a href="{% url 'cargas_list' %}?nueva=1" class="delco-action-btn is-add">
+          <span class="delco-action-btn-icon"><i class="bi bi-plus-lg"></i></span>
+          Nueva carga
+        </a>
+        <form method="post" action="{% url 'cargas_generar_pendientes' %}">
+          {% csrf_token %}
+          <button type="submit" class="delco-action-btn is-full">
+            <span class="delco-action-btn-icon"><i class="bi bi-lightning"></i></span>
+            Generar
+          </button>
+        </form>
+        <a href="{% url 'cargas_list' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-list-task"></i></span>
+          Ver todas
+        </a>
+      </div>
     </div>
   </div>
 

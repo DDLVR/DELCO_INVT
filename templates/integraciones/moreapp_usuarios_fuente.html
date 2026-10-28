@@ -3,12 +3,22 @@
 {% block title %}{{ titulo }} · Usuario MoreApp{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-    <div>
-      <h1 class="h3 mb-1"><i class="bi bi-people"></i> {{ titulo }}</h1>
-      <p class="text-muted mb-0">{{ descripcion }}{% if datasource_name %} Fuente: <strong>{{ datasource_name }}</strong>.{% endif %}</p>
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Usuarios MoreApp</p>
+        <h1 class="h3 mb-1">{{ titulo }}</h1>
+        <p class="text-muted mb-0">{{ descripcion }}{% if datasource_name %} Fuente: <strong>{{ datasource_name }}</strong>.{% endif %}</p>
+      </div>
+      <div class="delco-action-bar">
+        <a href="{% url 'moreapp_api_catalogo' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-journal-text"></i></span>
+          Catálogo
+        </a>
+      </div>
     </div>
+    {% include 'integraciones/_moreapp_usuarios_nav.html' %}
   </div>
 
   {% if error %}
@@ -16,40 +26,41 @@
   {% endif %}
 
   <div class="row g-2 mb-3">
-    <div class="col-md-6">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Filas visibles</div>
-        <div class="fs-4 fw-semibold">{{ filas|length }}</div>
-      </div></div>
+    <div class="col-6 col-lg-6">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-list-ul"></i></span>
+        <div>
+          <div class="text-muted small">Filas visibles</div>
+          <div class="fs-4 fw-semibold">{{ filas|length }}</div>
+        </div>
+      </div>
     </div>
-    <div class="col-md-6">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">En MoreApp</div>
-        <div class="fs-4 fw-semibold">{{ total|default:"—" }}</div>
-      </div></div>
-    </div>
-  </div>
-
-  <div class="card shadow-sm mb-3 delco-panel-card">
-    <div class="card-body">
-      <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-8">
-          <label class="form-label">Buscar</label>
-          <input type="text" name="query" class="form-control" value="{{ query }}" placeholder="Nombre o id">
+    <div class="col-6 col-lg-6">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-info"><i class="bi bi-cloud"></i></span>
+        <div>
+          <div class="text-muted small">En MoreApp</div>
+          <div class="fs-4 fw-semibold">{{ total|default:"—" }}</div>
         </div>
-        <div class="col-md-4">
-          <button type="submit" class="btn btn-primary w-100">Filtrar</button>
-        </div>
-        {% if tiene_filtros %}
-        <div class="col-12">
-          <a href="{% url request.resolver_match.url_name %}" class="btn btn-outline-secondary btn-sm">Limpiar filtros</a>
-        </div>
-        {% endif %}
-      </form>
+      </div>
     </div>
   </div>
 
-  <div class="card shadow-sm delco-panel-card">
+  <div class="delco-catalogo-filters mb-3">
+    <form method="get">
+      <div class="delco-catalogo-search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" name="query" class="form-control" value="{{ query }}" placeholder="Nombre o id…" autocomplete="off">
+      </div>
+      {% if tiene_filtros %}
+      <div class="mt-2">
+        <a href="{% url request.resolver_match.url_name %}" class="btn btn-link btn-sm px-0">Limpiar filtros</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+
+  <div class="delco-catalogo-panel">
     {% if truncadas %}
     <div class="px-3 pt-2 small text-muted">Se muestran las primeras {{ filas|length }} filas de {{ total }}.</div>
     {% endif %}

@@ -3,13 +3,22 @@
 {% block title %}Cuentas MoreApp{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
-    <div>
-      <h1 class="h3 mb-1"><i class="bi bi-people"></i> Cuentas MoreApp</h1>
-      <p class="text-muted mb-0">Listado de correos MoreApp. Asigna a mano un técnico de la data source Técnicos a cada cuenta. En las tareas se elige el nombre del técnico; el correo se usa por detrás. No se copian a la intranet.</p>
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Usuarios MoreApp</p>
+        <h1 class="h3 mb-1">Cuentas MoreApp</h1>
+        <p class="text-muted mb-0">Asigna a mano un técnico de la data source Técnicos a cada correo. En las tareas se elige el nombre; el correo se usa por detrás.</p>
+      </div>
+      <div class="delco-action-bar">
+        <a href="{% url 'moreapp_api_catalogo' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-journal-text"></i></span>
+          Catálogo
+        </a>
+      </div>
     </div>
-    <a href="{% url 'moreapp_api_catalogo' %}" class="btn btn-outline-secondary btn-sm">Catálogo MoreApp</a>
+    {% include 'integraciones/_moreapp_usuarios_nav.html' %}
   </div>
 
   {% if error %}
@@ -17,52 +26,59 @@
   {% endif %}
 
   <div class="row g-2 mb-3">
-    <div class="col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Cuentas visibles</div>
-        <div class="fs-4 fw-semibold">{{ usuarios|length }}</div>
-      </div></div>
+    <div class="col-6 col-lg-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-people"></i></span>
+        <div>
+          <div class="text-muted small">Cuentas visibles</div>
+          <div class="fs-4 fw-semibold">{{ usuarios|length }}</div>
+        </div>
+      </div>
     </div>
-    <div class="col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Activos</div>
-        <div class="fs-4 fw-semibold text-success">{{ activos }}</div>
-      </div></div>
+    <div class="col-6 col-lg-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-ok"><i class="bi bi-check-circle"></i></span>
+        <div>
+          <div class="text-muted small">Activos</div>
+          <div class="fs-4 fw-semibold text-success">{{ activos }}</div>
+        </div>
+      </div>
     </div>
-    <div class="col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Enlazados</div>
-        <div class="fs-4 fw-semibold text-primary">{{ enlazados }}</div>
-      </div></div>
+    <div class="col-6 col-lg-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-info"><i class="bi bi-link-45deg"></i></span>
+        <div>
+          <div class="text-muted small">Enlazados</div>
+          <div class="fs-4 fw-semibold text-primary">{{ enlazados }}</div>
+        </div>
+      </div>
     </div>
-    <div class="col-md-3">
-      <div class="card delco-panel-card"><div class="card-body py-3">
-        <div class="text-muted small">Deshabilitados</div>
-        <div class="fs-4 fw-semibold">{{ deshabilitados }}</div>
-      </div></div>
+    <div class="col-6 col-lg-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-muted"><i class="bi bi-slash-circle"></i></span>
+        <div>
+          <div class="text-muted small">Deshabilitados</div>
+          <div class="fs-4 fw-semibold">{{ deshabilitados }}</div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <div class="card shadow-sm mb-3 delco-panel-card">
-    <div class="card-body">
-      <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-8">
-          <label class="form-label">Nombre, correo o técnico</label>
-          <input type="text" name="query" class="form-control" value="{{ query }}" placeholder="Ej. juan, @delcochile, ALEXANDER">
-        </div>
-        <div class="col-md-4">
-          <button type="submit" class="btn btn-primary w-100">Filtrar</button>
-        </div>
-        {% if tiene_filtros %}
-        <div class="col-12">
-          <a href="{% url 'usuarios_moreapp' %}" class="btn btn-outline-secondary btn-sm">Limpiar filtros</a>
-        </div>
-        {% endif %}
-      </form>
-    </div>
+  <div class="delco-catalogo-filters mb-3">
+    <form method="get">
+      <div class="delco-catalogo-search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" name="query" class="form-control" value="{{ query }}" placeholder="Nombre, correo o técnico…" autocomplete="off">
+      </div>
+      {% if tiene_filtros %}
+      <div class="mt-2">
+        <a href="{% url 'usuarios_moreapp' %}" class="btn btn-link btn-sm px-0">Limpiar filtros</a>
+      </div>
+      {% endif %}
+    </form>
   </div>
 
-  <div class="card shadow-sm delco-panel-card">
+  <div class="delco-catalogo-panel">
     {% csrf_token %}
     {% if not tecnicos %}
     <div class="px-3 pt-3 small text-warning">No se pudieron cargar los técnicos de la data source MoreApp. El cruce usa esas filas.</div>
@@ -72,18 +88,18 @@
         <thead>
           <tr>
             <th>Correo MoreApp</th>
-            <th>Usuario MoreApp</th>
-            <th>Estado</th>
+            <th class="d-none d-md-table-cell">Usuario MoreApp</th>
+            <th class="d-none d-sm-table-cell">Estado</th>
             <th>Técnico MoreApp</th>
-            <th>Cruce</th>
+            <th class="d-none d-sm-table-cell">Cruce</th>
           </tr>
         </thead>
         <tbody>
           {% for usuario in usuarios %}
           <tr class="js-cuenta-moreapp" data-email="{{ usuario.email }}">
-            <td>{{ usuario.email|default:"—" }}</td>
-            <td>{{ usuario.username|default:usuario.nombre_moreapp|default:"—" }}</td>
-            <td>
+            <td class="delco-cell-wrap">{{ usuario.email|default:"—" }}</td>
+            <td class="d-none d-md-table-cell">{{ usuario.username|default:usuario.nombre_moreapp|default:"—" }}</td>
+            <td class="d-none d-sm-table-cell">
               {% if usuario.disabled %}
               <span class="badge bg-secondary">Deshabilitado</span>
               {% else %}
@@ -101,7 +117,7 @@
                 {% endfor %}
               </select>
             </td>
-            <td>
+            <td class="d-none d-sm-table-cell">
               {% if usuario.enlazado %}
               <span class="badge bg-success js-vinculo-estado">Enlazado</span>
               {% else %}

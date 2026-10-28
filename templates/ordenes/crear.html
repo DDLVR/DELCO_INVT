@@ -3,10 +3,19 @@
 {% block title %}Nueva Orden de Trabajo{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-5">
-    <div class="row mb-4">
-        <div class="col-12">
-            <h1><i class="bi bi-plus-circle"></i> Nueva Orden de Trabajo</h1>
+<div class="container-fluid py-4 delco-catalogo">
+    <div class="delco-catalogo-hero mb-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <p class="delco-catalogo-kicker mb-1">Órdenes</p>
+                <h1 class="h3 mb-1">Nueva orden de trabajo</h1>
+            </div>
+            <div class="delco-action-bar">
+                <a href="{% url 'ordenes_list' %}" class="delco-action-btn is-help">
+                    <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+                    Volver
+                </a>
+            </div>
         </div>
     </div>
 

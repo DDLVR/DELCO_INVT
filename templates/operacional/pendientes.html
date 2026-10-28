@@ -5,20 +5,25 @@
 {% block title %}Cola de Pendientes Operativos{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-fluid py-4 delco-catalogo">
 
-    <div class="row mb-3 align-items-center">
-        <div class="col">
-            <h1 class="mb-1 h3"><i class="bi bi-list-check"></i> Pendientes Operativos MoreApp</h1>
-            <p class="text-muted mb-0 small">Cola de revisión operativa: pendientes, advertencias y acciones rápidas.</p>
-        </div>
-        <div class="col-auto">
-            <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary btn-sm">
-                <i class="bi bi-arrow-left"></i> Dashboard
-            </a>
-            <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-outline-primary btn-sm">
-                <i class="bi bi-cloud-download"></i> Todos los registros
-            </a>
+    <div class="delco-catalogo-hero mb-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <p class="delco-catalogo-kicker mb-1">MoreApp</p>
+                <h1 class="h3 mb-1">Pendientes operativos</h1>
+                <p class="text-muted mb-0">Cola de revisión: pendientes, advertencias y acciones rápidas.</p>
+            </div>
+            <div class="delco-action-bar">
+                <a href="{% url 'dashboard' %}" class="delco-action-btn is-help">
+                    <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+                    Dashboard
+                </a>
+                <a href="{% url 'reportes_moreapp_list' %}" class="delco-action-btn is-export">
+                    <span class="delco-action-btn-icon"><i class="bi bi-cloud-download"></i></span>
+                    Registros
+                </a>
+            </div>
         </div>
     </div>
 

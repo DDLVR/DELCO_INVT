@@ -4,12 +4,14 @@
 
 {% block content %}
 <div class="container-fluid py-4 delco-registros">
-  <div class="d-flex flex-wrap gap-2 mb-3">
-    <a href="{% url 'moreapp_api_form_registros' form_id %}{% if filtros_qs %}?{{ filtros_qs }}{% endif %}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-arrow-left"></i> Volver a registros
+  <div class="delco-action-bar mb-3">
+    <a href="{% url 'moreapp_api_form_registros' form_id %}{% if filtros_qs %}?{{ filtros_qs }}{% endif %}" class="delco-action-btn is-help">
+      <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+      Volver
     </a>
-    <a href="{% url 'moreapp_api_formulario' form_id %}" class="btn btn-outline-primary btn-sm">
-      <i class="bi bi-diagram-3"></i> Ver estructura
+    <a href="{% url 'moreapp_api_formulario' form_id %}" class="delco-action-btn is-help">
+      <span class="delco-action-btn-icon"><i class="bi bi-diagram-3"></i></span>
+      Estructura
     </a>
   </div>
 
@@ -20,7 +22,7 @@
           {{ registro.tecnico|default:"?"|make_list|first|upper }}
         </div>
         <div class="min-w-0">
-          <p class="small text-uppercase text-muted mb-1">Registro MoreApp</p>
+          <p class="delco-catalogo-kicker mb-1">Registro MoreApp</p>
           <h1 class="h3 mb-1">{{ formulario.name|default:"Formulario" }}</h1>
           <p class="text-muted mb-0">
             {{ registro.tecnico|default:"Técnico no informado" }}
@@ -41,37 +43,37 @@
 
   <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3">
-      <div class="delco-registro-stat">
-        <i class="bi bi-calendar3"></i>
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-calendar3"></i></span>
         <div>
-          <div class="small text-muted">Fecha</div>
+          <div class="text-muted small">Fecha</div>
           <div class="fw-semibold">{{ registro.created|default:"—" }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-lg-3">
-      <div class="delco-registro-stat">
-        <i class="bi bi-person"></i>
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-info"><i class="bi bi-person"></i></span>
         <div>
-          <div class="small text-muted">Técnico responsable</div>
+          <div class="text-muted small">Técnico responsable</div>
           <div class="fw-semibold">{{ registro.tecnico|default:"—" }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-lg-3">
-      <div class="delco-registro-stat">
-        <i class="bi bi-person-vcard"></i>
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-person-vcard"></i></span>
         <div>
-          <div class="small text-muted">N° cliente</div>
+          <div class="text-muted small">N° cliente</div>
           <div class="fw-semibold">{{ registro.cliente|default:"—" }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-lg-3">
-      <div class="delco-registro-stat">
-        <i class="bi bi-list-check"></i>
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-ok"><i class="bi bi-list-check"></i></span>
         <div>
-          <div class="small text-muted">Campos con valor</div>
+          <div class="text-muted small">Campos con valor</div>
           <div class="fw-semibold">{{ campos_con_valor|length }}{% if fotos_count %} <span class="text-muted fw-normal">· {{ fotos_count }} foto{{ fotos_count|pluralize }}</span>{% endif %}</div>
         </div>
       </div>

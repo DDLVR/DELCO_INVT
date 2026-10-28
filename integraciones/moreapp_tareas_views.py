@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,7 +19,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from clientes.models import Cliente
 from web.decorators import admin_or_administrativo
 
-from .models import MoreAppTareaEnviada
+from .models import MoreAppFormularioAsignado, MoreAppTareaEnviada
 from .moreapp_api import (
     MoreAppApiConfigError,
     MoreAppApiError,
@@ -120,7 +121,24 @@ def _tiene_version_publicada(row: Dict[str, Any]) -> bool:
     return bool(str(published or "").strip())
 
 
-def _formularios_activos() -> List[Dict[str, Any]]:
+def _ids_formularios_asignados(usuario) -> Optional[set]:
+    """None = todos (ADMIN). Conjunto vacío = ninguno asignado."""
+    if usuario is None or getattr(usuario, "rol", "") == "ADMIN":
+        return None
+    return set(
+        MoreAppFormularioAsignado.objects.filter(usuario=usuario).values_list("form_id", flat=True)
+    )
+
+
+def _usuario_puede_usar_formulario(usuario, form_id: str) -> bool:
+    permitidos = _ids_formularios_asignados(usuario)
+    if permitidos is None:
+        return True
+    return str(form_id or "").strip() in permitidos
+
+
+def _formularios_activos(usuario=None) -> List[Dict[str, Any]]:
+    permitidos = _ids_formularios_asignados(usuario)
     rows = []
     for item in list_all_forms():
         if not isinstance(item, dict):
@@ -129,6 +147,9 @@ def _formularios_activos() -> List[Dict[str, Any]]:
         if str(row.get("status") or "").upper() == "TRASH":
             continue
         if not _tiene_version_publicada(row):
+            continue
+        form_id = str(row.get("id") or "")
+        if permitidos is not None and form_id not in permitidos:
             continue
         rows.append(row)
     return rows
@@ -562,7 +583,7 @@ def _contexto_destinatarios(request):
         "max_lote": MAX_LOTE,
     }
     try:
-        context["formularios"] = _formularios_activos()
+        context["formularios"] = _formularios_activos(getattr(request, "user", None))
         usuarios, grupos = _usuarios_moreapp()
         context["usuarios"] = usuarios
         context["grupos"] = grupos
@@ -858,7 +879,6 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
         conteos_alertas_tareas,
         intervalo_auto_sync_tareas,
         kpis_tareas,
-        marcar_alertas_leidas,
         sincronizar_tareas_si_corresponde,
     )
 
@@ -869,7 +889,6 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
 
     user = getattr(request, "user", None)
     context["tareas_aviso"] = conteos_alertas_tareas(user)
-    marcar_alertas_leidas(user)
 
     estado_filtro = (request.GET.get("estado") or "").strip()
     form_filtro = (request.GET.get("formulario") or "").strip()
@@ -1163,6 +1182,54 @@ def _aviso_sync_detalle(tarea: MoreAppTareaEnviada, result: Optional[Dict[str, A
         "tipo": "warning",
         "mensaje": "MoreApp no devolvió esta tarea. Puede seguir pendiente o el aviso no llegó a crearse.",
     }
+
+
+def _cuerpo_json(request) -> Dict[str, Any]:
+    if request.content_type and "json" in (request.content_type or ""):
+        try:
+            raw = json.loads(request.body.decode("utf-8") or "{}")
+        except (TypeError, ValueError, UnicodeDecodeError):
+            return {}
+        return raw if isinstance(raw, dict) else {}
+    return {key: request.POST.get(key) for key in request.POST}
+
+
+@require_GET
+@admin_or_administrativo
+def notificaciones_list_view(request):
+    """Bandeja persistente de alertas del perfil (campana)."""
+    from .moreapp_tareas_ciclo import listar_alertas_inbox
+
+    payload = listar_alertas_inbox(request.user)
+    payload["ok"] = True
+    return JsonResponse(payload)
+
+
+@require_POST
+@admin_or_administrativo
+def notificaciones_leer_view(request):
+    """Marca una alerta o todas como leídas, sin borrar el historial."""
+    from .moreapp_tareas_ciclo import (
+        listar_alertas_inbox,
+        marcar_alerta_leida,
+        marcar_alertas_leidas,
+    )
+
+    body = _cuerpo_json(request)
+    todas = str(body.get("todas") or "").strip().lower() in ("1", "true", "yes")
+    pk_raw = body.get("id")
+    if todas:
+        marcar_alertas_leidas(request.user)
+    elif pk_raw not in (None, ""):
+        try:
+            marcar_alerta_leida(request.user, int(pk_raw))
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "error": "Identificador inválido."}, status=400)
+    else:
+        return JsonResponse({"ok": False, "error": "Indica la notificación o todas."}, status=400)
+    payload = listar_alertas_inbox(request.user)
+    payload["ok"] = True
+    return JsonResponse(payload)
 
 
 @require_GET
@@ -1492,6 +1559,11 @@ def tareas_eliminar_masivo_view(request):
 def tarea_campos_view(request, form_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
+        if not _usuario_puede_usar_formulario(request.user, form_id):
+            return JsonResponse(
+                {"ok": False, "error": "No tienes este formulario asignado.", "campos": []},
+                status=403,
+            )
         formulario = get_form(form_id)
         campos = _campos_desde_formulario(formulario if isinstance(formulario, dict) else {})
         if not campos and isinstance(formulario, dict):
@@ -1532,7 +1604,7 @@ def tarea_crear_view(request):
         "sugerencias_proyecto": _sugerencias_proyecto(),
     }
     try:
-        context["formularios"] = _formularios_activos()
+        context["formularios"] = _formularios_activos(request.user)
         usuarios, grupos = _usuarios_moreapp()
         context["usuarios"] = usuarios
         context["grupos"] = grupos
@@ -1590,6 +1662,8 @@ def tarea_crear_view(request):
     elegido = next((item for item in context["formularios"] if str(item.get("id") or "") == form_id), None)
     if not form_id:
         return _fail_crear("Elige el formulario que hay que llenar.")
+    if not _usuario_puede_usar_formulario(request.user, form_id):
+        return _fail_crear("No tienes este formulario asignado.")
     if not elegido or not _tiene_version_publicada(elegido):
         return _fail_crear(
             "Ese formulario no tiene una versión publicada en MoreApp. Elige uno publicado o publícalo primero."
@@ -1733,7 +1807,7 @@ def tarea_lote_csv_view(request):
         }
         form = resolver_formulario(fila.get("formulario") or "", context["formularios"])
         if not form:
-            resultado["error"] = "Formulario no encontrado o sin versión publicada."
+            resultado["error"] = "Formulario no encontrado, sin publicar o no asignado a tu usuario."
             resultados.append(resultado)
             continue
         form_id = str(form.get("id") or "").strip()
@@ -1902,7 +1976,13 @@ def tarea_lote_clientes_view(request):
     all_recipients, groups_sel, dest_error = _destinatarios_finales(
         context["usuarios_sel"], context["grupos_sel"], context["usuarios"]
     )
-    if not form_id or not elegido:
+    if not form_id:
+        messages.error(request, "Elige un formulario publicado.")
+        return _render_tareas_list(request, context, lote_modal="clientes")
+    if not _usuario_puede_usar_formulario(request.user, form_id):
+        messages.error(request, "No tienes este formulario asignado.")
+        return _render_tareas_list(request, context, lote_modal="clientes")
+    if not elegido:
         messages.error(request, "Elige un formulario publicado.")
         return _render_tareas_list(request, context, lote_modal="clientes")
     if dest_error:
@@ -2016,7 +2096,7 @@ def tarea_lote_listado_view(request):
                     "cliente": str(fila["cantidad"]),
                     "ok": False,
                     "precarga": False,
-                    "error": "Formulario no encontrado o sin versión publicada.",
+                    "error": "Formulario no encontrado, sin publicar o no asignado a tu usuario.",
                 }
             )
             continue

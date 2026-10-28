@@ -3,15 +3,24 @@
 {% block title %}Formularios asignados{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-4">
-  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
-    <div>
-      <h1 class="h3 mb-1"><i class="bi bi-ui-checks"></i> Formularios asignados</h1>
-      {% if es_admin %}
-      <p class="text-muted mb-0">Listado de formularios MoreApp ya asignados a usuarios de la intranet.</p>
-      {% else %}
-      <p class="text-muted mb-0">Formularios MoreApp que un administrador te asignó para trabajar en la plataforma.</p>
-      {% endif %}
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">MoreApp</p>
+        <h1 class="h3 mb-1">Formularios asignados</h1>
+        {% if es_admin %}
+        <p class="text-muted mb-0">Listado de formularios MoreApp ya asignados a usuarios de la intranet.</p>
+        {% else %}
+        <p class="text-muted mb-0">Formularios MoreApp que un administrador te asignó para trabajar en la plataforma.</p>
+        {% endif %}
+      </div>
+      <div class="delco-action-bar">
+        <a href="{% url 'moreapp_api_catalogo' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-grid"></i></span>
+          Catálogo
+        </a>
+      </div>
     </div>
   </div>
 
@@ -19,25 +28,23 @@
   <div class="alert alert-warning">{{ error }}</div>
   {% endif %}
 
-  <div class="card shadow-sm mb-3">
-    <div class="card-body">
-      <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-6 col-lg-4">
-          <label class="form-label small mb-1" for="query">Buscar por nombre</label>
-          <input class="form-control" id="query" name="query" value="{{ query }}" placeholder="Nombre del formulario">
-        </div>
-        <div class="col-auto">
-          <button type="submit" class="btn btn-primary">Buscar</button>
-          {% if tiene_filtros %}
-          <a href="{% url 'moreapp_formularios_list' %}" class="btn btn-outline-secondary">Limpiar</a>
-          {% endif %}
-        </div>
-      </form>
-    </div>
+  <div class="delco-catalogo-filters mb-3">
+    <form method="get">
+      <div class="delco-catalogo-search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" class="form-control" id="query" name="query" value="{{ query }}" placeholder="Busca por nombre del formulario…" autocomplete="off">
+      </div>
+      {% if tiene_filtros %}
+      <div class="mt-2">
+        <a href="{% url 'moreapp_formularios_list' %}" class="btn btn-link btn-sm px-0">Limpiar filtros</a>
+      </div>
+      {% endif %}
+    </form>
   </div>
 
   {% if not formularios %}
-  <div class="alert alert-light border">
+  <div class="delco-catalogo-empty">
+    <i class="bi bi-inboxes"></i>
     {% if es_admin %}
     Aún no hay formularios asignados.
     {% else %}
@@ -48,23 +55,28 @@
   <div class="row g-3">
     {% for form in formularios %}
     <div class="col-md-6 col-xl-4">
-      <div class="card shadow-sm h-100 delco-panel-card">
-        <div class="card-body d-flex flex-column">
-          <div class="d-flex justify-content-between gap-2 mb-2">
-            <h2 class="h6 mb-0">{{ form.name }}</h2>
-            <span class="badge bg-{{ form.status_badge }}">{{ form.status|default:"—" }}</span>
+      <article class="delco-catalogo-card h-100">
+        <div class="delco-catalogo-card-accent"></div>
+        <div class="delco-catalogo-card-body">
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+            <div class="d-flex align-items-start gap-2 min-w-0">
+              <span class="delco-catalogo-form-icon" aria-hidden="true"><i class="bi bi-ui-checks"></i></span>
+              <div class="min-w-0">
+                <h2 class="h6 mb-1 text-break">{{ form.name }}</h2>
+                <span class="badge rounded-pill text-bg-{{ form.status_badge }}">{{ form.status|default:"—" }}</span>
+              </div>
+            </div>
           </div>
           {% if form.description %}
           <p class="small text-muted mb-2">{{ form.description|truncatechars:140 }}</p>
           {% endif %}
-          <div class="small text-muted mb-3">
-            <div>Versión publicada: <code>{{ form.published_version|default:"—" }}</code></div>
-            <div>Último registro: <span class="js-ultimo-registro" data-url="{% url 'moreapp_api_form_ultimo_registro' form.id %}">…</span></div>
+          <div class="delco-catalogo-meta mb-3">
+            <div><i class="bi bi-layers me-1"></i>Versión: {{ form.published_version|default:"—" }}</div>
+            <div><i class="bi bi-clock-history me-1"></i>Último registro: <span class="js-ultimo-registro" data-url="{% url 'moreapp_api_form_ultimo_registro' form.id %}">…</span></div>
             {% if es_admin %}
-            <div class="mt-1">
-              Asignado a
-              <strong>{{ form.asignados_count|default:0 }}</strong>
-              usuario{{ form.asignados_count|default:0|pluralize }}
+            <div>
+              <i class="bi bi-people me-1"></i>
+              {{ form.asignados_count|default:0 }} usuario{{ form.asignados_count|default:0|pluralize }}
               {% if form.asignados %}
               · {{ form.asignados|join:", " }}
               {% endif %}
@@ -80,7 +92,7 @@
             </a>
           </div>
         </div>
-      </div>
+      </article>
     </div>
     {% endfor %}
   </div>

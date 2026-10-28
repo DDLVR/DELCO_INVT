@@ -3,8 +3,22 @@
 {% block title %}Errores de Importación{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-    <!-- Header -->
+<div class="container-fluid py-4 delco-catalogo">
+    <div class="delco-catalogo-hero mb-3">
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+            <div>
+                <p class="delco-catalogo-kicker mb-1">Importaciones</p>
+                <h1 class="h3 mb-1">Errores en importación #{{ importacion.id }}</h1>
+                <p class="text-muted mb-0">{{ importacion.get_tipo_display }} · {{ importacion.archivo_original }}</p>
+            </div>
+            <div class="delco-action-bar">
+                <a href="{% url 'registro_errores' %}" class="delco-action-btn is-help">
+                    <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+                    Registro
+                </a>
+            </div>
+        </div>
+    </div>
     <div class="row mb-4">
         <div class="col-12">
             <div class="card border-danger delco-panel-card">

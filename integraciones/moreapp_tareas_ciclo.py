@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any, Dict, List, Optional
 
-from django.db.models import Avg, Count, DurationField, ExpressionWrapper, F, Q
+from django.db.models import Avg, Case, Count, DurationField, ExpressionWrapper, F, IntegerField, Q, When
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -83,10 +83,13 @@ def _alerta_unica(
     )
 
 
+ROLES_INBOX = ("ADMIN", "ADMINISTRATIVO")
+
+
 def emitir_alertas(tarea: MoreAppTareaEnviada, tipo: str) -> None:
+    """Guarda la alerta en el perfil de quien asignó la tarea (creado_por)."""
     if tarea.creado_por_id:
         _alerta_unica(tarea, tipo, usuario=tarea.creado_por, broadcast=False)
-    _alerta_unica(tarea, tipo, usuario=None, broadcast=True)
     _invalidar_caches()
 
 
@@ -453,15 +456,107 @@ def sincronizar_tareas_desde_api(max_pages: int = 8) -> Dict[str, int]:
     return stats
 
 
+def _filtro_inbox(user) -> Q:
+    filtro = Q(usuario=user)
+    if getattr(user, "rol", None) in ROLES_INBOX:
+        filtro = filtro | Q(broadcast=True)
+    return filtro
+
+
+def qs_alertas_inbox(user):
+    if user is None or not getattr(user, "is_authenticated", False):
+        return MoreAppTareaAlerta.objects.none()
+    return (
+        MoreAppTareaAlerta.objects.filter(_filtro_inbox(user))
+        .select_related("tarea")
+        .annotate(
+            _pendiente=Case(
+                When(leida_en__isnull=True, then=0),
+                default=1,
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("_pendiente", "broadcast", "-fecha_creacion", "-id")
+    )
+
+
+def serializar_alerta(alerta: MoreAppTareaAlerta) -> Dict[str, Any]:
+    from django.urls import reverse
+
+    tarea = getattr(alerta, "tarea", None)
+    completada = alerta.tipo == MoreAppTareaAlerta.TIPO_COMPLETADO
+    titulo = "Tarea completada" if completada else "Tarea asignada"
+    partes: List[str] = []
+    url = ""
+    tarea_id = None
+    if tarea is not None:
+        tarea_id = tarea.pk
+        if tarea.form_name:
+            partes.append(tarea.form_name)
+        if tarea.mensaje:
+            partes.append(tarea.mensaje)
+        if tarea.cuenta:
+            partes.append("Cuenta %s" % tarea.cuenta)
+        try:
+            url = reverse("moreapp_tarea_detalle", args=[tarea.pk])
+        except Exception:
+            url = ""
+    fecha = alerta.fecha_creacion
+    fecha_local = timezone.localtime(fecha) if fecha else None
+    return {
+        "id": alerta.pk,
+        "tipo": alerta.tipo,
+        "titulo": titulo,
+        "texto": " · ".join(partes) if partes else titulo,
+        "url": url,
+        "tarea_id": tarea_id,
+        "leida": alerta.leida_en is not None,
+        "fecha": fecha_local.strftime("%d/%m/%Y %H:%M") if fecha_local else "",
+        "fecha_iso": fecha.isoformat() if fecha else "",
+    }
+
+
+def listar_alertas_inbox(user, limit: int = 40) -> Dict[str, Any]:
+    tope = max(1, min(int(limit or 40), 80))
+    qs = qs_alertas_inbox(user)
+    vistos = set()
+    items: List[Dict[str, Any]] = []
+    for alerta in qs:
+        clave = (alerta.tarea_id, alerta.tipo)
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        items.append(serializar_alerta(alerta))
+        if len(items) >= tope:
+            break
+    payload = conteos_alertas_tareas(user)
+    payload["items"] = items
+    payload["total"] = qs.values("tarea_id", "tipo").distinct().count()
+    return payload
+
+
+def marcar_alerta_leida(user, pk: int) -> bool:
+    if not pk or user is None or not getattr(user, "is_authenticated", False):
+        return False
+    n = (
+        MoreAppTareaAlerta.objects.filter(_filtro_inbox(user), pk=pk, leida_en__isnull=True)
+        .update(leida_en=timezone.now())
+    )
+    if n:
+        _invalidar_caches()
+    return n > 0
+
+
 def marcar_alertas_leidas(user) -> int:
     if user is None or not getattr(user, "is_authenticated", False):
         return 0
-    ahora = timezone.now()
-    filtro = Q(usuario=user)
-    if getattr(user, "rol", None) in ("ADMIN", "ADMINISTRATIVO"):
-        filtro = filtro | Q(broadcast=True)
-    qs = MoreAppTareaAlerta.objects.filter(leida_en__isnull=True).filter(filtro)
-    return qs.update(leida_en=ahora)
+    n = (
+        MoreAppTareaAlerta.objects.filter(_filtro_inbox(user), leida_en__isnull=True)
+        .update(leida_en=timezone.now())
+    )
+    if n:
+        _invalidar_caches()
+    return n
 
 
 def conteos_alertas_tareas(user) -> Dict[str, int]:
@@ -472,13 +567,7 @@ def conteos_alertas_tareas(user) -> Dict[str, int]:
     }
     if user is None or not getattr(user, "is_authenticated", False):
         return vacio
-    qs = MoreAppTareaAlerta.objects.filter(leida_en__isnull=True)
-    personal = qs.filter(usuario=user)
-    rol = getattr(user, "rol", None)
-    if rol in ("ADMIN", "ADMINISTRATIVO"):
-        visible = qs.filter(Q(usuario=user) | Q(broadcast=True))
-    else:
-        visible = personal
+    visible = MoreAppTareaAlerta.objects.filter(leida_en__isnull=True).filter(_filtro_inbox(user))
     creacion = visible.filter(tipo=MoreAppTareaAlerta.TIPO_CREACION).values("tarea_id").distinct().count()
     completado = visible.filter(tipo=MoreAppTareaAlerta.TIPO_COMPLETADO).values("tarea_id").distinct().count()
     return {

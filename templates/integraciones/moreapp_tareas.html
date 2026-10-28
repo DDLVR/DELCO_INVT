@@ -3,36 +3,33 @@
 {% block title %}Tareas MoreApp{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="row mb-3">
-    <div class="col-12 d-flex justify-content-between align-items-center flex-wrap gap-2">
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
       <div>
-        <h1 class="mb-1"><i class="bi bi-send-check"></i> Tareas MoreApp</h1>
-        <p class="text-muted mb-0">Planifica, asigna y da seguimiento a las tareas. El aviso llega en MoreApp, no por correo. El estado se consulta cada {{ tareas_auto_refresh_seconds|default:20 }} segundos, sin recargar la página.</p>
+        <p class="delco-catalogo-kicker mb-1">MoreApp</p>
+        <h1 class="h3 mb-1">Tareas MoreApp</h1>
+        <p class="text-muted mb-0">Planifica, asigna y da seguimiento. El aviso llega en MoreApp, no por correo. El estado se consulta cada {{ tareas_auto_refresh_seconds|default:20 }} segundos.</p>
       </div>
-      <div class="d-flex flex-wrap gap-2">
-        <form method="post" action="{% url 'moreapp_tareas_sincronizar' %}" class="d-inline" id="js-form-revisar-estado">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-outline-success" title="Consulta en MoreApp si las tareas asignadas ya se terminaron">
-            <i class="bi bi-arrow-repeat"></i> Revisar estado
-          </button>
-        </form>
-        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteListado">
-          <i class="bi bi-list-check"></i> Listado
+      <div class="delco-action-bar">
+        <button type="button" class="delco-action-btn is-add" data-bs-toggle="modal" data-bs-target="#modalNuevaTarea">
+          <span class="delco-action-btn-icon"><i class="bi bi-plus-lg"></i></span>
+          Nueva tarea
         </button>
-        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteCsv">
-          <i class="bi bi-upload"></i> Importar Excel
-        </button>
-        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLoteClientes">
-          <i class="bi bi-buildings"></i> Desde clientes
+        <button type="button" class="delco-action-btn is-import" data-bs-toggle="modal" data-bs-target="#modalLoteCsv">
+          <span class="delco-action-btn-icon"><i class="bi bi-upload"></i></span>
+          Importar Excel
         </button>
         {% url 'moreapp_tareas_exportar' as moreapp_tareas_exportar_url %}
         {% if moreapp_tareas_exportar_url %}
-        <div class="btn-group">
-          <a href="{{ moreapp_tareas_exportar_url }}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}" class="btn btn-info">
-            <i class="bi bi-download"></i> Exportar filtradas
+        <div class="delco-action-split">
+          <a href="{{ moreapp_tareas_exportar_url }}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}" class="delco-action-btn is-export">
+            <span class="delco-action-btn-icon"><i class="bi bi-download"></i></span>
+            <span class="delco-action-label-lg">Exportar</span>
+            <span class="delco-action-label-sm">Excel</span>
           </a>
-          <button type="button" class="btn btn-info dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+          <button type="button" class="delco-action-btn is-export delco-action-caret" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-chevron-down"></i>
             <span class="visually-hidden">Más opciones</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
@@ -49,8 +46,20 @@
           </ul>
         </div>
         {% endif %}
-        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalNuevaTarea">
-          <i class="bi bi-plus-circle"></i> Nueva tarea
+        <form method="post" action="{% url 'moreapp_tareas_sincronizar' %}" id="js-form-revisar-estado">
+          {% csrf_token %}
+          <button type="submit" class="delco-action-btn is-help" title="Consulta en MoreApp si las tareas asignadas ya se terminaron">
+            <span class="delco-action-btn-icon"><i class="bi bi-arrow-repeat"></i></span>
+            Revisar
+          </button>
+        </form>
+        <button type="button" class="delco-action-btn is-help" data-bs-toggle="modal" data-bs-target="#modalLoteListado">
+          <span class="delco-action-btn-icon"><i class="bi bi-list-check"></i></span>
+          Listado
+        </button>
+        <button type="button" class="delco-action-btn is-help" data-bs-toggle="modal" data-bs-target="#modalLoteClientes">
+          <span class="delco-action-btn-icon"><i class="bi bi-buildings"></i></span>
+          Clientes
         </button>
       </div>
     </div>
@@ -60,93 +69,76 @@
   <div class="alert alert-info border mb-3" role="status">
     {% if tareas_aviso.tareas_creacion %}{{ tareas_aviso.tareas_creacion }} tarea{{ tareas_aviso.tareas_creacion|pluralize }} creada{{ tareas_aviso.tareas_creacion|pluralize }}{% endif %}
     {% if tareas_aviso.tareas_creacion and tareas_aviso.tareas_completado %} / {% endif %}
-    {% if tareas_aviso.tareas_completado %}{{ tareas_aviso.tareas_completado }} completada{{ tareas_aviso.tareas_completado|pluralize }} por revisar{% endif %}
+    {% if tareas_aviso.tareas_completado %}{{ tareas_aviso.tareas_completado }} completada{{ tareas_aviso.tareas_completado|pluralize }}{% endif %}
+    <span class="d-none d-sm-inline"> · Revisa la campana junto al modo oscuro.</span>
   </div>
   {% endif %}
 
-  <div class="row g-3 mb-3">
+  <div class="row g-2 mb-3">
     <div class="col-6 col-md-4 col-xl-2">
-      <div class="card delco-panel-card h-100 border-0 shadow-sm">
-        <div class="card-body py-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-list-check"></i></span>
+        <div>
           <div class="text-muted small">Total filtrado</div>
-          <div class="fs-3 fw-semibold" data-kpi="resumen.total">{{ resumen.total|default:0 }}</div>
+          <div class="fs-4 fw-semibold" data-kpi="resumen.total">{{ resumen.total|default:0 }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
-      <div class="card delco-panel-card h-100 border-0 shadow-sm">
-        <div class="card-body py-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-info"><i class="bi bi-hourglass-split"></i></span>
+        <div>
           <div class="text-muted small">Abiertas</div>
-          <div class="fs-3 fw-semibold" data-kpi="resumen.abiertas">{{ resumen.abiertas|default:0 }}</div>
+          <div class="fs-4 fw-semibold" data-kpi="resumen.abiertas">{{ resumen.abiertas|default:0 }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
-      <div class="card delco-panel-card h-100 border-0 shadow-sm">
-        <div class="card-body py-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-ok"><i class="bi bi-check-circle"></i></span>
+        <div>
           <div class="text-muted small">Completadas</div>
-          <div class="fs-3 fw-semibold text-success" data-kpi="resumen.completadas">{{ resumen.completadas|default:0 }}</div>
+          <div class="fs-4 fw-semibold text-success" data-kpi="resumen.completadas">{{ resumen.completadas|default:0 }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
-      <div class="card delco-panel-card h-100 border-0 shadow-sm">
-        <div class="card-body py-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-file-earmark-text"></i></span>
+        <div>
           <div class="text-muted small">Con informe</div>
-          <div class="fs-3 fw-semibold" data-kpi="resumen.con_informe">{{ resumen.con_informe|default:0 }}</div>
+          <div class="fs-4 fw-semibold" data-kpi="resumen.con_informe">{{ resumen.con_informe|default:0 }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
-      <div class="card delco-panel-card h-100 border-0 shadow-sm">
-        <div class="card-body py-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon {% if kpis_tareas.vencidas %}is-danger{% else %}is-muted{% endif %}"><i class="bi bi-exclamation-triangle"></i></span>
+        <div>
           <div class="text-muted small">Vencidas</div>
-          <div class="fs-3 fw-semibold {% if kpis_tareas.vencidas %}text-danger{% endif %}" data-kpi="kpis.vencidas">{{ kpis_tareas.vencidas|default:0 }}</div>
+          <div class="fs-4 fw-semibold {% if kpis_tareas.vencidas %}text-danger{% endif %}" data-kpi="kpis.vencidas">{{ kpis_tareas.vencidas|default:0 }}</div>
         </div>
       </div>
     </div>
     <div class="col-6 col-md-4 col-xl-2">
-      <div class="card delco-panel-card h-100 border-0 shadow-sm">
-        <div class="card-body py-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon {% if resumen.errores %}is-danger{% else %}is-muted{% endif %}"><i class="bi bi-x-octagon"></i></span>
+        <div>
           <div class="text-muted small">Errores</div>
-          <div class="fs-3 fw-semibold" data-kpi="resumen.errores">{{ resumen.errores|default:0 }}</div>
+          <div class="fs-4 fw-semibold" data-kpi="resumen.errores">{{ resumen.errores|default:0 }}</div>
         </div>
       </div>
     </div>
   </div>
 
-  <div class="row mb-3">
-    <div class="col-12">
-      <div class="d-flex flex-wrap gap-2">
-        <a href="{% url 'moreapp_tareas_list' %}" class="btn btn-sm {% if not cola_filtro %}btn-primary{% else %}btn-outline-primary{% endif %}">Todas</a>
-        <a href="?cola=pendientes" class="btn btn-sm {% if cola_filtro == 'pendientes' %}btn-warning{% elif colas_conteo.pendientes %}btn-outline-warning{% else %}btn-outline-secondary opacity-50{% endif %}">
-          Sin asignar <span class="badge bg-dark" data-cola-count="pendientes">{{ colas_conteo.pendientes|default:0 }}</span>
-        </a>
-        <a href="?cola=en_campo" class="btn btn-sm {% if cola_filtro == 'en_campo' %}btn-info{% elif colas_conteo.en_campo %}btn-outline-info{% else %}btn-outline-secondary opacity-50{% endif %}">
-          En campo <span class="badge bg-dark" data-cola-count="en_campo">{{ colas_conteo.en_campo|default:0 }}</span>
-        </a>
-        <a href="?cola=completadas" class="btn btn-sm {% if cola_filtro == 'completadas' %}btn-success{% elif colas_conteo.completadas %}btn-outline-success{% else %}btn-outline-secondary opacity-50{% endif %}">
-          Completadas <span class="badge bg-dark" data-cola-count="completadas">{{ colas_conteo.completadas|default:0 }}</span>
-        </a>
-        <a href="?cola=vencidas" class="btn btn-sm {% if cola_filtro == 'vencidas' %}btn-danger{% elif colas_conteo.vencidas %}btn-outline-danger{% else %}btn-outline-secondary opacity-50{% endif %}">
-          Vencidas <span class="badge bg-dark" data-cola-count="vencidas">{{ colas_conteo.vencidas|default:0 }}</span>
-        </a>
-        <a href="?cola=errores" class="btn btn-sm {% if cola_filtro == 'errores' %}btn-dark{% elif colas_conteo.errores %}btn-outline-dark{% else %}btn-outline-secondary opacity-50{% endif %}">
-          Con error <span class="badge bg-dark" data-cola-count="errores">{{ colas_conteo.errores|default:0 }}</span>
-        </a>
-      </div>
-      <p class="text-muted small mt-2 mb-0">Flujo: Delco crea la tarea → MoreApp avisa al destinatario → el formulario se completa en la app → Delco revisa el contenido y el PDF.</p>
-    </div>
-  </div>
+  <p class="text-muted small mb-3">Flujo: Delco crea la tarea → MoreApp avisa al destinatario → el formulario se completa en la app → Delco revisa el contenido y el PDF.</p>
 
   {% if resumen.por_formulario %}
   <div class="row g-3 mb-3">
     <div class="col-md-6">
-      <div class="card delco-panel-card h-100">
-        <div class="card-header card-header-delco py-2">
-          <strong class="small">Por formulario</strong>
-        </div>
-        <div class="card-body py-2">
+      <div class="delco-catalogo-panel h-100">
+        <div class="delco-catalogo-panel-head">Por formulario</div>
+        <div class="delco-catalogo-panel-body py-2">
           <ul class="list-unstyled mb-0 small">
             {% for row in resumen.por_formulario %}
             <li class="d-flex justify-content-between border-bottom py-1">
@@ -161,10 +153,30 @@
   </div>
   {% endif %}
 
-  <div class="card delco-panel-card mb-3">
-    <div class="card-body">
+  <div class="delco-catalogo-filters mb-3">
+      <div class="delco-catalogo-chip-row mb-3">
+        <span class="small text-muted d-none d-md-inline">Cola</span>
+        <div class="delco-catalogo-chips">
+          <a href="{% url 'moreapp_tareas_list' %}" class="delco-catalogo-chip {% if not cola_filtro %}is-active{% endif %}">Todas</a>
+          <a href="?cola=pendientes" class="delco-catalogo-chip {% if cola_filtro == 'pendientes' %}is-active{% endif %}">
+            Sin asignar <span class="badge bg-dark" data-cola-count="pendientes">{{ colas_conteo.pendientes|default:0 }}</span>
+          </a>
+          <a href="?cola=en_campo" class="delco-catalogo-chip {% if cola_filtro == 'en_campo' %}is-active{% endif %}">
+            En campo <span class="badge bg-dark" data-cola-count="en_campo">{{ colas_conteo.en_campo|default:0 }}</span>
+          </a>
+          <a href="?cola=completadas" class="delco-catalogo-chip {% if cola_filtro == 'completadas' %}is-active{% endif %}">
+            Completadas <span class="badge bg-dark" data-cola-count="completadas">{{ colas_conteo.completadas|default:0 }}</span>
+          </a>
+          <a href="?cola=vencidas" class="delco-catalogo-chip {% if cola_filtro == 'vencidas' %}is-active{% endif %}">
+            Vencidas <span class="badge bg-dark" data-cola-count="vencidas">{{ colas_conteo.vencidas|default:0 }}</span>
+          </a>
+          <a href="?cola=errores" class="delco-catalogo-chip {% if cola_filtro == 'errores' %}is-active{% endif %}">
+            Con error <span class="badge bg-dark" data-cola-count="errores">{{ colas_conteo.errores|default:0 }}</span>
+          </a>
+        </div>
+      </div>
       <form method="get" class="row g-2 align-items-end">
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-xl-2">
           <label class="form-label small mb-1">Estado</label>
           <select name="estado" class="form-select form-select-sm">
             <option value="">Todos</option>
@@ -173,7 +185,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-xl-2">
           <label class="form-label small mb-1">Formulario</label>
           <select name="formulario" class="form-select form-select-sm">
             <option value="">Todos</option>
@@ -182,7 +194,7 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-xl-2">
           <label class="form-label small mb-1">Tipo de trabajo</label>
           <select name="tipo_trabajo" class="form-select form-select-sm">
             <option value="">Todos</option>
@@ -191,27 +203,27 @@
             {% endfor %}
           </select>
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-xl-2">
           <label class="form-label small mb-1">CUENTA</label>
           <input type="text" name="cuenta" class="form-control form-control-sm" value="{{ cuenta_filtro }}" placeholder="Nº cliente">
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-xl-2">
           <label class="form-label small mb-1">Proyecto / Carga</label>
           <input type="text" name="proyecto_carga" class="form-control form-control-sm" value="{{ proyecto_filtro }}" placeholder="Filtrar proyecto…">
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-xl-2">
           <label class="form-label small mb-1">Destinatario</label>
           <input type="text" name="destinatario" class="form-control form-control-sm" value="{{ destinatario_filtro }}" placeholder="Técnico o correo">
         </div>
-        <div class="col-md-2">
+        <div class="col-12 col-md-4 col-xl-2">
           <label class="form-label small mb-1">Buscar</label>
           <input type="text" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Título, mensaje, proyecto…">
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-xl-2">
           <label class="form-label small mb-1">Desde</label>
           <input type="date" name="fecha_desde" class="form-control form-control-sm" value="{{ fecha_desde }}">
         </div>
-        <div class="col-md-2">
+        <div class="col-6 col-md-4 col-xl-2">
           <label class="form-label small mb-1">Hasta</label>
           <input type="date" name="fecha_hasta" class="form-control form-control-sm" value="{{ fecha_hasta }}">
         </div>
@@ -222,34 +234,32 @@
           <a href="{% url 'moreapp_tareas_list' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
         </div>
       </form>
-    </div>
   </div>
 
-  <div class="card delco-panel-card">
-    <div class="card-header card-header-delco d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <div class="delco-catalogo-panel">
+    <div class="delco-catalogo-panel-head">
       <div class="d-flex flex-wrap align-items-center gap-2">
         <strong>Listado</strong>
         {% url 'moreapp_tareas_eliminar_masivo' as moreapp_tareas_eliminar_masivo_url %}
         {% if moreapp_tareas_eliminar_masivo_url %}
-        <button type="button" class="btn btn-sm btn-outline-danger" id="btnEliminarTareasSel" data-url="{{ moreapp_tareas_eliminar_masivo_url }}" disabled>
+        <button type="button" class="btn btn-sm btn-outline-danger d-none d-md-inline-flex" id="btnEliminarTareasSel" data-url="{{ moreapp_tareas_eliminar_masivo_url }}" disabled>
           <i class="bi bi-trash"></i> Eliminar seleccionadas
         </button>
-        <span class="small text-muted" id="tareasSelLabel">0 seleccionadas</span>
+        <span class="small text-muted d-none d-md-inline" id="tareasSelLabel">0 seleccionadas</span>
         {% endif %}
       </div>
       <span class="badge bg-secondary"><span data-kpi="resumen.total">{{ resumen.total|default:0 }}</span> resultado(s)</span>
     </div>
-    <div class="card-body p-0">
       <div class="table-responsive">
         <table class="table table-hover mb-0 align-middle" data-cola-filtro="{{ cola_filtro|default:'' }}">
           <thead>
             <tr>
-              <th style="width:2rem;">
+              <th class="d-none d-md-table-cell" style="width:2rem;">
                 <input type="checkbox" class="form-check-input" id="checkAllTareas" title="Seleccionar todas" aria-label="Seleccionar todas">
               </th>
               <th>ID</th>
               <th>Título / Mensaje</th>
-              <th>Formulario</th>
+              <th class="d-none d-md-table-cell">Formulario</th>
               <th>Estado</th>
               <th class="d-none d-md-table-cell">Tipo</th>
               <th class="d-none d-md-table-cell">CUENTA</th>
@@ -263,17 +273,18 @@
           <tbody>
             {% for tarea in tareas %}
             <tr data-tarea-id="{{ tarea.pk }}" data-estado="{{ tarea.estado }}">
-              <td>
+              <td class="d-none d-md-table-cell">
                 <input type="checkbox" class="form-check-input js-tarea-check" value="{{ tarea.pk }}" aria-label="Seleccionar tarea {{ tarea.pk }}">
               </td>
               <td><a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="fw-bold text-decoration-none">#{{ tarea.pk }}</a></td>
-              <td>
+              <td class="delco-cell-wrap">
                 <div class="fw-semibold">{{ tarea.titulo|default:tarea.mensaje }}</div>
                 {% if tarea.titulo and tarea.mensaje and tarea.titulo != tarea.mensaje %}
                 <div class="small text-muted">{{ tarea.mensaje }}</div>
                 {% endif %}
+                <div class="small text-muted d-md-none">{{ tarea.form_name|default:tarea.form_id }}</div>
               </td>
-              <td>{{ tarea.form_name|default:tarea.form_id }}</td>
+              <td class="d-none d-md-table-cell">{{ tarea.form_name|default:tarea.form_id }}</td>
               <td class="js-tarea-estado">
                 {% if tarea.estado == 'ERROR' or tarea.error %}
                 <span class="badge text-bg-danger">Error</span>
@@ -311,10 +322,10 @@
               </td>
               <td class="d-none d-md-table-cell">{{ tarea.fecha_creacion|date:"d/m/Y H:i" }}</td>
               <td class="text-nowrap js-tarea-acciones">
-                <a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i> Ver</a>
+                <a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i> <span class="d-none d-md-inline">Ver</span></a>
                 {% if tarea.puede_pdf %}
                 <a href="{% url 'moreapp_tarea_pdf' tarea.pk %}" class="btn btn-sm btn-outline-danger js-tarea-pdf" title="Ver PDF del contenido rellenado" target="_blank" rel="noopener">
-                  <i class="bi bi-file-earmark-pdf"></i> PDF
+                  <i class="bi bi-file-earmark-pdf"></i> <span class="d-none d-md-inline">PDF</span>
                 </a>
                 {% endif %}
                 {% url 'moreapp_tarea_eliminar' tarea.pk as moreapp_tarea_eliminar_url %}
@@ -336,9 +347,8 @@
           </tbody>
         </table>
       </div>
-    </div>
     {% if page_obj and page_obj.paginator.num_pages > 1 %}
-    <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div class="delco-catalogo-panel-head d-flex flex-wrap justify-content-between align-items-center gap-2">
       <span class="text-muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
       <div class="btn-group btn-group-sm">
         {% if page_obj.has_previous %}
@@ -897,7 +907,7 @@
         if (body) body.innerHTML = '';
         addListadoFila();
         if (status) {
-          status.textContent = 'Cada fila crea esa cantidad de tareas para la misma persona o grupo.';
+          status.textContent = 'Cada fila crea esa cantidad de tareas para el mismo técnico o grupo.';
         }
       })
       .catch(function () {
@@ -959,7 +969,7 @@
         ev.preventDefault();
         var errBox = document.querySelector('#modalLoteListado .js-lote-listado-error');
         if (errBox) {
-          errBox.textContent = 'Completa al menos una fila con formulario y persona o grupo.';
+          errBox.textContent = 'Completa al menos una fila con formulario y técnico o grupo.';
           errBox.classList.remove('d-none');
         }
       }

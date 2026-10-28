@@ -4,15 +4,24 @@
 {% block title %}Tickets de soporte{% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-  <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-    <div>
-      <h1 class="h3 mb-1"><i class="bi bi-ticket-detailed"></i> Tickets de soporte</h1>
-      <p class="text-muted mb-0">Solo visible para administradores.</p>
-    </div>
-    <div class="d-flex gap-2">
-      <a href="{% url 'soporte_hub' %}" class="btn btn-outline-secondary">Hub</a>
-      <a href="{% url 'soporte_crear' %}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> Nuevo ticket</a>
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Soporte</p>
+        <h1 class="h3 mb-1">Tickets de soporte</h1>
+        <p class="text-muted mb-0">Solo visible para administradores.</p>
+      </div>
+      <div class="delco-action-bar">
+        <a href="{% url 'soporte_crear' %}" class="delco-action-btn is-add">
+          <span class="delco-action-btn-icon"><i class="bi bi-plus-lg"></i></span>
+          Nuevo ticket
+        </a>
+        <a href="{% url 'soporte_hub' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-life-preserver"></i></span>
+          Hub
+        </a>
+      </div>
     </div>
   </div>
 

@@ -3,11 +3,20 @@
 {% block title %}Crear Nuevo Usuario{% endblock %}
 
 {% block content %}
-<div class="container" style="max-width: 600px;">
-  <div class="row mb-4">
-    <div class="col-12">
-      <h1>➕ Crear usuario interno</h1>
-      <p class="text-muted">Completa el formulario para agregar una cuenta de la intranet</p>
+<div class="container-fluid py-4 delco-catalogo" style="max-width: 640px;">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Usuarios</p>
+        <h1 class="h3 mb-1">Crear usuario interno</h1>
+        <p class="text-muted mb-0">Completa el formulario para agregar una cuenta de la intranet.</p>
+      </div>
+      <div class="delco-action-bar">
+        <a href="{% url 'usuarios_list' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
+          Volver
+        </a>
+      </div>
     </div>
   </div>
 
