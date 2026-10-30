@@ -20,6 +20,11 @@ from web.decorators import admin_only, admin_or_formulario_asignado
 from .models import MoreAppFormularioOculto, MoreAppFuenteInterna
 from .moreapp_cuentas import aplicar_vinculos_a_usuarios, guardar_vinculo, listar_tecnicos_moreapp
 from .moreapp_asignaciones import asignaciones_por_form, enriquecer_fila, usuarios_asignables
+from .moreapp_permisos import (
+    accesos_de_formulario,
+    anotar_accesos_en_formularios,
+    cargar_usuarios_moreapp_con_permisos,
+)
 
 from .moreapp_api import (
     MoreAppApiConfigError,
@@ -317,6 +322,8 @@ def catalogo_forms_view(request):
         "registros_qs": urlencode(registros_params),
         "activos": 0,
         "ocultos": 0,
+        "ocultos_en_catalogo": 0,
+        "total_api": 0,
         "asignados_forms": 0,
         "usuarios_asignables": list(usuarios_asignables()),
     }
@@ -327,12 +334,16 @@ def catalogo_forms_view(request):
             MoreAppFormularioOculto.objects.filter(usuario=request.user).values_list("form_id", flat=True)
         )
         por_form = asignaciones_por_form()
+        usuarios_ma, conoce_permisos = cargar_usuarios_moreapp_con_permisos()
         for row in rows:
             form_id = str(row.get("id") or "")
             row["oculto"] = form_id in ocultos_ids
             enriquecer_fila(row, por_form.get(form_id, []))
             row["search_haystack"] = _search_haystack(row)
+        anotar_accesos_en_formularios(rows, usuarios_ma, conoce_permisos=conoce_permisos)
+        ocultos_en_catalogo = sum(1 for row in rows if row.get("oculto"))
         ocultos_count = MoreAppFormularioOculto.objects.filter(usuario=request.user).count()
+        total_api = len(rows)
         if not mostrar_ocultos:
             rows = [row for row in rows if not row.get("oculto")]
         context["conexion"] = {
@@ -343,6 +354,8 @@ def catalogo_forms_view(request):
         context["activos"] = sum(1 for row in rows if row.get("status") == "ACTIVE")
         context["asignados_forms"] = sum(1 for row in rows if int(row.get("asignados_count") or 0) > 0)
         context["ocultos"] = ocultos_count
+        context["ocultos_en_catalogo"] = ocultos_en_catalogo
+        context["total_api"] = total_api
         context["raw_json"] = _pretty(raw)
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
@@ -379,6 +392,21 @@ def catalogo_mostrar_form_view(request, form_id: str):
     MoreAppFormularioOculto.objects.filter(usuario=request.user, form_id=form_id).delete()
     messages.success(request, "Formulario visible otra vez en tu catálogo.")
     return redirect(_catalogo_return_url(request))
+
+
+@require_POST
+@admin_only
+def catalogo_mostrar_todos_view(request):
+    borrados, _unused = MoreAppFormularioOculto.objects.filter(usuario=request.user).delete()
+    if borrados:
+        messages.success(
+            request,
+            "Volviste a mostrar %s formulario%s en tu catálogo."
+            % (borrados, "" if borrados == 1 else "s"),
+        )
+    else:
+        messages.info(request, "No tenías formularios ocultos en tu catálogo.")
+    return redirect(reverse("moreapp_api_catalogo"))
 
 
 @admin_or_formulario_asignado
@@ -446,6 +474,13 @@ def catalogo_form_detail_view(request, form_id: str):
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
         messages.error(request, str(exc))
+    usuarios_ma, conoce_permisos = cargar_usuarios_moreapp_con_permisos()
+    context["moreapp_accesos"] = accesos_de_formulario(form_id, usuarios_ma)
+    context["moreapp_permisos_conocidos"] = conoce_permisos
+    context["puede_ver_accesos_moreapp"] = getattr(request.user, "rol", "") in (
+        "ADMIN",
+        "ADMINISTRATIVO",
+    )
     return render(request, "integraciones/moreapp_formulario.html", context)
 
 

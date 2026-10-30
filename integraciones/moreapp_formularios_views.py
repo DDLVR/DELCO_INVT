@@ -17,6 +17,7 @@ from .moreapp_asignaciones import (
     fila_asignada,
     usuarios_asignables,
 )
+from .moreapp_permisos import anotar_accesos_en_formularios, cargar_usuarios_moreapp_con_permisos
 from .moreapp_catalogo_views import _catalogo_return_url, _fold_text, _form_row
 from .moreapp_http import assert_safe_id
 
@@ -24,13 +25,15 @@ from .moreapp_http import assert_safe_id
 @any_intranet_user
 def formularios_list_view(request):
     query = (request.GET.get("query") or "").strip()
-    es_admin = getattr(request.user, "rol", "") == "ADMIN"
+    rol = getattr(request.user, "rol", "")
+    es_admin = rol == "ADMIN"
     context = {
         "conexion": None,
         "formularios": [],
         "error": "",
         "query": query,
         "es_admin": es_admin,
+        "puede_ver_accesos_moreapp": rol in ("ADMIN", "ADMINISTRATIVO"),
         "tiene_filtros": bool(query),
     }
     if es_admin:
@@ -43,6 +46,7 @@ def formularios_list_view(request):
         return render(request, "integraciones/moreapp_formularios.html", context)
 
     por_form = asignaciones_por_form()
+    usuarios_ma, conoce_permisos = cargar_usuarios_moreapp_con_permisos()
     try:
         raw = list_all_forms()
         rows = [_form_row(item) for item in raw if isinstance(item, dict)]
@@ -63,6 +67,7 @@ def formularios_list_view(request):
         if query:
             needle = _fold_text(query)
             visibles = [row for row in visibles if needle in _fold_text(row.get("name"))]
+        anotar_accesos_en_formularios(visibles, usuarios_ma, conoce_permisos=conoce_permisos)
         context["conexion"] = {"ok": True, "forms_detected_in_first_call": len(visibles)}
         context["formularios"] = visibles
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
@@ -74,6 +79,7 @@ def formularios_list_view(request):
         if query:
             needle = _fold_text(query)
             rows = [row for row in rows if needle in _fold_text(row.get("name"))]
+        anotar_accesos_en_formularios(rows, usuarios_ma, conoce_permisos=conoce_permisos)
         context["formularios"] = rows
         context["error"] = str(exc)
     return render(request, "integraciones/moreapp_formularios.html", context)

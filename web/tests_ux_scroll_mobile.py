@@ -15,9 +15,13 @@ class DelcoUxAssetsTests(SimpleTestCase):
 		css = (base / 'static' / 'css' / 'app.css').read_text(encoding='utf-8')
 		self.assertIn('.delco-back-to-top', css)
 		self.assertIn('delcoPageEnter', css)
+		self.assertIn('delco-page-loader-spinner', css)
 		js = (base / 'static' / 'js' / 'delco_ux.js').read_text(encoding='utf-8')
 		self.assertIn('delcoBackToTop', js)
 		self.assertIn('delcoMainContent', js)
+		nav = (base / 'static' / 'js' / 'delco_nav_guard.js').read_text(encoding='utf-8')
+		self.assertIn('delcoPageLoader', nav)
+		self.assertIn('delcoVisit', nav)
 
 
 @override_settings(ALLOWED_HOSTS=['testserver', 'localhost', '127.0.0.1'])
@@ -44,3 +48,6 @@ class DelcoUxTemplateTests(TestCase):
 		self.assertIn('id="delcoBackToTop"', content)
 		self.assertIn('delco_ux.js', content)
 		self.assertIn('delcoSidebarOffcanvas', content)
+		self.assertIn('id="delcoPageLoader"', content)
+		self.assertIn('delco-page-loader-spinner', content)
+		self.assertIn('id="delcoPageScripts"', content)

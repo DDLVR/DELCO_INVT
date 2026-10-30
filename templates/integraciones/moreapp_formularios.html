@@ -76,11 +76,15 @@
             {% if es_admin %}
             <div>
               <i class="bi bi-people me-1"></i>
+              Intranet:
               {{ form.asignados_count|default:0 }} usuario{{ form.asignados_count|default:0|pluralize }}
               {% if form.asignados %}
               · {{ form.asignados|join:", " }}
               {% endif %}
             </div>
+            {% endif %}
+            {% if puede_ver_accesos_moreapp %}
+            {% include 'integraciones/_moreapp_accesos_fold.html' %}
             {% endif %}
           </div>
           <div class="mt-auto d-flex flex-wrap gap-2">

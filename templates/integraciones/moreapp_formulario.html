@@ -68,6 +68,32 @@
     </div>
   </div>
 
+  {% if puede_ver_accesos_moreapp %}
+  <div class="delco-catalogo-panel mb-3">
+    <div class="delco-catalogo-panel-head">Correos con acceso en MoreApp</div>
+    <div class="p-3">
+      {% if moreapp_permisos_conocidos %}
+        {% if moreapp_accesos %}
+        <ul class="list-unstyled mb-0 small">
+          {% for acc in moreapp_accesos %}
+          <li class="mb-1">
+            <strong>{{ acc.nombre }}</strong>
+            {% if acc.email and acc.email != acc.nombre %}
+            <span class="text-muted"> · {{ acc.email }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted mb-0 small">Nadie tiene este formulario asignado en MoreApp. No se puede crear una tarea hasta que un técnico o grupo lo tenga.</p>
+        {% endif %}
+      {% else %}
+      <p class="text-muted mb-0 small">No se pudieron leer los permisos de MoreApp en este momento.</p>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
   <div class="row g-3">
     <div class="col-lg-4">
       <div class="delco-catalogo-panel h-100">

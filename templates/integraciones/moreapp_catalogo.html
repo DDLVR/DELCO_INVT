@@ -67,6 +67,24 @@
   <div class="alert alert-danger">{{ error }}</div>
   {% endif %}
 
+  {% if ocultos_en_catalogo %}
+  <div class="alert alert-info d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      MoreApp tiene <strong>{{ total_api }}</strong> formulario{{ total_api|pluralize }}.
+      En tu catálogo hay <strong>{{ ocultos_en_catalogo }}</strong> oculto{{ ocultos_en_catalogo|pluralize }} (solo para ti).
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      {% if not mostrar_ocultos %}
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'moreapp_api_catalogo' %}?mostrar_ocultos=1">Ver los ocultos</a>
+      {% endif %}
+      <form method="post" action="{% url 'moreapp_api_catalogo_mostrar_todos' %}" class="d-inline">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-primary">Mostrar todos otra vez</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="delco-catalogo-filters mb-3">
     <form method="get" id="js-catalogo-form" class="d-flex flex-column gap-3">
       <div class="delco-catalogo-search">
@@ -132,7 +150,7 @@
         <div class="col-md-2">
           <div class="form-check mt-md-4">
             <input class="form-check-input" type="checkbox" name="mostrar_ocultos" value="1" id="mostrarOcultos" {% if mostrar_ocultos %}checked{% endif %}>
-            <label class="form-check-label" for="mostrarOcultos">Mostrar los que oculté</label>
+            <label class="form-check-label" for="mostrarOcultos">Mostrar los que oculté{% if ocultos_en_catalogo %} ({{ ocultos_en_catalogo }}){% endif %}</label>
           </div>
         </div>
       </div>
@@ -186,12 +204,14 @@
             <div><i class="bi bi-clock-history me-1"></i>Último registro: <span class="js-ultimo-registro" data-url="{% url 'moreapp_api_form_ultimo_registro' form.id %}">…</span></div>
             <div>
               <i class="bi bi-people me-1"></i>
+              Intranet:
               {% if form.asignados %}
                 {{ form.asignados|join:", " }}
               {% else %}
                 Sin asignar
               {% endif %}
             </div>
+            {% include 'integraciones/_moreapp_accesos_fold.html' %}
           </div>
           <div class="mt-auto d-flex flex-wrap gap-2">
             <a class="btn btn-sm btn-outline-primary" href="{% url 'moreapp_api_formulario' form.id %}">

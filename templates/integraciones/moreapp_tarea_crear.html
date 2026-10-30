@@ -94,12 +94,13 @@
 
     <section class="delco-import-section">
       <div class="delco-import-section-label">3. Destinatarios</div>
+        <p class="small text-muted js-destinatarios-hint">Elige un formulario para ver quién tiene acceso en MoreApp.</p>
         <div class="row g-3">
           <div class="col-lg-7">
             <div class="fw-semibold small mb-2">Técnicos</div>
-            <div class="delco-tarea-lista">
+            <div class="delco-tarea-lista" id="js-crear-page-usuarios">
               {% for u in usuarios %}
-              <label class="d-flex gap-2 align-items-start py-1">
+              <label class="d-flex gap-2 align-items-start py-1 js-dest-item" data-form-ids="{{ u.form_ids|join:',' }}" data-conoce="{% if u.conoce_permisos %}1{% else %}0{% endif %}">
                 <input class="form-check-input mt-1" type="checkbox" name="usuarios" value="{{ u.email }}" {% if u.email in usuarios_sel %}checked{% endif %}>
                 <span>
                   {{ u.nombre|default:u.email }}
@@ -115,9 +116,9 @@
           </div>
           <div class="col-lg-5">
             <div class="fw-semibold small mb-2">Grupos</div>
-            <div class="delco-tarea-lista">
+            <div class="delco-tarea-lista" id="js-crear-page-grupos">
               {% for g in grupos %}
-              <label class="d-flex gap-2 align-items-start py-2 delco-tarea-grupo">
+              <label class="d-flex gap-2 align-items-start py-2 delco-tarea-grupo js-dest-item" data-form-ids="{{ g.form_ids|join:',' }}">
                 <input class="form-check-input mt-1" type="checkbox" name="grupos" value="{{ g.id }}" {% if g.id in grupos_sel %}checked{% endif %}>
                 <span>
                   {{ g.nombre }}
@@ -240,10 +241,41 @@
       });
   }
 
-  if (select) select.addEventListener('change', loadCampos);
+  function filtrarDestinatariosPagina() {
+    var formId = select ? select.value : '';
+    var items = document.querySelectorAll('.js-dest-item');
+    var visible = 0;
+    var conoce = false;
+    items.forEach(function (el) {
+      if (el.getAttribute('data-conoce') === '1') conoce = true;
+    });
+    items.forEach(function (el) {
+      var ids = (el.getAttribute('data-form-ids') || '').split(',').filter(Boolean);
+      var ok = !formId || !conoce || ids.indexOf(formId) !== -1;
+      el.classList.toggle('d-none', !ok);
+      if (!ok) {
+        var box = el.querySelector('input[type="checkbox"]');
+        if (box) box.checked = false;
+      } else {
+        visible += 1;
+      }
+    });
+    var hint = document.querySelector('.js-destinatarios-hint');
+    if (!hint) return;
+    if (!formId) hint.textContent = 'Elige un formulario para ver quién tiene acceso en MoreApp.';
+    else if (!conoce) hint.textContent = 'No se pudieron leer los permisos de MoreApp. Se muestran todas las cuentas.';
+    else if (!visible) hint.textContent = 'Nadie tiene este formulario asignado en MoreApp.';
+    else hint.textContent = 'Solo aparecen técnicos y grupos con este formulario en MoreApp.';
+  }
+
+  if (select) select.addEventListener('change', function () {
+    loadCampos();
+    filtrarDestinatariosPagina();
+  });
   if (envio) envio.addEventListener('change', toggleProgramada);
   toggleProgramada();
   if (select && select.value) loadCampos();
+  filtrarDestinatariosPagina();
 })();
 </script>
 {% endblock %}

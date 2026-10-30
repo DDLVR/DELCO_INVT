@@ -358,33 +358,77 @@ def destino_listado(token: str) -> Tuple[str, str]:
     return "", raw
 
 
+def _cantidad_listado(raw: str) -> Optional[int]:
+    texto = str(raw or "").strip()
+    if not texto:
+        return 0
+    try:
+        return int(texto)
+    except (TypeError, ValueError):
+        return None
+
+
+def _notas_de_fila(extras: List[str], offset: int, cantidad: int) -> Tuple[List[str], int]:
+    notas: List[str] = []
+    idx = offset
+    for _ in range(max(1, cantidad)):
+        nota = str(extras[idx] if idx < len(extras) else "").strip()[:200]
+        notas.append(nota)
+        idx += 1
+    return notas, idx
+
+
+def mensaje_tarea_listado(base: str, extra: str, indice: int, cantidad: int) -> str:
+    """Mensaje general + nota de esa tarea (nº de cliente). Sin nota, numera 1/N."""
+    general = (base or "").strip()[:500] or "Tarea asignada desde la intranet"
+    nota = (extra or "").strip()[:200]
+    if nota:
+        if nota.lower() in general.lower():
+            return general[:500]
+        return ("%s · %s" % (general, nota))[:500]
+    if cantidad > 1:
+        return ("%s · %s/%s" % (general, indice, cantidad))[:500]
+    return general[:500]
+
+
 def parse_filas_listado(post) -> Tuple[List[Dict[str, Any]], str]:
     forms = list(post.getlist("form_id"))
     dests = list(post.getlist("destinatario"))
     cants = list(post.getlist("cantidad"))
+    extras = list(post.getlist("mensaje_item"))
     n = max(len(forms), len(dests), len(cants))
     if n > MAX_FILAS_LISTADO:
         return [], "Máximo %s filas en el listado." % MAX_FILAS_LISTADO
     filas: List[Dict[str, Any]] = []
     total = 0
+    extra_idx = 0
     for idx in range(n):
         form_id = str(forms[idx] if idx < len(forms) else "").strip()
         dest = str(dests[idx] if idx < len(dests) else "").strip()
         raw_cant = str(cants[idx] if idx < len(cants) else "").strip()
+        cantidad = _cantidad_listado(raw_cant)
         if not form_id and not dest:
+            skip_n = cantidad if isinstance(cantidad, int) and cantidad > 0 else 1
+            _, extra_idx = _notas_de_fila(extras, extra_idx, skip_n)
             continue
         if not form_id or not dest:
             return [], "Cada fila necesita formulario y persona o grupo."
-        try:
-            cantidad = int(raw_cant or "0")
-        except (TypeError, ValueError):
+        if cantidad is None:
             return [], "La cantidad debe ser un número entero."
         if cantidad < 1 or cantidad > MAX_CANTIDAD:
             return [], "La cantidad por fila va de 1 a %s." % MAX_CANTIDAD
         total += cantidad
         if total > MAX_LOTE:
             return [], "El listado no puede superar %s tareas." % MAX_LOTE
-        filas.append({"form_id": form_id, "destinatario": dest, "cantidad": cantidad})
+        notas, extra_idx = _notas_de_fila(extras, extra_idx, cantidad)
+        filas.append(
+            {
+                "form_id": form_id,
+                "destinatario": dest,
+                "cantidad": cantidad,
+                "notas": notas,
+            }
+        )
     if not filas:
         return [], "Agrega al menos una fila con formulario, persona o grupo y cantidad."
     return filas, ""

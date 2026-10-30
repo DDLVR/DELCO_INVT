@@ -8,6 +8,7 @@ from .moreapp_catalogo_views import (
     catalogo_form_detail_view,
     catalogo_forms_view,
     catalogo_mostrar_form_view,
+    catalogo_mostrar_todos_view,
     catalogo_ocultar_form_view,
     catalogo_guardar_fuente_view,
     catalogo_importar_fuente_view,
@@ -113,6 +114,11 @@ urlpatterns = [
         'moreapp/api/catalogo/',
         catalogo_forms_view,
         name='moreapp_api_catalogo',
+    ),
+    path(
+        'moreapp/api/catalogo/mostrar-ocultos/',
+        catalogo_mostrar_todos_view,
+        name='moreapp_api_catalogo_mostrar_todos',
     ),
     path(
         'moreapp/api/catalogo/datasources/',

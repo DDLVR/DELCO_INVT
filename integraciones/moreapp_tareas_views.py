@@ -38,6 +38,11 @@ from .moreapp_cuentas import (
     etiquetas_destinatarios,
 )
 from .moreapp_http import assert_safe_id
+from .moreapp_permisos import (
+    anotar_permisos_grupos,
+    anotar_permisos_usuarios,
+    filtrar_destinatarios_por_formulario,
+)
 from .moreapp_registros_views import _campos_desde_formulario
 from .moreapp_tareas_lote import (
     MAX_CANTIDAD,
@@ -47,6 +52,7 @@ from .moreapp_tareas_lote import (
     fila_cliente_en_fuente,
     parse_fecha_lote,
     parse_filas_listado,
+    mensaje_tarea_listado,
     parse_lote_archivo,
     parse_ubicacion_lote,
     plantilla_xlsx,
@@ -297,8 +303,9 @@ def _emails_de_grupos(usuarios: List[Dict[str, Any]], group_ids: List[str]) -> L
 
 def _usuarios_moreapp() -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
     raw = list_users()
+    raw_items = _items_de_lista(raw, ("users",))
     rows = []
-    for item in _items_de_lista(raw, ("users",)):
+    for item in raw_items:
         if not isinstance(item, dict):
             continue
         row = _user_row(item)
@@ -306,7 +313,11 @@ def _usuarios_moreapp() -> Tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
         if row.get("disabled") or not row.get("email"):
             continue
         rows.append(row)
-    return aplicar_vinculos_a_usuarios(rows), _grupos_desde_usuarios(raw)
+    linked = aplicar_vinculos_a_usuarios(rows)
+    anotar_permisos_usuarios(linked, raw_items)
+    grupos = _grupos_desde_usuarios(raw)
+    anotar_permisos_grupos(grupos, linked)
+    return linked, grupos
 
 
 def _items_de_lista(raw: Any, extra_keys: Tuple[str, ...] = ()) -> List[Any]:
@@ -454,6 +465,7 @@ def _destinatarios_finales(
     emails: List[str],
     group_ids: List[str],
     usuarios: List[Dict[str, Any]],
+    form_id: str = "",
 ) -> Tuple[List[str], List[str], str]:
     emails_sel = unicos(emails)
     groups_sel = unicos(group_ids)
@@ -462,7 +474,10 @@ def _destinatarios_finales(
         if groups_sel:
             return [], groups_sel, "El grupo elegido no tiene usuarios MoreApp activos con correo."
         return [], groups_sel, "Asigna la tarea a un usuario o grupo de MoreApp."
-    return all_recipients, groups_sel, ""
+    filtrados, permiso_error = filtrar_destinatarios_por_formulario(all_recipients, usuarios, form_id)
+    if permiso_error:
+        return [], groups_sel, permiso_error
+    return filtrados, groups_sel, ""
 
 
 def _enviar_tarea_registrada(
@@ -1061,6 +1076,8 @@ def _payload_lote_clientes(context: Dict[str, Any]) -> Dict[str, Any]:
                 "nombre": item.get("nombre") or item.get("email") or "",
                 "tecnico_nombre": item.get("tecnico_nombre") or "",
                 "enlazado": bool(item.get("enlazado")),
+                "form_ids": list(item.get("form_ids") or []),
+                "conoce_permisos": bool(item.get("conoce_permisos")),
             }
             for item in context.get("usuarios") or []
         ],
@@ -1069,9 +1086,13 @@ def _payload_lote_clientes(context: Dict[str, Any]) -> Dict[str, Any]:
                 "id": item.get("id") or "",
                 "nombre": item.get("nombre") or "",
                 "detalle": item.get("detalle") or "",
+                "form_ids": list(item.get("form_ids") or []),
             }
             for item in context.get("grupos") or []
         ],
+        "conoce_permisos": any(
+            item.get("conoce_permisos") for item in context.get("usuarios") or []
+        ),
         "clientes": [
             {
                 "id": cliente.pk,
@@ -1679,6 +1700,11 @@ def tarea_crear_view(request):
             all_recipients.append(email)
     if not all_recipients:
         return _fail_crear("El grupo elegido no tiene usuarios MoreApp activos con correo.")
+    all_recipients, permiso_error = filtrar_destinatarios_por_formulario(
+        all_recipients, context["usuarios"], form_id
+    )
+    if permiso_error:
+        return _fail_crear(permiso_error)
     titulo = (context.get("titulo") or "").strip()
     if not mensaje and titulo:
         mensaje = titulo[:500]
@@ -1828,7 +1854,7 @@ def tarea_lote_csv_view(request):
             resultados.append(resultado)
             continue
         all_recipients, groups_sel, dest_error = _destinatarios_finales(
-            emails, group_ids, context["usuarios"]
+            emails, group_ids, context["usuarios"], form_id
         )
         if dest_error:
             resultado["error"] = dest_error
@@ -1974,7 +2000,7 @@ def tarea_lote_clientes_view(request):
             % (total_clientes, MAX_LOTE),
         )
     all_recipients, groups_sel, dest_error = _destinatarios_finales(
-        context["usuarios_sel"], context["grupos_sel"], context["usuarios"]
+        context["usuarios_sel"], context["grupos_sel"], context["usuarios"], form_id
     )
     if not form_id:
         messages.error(request, "Elige un formulario publicado.")
@@ -2134,7 +2160,7 @@ def tarea_lote_listado_view(request):
             )
             continue
         all_recipients, groups_sel, dest_error = _destinatarios_finales(
-            emails, group_ids, context["usuarios"]
+            emails, group_ids, context["usuarios"], form_id
         )
         if dest_error:
             resultados.append(
@@ -2152,8 +2178,10 @@ def tarea_lote_listado_view(request):
         form_name = str(form.get("name") or form_id)
         etiqueta = ", ".join(all_recipients)
         cantidad = fila["cantidad"]
+        notas = list(fila.get("notas") or [])
         for indice in range(1, cantidad + 1):
-            mensaje_item = mensaje if cantidad == 1 else ("%s · %s/%s" % (mensaje, indice, cantidad))[:500]
+            extra = notas[indice - 1] if indice - 1 < len(notas) else ""
+            mensaje_item = mensaje_tarea_listado(mensaje, extra, indice, cantidad)
             _tarea, error = _enviar_tarea_registrada(
                 form_id=form_id,
                 form_name=form_name,

@@ -6,7 +6,7 @@
           <h5 class="modal-title" id="modalLoteListadoLabel">
             <i class="bi bi-list-check me-2" aria-hidden="true"></i>Listado de tareas
           </h5>
-          <p class="delco-import-clientes-subtitle mb-0">Formulario · técnico o grupo · cantidad · máximo {{ max_lote }} tareas</p>
+          <p class="delco-import-clientes-subtitle mb-0">Formulario · técnico o grupo · cantidad · nota por tarea · máximo {{ max_lote }} tareas</p>
         </div>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
@@ -18,13 +18,14 @@
           {% else %}
           <div class="alert alert-warning js-lote-listado-error d-none"></div>
           {% endif %}
-          <p class="small text-muted" id="js-lote-listado-status">Cada fila crea esa cantidad de tareas para el mismo técnico o grupo.</p>
+          <p class="small text-muted" id="js-lote-listado-status">Cada fila crea esa cantidad de tareas. El mensaje de abajo vale para todas; en cada tarea puedes anotar el nº de cliente u otra nota para que el técnico no se confunda.</p>
           <section class="delco-import-section">
-            <div class="delco-import-section-label">1. Mensaje</div>
+            <div class="delco-import-section-label">1. Mensaje general</div>
             <div class="row g-3">
               <div class="col-md-8">
                 <label class="form-label" for="listado_mensaje">Mensaje corto</label>
                 <textarea name="mensaje" id="listado_mensaje" class="form-control" rows="2" maxlength="500" required>{{ mensaje|default:"Tarea asignada desde la intranet" }}</textarea>
+                <div class="form-text">Se envía a todas las tareas. La nota de cada tarea (nº de cliente) se agrega después.</div>
               </div>
               <div class="col-md-4">
                 <label class="form-label" for="listado_fecha_limite">Fecha límite (opcional)</label>
@@ -40,7 +41,7 @@
               </button>
             </div>
             <div class="table-responsive">
-              <table class="table align-middle mb-0 delco-lote-listado-tabla">
+              <table class="table align-middle mb-0 delco-lote-listado-tabla" id="js-listado-tabla">
                 <thead class="table-delco">
                   <tr>
                     <th>Formulario</th>
@@ -49,7 +50,6 @@
                     <th style="width:3rem"></th>
                   </tr>
                 </thead>
-                <tbody id="js-listado-filas"></tbody>
               </table>
             </div>
           </section>
@@ -97,24 +97,32 @@
 </div>
 
 <template id="tplListadoFila">
-  <tr class="js-listado-fila">
-    <td>
-      <select name="form_id" class="form-select form-select-sm js-listado-form">
-        <option value="">— Formulario —</option>
-      </select>
-    </td>
-    <td>
-      <select name="destinatario" class="form-select form-select-sm js-listado-dest">
-        <option value="">— Técnico o grupo —</option>
-      </select>
-    </td>
-    <td>
-      <input type="number" name="cantidad" class="form-control form-control-sm" min="1" max="{{ max_cantidad|default:20 }}" value="1" required>
-    </td>
-    <td class="text-end">
-      <button type="button" class="btn btn-outline-danger btn-sm js-listado-quitar" title="Quitar fila">
-        <i class="bi bi-x-lg"></i>
-      </button>
-    </td>
-  </tr>
+  <tbody class="js-listado-fila">
+    <tr>
+      <td>
+        <select name="form_id" class="form-select form-select-sm js-listado-form">
+          <option value="">— Formulario —</option>
+        </select>
+      </td>
+      <td>
+        <select name="destinatario" class="form-select form-select-sm js-listado-dest">
+          <option value="">— Técnico o grupo —</option>
+        </select>
+      </td>
+      <td>
+        <input type="number" name="cantidad" class="form-control form-control-sm js-listado-cantidad" min="1" max="{{ max_cantidad|default:20 }}" value="1" required>
+      </td>
+      <td class="text-end">
+        <button type="button" class="btn btn-outline-danger btn-sm js-listado-quitar" title="Quitar fila">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </td>
+    </tr>
+    <tr class="js-listado-notas-wrap">
+      <td colspan="4">
+        <div class="small text-muted mb-1">Notas por tarea (nº de cliente o detalle). Vacío = solo el mensaje general.</div>
+        <div class="row g-2 js-listado-notas"></div>
+      </td>
+    </tr>
+  </tbody>
 </template>

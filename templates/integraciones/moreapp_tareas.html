@@ -550,16 +550,18 @@
     });
   }
 
-  document.addEventListener('change', function (ev) {
+  function onTareasDocChange(ev) {
     if (ev.target && (ev.target.id === 'checkAllTareas' || ev.target.classList.contains('js-tarea-check'))) {
       if (ev.target.id === 'checkAllTareas') {
         checksTareas().forEach(function (el) { el.checked = ev.target.checked; });
       }
       actualizarSeleccionTareas();
     }
-  });
+  }
 
-  document.addEventListener('click', function (ev) {
+  document.addEventListener('change', onTareasDocChange);
+
+  function onTareasDocClick(ev) {
     var btn = ev.target.closest('.js-tarea-eliminar');
     if (!btn) return;
     var url = btn.getAttribute('data-url') || '';
@@ -589,7 +591,9 @@
     } else if (window.confirm('¿Eliminar la tarea #' + id + '?')) {
       go();
     }
-  });
+  }
+
+  document.addEventListener('click', onTareasDocClick);
 
   var btnMasivo = document.getElementById('btnEliminarTareasSel');
   if (btnMasivo) {
@@ -627,7 +631,13 @@
   }
   actualizarSeleccionTareas();
 
-  window.setInterval(function () { consultar(); }, refreshSeconds * 1000);
+  var estadoTimer = window.setInterval(function () { consultar(); }, refreshSeconds * 1000);
+  window.__delcoPageCleanup = window.__delcoPageCleanup || [];
+  window.__delcoPageCleanup.push(function () {
+    clearInterval(estadoTimer);
+    document.removeEventListener('change', onTareasDocChange);
+    document.removeEventListener('click', onTareasDocClick);
+  });
 })();
 (function () {
   var csvModal = document.getElementById('modalLoteCsv');
@@ -641,6 +651,8 @@
   var loaded = false;
   var listadoCatalogo = null;
   var nuevaLoaded = false;
+  var catalogoClientes = null;
+  var catalogoNueva = null;
   var maxFilasListado = Number({{ max_filas_listado|default:15 }}) || 15;
 
   function mount(modal) {
@@ -650,6 +662,12 @@
   mount(clientesModal);
   mount(listadoModal);
   mount(nuevaModal);
+  window.__delcoPageCleanup = window.__delcoPageCleanup || [];
+  window.__delcoPageCleanup.push(function () {
+    [csvModal, clientesModal, listadoModal, nuevaModal].forEach(function (el) {
+      if (el && el.parentNode) el.remove();
+    });
+  });
 
   var archivo = document.getElementById('archivoLoteCsv');
   var archivoNombre = document.getElementById('archivoLoteCsvNombre');
@@ -786,6 +804,56 @@
     }).join('');
   }
 
+  function itemTieneFormulario(item, formId, conoce) {
+    if (!formId || !conoce) return true;
+    var ids = item.form_ids || [];
+    for (var i = 0; i < ids.length; i += 1) {
+      if (String(ids[i]) === String(formId)) return true;
+    }
+    return false;
+  }
+
+  function filtrarCatalogoDestinatarios(data, formId) {
+    var conoce = !!(data && data.conoce_permisos);
+    var usuarios = ((data && data.usuarios) || []).filter(function (item) {
+      return itemTieneFormulario(item, formId, conoce);
+    });
+    var grupos = ((data && data.grupos) || []).filter(function (item) {
+      return itemTieneFormulario(item, formId, conoce);
+    });
+    return { usuarios: usuarios, grupos: grupos, conoce: conoce };
+  }
+
+  function hintDestinatarios(root, formId, filtrado) {
+    var hint = (root || document).querySelector('.js-destinatarios-hint');
+    if (!hint) return;
+    if (!formId) {
+      hint.textContent = 'Elige un formulario para ver quién tiene acceso en MoreApp.';
+      return;
+    }
+    if (!filtrado.conoce) {
+      hint.textContent = 'No se pudieron leer los permisos de MoreApp. Se muestran todas las cuentas.';
+      return;
+    }
+    hint.textContent = 'Solo aparecen técnicos y grupos con este formulario en MoreApp (' +
+      filtrado.usuarios.length + ' correo' + (filtrado.usuarios.length === 1 ? '' : 's') + ').';
+  }
+
+  function pintarDestinatarios(data, formSelectId, usuariosId, gruposId, rootSelector) {
+    var formSelect = document.getElementById(formSelectId);
+    var formId = formSelect ? formSelect.value : '';
+    var filtrado = filtrarCatalogoDestinatarios(data, formId);
+    var emptyUsers = formId && filtrado.conoce
+      ? 'Nadie tiene este formulario asignado en MoreApp.'
+      : 'No hay cuentas MoreApp activas.';
+    var emptyGroups = formId && filtrado.conoce
+      ? 'Ningún grupo tiene este formulario asignado.'
+      : 'No hay grupos para mostrar.';
+    fillChecks(document.getElementById(usuariosId), filtrado.usuarios, 'usuarios', [], emptyUsers);
+    fillChecks(document.getElementById(gruposId), filtrado.grupos, 'grupos', [], emptyGroups);
+    hintDestinatarios(rootSelector ? document.querySelector(rootSelector) : document, formId, filtrado);
+  }
+
   function fillClientes(box, items, selected) {
     if (!box) return;
     var chosen = selected || [];
@@ -828,9 +896,9 @@
           return;
         }
         loaded = true;
+        catalogoClientes = data;
         fillSelect(select, data.formularios || []);
-        fillChecks(document.getElementById('js-lote-usuarios'), data.usuarios || [], 'usuarios', [], 'No hay cuentas MoreApp activas.');
-        fillChecks(document.getElementById('js-lote-grupos'), data.grupos || [], 'grupos', [], 'No hay grupos para mostrar.');
+        pintarDestinatarios(data, 'lote_form_id', 'js-lote-usuarios', 'js-lote-grupos', '#modalLoteClientes');
         fillClientes(document.getElementById('js-lista-clientes'), data.clientes || [], []);
         if (status) {
           status.textContent = 'Elige formulario, técnico y clientes. Si el Search coincide con CUENTA, se precarga.';
@@ -849,19 +917,20 @@
     clientesModal.addEventListener('show.bs.modal', loadClientesModal);
   }
 
-  function fillDestinoSelect(select, data) {
+  function fillDestinoSelect(select, data, formId) {
     if (!select) return;
     var current = select.value || '';
+    var filtrado = filtrarCatalogoDestinatarios(data, formId || '');
     var html = '<option value="">— Técnico o grupo —</option>';
     html += '<optgroup label="Técnicos">';
-    (data.usuarios || []).forEach(function (item) {
+    (filtrado.usuarios || []).forEach(function (item) {
       var value = 'user:' + (item.email || '');
       var label = item.tecnico_nombre || item.nombre || item.email || '';
       html += '<option value="' + escapeHtml(value) + '"' + (current === value ? ' selected' : '') + '>' +
         escapeHtml(label) + '</option>';
     });
     html += '</optgroup><optgroup label="Grupos">';
-    (data.grupos || []).forEach(function (item) {
+    (filtrado.grupos || []).forEach(function (item) {
       var value = 'group:' + (item.id || '');
       var label = item.nombre || item.id || '';
       html += '<option value="' + escapeHtml(value) + '"' + (current === value ? ' selected' : '') + '>' +
@@ -871,23 +940,63 @@
     select.innerHTML = html;
   }
 
+  var listadoStatusText = 'Cada fila crea esa cantidad de tareas. El mensaje de abajo vale para todas; en cada tarea puedes anotar el nº de cliente u otra nota para que el técnico no se confunda.';
+
+  function listadoTabla() {
+    return document.getElementById('js-listado-tabla');
+  }
+
+  function syncListadoNotas(row) {
+    var cantInput = row.querySelector('.js-listado-cantidad');
+    var box = row.querySelector('.js-listado-notas');
+    if (!cantInput || !box) return;
+    var maxCant = parseInt(cantInput.getAttribute('max') || '20', 10) || 20;
+    var n = parseInt(cantInput.value, 10);
+    if (isNaN(n) || n < 1) n = 1;
+    if (n > maxCant) n = maxCant;
+    var prev = Array.prototype.map.call(box.querySelectorAll('input[name="mensaje_item"]'), function (el) {
+      return el.value;
+    });
+    box.innerHTML = '';
+    for (var i = 0; i < n; i++) {
+      var col = document.createElement('div');
+      col.className = 'col-md-6 col-xl-4';
+      var label = document.createElement('label');
+      label.className = 'form-label small mb-0';
+      label.textContent = n > 1 ? ('Tarea ' + (i + 1) + ' de ' + n) : 'Nota de esta tarea';
+      var input = document.createElement('input');
+      input.type = 'text';
+      input.name = 'mensaje_item';
+      input.className = 'form-control form-control-sm';
+      input.maxLength = 200;
+      input.placeholder = 'Nº de cliente o nota';
+      input.setAttribute('autocomplete', 'off');
+      input.value = prev[i] || '';
+      col.appendChild(label);
+      col.appendChild(input);
+      box.appendChild(col);
+    }
+  }
+
   function addListadoFila() {
-    var body = document.getElementById('js-listado-filas');
+    var table = listadoTabla();
     var tpl = document.getElementById('tplListadoFila');
-    if (!body || !tpl || !listadoCatalogo) return;
-    if (body.querySelectorAll('.js-listado-fila').length >= maxFilasListado) return;
+    if (!table || !tpl || !listadoCatalogo) return;
+    if (table.querySelectorAll('.js-listado-fila').length >= maxFilasListado) return;
     var row = tpl.content.cloneNode(true);
     fillSelect(row.querySelector('.js-listado-form'), listadoCatalogo.formularios || []);
-    fillDestinoSelect(row.querySelector('.js-listado-dest'), listadoCatalogo);
-    body.appendChild(row);
+    fillDestinoSelect(row.querySelector('.js-listado-dest'), listadoCatalogo, '');
+    table.appendChild(row);
+    var inserted = table.querySelector('.js-listado-fila:last-of-type');
+    if (inserted) syncListadoNotas(inserted);
   }
 
   function loadListadoModal() {
     var status = document.getElementById('js-lote-listado-status');
     var errBox = document.querySelector('#modalLoteListado .js-lote-listado-error');
-    var body = document.getElementById('js-listado-filas');
+    var table = listadoTabla();
     if (listadoCatalogo) {
-      if (body && !body.querySelector('.js-listado-fila')) addListadoFila();
+      if (table && !table.querySelector('.js-listado-fila')) addListadoFila();
       return;
     }
     if (status) status.textContent = 'Cargando formularios y destinatarios…';
@@ -904,11 +1013,13 @@
           return;
         }
         listadoCatalogo = data;
-        if (body) body.innerHTML = '';
-        addListadoFila();
-        if (status) {
-          status.textContent = 'Cada fila crea esa cantidad de tareas para el mismo técnico o grupo.';
+        if (table) {
+          Array.prototype.slice.call(table.querySelectorAll('tbody.js-listado-fila')).forEach(function (el) {
+            el.remove();
+          });
         }
+        addListadoFila();
+        if (status) status.textContent = listadoStatusText;
       })
       .catch(function () {
         if (errBox) {
@@ -918,6 +1029,18 @@
       });
   }
 
+  function setListadoRowDisabled(row, disabled) {
+    var form = row.querySelector('.js-listado-form');
+    var dest = row.querySelector('.js-listado-dest');
+    var cant = row.querySelector('input[name="cantidad"]');
+    if (form) form.disabled = disabled;
+    if (dest) dest.disabled = disabled;
+    if (cant) cant.disabled = disabled;
+    Array.prototype.forEach.call(row.querySelectorAll('input[name="mensaje_item"]'), function (el) {
+      el.disabled = disabled;
+    });
+  }
+
   var btnAgregar = document.getElementById('js-listado-agregar');
   if (btnAgregar) {
     btnAgregar.addEventListener('click', function () {
@@ -925,7 +1048,7 @@
       else addListadoFila();
     });
   }
-  var filasBox = document.getElementById('js-listado-filas');
+  var filasBox = listadoTabla();
   if (filasBox) {
     filasBox.addEventListener('click', function (ev) {
       var btn = ev.target.closest('.js-listado-quitar');
@@ -934,6 +1057,18 @@
       if (!row) return;
       if (filasBox.querySelectorAll('.js-listado-fila').length <= 1) return;
       row.remove();
+    });
+    filasBox.addEventListener('change', function (ev) {
+      var formSel = ev.target.closest('.js-listado-form');
+      if (formSel && listadoCatalogo) {
+        var rowForm = formSel.closest('.js-listado-fila');
+        if (rowForm) fillDestinoSelect(rowForm.querySelector('.js-listado-dest'), listadoCatalogo, formSel.value);
+      }
+    });
+    filasBox.addEventListener('input', function (ev) {
+      if (!ev.target.closest('.js-listado-cantidad')) return;
+      var row = ev.target.closest('.js-listado-fila');
+      if (row) syncListadoNotas(row);
     });
   }
   if (listadoModal) {
@@ -950,22 +1085,10 @@
       });
       rows.forEach(function (row) {
         if (complete.indexOf(row) !== -1) return;
-        var form = row.querySelector('.js-listado-form');
-        var dest = row.querySelector('.js-listado-dest');
-        var cant = row.querySelector('input[name="cantidad"]');
-        if (form) form.disabled = true;
-        if (dest) dest.disabled = true;
-        if (cant) cant.disabled = true;
+        setListadoRowDisabled(row, true);
       });
       if (!complete.length) {
-        rows.forEach(function (row) {
-          var form = row.querySelector('.js-listado-form');
-          var dest = row.querySelector('.js-listado-dest');
-          var cant = row.querySelector('input[name="cantidad"]');
-          if (form) form.disabled = false;
-          if (dest) dest.disabled = false;
-          if (cant) cant.disabled = false;
-        });
+        rows.forEach(function (row) { setListadoRowDisabled(row, false); });
         ev.preventDefault();
         var errBox = document.querySelector('#modalLoteListado .js-lote-listado-error');
         if (errBox) {
@@ -1053,6 +1176,7 @@
           return;
         }
         nuevaLoaded = true;
+        catalogoNueva = data;
         fillSelect(formSelect, data.formularios || []);
         var tipo = document.getElementById('crear_tipo_trabajo');
         if (tipo) {
@@ -1066,8 +1190,7 @@
             tipo.appendChild(opt);
           });
         }
-        fillChecks(document.getElementById('js-crear-usuarios'), data.usuarios || [], 'usuarios', [], 'No hay cuentas MoreApp activas.');
-        fillChecks(document.getElementById('js-crear-grupos'), data.grupos || [], 'grupos', [], 'No hay grupos para mostrar.');
+        pintarDestinatarios(data, 'crear_form_id', 'js-crear-usuarios', 'js-crear-grupos', '#modalNuevaTarea');
         var clienteSel = document.getElementById('crearClienteSelectPopup');
         if (clienteSel) {
           var chosen = clienteSel.value || '';
@@ -1109,7 +1232,22 @@
     }
   }
   var crearFormSelect = document.getElementById('crear_form_id');
-  if (crearFormSelect) crearFormSelect.addEventListener('change', loadCamposCrear);
+  if (crearFormSelect) {
+    crearFormSelect.addEventListener('change', function () {
+      loadCamposCrear();
+      if (catalogoNueva) {
+        pintarDestinatarios(catalogoNueva, 'crear_form_id', 'js-crear-usuarios', 'js-crear-grupos', '#modalNuevaTarea');
+      }
+    });
+  }
+  var loteFormSelect = document.getElementById('lote_form_id');
+  if (loteFormSelect) {
+    loteFormSelect.addEventListener('change', function () {
+      if (catalogoClientes) {
+        pintarDestinatarios(catalogoClientes, 'lote_form_id', 'js-lote-usuarios', 'js-lote-grupos', '#modalLoteClientes');
+      }
+    });
+  }
   var crearEnvio = document.getElementById('crear_envio');
   if (crearEnvio) crearEnvio.addEventListener('change', toggleProgramadaCrear);
   var crearClienteSel = document.getElementById('crearClienteSelectPopup');

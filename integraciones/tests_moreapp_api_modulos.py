@@ -383,6 +383,30 @@ class MoreAppApiModulosTests(TestCase):
         MOREAPP_API_KEY='test-key',
         MOREAPP_CUSTOMER_ID='123',
     )
+    def test_catalogo_mostrar_todos_restaura_ocultos(self):
+        from integraciones.models import MoreAppFormularioOculto
+
+        MoreAppFormularioOculto.objects.create(
+            usuario=self.admin,
+            form_id='abc123abc123abc123abc123',
+            form_name='Reposicion',
+        )
+        MoreAppFormularioOculto.objects.create(
+            usuario=self.admin,
+            form_id='def123def123def123def123',
+            form_name='Retiro',
+        )
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.post(reverse('moreapp_api_catalogo_mostrar_todos'))
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse('moreapp_api_catalogo'))
+        self.assertFalse(MoreAppFormularioOculto.objects.filter(usuario=self.admin).exists())
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
     @mock.patch('integraciones.moreapp_registros_views.get_form_version')
     @mock.patch('integraciones.moreapp_registros_views.list_submissions')
     @mock.patch('integraciones.moreapp_registros_views.get_form')
@@ -1827,8 +1851,8 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(mocked_create.call_count, 2)
         payloads = [call[0][1] for call in mocked_create.call_args_list]
-        self.assertEqual(payloads[0]['recipients'], ['campo@more.app', 'oficina@more.app'])
-        self.assertEqual(payloads[1]['recipients'], ['campo@more.app', 'oficina@more.app'])
+        self.assertCountEqual(payloads[0]['recipients'], ['campo@more.app', 'oficina@more.app'])
+        self.assertCountEqual(payloads[1]['recipients'], ['campo@more.app', 'oficina@more.app'])
         cuentas = [
             (item['data'] or {}).get('cliente1', {}).get('CUENTA')
             for item in payloads
@@ -1957,6 +1981,91 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(err, '')
         self.assertEqual(len(filas), 1)
         self.assertEqual(filas[0]['cantidad'], 2)
+        self.assertEqual(filas[0]['notas'], ['', ''])
+
+    def test_lote_listado_notas_por_tarea_y_filas_vacias(self):
+        from integraciones.moreapp_tareas_lote import mensaje_tarea_listado, parse_filas_listado
+
+        class Post(dict):
+            def getlist(self, key):
+                return list(self.get(key) or [])
+
+        filas, err = parse_filas_listado(
+            Post(
+                {
+                    'form_id': ['abc123abc123abc123abc123', ''],
+                    'destinatario': ['user:campo@more.app', ''],
+                    'cantidad': ['7', '1'],
+                    'mensaje_item': [
+                        '',
+                        '',
+                        'cliente 858678',
+                        '',
+                        '',
+                        '',
+                        '',
+                        'nota de fila vacia',
+                    ],
+                }
+            )
+        )
+        self.assertEqual(err, '')
+        self.assertEqual(len(filas), 1)
+        self.assertEqual(filas[0]['cantidad'], 7)
+        self.assertEqual(filas[0]['notas'][2], 'cliente 858678')
+        self.assertEqual(filas[0]['notas'].count(''), 6)
+        self.assertEqual(mensaje_tarea_listado('Ronda de terreno', '', 1, 7), 'Ronda de terreno · 1/7')
+        self.assertEqual(
+            mensaje_tarea_listado('Ronda de terreno', 'cliente 858678', 3, 7),
+            'Ronda de terreno · cliente 858678',
+        )
+        self.assertEqual(mensaje_tarea_listado('Ronda de terreno', '', 1, 1), 'Ronda de terreno')
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.create_task')
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_lote_listado_usa_nota_en_una_tarea(self, mocked_forms, mocked_users, mocked_create):
+        from integraciones.models import MoreAppTareaEnviada
+
+        form = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Instalacion',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_forms.return_value = [form]
+        mocked_users.return_value = [
+            {
+                'id': 'u1',
+                'emailAddress': 'campo@more.app',
+                'disabled': False,
+                'settings': {'displayName': 'Tecnico More'},
+                'groups': [{'id': 'g1', 'name': 'Terreno'}],
+            }
+        ]
+        mocked_create.side_effect = [{'id': 't1'}, {'id': 't2'}, {'id': 't3'}]
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.post(
+            reverse('moreapp_tareas_lote_listado'),
+            {
+                'mensaje': 'Ronda de terreno',
+                'form_id': ['abc123abc123abc123abc123'],
+                'destinatario': ['user:campo@more.app'],
+                'cantidad': ['3'],
+                'mensaje_item': ['', 'cliente 858678', ''],
+            },
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(mocked_create.call_count, 3)
+        mensajes = list(MoreAppTareaEnviada.objects.values_list('mensaje', flat=True))
+        self.assertIn('Ronda de terreno · 1/3', mensajes)
+        self.assertIn('Ronda de terreno · cliente 858678', mensajes)
+        self.assertIn('Ronda de terreno · 3/3', mensajes)
 
     def test_lote_csv_cuenta_filas_sobre_el_maximo(self):
         from integraciones.moreapp_tareas_lote import MAX_LOTE, parse_lote_csv
@@ -2610,3 +2719,182 @@ class MoreAppTareaCicloTests(TestCase):
         self.assertEqual(payload['tareas'][0]['estado'], MoreAppTareaEnviada.ESTADO_COMPLETADA)
         tarea.refresh_from_db()
         self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_COMPLETADA)
+
+
+class MoreAppPermisosFormularioTests(TestCase):
+    def setUp(self):
+        self.password = 'Seguro1234'
+        self.admin = Usuario.objects.create_user(
+            rut='11111111-1',
+            email='admin-perm@delco.cl',
+            password=self.password,
+            nombre='Admin',
+            apellido='Perm',
+            nombre_interno='admin_perm',
+            rol='ADMIN',
+            is_active=True,
+        )
+
+    def test_parsea_grants_y_filtra_correos_sin_acceso(self):
+        from integraciones.moreapp_permisos import (
+            accesos_de_formulario,
+            filtrar_destinatarios_por_formulario,
+            ids_formulario_de_usuario,
+        )
+
+        ids, seen = ids_formulario_de_usuario(
+            {
+                'emailAddress': 'campo@more.app',
+                'grants': [
+                    {'resourceType': 'FORM', 'resourceId': 'form-ok'},
+                    {'type': 'DATASOURCE', 'resourceId': 'ds-1'},
+                ],
+            }
+        )
+        self.assertTrue(seen)
+        self.assertEqual(ids, ['form-ok'])
+        usuarios = [
+            {
+                'email': 'campo@more.app',
+                'nombre': 'Campo',
+                'form_ids': ['form-ok'],
+                'conoce_permisos': True,
+            },
+            {
+                'email': 'otro@more.app',
+                'nombre': 'Otro',
+                'form_ids': ['otro-form'],
+                'conoce_permisos': True,
+            },
+        ]
+        ok, error = filtrar_destinatarios_por_formulario(
+            ['campo@more.app', 'otro@more.app'], usuarios, 'form-ok'
+        )
+        self.assertEqual(ok, ['campo@more.app'])
+        self.assertEqual(error, '')
+        vacio, error_vacio = filtrar_destinatarios_por_formulario(
+            ['otro@more.app'], usuarios, 'form-ok'
+        )
+        self.assertEqual(vacio, [])
+        self.assertIn('Ningún destinatario', error_vacio)
+        accesos = accesos_de_formulario('form-ok', usuarios)
+        self.assertEqual([item['email'] for item in accesos], ['campo@more.app'])
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.create_task')
+    @mock.patch('integraciones.moreapp_tareas_views._campos_desde_formulario')
+    @mock.patch('integraciones.moreapp_tareas_views.get_form')
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_crear_tarea_rechaza_tecnico_sin_formulario(
+        self,
+        mocked_forms,
+        mocked_users,
+        mocked_get_form,
+        mocked_campos,
+        mocked_create,
+    ):
+        form = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Instalacion',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_forms.return_value = [form]
+        mocked_get_form.return_value = form
+        mocked_campos.return_value = []
+        mocked_users.return_value = [
+            {
+                'id': 'u1',
+                'emailAddress': 'campo@more.app',
+                'disabled': False,
+                'grants': [{'resourceType': 'FORM', 'resourceId': 'abc123abc123abc123abc123'}],
+            },
+            {
+                'id': 'u2',
+                'emailAddress': 'otro@more.app',
+                'disabled': False,
+                'grants': [{'resourceType': 'FORM', 'resourceId': 'zzzzzzzzzzzzzzzzzzzzzzzz'}],
+            },
+        ]
+        self.client.login(username=self.admin.rut, password=self.password)
+        denied = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': 'abc123abc123abc123abc123',
+                'mensaje': 'Instalar',
+                'envio': 'IMMEDIATE',
+                'usuarios': ['otro@more.app'],
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(denied.status_code, 400)
+        denied_body = denied.json()
+        self.assertFalse(denied_body.get('success') or denied_body.get('ok'))
+        self.assertIn('formulario', (denied_body.get('message') or denied_body.get('error') or '').lower())
+        mocked_create.assert_not_called()
+
+        mocked_create.return_value = {'id': 'task-ok'}
+        ok = self.client.post(
+            reverse('moreapp_tarea_crear'),
+            {
+                'form_id': 'abc123abc123abc123abc123',
+                'mensaje': 'Instalar',
+                'envio': 'IMMEDIATE',
+                'usuarios': ['campo@more.app'],
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(ok.status_code, 200)
+        self.assertTrue(ok.json()['success'])
+        mocked_create.assert_called_once()
+        recipients = mocked_create.call_args[0][1]['recipients']
+        self.assertEqual(recipients, ['campo@more.app'])
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_json_lote_incluye_permisos_por_formulario(self, mocked_forms, mocked_users):
+        mocked_forms.return_value = [
+            {
+                'id': 'abc123abc123abc123abc123',
+                'name': 'Instalacion',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+            }
+        ]
+        mocked_users.return_value = [
+            {
+                'id': 'u1',
+                'emailAddress': 'campo@more.app',
+                'disabled': False,
+                'grants': [{'resourceType': 'FORM', 'resourceId': 'abc123abc123abc123abc123'}],
+                'groups': [{'id': 'g1', 'name': 'Terreno'}],
+            },
+            {
+                'id': 'u2',
+                'emailAddress': 'otro@more.app',
+                'disabled': False,
+                'grants': [],
+                'groups': [{'id': 'g1', 'name': 'Terreno'}],
+            },
+        ]
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_tareas_lote_clientes') + '?json=1')
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertTrue(data['conoce_permisos'])
+        by_email = {item['email']: item for item in data['usuarios']}
+        self.assertEqual(by_email['campo@more.app']['form_ids'], ['abc123abc123abc123abc123'])
+        self.assertEqual(by_email['otro@more.app']['form_ids'], [])
+        self.assertEqual(data['grupos'][0]['form_ids'], ['abc123abc123abc123abc123'])

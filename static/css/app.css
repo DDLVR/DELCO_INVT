@@ -170,15 +170,68 @@ code {
   font-size: 0.92rem;
 }
 
-/* Navegación: primer click gana (evita ráfagas de GET al hacer click rápido) */
+/* Navegación del shell: menú usable, contenido con círculo de carga */
 body.delco-navigating {
   cursor: progress;
 }
 
-body.delco-navigating main {
-  opacity: 0.72;
+body.delco-navigating #delcoMainContent {
+  opacity: 0.45;
   pointer-events: none;
   transition: opacity 0.15s ease;
+}
+
+.delco-page-loader {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bs-body-bg) 70%, transparent);
+  backdrop-filter: blur(1px);
+}
+
+body.delco-navigating .delco-page-loader {
+  display: flex;
+}
+
+.delco-page-loader-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 1rem;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  box-shadow: 0 0.75rem 1.75rem rgba(15, 36, 56, 0.16);
+}
+
+.delco-page-loader-spinner {
+  width: 2.6rem;
+  height: 2.6rem;
+  border: 0.28rem solid var(--bs-border-color);
+  border-top-color: var(--delco-accent, #4a90e2);
+  border-radius: 50%;
+  animation: delco-spin 0.7s linear infinite;
+}
+
+.delco-page-loader-text {
+  font-weight: 600;
+  color: var(--bs-body-color);
+}
+
+@keyframes delco-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delco-page-loader-spinner {
+    animation-duration: 1.2s;
+  }
 }
 
 .delco-sidebar .app-nav-link.delco-nav-pending {
@@ -2533,8 +2586,18 @@ body.delco-foto-lightbox-open {
 }
 
 .delco-lote-listado-tabla select,
-.delco-lote-listado-tabla input[type="number"] {
+.delco-lote-listado-tabla input[type="number"],
+.delco-lote-listado-tabla input[type="text"] {
   min-width: 0;
+}
+
+.delco-lote-listado-tabla tbody.js-listado-fila tr:first-child td {
+  border-bottom: 0;
+}
+
+.delco-lote-listado-tabla .js-listado-notas-wrap td {
+  padding-top: 0.15rem;
+  border-top: 0;
 }
 
 .delco-catalogo-hero,
@@ -2746,6 +2809,50 @@ a.delco-catalogo-chip:hover {
   font-size: 0.82rem;
   color: var(--bs-secondary-color);
   overflow-wrap: anywhere;
+}
+
+.delco-accesos-fold {
+  margin: 0;
+}
+
+.delco-accesos-fold > summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  user-select: none;
+}
+
+.delco-accesos-fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+.delco-accesos-fold > summary .bi-envelope {
+  flex-shrink: 0;
+}
+
+.delco-accesos-fold-chevron {
+  margin-left: auto;
+  font-size: 0.75rem;
+  opacity: 0.7;
+  transition: transform 0.16s ease;
+}
+
+.delco-accesos-fold[open] > summary .delco-accesos-fold-chevron {
+  transform: rotate(180deg);
+}
+
+.delco-accesos-fold-list {
+  margin-top: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  max-height: 11rem;
+  overflow: auto;
+  border-radius: 0.55rem;
+  background: var(--bs-tertiary-bg);
+  color: var(--bs-secondary-color);
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 .delco-catalogo-empty {
@@ -3051,9 +3158,14 @@ a.delco-catalogo-chip:hover {
     width: 100%;
   }
 
-  .delco-lote-listado-tabla tr {
-    padding: 0.7rem 0;
+  .delco-lote-listado-tabla tbody.js-listado-fila {
+    padding: 0.55rem 0 0.75rem;
     border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .delco-lote-listado-tabla tr {
+    padding: 0;
+    border-bottom: 0;
   }
 
   .delco-lote-listado-tabla td {
