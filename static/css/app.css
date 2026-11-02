@@ -2142,6 +2142,52 @@ input[type="file"].form-control,
   gap: 0.75rem;
 }
 
+.delco-registros-scroll {
+  max-height: min(68vh, 46rem);
+  overflow-y: auto;
+  padding-right: 0.35rem;
+  scrollbar-gutter: stable;
+}
+
+.delco-registros-sentinel {
+  text-align: center;
+  padding: 0.85rem 0.5rem 0.35rem;
+  color: var(--bs-secondary-color, #6c757d);
+  font-size: 0.86rem;
+}
+
+.delco-registros-selectall {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.86rem;
+  color: var(--bs-secondary-color, #6c757d);
+}
+
+.delco-registro-check {
+  display: flex;
+  align-items: flex-start;
+  padding-top: 0.35rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.delco-registro-check input {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  accent-color: var(--delco-primary, #1a3a5c);
+}
+
+.delco-registro-card.is-selected {
+  border-color: rgba(26, 58, 92, 0.45);
+  box-shadow: 0 0.45rem 1.1rem rgba(26, 58, 92, 0.12);
+}
+
+.delco-registro-card.is-muted {
+  opacity: 0.72;
+}
+
 .delco-registro-card {
   position: relative;
   display: block;
@@ -2372,6 +2418,56 @@ input[type="file"].form-control,
   border-radius: 0.9rem;
   background: var(--bs-card-bg, var(--bs-body-bg));
   text-decoration: none;
+}
+
+.delco-campo-adjuntos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.85rem;
+}
+
+.delco-campo-adjunto {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.9rem;
+  background: var(--bs-card-bg, var(--bs-body-bg));
+  min-width: 220px;
+}
+
+.delco-campo-adjunto-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.86rem;
+}
+
+.delco-campo-adjunto-head .bi {
+  font-size: 1.25rem;
+  color: var(--bs-primary);
+}
+
+.delco-campo-adjunto-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.delco-campo-txt {
+  width: 100%;
+  min-height: 180px;
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.6rem;
+  background: var(--bs-tertiary-bg);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .delco-respuesta-grupo,

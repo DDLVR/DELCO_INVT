@@ -150,7 +150,7 @@ class ReportesSoloActividadOperativaTests(TestCase):
         self.assertTrue(any('Instalación' in str(r[0]) for r in filt_rows))
         self.assertFalse(any('Inspección' in str(r[0]) for r in filt_rows))
 
-    def test_hub_vacio_con_moreapp_sin_cliente(self):
+    def test_hub_muestra_catalogo_con_visita_moreapp(self):
         from django.test import RequestFactory
         from ordenes_trabajo.models import IntegracionMoreApp
         from reportes.views import reportes_hub_view
@@ -158,15 +158,47 @@ class ReportesSoloActividadOperativaTests(TestCase):
         IntegracionMoreApp.objects.create(
             moreapp_submission_id='orphan-moreapp-1',
             estado_sincronizacion='PROCESADO',
-            datos_procesados={'cliente_codigo': '9999999'},
+            datos_procesados={'cliente_codigo': '9999999', 'estado': 'INCIDENCIA', 'diagnostico': 'SIM'},
             datos_recibidos={},
         )
         request = RequestFactory().get('/reportes/')
         request.user = self.admin
         response = reportes_hub_view(request)
         content = response.content.decode()
-        self.assertIn('Sin reportes operativos por ahora', content)
-        self.assertNotIn('Base completa de clientes', content)
+        self.assertIn('Base completa de clientes', content)
+        self.assertNotIn('Sin reportes operativos por ahora', content)
+
+    def test_reportes_usan_visitas_moreapp_sin_ot(self):
+        from ordenes_trabajo.models import IntegracionMoreApp
+
+        IntegracionMoreApp.objects.create(
+            moreapp_submission_id='visita-ejec-1',
+            estado_sincronizacion='PROCESADO',
+            nombre_formulario='Mantenimiento Telemetría',
+            datos_procesados={
+                'cliente_codigo': self.cliente.numero_cliente,
+                'estado': 'EJECUTADO',
+                'diagnostico': 'MEDIDOR',
+                'tecnico_responsable': 'tec_prueba',
+            },
+            datos_recibidos={},
+        )
+        IntegracionMoreApp.objects.create(
+            moreapp_submission_id='visita-inc-1',
+            estado_sincronizacion='PROCESADO',
+            nombre_formulario='Mantenimiento Telemetría',
+            datos_procesados={
+                'cliente_codigo': self.cliente.numero_cliente,
+                'estado': 'INCIDENCIA',
+                'diagnostico': 'MODEM - DESPROGRAMADO',
+                'tecnico_responsable': 'tec_prueba',
+            },
+            datos_recibidos={},
+        )
+        _, ejecutados = run_report('clientes_ejecutados', {})
+        self.assertTrue(any(self.cliente.numero_cliente in [str(c) for c in row] for row in ejecutados))
+        _, causas = run_report('trabajos_pendientes_causa', {})
+        self.assertTrue(any('MODEM - DESPROGRAMADO' in str(row[0]) for row in causas))
 
     def test_filtro_periodo_7_dias(self):
         from reportes.services import parse_report_filters

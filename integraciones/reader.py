@@ -211,6 +211,15 @@ def _as_text(valor: Any) -> str:
         return ''
     if isinstance(valor, bytes):
         texto = valor.decode('utf-8', errors='replace')
+    elif isinstance(valor, dict):
+        for key in ('name', 'label', 'value', 'text', 'nombres', 'NOMBRES'):
+            inner = valor.get(key)
+            if inner not in (None, '', []):
+                return _as_text(inner)
+        return ''
+    elif isinstance(valor, list):
+        partes = [_as_text(item) for item in valor]
+        return ', '.join(p for p in partes if p)
     else:
         texto = str(valor)
 
@@ -305,6 +314,10 @@ def _valor_campo_fuentes(fuentes, aliases):
 
 def _resolver_formulario(nombre_formulario: str) -> str:
     nombre_norm = _normalizar_texto(nombre_formulario)
+    if 'telemetr' in nombre_norm and (
+        'mantenimiento' in nombre_norm or 'informe' in nombre_norm
+    ):
+        return 'MANTENIMIENTO_TELEMETRIA_V3'
     for nombre_base, canonico in FORMULARIOS_SOPORTADOS.items():
         if nombre_base in nombre_norm:
             return canonico
@@ -1748,20 +1761,22 @@ def _extraer_mantenimiento(data: dict, info: dict, meta: dict) -> Dict[str, Any]
     return {
         'form_name': info.get('formName', ''),
         'formulario_canonico': 'MANTENIMIENTO_TELEMETRIA_V3',
-        'fecha_registro': meta.get('registrationDate', ''),
-        'serial_number': _as_text(cli_man.get('NROAPARATO')),
+        'fecha_registro': meta.get('registrationDate') or info.get('date') or '',
+        'serial_number': _as_text(cli_man.get('NROAPARATO') or campos.get('medidor') or campos.get('nroAparato')),
         'empresa': '',
         'actividad': _as_text(campos.get('tipoDeIncidencia')),
         'estado': _as_text(campos.get('estado')),
         'cliente_codigo': _as_text(campos.get('cliente') or cli_man.get('NROCLIENTE')),
-        'cliente_nombre': _as_text(cli_man.get('NOMBRE')),
+        'cliente_nombre': _as_text(cli_man.get('NOMBRE') or campos.get('nombreCliente')),
         'cliente_direccion': _as_text(cli_man.get('DIRECCION')),
         'cliente_comuna': _as_text(cli_man.get('COMUNA')),
         'trabajo': _as_text(campos.get('tipoDeIncidencia')),
         'con_sim': '',
         'tipo_telemetria': '',
-        'tecnico_responsable': _as_text(tecnico.get('NOMBRES')),
-        'tecnico_asistente': _as_text(asistente.get('NOMBRES')),
+        'tecnico_responsable': _as_text(
+            tecnico.get('NOMBRES') or tecnico.get('nombres') or campos.get('tecnicoResponsable')
+        ),
+        'tecnico_asistente': _as_text(asistente.get('NOMBRES') or asistente.get('nombres')),
         'observacion': _as_text(campos.get('observacion')),
         'fecha_trabajo': _as_text(campos.get('fechaDeLaVisita')),
         'location': location_str,
@@ -2404,9 +2419,16 @@ def _procesar_json(
     return resultado
 
 
-def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webhook') -> Dict[str, Any]:
+def procesar_payload_moreapp(
+    payload: Dict[str, Any],
+    ruta_context: str = 'webhook',
+    aplicar_operativo: bool = True,
+) -> Dict[str, Any]:
     """
     Procesa un payload de MoreApp en tiempo real (sin archivo intermedio).
+
+    ``aplicar_operativo=False`` persiste datos normalizados sin mutar ficha/inventario
+    (ingesta masiva desde la API).
     """
     from ordenes_trabajo.models import IntegracionMoreApp
 
@@ -2448,31 +2470,32 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
             return resultado
         try:
             datos_norm = _extraer_datos_normalizados(data)
-            resumen_operativo = _aplicar_actualizaciones_operativas(
-                registro=existente,
-                payload=data,
-                datos_norm=datos_norm,
-                nombre_formulario=nombre_formulario,
-            )
+            resumen_operativo = {}
+            if aplicar_operativo:
+                resumen_operativo = _aplicar_actualizaciones_operativas(
+                    registro=existente,
+                    payload=data,
+                    datos_norm=datos_norm,
+                    nombre_formulario=nombre_formulario,
+                )
             existente.datos_recibidos = data
             existente.datos_procesados = _finalizar_datos_procesados(datos_norm, data, existente, resumen_operativo)
             existente.nombre_formulario = nombre_formulario
             existente.ruta_carpeta = ruta_context
             existente.fecha_procesamiento = timezone.now()
-            existente.save(
-                update_fields=[
-                    'datos_recibidos',
-                    'datos_procesados',
-                    'nombre_formulario',
-                    'ruta_carpeta',
-                    'fecha_procesamiento',
-                    'actualizo_cliente',
-                    'actualizo_equipos',
-                    'estado_revision',
-                    'alerta_doble_trabajo',
-                    'descripcion_alerta',
-                ]
-            )
+            update_fields = [
+                'datos_recibidos',
+                'datos_procesados',
+                'nombre_formulario',
+                'ruta_carpeta',
+                'fecha_procesamiento',
+                'estado_revision',
+                'alerta_doble_trabajo',
+                'descripcion_alerta',
+            ]
+            if aplicar_operativo:
+                update_fields.extend(['actualizo_cliente', 'actualizo_equipos'])
+            existente.save(update_fields=update_fields)
             resultado['resultado'] = 'duplicado'
             resultado['alerta'] = bool(existente.alerta_doble_trabajo)
             resultado['mensaje'] = (
@@ -2505,23 +2528,18 @@ def procesar_payload_moreapp(payload: Dict[str, Any], ruta_context: str = 'webho
 
     resumen_operativo = {}
     try:
-        resumen_operativo = _aplicar_actualizaciones_operativas(
-            registro=registro,
-            payload=data,
-            datos_norm=datos_norm,
-            nombre_formulario=nombre_formulario,
-        )
+        if aplicar_operativo:
+            resumen_operativo = _aplicar_actualizaciones_operativas(
+                registro=registro,
+                payload=data,
+                datos_norm=datos_norm,
+                nombre_formulario=nombre_formulario,
+            )
         registro.datos_procesados = _finalizar_datos_procesados(datos_norm, data, registro, resumen_operativo)
-        registro.save(
-            update_fields=[
-                'datos_procesados',
-                'actualizo_cliente',
-                'actualizo_equipos',
-                'estado_revision',
-                'alerta_doble_trabajo',
-                'descripcion_alerta',
-            ]
-        )
+        update_fields = ['datos_procesados', 'estado_revision', 'alerta_doble_trabajo', 'descripcion_alerta']
+        if aplicar_operativo:
+            update_fields.extend(['actualizo_cliente', 'actualizo_equipos'])
+        registro.save(update_fields=update_fields)
     except Exception as exc:
         logger.exception('Error operativo webhook MoreApp id=%s', submission_id)
         registro.alerta_doble_trabajo = True

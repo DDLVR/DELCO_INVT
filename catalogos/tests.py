@@ -24,6 +24,11 @@ class CatalogoDiagnosticoTests(TestCase):
 
     def test_catalogo_inicial_cargado(self):
         self.assertGreaterEqual(CatalogoDiagnostico.objects.filter(activo=True).count(), 20)
+        self.assertTrue(
+            CatalogoDiagnostico.objects.filter(
+                activo=True, categoria='TAREAS', origen__icontains='formulario no aparece'
+            ).exists()
+        )
 
     def test_vista_catalogo_accesible(self):
         from django.test import RequestFactory
@@ -33,4 +38,7 @@ class CatalogoDiagnosticoTests(TestCase):
         request.user = self.admin
         response = catalogo_diagnostico_list_view(request)
         self.assertEqual(response.status_code, 200)
-        self.assertIn('Medidor en terreno distinto al sistema', response.content.decode())
+        body = response.content.decode()
+        self.assertIn('Medidor en terreno distinto al sistema', body)
+        self.assertIn('Tareas MoreApp', body)
+        self.assertNotIn('StarBeat', body)

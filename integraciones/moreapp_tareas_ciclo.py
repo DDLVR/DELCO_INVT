@@ -114,6 +114,9 @@ def registrar_ciclo_envio(tarea: MoreAppTareaEnviada) -> None:
             MoreAppTareaEvento.TIPO_ERROR_ENVIO,
             detalle={"error": (tarea.error or "")[:180]},
         )
+        from .moreapp_tareas_audit import registrar_auditoria_tarea
+
+        registrar_auditoria_tarea(tarea, "ERROR_ENVIO")
         return
     ahora = timezone.now()
     tarea.estado = MoreAppTareaEnviada.ESTADO_ASIGNADA
@@ -122,6 +125,9 @@ def registrar_ciclo_envio(tarea: MoreAppTareaEnviada) -> None:
     registrar_evento(tarea, MoreAppTareaEvento.TIPO_CREADA)
     registrar_evento(tarea, MoreAppTareaEvento.TIPO_ASIGNADA)
     emitir_alertas(tarea, MoreAppTareaAlerta.TIPO_CREACION)
+    from .moreapp_tareas_audit import registrar_auditoria_tarea
+
+    registrar_auditoria_tarea(tarea, "CREADA")
 
 
 def completar_tarea(
@@ -154,6 +160,9 @@ def completar_tarea(
         detalle=detalle or {},
     )
     emitir_alertas(tarea, MoreAppTareaAlerta.TIPO_COMPLETADO)
+    from .moreapp_tareas_audit import registrar_auditoria_tarea
+
+    registrar_auditoria_tarea(tarea, "COMPLETADA")
     return True
 
 

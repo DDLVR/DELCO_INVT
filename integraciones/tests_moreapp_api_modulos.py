@@ -256,7 +256,346 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(by_key['equipos']['rows'][0][0]['text'], 'ABC-1')
         self.assertTrue(by_key['fachada']['files'])
         self.assertIn('7f555c8d-6a67-439c-ad41-da32206657b9', by_key['fachada']['files'][0]['id'])
+        self.assertTrue(by_key['fachada']['files'][0]['is_image'])
         self.assertIn('Santiago', by_key['location']['text'])
+
+    def test_lectura_txt_no_se_trata_como_foto(self):
+        from integraciones.moreapp_respuestas import respuestas_desde_data, sniff_archivo
+
+        campos = respuestas_desde_data(
+            {
+                'formatoCsv': 'gridfs://registrationFiles/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+                'fachada': 'gridfs://registrationFiles/7f555c8d-6a67-439c-ad41-da32206657b9',
+            },
+            labels={'formatoCsv': 'Formato CSV', 'fachada': 'Foto fachada'},
+        )
+        by_key = {item['key']: item for item in campos}
+        csv_file = by_key['formatoCsv']['files'][0]
+        self.assertEqual(csv_file['kind'], 'text')
+        self.assertTrue(csv_file['is_text'])
+        self.assertFalse(csv_file['is_image'])
+        self.assertIn('download=1', csv_file['download_url'])
+        self.assertTrue(by_key['fachada']['files'][0]['is_image'])
+        kind, ctype, nombre = sniff_archivo(b'MEDIDOR;KWH\n123;45.6\n', 'lectura.txt', 'application/octet-stream')
+        self.assertEqual(kind, 'text')
+        self.assertIn('text/', ctype)
+        self.assertTrue(nombre.endswith('.txt') or nombre.endswith('.csv'))
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_registros_views.download_registration_file')
+    def test_archivo_txt_se_ve_y_se_descarga(self, mocked_download):
+        mocked_download.return_value = {
+            'content': b'fecha;lectura\n2026-11-02;1234\n',
+            'content_type': 'application/octet-stream',
+            'filename': 'formato.csv',
+        }
+        self.client.login(username=self.admin.rut, password=self.password)
+        url = reverse('moreapp_api_registro_archivo', args=['aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'])
+        ver = self.client.get(url)
+        self.assertEqual(ver.status_code, 200)
+        self.assertIn('text/', ver['Content-Type'])
+        self.assertIn('inline', ver['Content-Disposition'])
+        desc = self.client.get(url + '?download=1')
+        self.assertEqual(desc.status_code, 200)
+        self.assertIn('attachment', desc['Content-Disposition'])
+        self.assertIn(b'1234', desc.content)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_registros_views.download_registration_file')
+    @mock.patch('integraciones.moreapp_registros_views.get_form_version')
+    @mock.patch('integraciones.moreapp_registros_views.get_submission')
+    @mock.patch('integraciones.moreapp_registros_views.get_form')
+    def test_informe_pdf_incluye_txt(self, mocked_form, mocked_sub, mocked_version, mocked_download):
+        mocked_form.return_value = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Lectura',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_version.return_value = {
+            'fields': [
+                {
+                    'widget': 'com.moreapps:file:1',
+                    'properties': {'label_text': 'Formato CSV', 'data_name': 'formatoCsv'},
+                }
+            ]
+        }
+        mocked_sub.return_value = {
+            'id': 'sub123sub123sub123sub123',
+            'info': {'userName': 'tec@delco.cl'},
+            'meta': {'created': '2026-10-14T12:00:00Z'},
+            'data': {
+                'formatoCsv': 'gridfs://registrationFiles/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+            },
+        }
+        mocked_download.return_value = {
+            'content': b'MEDIDOR;KWH\nABC-99;150.5\n',
+            'content_type': 'text/plain',
+            'filename': 'lectura.txt',
+        }
+        self.client.login(username=self.admin.rut, password=self.password)
+        detalle = self.client.get(
+            reverse(
+                'moreapp_api_registro',
+                args=['abc123abc123abc123abc123', 'sub123sub123sub123sub123'],
+            )
+        )
+        self.assertEqual(detalle.status_code, 200)
+        body = detalle.content.decode('utf-8')
+        self.assertIn('Informe PDF', body)
+        self.assertIn('Descargar', body)
+        self.assertIn('Archivos de texto', body)
+        self.assertNotIn('<img src="/integraciones/moreapp/api/archivos/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"', body)
+        pdf = self.client.get(
+            reverse(
+                'moreapp_api_registro_pdf',
+                args=['abc123abc123abc123abc123', 'sub123sub123sub123sub123'],
+            )
+        )
+        self.assertEqual(pdf.status_code, 200)
+        self.assertEqual(pdf['Content-Type'], 'application/pdf')
+        self.assertTrue(pdf.content.startswith(b'%PDF'))
+        self.assertTrue(mocked_download.called)
+        from integraciones.moreapp_registro_pdf import _pdf_minimo_registro
+        from integraciones.moreapp_respuestas import respuestas_desde_data
+
+        campos = respuestas_desde_data(
+            {'formatoCsv': 'gridfs://registrationFiles/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'},
+            labels={'formatoCsv': 'Formato CSV'},
+        )
+        mini = _pdf_minimo_registro(
+            'Lectura',
+            {'id': 'sub123sub123sub123sub123'},
+            campos,
+            fetch_file=lambda _fid: mocked_download.return_value,
+        )
+        self.assertIn(b'ABC-99', mini)
+        self.assertIn(b'150.5', mini)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_registros_views.get_form_version')
+    @mock.patch('integraciones.moreapp_registros_views.list_submissions')
+    @mock.patch('integraciones.moreapp_registros_views.get_form')
+    def test_lectura_muestra_boton_zip_txt(self, mocked_form, mocked_subs, mocked_version):
+        mocked_form.return_value = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Lectura',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_version.return_value = {
+            'fields': [
+                {
+                    'widget': 'com.moreapps:text:1',
+                    'properties': {'label_text': 'Estado', 'data_name': 'estado'},
+                }
+            ]
+        }
+        mocked_subs.return_value = {
+            'totalSize': 1,
+            'elements': [
+                {
+                    'id': 'sub-ejecutado-1234567890ab',
+                    'info': {'userName': 'Sergio Reyes', 'date': '2026-11-02T16:00:00Z'},
+                    'data': {'cliente': '623587', 'estado': 'EJECUTADO'},
+                }
+            ],
+        }
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_api_form_registros', args=['abc123abc123abc123abc123']))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('Descargar seleccionados', body)
+        self.assertIn('name="registro_id"', body)
+        self.assertIn('js-registros-scroll', body)
+        self.assertIn(reverse('moreapp_api_form_registros_txt_zip', args=['abc123abc123abc123abc123']), body)
+        ajax = self.client.get(
+            reverse('moreapp_api_form_registros', args=['abc123abc123abc123abc123']),
+            {'ajax': '1', 'page': '0'},
+        )
+        self.assertEqual(ajax.status_code, 200)
+        payload = ajax.json()
+        self.assertTrue(payload['ok'])
+        self.assertTrue(payload['es_lectura'])
+        self.assertEqual(payload['registros'][0]['id'], 'sub-ejecutado-1234567890ab')
+        self.assertTrue(payload['registros'][0]['efectivo'])
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_registros_views.get_form')
+    def test_zip_txt_exige_fechas_y_formulario_lectura(self, mocked_form):
+        mocked_form.return_value = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Lectura',
+            'status': 'ACTIVE',
+        }
+        self.client.login(username=self.admin.rut, password=self.password)
+        sin_fechas = self.client.get(
+            reverse('moreapp_api_form_registros_txt_zip', args=['abc123abc123abc123abc123'])
+        )
+        self.assertEqual(sin_fechas.status_code, 302)
+        mocked_form.return_value = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Telemetría',
+            'status': 'ACTIVE',
+        }
+        otro = self.client.get(
+            reverse('moreapp_api_form_registros_txt_zip', args=['abc123abc123abc123abc123']),
+            {'fecha_desde': '2026-11-01', 'fecha_hasta': '2026-11-02'},
+        )
+        self.assertEqual(otro.status_code, 302)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_registros_views.download_registration_file')
+    @mock.patch('integraciones.moreapp_registros_views.list_submissions')
+    @mock.patch('integraciones.moreapp_registros_views.get_form')
+    def test_zip_txt_solo_efectivos_en_rango(self, mocked_form, mocked_subs, mocked_download):
+        import zipfile
+        from io import BytesIO
+
+        mocked_form.return_value = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Lectura',
+            'status': 'ACTIVE',
+        }
+        mocked_subs.return_value = {
+            'totalSize': 2,
+            'elements': [
+                {
+                    'id': 'sub-ejecutado-1234567890ab',
+                    'info': {'date': '2026-11-02T16:00:00Z'},
+                    'data': {
+                        'cliente': '623587',
+                        'estado': 'EJECUTADO',
+                        'formatoCsv': 'gridfs://registrationFiles/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+                    },
+                },
+                {
+                    'id': 'sub-incidencia-1234567890ab',
+                    'info': {'date': '2026-11-02T16:10:00Z'},
+                    'data': {
+                        'cliente': '111111',
+                        'estado': 'INCIDENCIA',
+                        'formatoCsv': 'gridfs://registrationFiles/bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
+                    },
+                },
+            ],
+        }
+
+        def _dl(file_id):
+            if file_id.startswith('aaaa'):
+                return {
+                    'content': b'RA\nconfigure terminal\n',
+                    'content_type': 'text/plain',
+                    'filename': '623587_curva.txt',
+                }
+            return {
+                'content': b'NO DEBE SALIR',
+                'content_type': 'text/plain',
+                'filename': 'incidencia.txt',
+            }
+
+        mocked_download.side_effect = _dl
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(
+            reverse('moreapp_api_form_registros_txt_zip', args=['abc123abc123abc123abc123']),
+            {'fecha_desde': '2026-11-01', 'fecha_hasta': '2026-11-02'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/zip')
+        self.assertIn('attachment', resp['Content-Disposition'])
+        payload = mocked_subs.call_args.kwargs.get('payload') or mocked_subs.call_args[1]['payload']
+        paths = [item['path'] for item in payload['query']]
+        self.assertIn('info.date', paths)
+        self.assertIn('data.estado', paths)
+        self.assertEqual(
+            [item['value'] for item in payload['query'] if item['path'] == 'data.estado'][0],
+            'EJECUTADO',
+        )
+        zf = zipfile.ZipFile(BytesIO(resp.content))
+        names = zf.namelist()
+        self.assertTrue(any(name.endswith('.txt') and 'README' not in name for name in names))
+        joined = b''.join(zf.read(name) for name in names)
+        self.assertIn(b'configure terminal', joined)
+        self.assertNotIn(b'NO DEBE SALIR', joined)
+        downloaded_ids = [call.args[0] for call in mocked_download.call_args_list]
+        self.assertTrue(any(item.startswith('aaaa') for item in downloaded_ids))
+        self.assertFalse(any(item.startswith('bbbb') for item in downloaded_ids))
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_registros_views.download_registration_file')
+    @mock.patch('integraciones.moreapp_registros_views.get_submission')
+    @mock.patch('integraciones.moreapp_registros_views.get_form')
+    def test_zip_txt_por_seleccion(self, mocked_form, mocked_sub, mocked_download):
+        import zipfile
+        from io import BytesIO
+
+        mocked_form.return_value = {'id': 'abc123abc123abc123abc123', 'name': 'Lectura', 'status': 'ACTIVE'}
+        mocked_sub.side_effect = [
+            {
+                'id': 'sub-ejecutado-1234567890ab',
+                'info': {'date': '2026-11-02T16:00:00Z'},
+                'data': {
+                    'cliente': '623587',
+                    'estado': 'EJECUTADO',
+                    'formatoCsv': 'gridfs://registrationFiles/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+                },
+            },
+            {
+                'id': 'sub-incidencia-1234567890ab',
+                'info': {'date': '2026-11-02T16:10:00Z'},
+                'data': {
+                    'cliente': '111111',
+                    'estado': 'INCIDENCIA',
+                    'formatoCsv': 'gridfs://registrationFiles/bbbbbbbb-cccc-dddd-eeee-ffffffffffff',
+                },
+            },
+        ]
+        mocked_download.return_value = {
+            'content': b'RA\nconfigure terminal\n',
+            'content_type': 'text/plain',
+            'filename': '623587_curva.txt',
+        }
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.post(
+            reverse('moreapp_api_form_registros_txt_zip', args=['abc123abc123abc123abc123']),
+            {
+                'registro_id': [
+                    'sub-ejecutado-1234567890ab',
+                    'sub-incidencia-1234567890ab',
+                ]
+            },
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/zip')
+        zf = zipfile.ZipFile(BytesIO(resp.content))
+        joined = b''.join(zf.read(name) for name in zf.namelist())
+        self.assertIn(b'configure terminal', joined)
+        self.assertEqual(mocked_sub.call_count, 2)
+        self.assertEqual(mocked_download.call_count, 1)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -983,6 +1322,105 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('adm_api', list_body)
         self.assertNotIn('Asignar usuarios', list_body)
         self.assertNotIn('Ir al catálogo', list_body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_formularios_views.list_all_forms')
+    def test_reportes_moreapp_lista_solo_formularios_en_registros(self, mocked_forms):
+        from integraciones.models import MoreAppFormularioAsignado
+
+        mocked_forms.return_value = [
+            {
+                'id': 'abc123abc123abc123abc123',
+                'name': 'Instalacion',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': '1'},
+            },
+            {
+                'id': 'def456def456def456def456',
+                'name': 'Retiro',
+                'status': 'ACTIVE',
+                'publishedVersion': {'formVersion': '1'},
+            },
+        ]
+        MoreAppFormularioAsignado.objects.create(
+            usuario=self.admin,
+            form_id='abc123abc123abc123abc123',
+            form_name='Instalacion',
+        )
+        self.client.login(username=self.admin.rut, password=self.password)
+        vacio_sin = self.client.get(reverse('reportes_moreapp_list'))
+        self.assertEqual(vacio_sin.status_code, 200)
+        body = vacio_sin.content.decode('utf-8')
+        self.assertIn('Instalacion', body)
+        self.assertNotIn('Retiro', body)
+        self.assertIn('Revisar registros', body)
+        self.assertIn('origen=reportes', body)
+        self.assertNotIn('Sincronizar', body)
+
+        auditor = Usuario.objects.create_user(
+            rut='12121212-1',
+            email='auditor-rep@delco.cl',
+            password=self.password,
+            nombre='Auditor',
+            apellido='Rep',
+            nombre_interno='auditor_rep',
+            rol='AUDITOR',
+            is_active=True,
+        )
+        self.client.login(username=auditor.rut, password=self.password)
+        listing = self.client.get(reverse('reportes_moreapp_list'))
+        self.assertEqual(listing.status_code, 200)
+        list_body = listing.content.decode('utf-8')
+        self.assertIn('Instalacion', list_body)
+        self.assertNotIn('Retiro', list_body)
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_registros_views.get_form_version')
+    @mock.patch('integraciones.moreapp_registros_views.list_submissions')
+    @mock.patch('integraciones.moreapp_registros_views.get_form')
+    def test_auditor_revisa_registros_de_formulario_asignado(self, mocked_form, mocked_subs, mocked_version):
+        from integraciones.models import MoreAppFormularioAsignado
+
+        mocked_form.return_value = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Instalacion',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_version.return_value = {'id': 'ver123ver123ver123ver123', 'fields': []}
+        mocked_subs.return_value = []
+        MoreAppFormularioAsignado.objects.create(
+            usuario=self.admin,
+            form_id='abc123abc123abc123abc123',
+            form_name='Instalacion',
+        )
+        auditor = Usuario.objects.create_user(
+            rut='13131313-1',
+            email='auditor-reg@delco.cl',
+            password=self.password,
+            nombre='Auditor',
+            apellido='Reg',
+            nombre_interno='auditor_reg',
+            rol='AUDITOR',
+            is_active=True,
+        )
+        self.client.login(username=auditor.rut, password=self.password)
+        ok = self.client.get(
+            reverse('moreapp_api_form_registros', args=['abc123abc123abc123abc123']) + '?origen=reportes'
+        )
+        self.assertEqual(ok.status_code, 200)
+        denied = self.client.get(
+            reverse('moreapp_api_form_registros', args=['def456def456def456def456'])
+        )
+        self.assertEqual(denied.status_code, 403)
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
@@ -2658,6 +3096,28 @@ class MoreAppTareaCicloTests(TestCase):
         self.assertTrue(masivo.json()['success'])
         self.assertFalse(MoreAppTareaEnviada.objects.filter(pk=extra2.pk).exists())
 
+    def test_pendientes_moreapp_lista_tareas_sin_completar(self):
+        from integraciones.models import MoreAppTareaEnviada
+
+        abierta = self._tarea(titulo='Visita pendiente', mensaje='Sigue en campo')
+        cerrada = self._tarea(task_id='task-cerrada', titulo='Visita terminada', mensaje='Ya cerrada', cuenta='9999')
+        cerrada.estado = MoreAppTareaEnviada.ESTADO_COMPLETADA
+        cerrada.save(update_fields=['estado'])
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('pendientes_operativos'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('Pendientes MoreApp', body)
+        self.assertIn('Visita pendiente', body)
+        self.assertNotIn('Visita terminada', body)
+        self.assertNotIn('Revisión pendiente', body)
+        self.assertIn(reverse('moreapp_tarea_detalle', args=[abierta.pk]), body)
+        filtrado = self.client.get(reverse('pendientes_operativos') + '?cola=completadas')
+        self.assertEqual(filtrado.status_code, 200)
+        filtrado_body = filtrado.content.decode('utf-8')
+        self.assertNotIn('Visita terminada', filtrado_body)
+        self.assertIn('Visita pendiente', filtrado_body)
+
     def test_estado_json_actualiza_sin_recargar(self):
         from django.core.cache import cache
         from integraciones.models import MoreAppTareaEnviada
@@ -2719,6 +3179,53 @@ class MoreAppTareaCicloTests(TestCase):
         self.assertEqual(payload['tareas'][0]['estado'], MoreAppTareaEnviada.ESTADO_COMPLETADA)
         tarea.refresh_from_db()
         self.assertEqual(tarea.estado, MoreAppTareaEnviada.ESTADO_COMPLETADA)
+
+    def test_auditoria_tarea_un_solo_registro_actualizado(self):
+        from web.models import AuditLog
+        from integraciones.moreapp_tareas_audit import registrar_auditoria_tarea
+
+        tarea = self._tarea()
+        self.assertEqual(
+            AuditLog.objects.filter(entity='MoreAppTarea', entity_id=str(tarea.pk)).count(),
+            1,
+        )
+        log = AuditLog.objects.get(entity='MoreAppTarea', entity_id=str(tarea.pk))
+        self.assertEqual(log.action, 'TAREA_CREADA')
+        registrar_auditoria_tarea(tarea, 'MODIFICADA', actor_id=self.admin.id, extra={'campo': 'observaciones'})
+        self.assertEqual(
+            AuditLog.objects.filter(entity='MoreAppTarea', entity_id=str(tarea.pk)).count(),
+            1,
+        )
+        log.refresh_from_db()
+        self.assertEqual(log.action, 'TAREA_MODIFICADA')
+        self.assertIn('Creada', log.reason)
+        self.assertIn('Modificada', log.reason)
+        registrar_auditoria_tarea(tarea, 'ELIMINADA', actor_id=self.admin.id)
+        self.assertEqual(
+            AuditLog.objects.filter(entity='MoreAppTarea', entity_id=str(tarea.pk)).count(),
+            1,
+        )
+        log.refresh_from_db()
+        self.assertEqual(log.action, 'TAREA_ELIMINADA')
+
+    def test_registro_errores_incluye_tareas_moreapp(self):
+        self._tarea(
+            error='Could not find published version for this form',
+            task_id='',
+            mensaje='Listado · 2930789',
+        )
+        ok = self._tarea(mensaje='Asignada ok')
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('registro_errores'))
+        self.assertEqual(resp.status_code, 200)
+        body = resp.content.decode('utf-8')
+        self.assertIn('Tareas MoreApp', body)
+        self.assertIn('Listado · 2930789', body)
+        self.assertIn('Could not find published version for this form', body)
+        self.assertNotIn(ok.mensaje, body)
+        only_moreapp = self.client.get(reverse('registro_errores') + '?seccion=moreapp')
+        self.assertEqual(only_moreapp.status_code, 200)
+        self.assertIn('error de envío', only_moreapp.content.decode('utf-8'))
 
 
 class MoreAppPermisosFormularioTests(TestCase):

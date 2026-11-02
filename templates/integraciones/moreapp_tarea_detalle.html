@@ -226,7 +226,16 @@
         if (archivo.is_image && archivo.url) {
           html += '<a class="delco-campo-foto" href="' + esc(archivo.url) + '" target="_blank" rel="noopener"><img src="' + esc(archivo.url) + '" alt=""><span>' + esc(archivo.name || campo.label) + '</span></a>';
         } else if (archivo.url) {
-          html += '<a class="delco-campo-file" href="' + esc(archivo.url) + '" target="_blank" rel="noopener">' + esc(archivo.name || campo.label) + '</a>';
+          html += '<div class="delco-campo-adjunto"><div class="delco-campo-adjunto-head"><span>' + esc(archivo.name || campo.label) + '</span></div>';
+          html += '<div class="delco-campo-adjunto-actions"><a class="btn btn-sm btn-outline-primary" href="' + esc(archivo.url) + '" target="_blank" rel="noopener">Ver</a>';
+          if (archivo.download_url) {
+            html += '<a class="btn btn-sm btn-primary" href="' + esc(archivo.download_url) + '">Descargar</a>';
+          }
+          html += '</div>';
+          if (archivo.is_text) {
+            html += '<iframe class="delco-campo-txt" src="' + esc(archivo.url) + '" title="' + esc(archivo.name || campo.label) + '"></iframe>';
+          }
+          html += '</div>';
         } else if (archivo.id) {
           html += '<div class="delco-campo-file text-muted">' + esc(archivo.id) + '</div>';
         }

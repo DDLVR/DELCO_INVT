@@ -60,7 +60,22 @@ def fila_asignada(form_id: str, nombre: str, asignados: List[MoreAppFormularioAs
     )
 
 
-def volver_listado_name(user) -> str:
+def ids_formularios_en_registros(usuario=None, todos: bool = False):
+    qs = MoreAppFormularioAsignado.objects.all()
+    if usuario is not None and not todos:
+        qs = qs.filter(usuario=usuario)
+    return set(qs.values_list("form_id", flat=True))
+
+
+def formulario_esta_en_registros(form_id: str) -> bool:
+    if not form_id:
+        return False
+    return MoreAppFormularioAsignado.objects.filter(form_id=form_id).exists()
+
+
+def volver_listado_name(user, origen: str = "") -> str:
+    if origen == "reportes":
+        return "reportes_moreapp_list"
     if getattr(user, "rol", "") == "ADMIN":
         return "moreapp_api_catalogo"
     return "moreapp_formularios_list"

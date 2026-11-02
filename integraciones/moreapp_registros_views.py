@@ -9,10 +9,12 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
-from django.views.decorators.http import require_GET
+from django.utils.text import get_valid_filename
+from django.views.decorators.http import require_GET, require_http_methods
 
 from web.decorators import admin_or_formulario_asignado, admin_or_tiene_formulario_asignado
 from .moreapp_asignaciones import volver_listado_name
@@ -30,7 +32,23 @@ from .moreapp_api import (
 from .moreapp_catalogo_views import _extract_version_fields, _fold_text, _form_row, _pretty
 from .moreapp_fechas import format_moreapp_when, iso_day_moreapp
 from .moreapp_http import assert_safe_id
-from .moreapp_respuestas import campo_tiene_valor, contar_archivos, respuestas_desde_data
+from .moreapp_lectura_zip import (
+    ESTADO_EFECTIVO,
+    ZIP_MAX_PAGES,
+    ZIP_MAX_SELECTED,
+    ZIP_PAGE_SIZE,
+    armar_zip_txt,
+    es_formulario_lectura,
+    estado_es_efectivo,
+)
+from .moreapp_respuestas import (
+    archivos_no_imagen,
+    campo_tiene_valor,
+    contar_archivos,
+    contar_fotos,
+    enriquecer_archivos,
+    respuestas_desde_data,
+)
 
 _PAGE_SIZE = 20
 _EXPORT_PAGE_SIZE = 50
@@ -125,8 +143,8 @@ def _gridfs_file(value: Any) -> Dict[str, str]:
     return {
         "id": file_id,
         "name": file_id,
-        "content_type": "image/jpeg",
-        "is_image": "1",
+        "content_type": "",
+        "is_image": "",
     }
 
 
@@ -163,7 +181,7 @@ def _file_row(item: Any) -> Dict[str, str]:
         "id": raw_id,
         "name": str(item.get("filename") or item.get("fileName") or item.get("name") or raw_id),
         "content_type": content_type,
-        "is_image": content_type.startswith("image/") or not content_type,
+        "is_image": "1" if content_type.startswith("image/") else "",
     }
 
 
@@ -318,6 +336,7 @@ def _submissions_query(
     num_cliente: str,
     fecha_desde: str,
     fecha_hasta: str,
+    estado: str = "",
 ) -> List[Dict[str, Any]]:
     filters: List[Dict[str, Any]] = []
     date_value: Dict[str, int] = {}
@@ -337,6 +356,8 @@ def _submissions_query(
             filters.append({"path": "data.numCliente", "type": "number", "value": int(cliente)})
         else:
             filters.append({"path": "data.numCliente", "type": "string", "value": cliente})
+    if (estado or "").strip():
+        filters.append({"path": "data.estado", "type": "string", "value": estado.strip()})
     return filters
 
 
@@ -368,6 +389,7 @@ def _filtros_qs(
     fecha_desde: str,
     fecha_hasta: str,
     page: Optional[int] = None,
+    origen: str = "",
 ) -> str:
     params: Dict[str, Any] = {}
     if tecnico:
@@ -378,6 +400,8 @@ def _filtros_qs(
         params["fecha_desde"] = fecha_desde
     if fecha_hasta:
         params["fecha_hasta"] = fecha_hasta
+    if origen:
+        params["origen"] = origen
     if page is not None:
         params["page"] = page
     return urlencode(params)
@@ -413,6 +437,7 @@ def _submission_row(
                 "text": formatted.get("text") or "",
             }
         )
+    inicial = (tecnico or cliente or "?").strip()[:1].upper() or "?"
     return {
         "id": str(item.get("id") or ""),
         "created": created,
@@ -421,6 +446,8 @@ def _submission_row(
         "cliente": cliente,
         "status": status,
         "preview": preview,
+        "efectivo": estado_es_efectivo(item),
+        "inicial": inicial,
     }
 
 
@@ -501,12 +528,13 @@ def _cargar_submissions(
     num_cliente: str,
     fecha_desde: str,
     fecha_hasta: str,
+    estado: str = "",
 ) -> Tuple[List[Dict[str, Any]], Any]:
     payload: Dict[str, Any] = {
         "pageSize": page_size,
         "sort": [{"key": "info.date", "direction": -1}],
     }
-    filters = _submissions_query(tecnico, num_cliente, fecha_desde, fecha_hasta)
+    filters = _submissions_query(tecnico, num_cliente, fecha_desde, fecha_hasta, estado=estado)
     if filters:
         payload["query"] = filters
     try:
@@ -553,15 +581,19 @@ def registros_form_view(request, form_id: str):
         form_id = assert_safe_id(form_id, "formId")
     except MoreAppApiConfigError as exc:
         messages.error(request, str(exc))
-        return redirect(volver_listado_name(request.user))
+        return redirect(volver_listado_name(request.user, origen=(request.GET.get("origen") or "").strip()))
 
     tecnico = (request.GET.get("tecnico") or request.GET.get("query") or "").strip()
     num_cliente = (request.GET.get("num_cliente") or "").strip()
     fecha_desde = (request.GET.get("fecha_desde") or "").strip()
     fecha_hasta = (request.GET.get("fecha_hasta") or "").strip()
+    origen = (request.GET.get("origen") or "").strip()
     page = _page_int(request.GET.get("page"))
     exportar = (request.GET.get("export") or "").strip().lower() in ("xlsx", "excel", "1")
-    filtros_detalle = _filtros_qs(tecnico, num_cliente, fecha_desde, fecha_hasta, page if page else None)
+    ajax = (request.GET.get("ajax") or "").strip() == "1"
+    if not ajax and not exportar:
+        page = 0
+    filtros_detalle = _filtros_qs(tecnico, num_cliente, fecha_desde, fecha_hasta, origen=origen)
     context = {
         "form_id": form_id,
         "formulario": {},
@@ -571,17 +603,15 @@ def registros_form_view(request, form_id: str):
         "num_cliente": num_cliente,
         "fecha_desde": fecha_desde,
         "fecha_hasta": fecha_hasta,
+        "origen": origen,
         "page": page,
-        "page_display": page + 1,
         "has_next": False,
-        "has_prev": page > 0,
         "preview_labels": [],
-        "filtros_qs": _filtros_qs(tecnico, num_cliente, fecha_desde, fecha_hasta),
+        "filtros_qs": _filtros_qs(tecnico, num_cliente, fecha_desde, fecha_hasta, origen=origen),
         "filtros_detalle": filtros_detalle,
-        "filtros_prev": _filtros_qs(tecnico, num_cliente, fecha_desde, fecha_hasta, page - 1 if page else 0),
-        "filtros_next": _filtros_qs(tecnico, num_cliente, fecha_desde, fecha_hasta, page + 1),
         "catalogo_qs": _catalogo_qs_from_fechas(fecha_desde, fecha_hasta),
         "tiene_filtros": bool(tecnico or num_cliente or fecha_desde or fecha_hasta),
+        "es_lectura": False,
     }
     try:
         formulario = get_form(form_id)
@@ -607,7 +637,7 @@ def registros_form_view(request, form_id: str):
             collected.extend(items)
             total = raw.get("totalSize") if isinstance(raw, dict) else None
             if total is None or tecnico or num_cliente:
-                page_has_next = len(items) >= _PAGE_SIZE
+                page_has_next = len(items) >= page_size
             else:
                 page_has_next = (page_idx * page_size + len(items)) < int(total)
             if not exportar:
@@ -623,20 +653,198 @@ def registros_form_view(request, form_id: str):
         if tecnico or num_cliente:
             collected = [item for item in collected if _item_matches_filtros(item, tecnico, num_cliente, usuarios)]
         registros = [_submission_row(item, labels, preview_keys, usuarios) for item in collected]
+        if not ajax:
+            try:
+                from integraciones.moreapp_api_ingest import ingest_submission_items
+
+                ingest_submission_items(
+                    collected,
+                    form_name=str(formulario_row.get("name") or ""),
+                    aplicar_operativo=False,
+                )
+            except Exception:
+                pass
         if exportar:
             return _excel_registros_response(formulario_row, registros, preview_labels)
+        es_lectura = es_formulario_lectura(str(formulario_row.get("name") or ""))
+        if ajax:
+            return JsonResponse(
+                {
+                    "ok": True,
+                    "page": page,
+                    "has_next": has_next,
+                    "es_lectura": es_lectura,
+                    "registros": registros,
+                }
+            )
         context.update(
             {
                 "formulario": formulario_row,
                 "registros": registros,
                 "has_next": has_next,
                 "preview_labels": preview_labels,
+                "es_lectura": es_lectura,
             }
         )
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
+        if ajax:
+            return JsonResponse({"ok": False, "error": str(exc), "registros": [], "has_next": False}, status=502)
         context["error"] = str(exc)
         messages.error(request, str(exc))
     return render(request, "integraciones/moreapp_registros.html", context)
+
+
+def _paginar_submissions_lectura(
+    form_id: str,
+    fecha_desde: str,
+    fecha_hasta: str,
+) -> Tuple[List[Dict[str, Any]], bool]:
+    collected: List[Dict[str, Any]] = []
+    truncado = False
+    usar_estado = True
+    for page_idx in range(ZIP_MAX_PAGES):
+        try:
+            items, raw = _cargar_submissions(
+                form_id,
+                page=page_idx,
+                page_size=ZIP_PAGE_SIZE,
+                tecnico="",
+                num_cliente="",
+                fecha_desde=fecha_desde,
+                fecha_hasta=fecha_hasta,
+                estado=ESTADO_EFECTIVO if usar_estado else "",
+            )
+        except MoreAppApiError:
+            if usar_estado and page_idx == 0:
+                usar_estado = False
+                items, raw = _cargar_submissions(
+                    form_id,
+                    page=page_idx,
+                    page_size=ZIP_PAGE_SIZE,
+                    tecnico="",
+                    num_cliente="",
+                    fecha_desde=fecha_desde,
+                    fecha_hasta=fecha_hasta,
+                    estado="",
+                )
+            else:
+                raise
+        collected.extend(items)
+        total = raw.get("totalSize") if isinstance(raw, dict) else None
+        if total is not None:
+            has_next = (page_idx * ZIP_PAGE_SIZE + len(items)) < int(total)
+        else:
+            has_next = len(items) >= ZIP_PAGE_SIZE
+        if not items or not has_next:
+            return collected, truncado
+        if page_idx == ZIP_MAX_PAGES - 1:
+            truncado = True
+    return collected, truncado
+
+
+@require_http_methods(["GET", "POST"])
+@admin_or_formulario_asignado
+def registros_txt_zip_view(request, form_id: str):
+    try:
+        form_id = assert_safe_id(form_id, "formId")
+    except MoreAppApiConfigError as exc:
+        messages.error(request, str(exc))
+        return redirect(volver_listado_name(request.user, origen=(request.GET.get("origen") or "").strip()))
+
+    params = request.POST if request.method == "POST" else request.GET
+    fecha_desde = (params.get("fecha_desde") or "").strip()
+    fecha_hasta = (params.get("fecha_hasta") or "").strip()
+    origen = (params.get("origen") or "").strip()
+    listado_qs = _filtros_qs("", "", fecha_desde, fecha_hasta, origen=origen)
+    listado_url = "moreapp_api_form_registros"
+
+    def _volver():
+        href = reverse(listado_url, args=[form_id])
+        if listado_qs:
+            href += "?" + listado_qs
+        return HttpResponseRedirect(href)
+
+    ids: List[str] = []
+    for raw in params.getlist("registro_id"):
+        try:
+            ids.append(assert_safe_id(str(raw).strip(), "submissionId"))
+        except MoreAppApiConfigError:
+            continue
+        if len(ids) >= ZIP_MAX_SELECTED:
+            break
+
+    try:
+        formulario = get_form(form_id)
+        formulario_row = _form_row(formulario if isinstance(formulario, dict) else {})
+    except (MoreAppApiConfigError, MoreAppApiError) as exc:
+        messages.error(request, str(exc))
+        return _volver()
+
+    if not es_formulario_lectura(str(formulario_row.get("name") or "")):
+        messages.warning(request, "La descarga ZIP de TXT aplica solo al formulario Lectura.")
+        return _volver()
+    if not ids and (not fecha_desde or not fecha_hasta):
+        messages.warning(
+            request,
+            "Selecciona registros o indica fecha desde y hasta para descargar los TXT efectivos.",
+        )
+        return _volver()
+    if request.method == "POST" and not ids:
+        messages.warning(request, "Selecciona al menos un registro EJECUTADO para descargar.")
+        return _volver()
+
+    truncado_paginas = False
+    try:
+        if ids:
+            items = []
+            for submission_id in ids:
+                try:
+                    item = get_submission(submission_id)
+                except MoreAppApiError:
+                    continue
+                if isinstance(item, dict):
+                    items.append(item)
+        else:
+            items, truncado_paginas = _paginar_submissions_lectura(form_id, fecha_desde, fecha_hasta)
+    except (MoreAppApiConfigError, MoreAppApiError) as exc:
+        messages.error(request, str(exc))
+        return _volver()
+
+    def _fetch(file_id: str):
+        try:
+            return download_registration_file(assert_safe_id(file_id, "fileId"))
+        except (MoreAppApiConfigError, MoreAppApiError):
+            return None
+
+    zip_bytes, archivos, _registros, truncado_archivos = armar_zip_txt(
+        items,
+        _fetch,
+        meta={
+            "desde": fecha_desde,
+            "hasta": fecha_hasta,
+            "registros_api": len(items),
+            "truncado_paginas": "sí" if truncado_paginas else "no",
+        },
+    )
+    if archivos < 1:
+        messages.info(
+            request,
+            "No hay TXT de registros EJECUTADO en la selección. Revisa el estado o las fechas.",
+        )
+        return _volver()
+    if truncado_paginas or truncado_archivos:
+        messages.warning(
+            request,
+            "Se alcanzó el tope de la descarga. Acota el rango de fechas o la selección.",
+        )
+    if fecha_desde and fecha_hasta:
+        nombre_zip = "lectura_txt_%s_%s.zip" % (fecha_desde.replace("-", ""), fecha_hasta.replace("-", ""))
+    else:
+        nombre_zip = "lectura_txt_seleccion.zip"
+    nombre = get_valid_filename(nombre_zip)
+    response = HttpResponse(zip_bytes, content_type="application/zip")
+    response["Content-Disposition"] = 'attachment; filename="%s"' % nombre.replace('"', "")
+    return response
 
 
 @require_GET
@@ -673,12 +881,13 @@ def registro_detail_view(request, form_id: str, submission_id: str):
         submission_id = assert_safe_id(submission_id, "submissionId")
     except MoreAppApiConfigError as exc:
         messages.error(request, str(exc))
-        return redirect(volver_listado_name(request.user))
+        return redirect(volver_listado_name(request.user, origen=(request.GET.get("origen") or "").strip()))
 
     tecnico = (request.GET.get("tecnico") or request.GET.get("query") or "").strip()
     num_cliente = (request.GET.get("num_cliente") or "").strip()
     fecha_desde = (request.GET.get("fecha_desde") or "").strip()
     fecha_hasta = (request.GET.get("fecha_hasta") or "").strip()
+    origen = (request.GET.get("origen") or "").strip()
     page = _page_int(request.GET.get("page"))
     context = {
         "form_id": form_id,
@@ -688,9 +897,12 @@ def registro_detail_view(request, form_id: str, submission_id: str):
         "campos": [],
         "campos_con_valor": [],
         "fotos_count": 0,
+        "archivos_count": 0,
+        "adjuntos": [],
         "error": "",
         "raw_json": "",
-        "filtros_qs": _filtros_qs(tecnico, num_cliente, fecha_desde, fecha_hasta, page if page else None),
+        "origen": origen,
+        "filtros_qs": _filtros_qs(tecnico, num_cliente, fecha_desde, fecha_hasta, page if page else None, origen=origen),
         "catalogo_qs": _catalogo_qs_from_fechas(fecha_desde, fecha_hasta),
     }
     try:
@@ -706,8 +918,28 @@ def registro_detail_view(request, form_id: str, submission_id: str):
         created, tecnico, status, cliente = _info_meta(item, usuarios)
         data = item.get("data") if isinstance(item.get("data"), dict) else {}
         campos = respuestas_desde_data(data, labels=labels, incluir_vacios=True)
+
+        def _fetch(file_id: str):
+            try:
+                return download_registration_file(assert_safe_id(file_id, "fileId"))
+            except (MoreAppApiConfigError, MoreAppApiError):
+                return None
+
+        enriquecer_archivos(campos, _fetch)
         campos_con_valor = [c for c in campos if campo_tiene_valor(c)]
-        fotos_count = contar_archivos(campos)
+        fotos_count = contar_fotos(campos)
+        archivos_count = contar_archivos(campos)
+        adjuntos = archivos_no_imagen(campos)
+        try:
+            from integraciones.moreapp_api_ingest import ingest_submission_items
+
+            ingest_submission_items(
+                [item],
+                form_name=str(formulario_row.get("name") or ""),
+                aplicar_operativo=True,
+            )
+        except Exception:
+            pass
         context.update(
             {
                 "formulario": formulario_row,
@@ -722,6 +954,8 @@ def registro_detail_view(request, form_id: str, submission_id: str):
                 "campos": campos,
                 "campos_con_valor": campos_con_valor,
                 "fotos_count": fotos_count,
+                "archivos_count": archivos_count,
+                "adjuntos": adjuntos,
                 "raw_json": _pretty(
                     {
                         "id": item.get("id"),
@@ -741,6 +975,8 @@ def registro_detail_view(request, form_id: str, submission_id: str):
 @require_GET
 @admin_or_tiene_formulario_asignado
 def registro_archivo_view(request, file_id: str):
+    from .moreapp_respuestas import sniff_archivo
+
     try:
         file_id = assert_safe_id(file_id, "fileId")
         archivo = download_registration_file(file_id)
@@ -751,9 +987,73 @@ def registro_archivo_view(request, file_id: str):
         messages.error(request, str(exc))
         return redirect(volver_listado_name(request.user))
 
-    content_type = archivo.get("content_type") or "application/octet-stream"
-    filename = (archivo.get("filename") or file_id).replace('"', "")
-    response = HttpResponse(archivo["content"], content_type=content_type)
-    disposition = "inline" if str(content_type).startswith("image/") else "attachment"
+    raw = archivo.get("content") or b""
+    kind, content_type, filename = sniff_archivo(
+        raw,
+        archivo.get("filename") or file_id,
+        archivo.get("content_type") or "",
+    )
+    filename = filename.replace('"', "")
+    response = HttpResponse(raw, content_type=content_type)
+    force_download = str(request.GET.get("download") or "") in {"1", "true", "si", "sí"}
+    if force_download:
+        disposition = "attachment"
+    elif kind in {"image", "text", "pdf"}:
+        disposition = "inline"
+    else:
+        disposition = "attachment"
     response["Content-Disposition"] = '%s; filename="%s"' % (disposition, filename)
     return response
+
+
+@require_GET
+@admin_or_formulario_asignado
+def registro_pdf_view(request, form_id: str, submission_id: str):
+    from .moreapp_registro_pdf import generar_pdf_registro, nombre_archivo_pdf_registro
+
+    try:
+        form_id = assert_safe_id(form_id, "formId")
+        submission_id = assert_safe_id(submission_id, "submissionId")
+    except MoreAppApiConfigError as exc:
+        messages.error(request, str(exc))
+        return redirect(volver_listado_name(request.user, origen=(request.GET.get("origen") or "").strip()))
+
+    try:
+        formulario = get_form(form_id)
+        formulario_row = _form_row(formulario if isinstance(formulario, dict) else {})
+        campos_tpl = _campos_desde_formulario(formulario if isinstance(formulario, dict) else {})
+        labels = _label_map(campos_tpl)
+        item = get_submission(submission_id)
+        if not isinstance(item, dict):
+            item = {"value": item}
+        info = item.get("info") if isinstance(item.get("info"), dict) else {}
+        usuarios = _usuarios_por_email([info.get("userId") or "", info.get("email") or "", info.get("userName") or ""])
+        created, tecnico, status, cliente = _info_meta(item, usuarios)
+        data = item.get("data") if isinstance(item.get("data"), dict) else {}
+        campos = respuestas_desde_data(data, labels=labels, incluir_vacios=True)
+
+        def _fetch(file_id: str):
+            try:
+                return download_registration_file(assert_safe_id(file_id, "fileId"))
+            except (MoreAppApiConfigError, MoreAppApiError, ValueError):
+                return None
+
+        pdf_bytes = generar_pdf_registro(
+            form_name=str(formulario_row.get("name") or "Registro MoreApp"),
+            registro={
+                "id": str(item.get("id") or submission_id),
+                "created": created,
+                "tecnico": tecnico,
+                "cliente": cliente,
+                "status": status,
+            },
+            campos=campos,
+            fetch_file=_fetch,
+        )
+        nombre = nombre_archivo_pdf_registro(str(formulario_row.get("name") or ""), submission_id)
+        response = HttpResponse(pdf_bytes, content_type="application/pdf")
+        response["Content-Disposition"] = 'inline; filename="%s"' % nombre.replace('"', "")
+        return response
+    except (MoreAppApiConfigError, MoreAppApiError) as exc:
+        messages.error(request, str(exc))
+        return redirect("moreapp_api_registro", form_id=form_id, submission_id=submission_id)

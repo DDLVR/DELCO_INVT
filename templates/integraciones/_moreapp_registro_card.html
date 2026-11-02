@@ -1,0 +1,48 @@
+<article class="delco-registro-card{% if es_lectura and registro.efectivo %} is-selectable{% endif %}{% if es_lectura and not registro.efectivo %} is-muted{% endif %}" data-registro-id="{{ registro.id }}">
+  <div class="delco-registro-card-accent"></div>
+  <div class="delco-registro-card-body">
+    <div class="delco-registro-card-main">
+      {% if es_lectura %}
+      <label class="delco-registro-check">
+        <input type="checkbox" name="registro_id" value="{{ registro.id }}" {% if not registro.efectivo %}disabled{% endif %} {% if not registro.id %}disabled{% endif %}>
+        <span class="visually-hidden">Seleccionar {{ registro.cliente|default:registro.id }}</span>
+      </label>
+      {% endif %}
+      <div class="delco-registro-when" aria-hidden="true">
+        <span class="delco-registro-when-day">{{ registro.created|default:"—" }}</span>
+      </div>
+      <div class="delco-registro-avatar" aria-hidden="true">
+        {{ registro.inicial|default:registro.tecnico|default:"?"|make_list|first|upper }}
+      </div>
+      <div class="min-w-0 flex-grow-1">
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+          <h2 class="h6 mb-0 text-truncate">{{ registro.tecnico|default:"Técnico no informado" }}</h2>
+          {% if registro.status %}
+          <span class="badge rounded-pill text-bg-light border">{{ registro.status }}</span>
+          {% endif %}
+        </div>
+        <div class="small text-muted d-flex flex-wrap gap-3">
+          <span class="delco-registro-when-inline"><i class="bi bi-calendar3 me-1"></i>{{ registro.created|default:"—" }}</span>
+          <span><i class="bi bi-person-vcard me-1"></i>N° cliente {{ registro.cliente|default:"—" }}</span>
+        </div>
+        {% if registro.preview %}
+        <div class="delco-registro-preview mt-2">
+          {% for dato in registro.preview %}
+            {% if dato.text %}
+            <span class="delco-registro-chip{% if 'INCIDENCIA' in dato.text %} delco-chip-warn{% elif 'EJECUTADO' in dato.text or 'CERRADO' in dato.text %} delco-chip-ok{% endif %}">
+              <span class="text-muted">{{ dato.label }}</span>
+              {{ dato.text|truncatechars:42 }}
+            </span>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% if registro.id %}
+    <a class="btn btn-primary delco-registro-card-cta" href="{% url 'moreapp_api_registro' form_id registro.id %}{% if filtros_detalle %}?{{ filtros_detalle }}{% endif %}">
+      Ver contenido <i class="bi bi-arrow-right ms-1"></i>
+    </a>
+    {% endif %}
+  </div>
+</article>

@@ -17,17 +17,24 @@ ESTADOS_MOREAPP_PROCESADOS = frozenset({
 
 
 def hay_actividad_operativa() -> bool:
-    """True si existe al menos una OT o un registro MoreApp procesado.
+    """True si existe OT, visita MoreApp procesada o tarea MoreApp.
 
     No se cachea: ``exists()`` es barato y un False stale ocultaría el hub
     justo después de crear la primera OT.
     """
     if OrdenTrabajo.objects.filter(eliminado=False).exists():
         return True
-    return IntegracionMoreApp.objects.filter(
+    if IntegracionMoreApp.objects.filter(
         eliminado=False,
         estado_sincronizacion__in=ESTADOS_MOREAPP_PROCESADOS,
-    ).exists()
+    ).exists():
+        return True
+    try:
+        from integraciones.models import MoreAppTareaEnviada
+
+        return MoreAppTareaEnviada.objects.exists()
+    except Exception:
+        return False
 
 
 def _codigos_cliente_desde_moreapp() -> Set[str]:
@@ -65,6 +72,16 @@ def cliente_ids_operativos() -> Set[int]:
             .values_list('cliente_id', flat=True)
             .distinct()
         )
+        try:
+            from integraciones.models import MoreAppTareaEnviada
+
+            ids.update(
+                MoreAppTareaEnviada.objects.exclude(cliente_id__isnull=True).values_list(
+                    'cliente_id', flat=True
+                )
+            )
+        except Exception:
+            pass
         codigos = _codigos_cliente_desde_moreapp()
         if codigos:
             ids.update(

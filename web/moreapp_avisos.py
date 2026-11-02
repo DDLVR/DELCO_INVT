@@ -106,6 +106,7 @@ def construir_aviso_moreapp(request) -> Dict[str, Any]:
         'tareas_alertas': 0,
         'tareas_creacion': 0,
         'tareas_completado': 0,
+        'tareas_abiertas': 0,
     }
 
     user = getattr(request, 'user', None)
@@ -113,9 +114,13 @@ def construir_aviso_moreapp(request) -> Dict[str, Any]:
         return vacio
 
     try:
+        from integraciones.models import MoreAppTareaEnviada
         from integraciones.moreapp_tareas_ciclo import conteos_alertas_tareas
 
         vacio.update(conteos_alertas_tareas(user))
+        vacio['tareas_abiertas'] = MoreAppTareaEnviada.objects.exclude(
+            estado=MoreAppTareaEnviada.ESTADO_COMPLETADA
+        ).count()
     except Exception:
         pass
 
@@ -171,4 +176,5 @@ def construir_aviso_moreapp(request) -> Dict[str, Any]:
         'tareas_alertas': int(vacio.get('tareas_alertas') or 0),
         'tareas_creacion': int(vacio.get('tareas_creacion') or 0),
         'tareas_completado': int(vacio.get('tareas_completado') or 0),
+        'tareas_abiertas': int(vacio.get('tareas_abiertas') or 0),
     }

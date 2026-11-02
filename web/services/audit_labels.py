@@ -26,6 +26,11 @@ ACCION_LABELS = {
     'CARGA_UPDATE': 'Carga administrativa — Actualización',
     'SOFT_DELETE': 'Eliminación lógica',
     'TEST_AUDIT': 'Prueba de auditoría',
+    'TAREA_CREADA': 'Tarea MoreApp — Creada',
+    'TAREA_MODIFICADA': 'Tarea MoreApp — Modificada',
+    'TAREA_ELIMINADA': 'Tarea MoreApp — Eliminada',
+    'TAREA_COMPLETADA': 'Tarea MoreApp — Completada',
+    'TAREA_ERROR_ENVIO': 'Tarea MoreApp — Error de envío',
 }
 
 ENTIDAD_LABELS = {
@@ -35,6 +40,7 @@ ENTIDAD_LABELS = {
     'AdjuntoCarga': 'Adjunto de carga administrativa',
     'ClienteAdjunto': 'Adjunto de cliente',
     'IntegracionMoreApp': 'MoreApp',
+    'MoreAppTarea': 'Tarea MoreApp',
     'Medidor': 'Medidor',
     'SimCard': 'SIM Card',
     'Modem': 'Módem',
@@ -85,6 +91,7 @@ CAMPO_LABELS = {
     'trabajo': 'Trabajo',
     'note': 'Nota',
     'archivo': 'Archivo adjunto',
+    'actividad': 'Actividad',
     'medidor_actual_id': 'Medidor actual',
 }
 

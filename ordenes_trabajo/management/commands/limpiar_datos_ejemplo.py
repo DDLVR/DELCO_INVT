@@ -3,33 +3,6 @@ from django.db import transaction
 from django.db.models import Q
 
 
-CATALOGO_DIAGNOSTICO_INICIAL = [
-    ('SISTEMA', 'IP errónea del módem', 'Actualizar IP en StarBeat'),
-    ('SISTEMA', 'Base de datos no actualizada', 'Actualizar medidor en StarBeat'),
-    ('SISTEMA', 'Caída masiva', 'Generar incidencia a TI'),
-    ('SIMCARD', 'Sin plan de datos', 'Cambio de SIMCard'),
-    ('SIMCARD', 'SIM sucia o mal instalada', 'Limpieza y reinstalación'),
-    ('SIMCARD', 'SIM dañada', 'Cambio de SIMCard'),
-    ('SIMCARD', 'Sin cobertura', 'Traslado de equipo, cambio de antena o uso de doble SIM'),
-    ('MODEM', 'Obsoleto o con falla sin repuesto', 'Cambio de módem'),
-    ('MODEM', 'Desprogramado', 'Cambio de módem y reprogramación del equipo retirado'),
-    ('MODEM', 'Falla franca', 'Cambio de módem y baja del equipo retirado'),
-    ('MODEM', 'No existe módem en terreno', 'Instalación de módem y habilitación de telemedida'),
-    ('MEDIDOR', 'Hurto o intervención', 'Informar a Pérdidas'),
-    ('MEDIDOR', 'No compatible con telemedida', 'Cambio de medidor'),
-    ('MEDIDOR', 'Sin medidor, conectado directo', 'Instalar medidor, habilitar telemedida e informar a Pérdidas'),
-    ('MEDIDOR', 'No comunica, pero registra', 'Cambio de medidor'),
-    ('MEDIDOR', 'Falla franca, no comunica ni registra', 'Cambio de medidor e informar a Pérdidas'),
-    ('MEDIDOR', 'Sin medidor', 'Reponer medidor si corresponde'),
-    ('MEDIDOR', 'Medidor en terreno distinto al sistema', 'Actualizar sistema con medidor real en terreno'),
-    ('ESTADO_CLIENTE', 'Sin suministro', 'Monitorear estado'),
-    ('ESTADO_CLIENTE', 'Retirado', 'Retirar cliente con apoyo de Morosidad'),
-    ('ESTADO_VISITA', 'Cerrado', 'Reprogramar visita para lograr acceso y diagnóstico'),
-    ('ESTADO_VISITA', 'Deshabitado', 'Realizar seguimiento con lectura pedestre'),
-    ('ESTADO_VISITA', 'No permite acceso', 'Reportar a Pérdidas o área correspondiente'),
-]
-
-
 class Command(BaseCommand):
     help = (
         'Elimina datos de prueba o resetea la plataforma operativa. '
@@ -473,19 +446,11 @@ class Command(BaseCommand):
         call_command('inicializar_estados', verbosity=0)
 
     def _resembrar_catalogo_diagnostico(self):
-        from catalogos.models import CatalogoDiagnostico
+        from catalogos.datos_diagnostico import sync_catalogo_diagnostico
 
-        creados = 0
-        for orden, (categoria, origen, solucion) in enumerate(CATALOGO_DIAGNOSTICO_INICIAL, start=1):
-            _, created = CatalogoDiagnostico.objects.get_or_create(
-                categoria=categoria,
-                origen=origen,
-                defaults={'solucion': solucion, 'orden': orden, 'activo': True},
-            )
-            if created:
-                creados += 1
+        stats = sync_catalogo_diagnostico()
         self.stdout.write(self.style.SUCCESS(
-            f'Catálogo de diagnósticos resembrado ({creados} entradas nuevas).'
+            'Catálogo de diagnósticos resembrado (%s entradas nuevas).' % stats['creados']
         ))
 
     def _limpiar_ejemplo_parcial(self):

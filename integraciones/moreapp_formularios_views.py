@@ -15,6 +15,7 @@ from .moreapp_asignaciones import (
     asignaciones_por_form,
     enriquecer_fila,
     fila_asignada,
+    ids_formularios_en_registros,
     usuarios_asignables,
 )
 from .moreapp_permisos import anotar_accesos_en_formularios, cargar_usuarios_moreapp_con_permisos
@@ -22,8 +23,7 @@ from .moreapp_catalogo_views import _catalogo_return_url, _fold_text, _form_row
 from .moreapp_http import assert_safe_id
 
 
-@any_intranet_user
-def formularios_list_view(request):
+def contexto_formularios_asignados(request, *, todos: bool = False):
     query = (request.GET.get("query") or "").strip()
     rol = getattr(request.user, "rol", "")
     es_admin = rol == "ADMIN"
@@ -36,14 +36,12 @@ def formularios_list_view(request):
         "puede_ver_accesos_moreapp": rol in ("ADMIN", "ADMINISTRATIVO"),
         "tiene_filtros": bool(query),
     }
-    if es_admin:
-        asignados_ids = set(MoreAppFormularioAsignado.objects.values_list("form_id", flat=True))
+    if todos or es_admin:
+        asignados_ids = ids_formularios_en_registros(todos=True)
     else:
-        asignados_ids = set(
-            MoreAppFormularioAsignado.objects.filter(usuario=request.user).values_list("form_id", flat=True)
-        )
+        asignados_ids = ids_formularios_en_registros(usuario=request.user)
     if not asignados_ids:
-        return render(request, "integraciones/moreapp_formularios.html", context)
+        return context
 
     por_form = asignaciones_por_form()
     usuarios_ma, conoce_permisos = cargar_usuarios_moreapp_con_permisos()
@@ -82,6 +80,12 @@ def formularios_list_view(request):
         anotar_accesos_en_formularios(rows, usuarios_ma, conoce_permisos=conoce_permisos)
         context["formularios"] = rows
         context["error"] = str(exc)
+    return context
+
+
+@any_intranet_user
+def formularios_list_view(request):
+    context = contexto_formularios_asignados(request, todos=getattr(request.user, "rol", "") == "ADMIN")
     return render(request, "integraciones/moreapp_formularios.html", context)
 
 
@@ -131,7 +135,7 @@ def formulario_asignar_view(request, form_id: str):
     if count:
         messages.success(
             request,
-            "Formulario asignado a %s usuario%s." % (count, "" if count == 1 else "s"),
+            "Formulario asignado a %s usuario%s. Queda disponible en Reportes MoreApp." % (count, "" if count == 1 else "s"),
         )
     else:
         messages.success(request, "Se quitaron las asignaciones de este formulario.")

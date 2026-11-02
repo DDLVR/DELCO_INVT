@@ -8,7 +8,7 @@
     <div class="delco-catalogo-hero mb-3">
         <p class="delco-catalogo-kicker mb-1">Control</p>
         <h1 class="h3 mb-1">Trazabilidad y auditoría</h1>
-        <p class="text-muted mb-0">Quién cambió qué, cuándo y con qué valores en clientes, inventario, órdenes y MoreApp.</p>
+        <p class="text-muted mb-0">Quién cambió qué y cuándo. Las tareas MoreApp quedan en un solo registro que se actualiza al crear, editar o eliminar.</p>
     </div>
 
     <div class="card shadow-sm mb-4 delco-panel-card">
@@ -65,7 +65,7 @@
                 <tbody>
                     {% for reg in registros %}
                     <tr>
-                        <td class="text-nowrap">{{ reg.created_at|date:"d/m/Y H:i" }}</td>
+                        <td class="text-nowrap">{{ reg.updated_at|default:reg.created_at|date:"d/m/Y H:i" }}</td>
                         <td>{{ reg.actor.nombre_interno|default:"Sistema" }}</td>
                         <td>
                             <span class="badge bg-light text-dark border text-wrap text-start">{{ reg.action|audit_action_label }}</span>

@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+from unicodedata import combining, normalize
 
 from django.db.models import Count, Q
 from django.utils import timezone
 
 from clientes.models import Cliente
 from ordenes_trabajo.models import IntegracionMoreApp, OrdenTrabajo
+from usuarios.models import Usuario
 from ordenes_trabajo.services import six_month_window_start
 from reportes.operational_scope import (
     clientes_operativos_qs,
@@ -40,6 +42,76 @@ def ordenes_operativas_qs():
 def moreapp_operativos_qs():
     """Registros MoreApp no eliminados."""
     return IntegracionMoreApp.objects.filter(eliminado=False)
+
+
+def _fold_txt(valor: Any) -> str:
+    raw = normalize('NFKD', str(valor or ''))
+    return ''.join(ch for ch in raw if not combining(ch)).casefold()
+
+
+def _es_ejecutado_moreapp(estado: str) -> bool:
+    texto = _fold_txt(estado)
+    return 'ejecut' in texto or texto in {'ok', 'realizada', 'finalizada'}
+
+
+def _es_incidencia_moreapp(estado: str) -> bool:
+    return 'inciden' in _fold_txt(estado)
+
+
+def _fecha_visita_moreapp(reg, datos: Dict[str, Any]):
+    raw = str((datos or {}).get('fecha_trabajo') or (datos or {}).get('fecha_registro') or '').strip()
+    if raw:
+        parsed = None
+        try:
+            parsed = datetime.fromisoformat(raw.replace('Z', '+00:00'))
+        except (TypeError, ValueError):
+            parsed = None
+        if parsed is not None:
+            if timezone.is_naive(parsed):
+                parsed = timezone.make_aware(parsed, timezone.get_current_timezone())
+            return parsed
+    return getattr(reg, 'fecha_procesamiento', None) or getattr(reg, 'fecha_recepcion', None)
+
+
+def _iter_visitas_moreapp(filters: Optional[Dict[str, Any]] = None) -> Iterable[Dict[str, Any]]:
+    """Visitas persistidas desde API/carpeta, con filtros de reporte aplicados en memoria."""
+    filters = filters or {}
+    tecnico_nombre = ''
+    if filters.get('tecnico_id'):
+        tech = Usuario.objects.filter(pk=filters['tecnico_id']).only('nombre_interno').first()
+        tecnico_nombre = _fold_txt(getattr(tech, 'nombre_interno', '') if tech else '')
+    for reg in moreapp_operativos_qs().exclude(
+        estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR'),
+    ).iterator(chunk_size=500):
+        datos = reg.datos_procesados if isinstance(reg.datos_procesados, dict) else {}
+        fecha = _fecha_visita_moreapp(reg, datos)
+        if filters.get('fecha_desde') and fecha and fecha.date() < filters['fecha_desde']:
+            continue
+        if filters.get('fecha_hasta') and fecha and fecha.date() > filters['fecha_hasta']:
+            continue
+        if tecnico_nombre:
+            if tecnico_nombre not in _fold_txt(datos.get('tecnico_responsable')):
+                continue
+        if filters.get('empresa') or filters.get('comuna'):
+            codigo = str(datos.get('cliente_codigo') or '').strip()
+            if not codigo:
+                continue
+            cliente_qs = Cliente.objects.filter(numero_cliente=codigo)
+            if filters.get('empresa'):
+                cliente_qs = cliente_qs.filter(empresa__iexact=filters['empresa'])
+            if filters.get('comuna'):
+                cliente_qs = cliente_qs.filter(comuna__iexact=filters['comuna'])
+            if not cliente_qs.exists():
+                continue
+        yield {
+            'registro': reg,
+            'datos': datos,
+            'fecha': fecha,
+            'estado': str(datos.get('estado') or ''),
+            'diagnostico': str(datos.get('diagnostico') or datos.get('trabajo') or datos.get('actividad') or ''),
+            'cliente_codigo': str(datos.get('cliente_codigo') or '').strip(),
+            'tecnico': str(datos.get('tecnico_responsable') or ''),
+        }
 
 
 def parse_report_filters(params) -> Dict[str, Any]:
@@ -154,7 +226,16 @@ def report_clientes_completos(filters: Dict[str, Any]) -> ReportResult:
 def report_clientes_ejecutados(filters: Dict[str, Any]) -> ReportResult:
     ot_qs = ordenes_operativas_qs().filter(estado__in=ESTADOS_EJECUTADOS, cliente_id__isnull=False)
     ot_qs = _filter_ordenes(ot_qs, filters, fecha_field='fecha_creacion')
-    cliente_ids = ot_qs.values_list('cliente_id', flat=True).distinct()
+    cliente_ids = set(ot_qs.values_list('cliente_id', flat=True))
+    codigos = [
+        visita['cliente_codigo']
+        for visita in _iter_visitas_moreapp(filters)
+        if visita['cliente_codigo'] and _es_ejecutado_moreapp(visita['estado'])
+    ]
+    if codigos:
+        cliente_ids.update(
+            Cliente.objects.filter(activo=True, numero_cliente__in=codigos).values_list('pk', flat=True)
+        )
     qs = _filter_clientes(Cliente.objects.filter(pk__in=cliente_ids, activo=True), filters).order_by('numero_cliente')
     rows = [_cliente_row(c) for c in qs]
     return CLIENTE_HEADERS, rows
@@ -174,6 +255,17 @@ def report_clientes_pendientes(filters: Dict[str, Any]) -> ReportResult:
         ).values_list('datos_procesados__cliente_codigo', flat=True)
         if codigo
     }
+    pendientes_tareas = set()
+    try:
+        from integraciones.models import MoreAppTareaEnviada
+
+        pendientes_tareas = set(
+            MoreAppTareaEnviada.objects.exclude(estado=MoreAppTareaEnviada.ESTADO_COMPLETADA)
+            .exclude(cliente_id__isnull=True)
+            .values_list('cliente_id', flat=True)
+        )
+    except Exception:
+        pendientes_tareas = set()
     clientes = _filter_clientes(clientes_operativos_qs(), filters).order_by('numero_cliente')
     rows = []
     for cliente in clientes:
@@ -182,6 +274,8 @@ def report_clientes_pendientes(filters: Dict[str, Any]) -> ReportResult:
             motivos.append('OT pendiente')
         if cliente.numero_cliente in pendientes_moreapp:
             motivos.append('MoreApp pendiente')
+        if cliente.id in pendientes_tareas:
+            motivos.append('Tarea MoreApp abierta')
         if motivos:
             row = _cliente_row(cliente)
             row.append('; '.join(motivos))
@@ -269,6 +363,22 @@ def report_trabajos_por_fecha(filters: Dict[str, Any]) -> ReportResult:
         ]
         for ot in qs.select_related('cliente', 'tecnico_responsable').order_by('-fecha_creacion')
     ]
+    if not filters.get('estado_ot'):
+        for visita in _iter_visitas_moreapp(filters):
+            if not _es_ejecutado_moreapp(visita['estado']) and not _es_incidencia_moreapp(visita['estado']):
+                continue
+            fecha = visita['fecha']
+            rows.append([
+                'MA',
+                visita['cliente_codigo'],
+                '',
+                visita['tecnico'],
+                visita['estado'] or 'MoreApp',
+                visita['diagnostico'],
+                fecha.strftime('%Y-%m-%d %H:%M') if fecha else '',
+                '',
+                str(visita['datos'].get('cliente_comuna') or ''),
+            ])
     return headers, rows
 
 
@@ -285,9 +395,20 @@ def report_trabajos_por_tecnico(filters: Dict[str, Any]) -> ReportResult:
         )
         .order_by('-ejecutados')
     )
+    por_tecnico: Dict[str, List[int]] = {}
+    for item in aggregated:
+        nombre = item['tecnico_responsable__nombre_interno'] or ''
+        por_tecnico[nombre] = [item['ejecutados'], item['pendientes'], item['en_ejecucion']]
+    for visita in _iter_visitas_moreapp(filters):
+        nombre = (visita['tecnico'] or '').strip() or 'MoreApp'
+        por_tecnico.setdefault(nombre, [0, 0, 0])
+        if _es_ejecutado_moreapp(visita['estado']):
+            por_tecnico[nombre][0] += 1
+        else:
+            por_tecnico[nombre][1] += 1
     rows = [
-        [item['tecnico_responsable__nombre_interno'], item['ejecutados'], item['pendientes'], item['en_ejecucion']]
-        for item in aggregated
+        [nombre, vals[0], vals[1], vals[2]]
+        for nombre, vals in sorted(por_tecnico.items(), key=lambda item: item[1][0], reverse=True)
     ]
     return headers, rows
 
@@ -329,11 +450,19 @@ def report_trabajos_pendientes_por_causa(filters: Dict[str, Any]) -> ReportResul
         [tipo_map.get(item['tipo_trabajo'], item['tipo_trabajo']), estado_map.get(item['estado'], item['estado']), item['cantidad']]
         for item in aggregated
     ]
+    causas: Dict[str, int] = {}
+    for visita in _iter_visitas_moreapp(filters):
+        if not _es_incidencia_moreapp(visita['estado']):
+            continue
+        causa = (visita['diagnostico'] or 'INCIDENCIA').strip() or 'INCIDENCIA'
+        causas[causa] = causas.get(causa, 0) + 1
+    for causa, cantidad in sorted(causas.items(), key=lambda item: item[1], reverse=True):
+        rows.append([causa, 'Incidencia MoreApp', cantidad])
     return headers, rows
 
 
 def report_trabajos_diarios(filters: Dict[str, Any]) -> ReportResult:
-    headers = ['Fecha', 'OT Creadas', 'OT Ejecutadas']
+    headers = ['Fecha', 'OT Creadas', 'OT Ejecutadas', 'Visitas MoreApp', 'Ejecutadas MoreApp']
     qs = ordenes_operativas_qs().filter(fecha_creacion__isnull=False)
     qs = _filter_ordenes(qs, filters, fecha_field='fecha_creacion')
     creadas = qs.values('fecha_creacion__date').annotate(cantidad=Count('id')).order_by('fecha_creacion__date')
@@ -344,12 +473,39 @@ def report_trabajos_diarios(filters: Dict[str, Any]) -> ReportResult:
         for item in ejecutadas_qs.values('fecha_creacion__date').annotate(cantidad=Count('id'))
         if item['fecha_creacion__date'] is not None
     }
+    visitas_dia: Dict[Any, int] = {}
+    ejecutadas_ma: Dict[Any, int] = {}
+    for visita in _iter_visitas_moreapp(filters):
+        if not visita['fecha']:
+            continue
+        dia = visita['fecha'].date()
+        visitas_dia[dia] = visitas_dia.get(dia, 0) + 1
+        if _es_ejecutado_moreapp(visita['estado']):
+            ejecutadas_ma[dia] = ejecutadas_ma.get(dia, 0) + 1
+    dias = set()
     rows = []
     for item in creadas:
         fecha = item['fecha_creacion__date']
         if fecha is None:
             continue
-        rows.append([fecha.strftime('%Y-%m-%d'), item['cantidad'], ejecutadas.get(fecha, 0)])
+        dias.add(fecha)
+        rows.append([
+            fecha.strftime('%Y-%m-%d'),
+            item['cantidad'],
+            ejecutadas.get(fecha, 0),
+            visitas_dia.get(fecha, 0),
+            ejecutadas_ma.get(fecha, 0),
+        ])
+    for dia in sorted(visitas_dia.keys(), reverse=True):
+        if dia in dias:
+            continue
+        rows.append([
+            dia.strftime('%Y-%m-%d'),
+            0,
+            0,
+            visitas_dia.get(dia, 0),
+            ejecutadas_ma.get(dia, 0),
+        ])
     return headers, rows
 
 
@@ -374,6 +530,18 @@ def report_resultado_diario_tecnico(filters: Dict[str, Any]) -> ReportResult:
         ]
         for item in aggregated
     ]
+    extra: Dict[Tuple[str, str], List[int]] = {}
+    for visita in _iter_visitas_moreapp(filters):
+        if not visita['fecha'] or not visita['tecnico']:
+            continue
+        clave = (visita['fecha'].date().strftime('%Y-%m-%d'), visita['tecnico'])
+        extra.setdefault(clave, [0, 0])
+        if _es_ejecutado_moreapp(visita['estado']):
+            extra[clave][0] += 1
+        else:
+            extra[clave][1] += 1
+    for (fecha, tecnico), vals in extra.items():
+        rows.append([fecha, tecnico, vals[0], vals[1]])
     return headers, rows
 
 
@@ -385,12 +553,30 @@ def report_clientes_reincidentes(filters: Dict[str, Any]) -> ReportResult:
     aggregated = (
         qs.values('cliente_id', 'cliente__numero_cliente', 'cliente__customer_name', 'cliente__comuna')
         .annotate(visitas=Count('id'))
-        .filter(visitas__gt=2)
         .order_by('-visitas')
     )
+    por_codigo: Dict[str, Dict[str, Any]] = {}
+    for item in aggregated:
+        codigo = item['cliente__numero_cliente'] or ''
+        if not codigo:
+            continue
+        por_codigo[codigo] = {
+            'nombre': item['cliente__customer_name'] or '',
+            'comuna': item['cliente__comuna'] or '',
+            'visitas': int(item['visitas'] or 0),
+        }
+    for visita in _iter_visitas_moreapp({**filters, 'fecha_desde': desde, 'fecha_hasta': None}):
+        codigo = visita['cliente_codigo']
+        if not codigo:
+            continue
+        fila = por_codigo.setdefault(codigo, {'nombre': '', 'comuna': str(visita['datos'].get('cliente_comuna') or ''), 'visitas': 0})
+        fila['visitas'] += 1
+        if not fila['nombre']:
+            fila['nombre'] = str(visita['datos'].get('cliente_nombre') or '')
     rows = [
-        [item['cliente__numero_cliente'], item['cliente__customer_name'] or '', item['cliente__comuna'] or '', item['visitas']]
-        for item in aggregated
+        [codigo, data['nombre'], data['comuna'], data['visitas']]
+        for codigo, data in sorted(por_codigo.items(), key=lambda item: item[1]['visitas'], reverse=True)
+        if data['visitas'] > 2
     ]
     return headers, rows
 
@@ -656,6 +842,8 @@ def report_clientes_ejecutado_no_actualizado(filters: Dict[str, Any]) -> ReportR
         .iterator(chunk_size=500)
     ):
         datos = reg.datos_procesados if isinstance(reg.datos_procesados, dict) else {}
+        if not _es_ejecutado_moreapp(str(datos.get('estado') or '')):
+            continue
         codigo = str(datos.get('cliente_codigo') or '').strip()
         if codigo:
             codigos.add(codigo)
@@ -687,7 +875,7 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     'clientes_ejecutados': {
         'title': 'Clientes ejecutados',
-        'description': 'Clientes con al menos una OT ejecutada/validada.',
+        'description': 'Clientes con OT ejecutada/validada o visita MoreApp en estado EJECUTADO.',
         'supports_date_range': True,
         'supports_tecnico': True,
         'supports_empresa': True,
@@ -698,7 +886,7 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     'clientes_pendientes': {
         'title': 'Clientes pendientes',
-        'description': 'Clientes con OT o revisión MoreApp pendiente.',
+        'description': 'Clientes con OT, revisión MoreApp o tarea MoreApp aún abierta.',
         'supports_date_range': False,
         'supports_tecnico': False,
         'supports_empresa': True,
@@ -753,7 +941,7 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     'trabajos_pendientes_causa': {
         'title': 'Trabajos pendientes por causa',
-        'description': 'Agrupación por tipo de trabajo y estado OT.',
+        'description': 'Agrupación por tipo/estado de OT e incidencias MoreApp (diagnóstico).',
         'supports_date_range': True,
         'supports_tecnico': True,
         'supports_empresa': True,
@@ -764,7 +952,7 @@ REPORT_CATALOG: Dict[str, Dict[str, Any]] = {
     },
     'trabajos_diarios': {
         'title': 'Cantidad de trabajos diarios',
-        'description': 'OT creadas y ejecutadas por día.',
+        'description': 'OT y visitas MoreApp creadas/ejecutadas por día.',
         'supports_date_range': True,
         'supports_tecnico': True,
         'supports_empresa': True,

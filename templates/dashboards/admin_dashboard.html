@@ -10,51 +10,22 @@
     {{ modems_por_estado|json_script:"datos-modems-estado" }}
     {{ movimientos_tipo_breakdown|json_script:"datos-mov-tipo" }}
     {{ movimientos_origen_breakdown|json_script:"datos-mov-origen" }}
-    {{ moreapp_sinc_breakdown|json_script:"datos-moreapp-sinc" }}
-    {{ moreapp_formulario_breakdown|json_script:"datos-moreapp-formulario" }}
-    {{ moreapp_adv_breakdown|json_script:"datos-moreapp-adv" }}
+    {{ moreapp_form_charts.por_formulario|json_script:"datos-moreapp-forms" }}
+    {{ moreapp_form_charts.telemetria_estado|json_script:"datos-telemetria-estado" }}
+    {{ moreapp_form_charts.telemetria_diagnostico|json_script:"datos-telemetria-diag" }}
 
-    {% if moreapp_aviso.por_revisar %}
-    <div class="alert {% if moreapp_aviso.nuevos %}alert-danger{% else %}alert-warning{% endif %} border shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-start gap-3" role="alert">
+    {% if moreapp_aviso.tareas_abiertas %}
+    <div class="alert alert-warning border shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-start gap-3" role="status">
         <div>
             <div class="fw-semibold mb-1">
-                <i class="bi bi-bell-fill me-1"></i>
-                {% if moreapp_aviso.nuevos %}
-                Hay {{ moreapp_aviso.nuevos }} informe(s) MoreApp nuevos por revisar
-                {% else %}
-                Hay {{ moreapp_aviso.por_revisar }} informe(s) MoreApp pendientes de revisión
-                {% endif %}
+                <i class="bi bi-list-task me-1"></i>
+                Hay {{ moreapp_aviso.tareas_abiertas }} tarea(s) MoreApp sin completar
             </div>
-            <div class="small mb-0">
-                Pendientes MoreApp: <strong>{{ moreapp_aviso.pendientes }}</strong>
-                · Con advertencia: <strong>{{ moreapp_aviso.advertencias }}</strong>
-                {% if moreapp_aviso.llegaron_hoy %}
-                · Últimas 24 h: <strong>{{ moreapp_aviso.llegaron_hoy }}</strong>
-                {% endif %}
-            </div>
-            {% if moreapp_aviso.recientes %}
-            <ul class="small mb-0 mt-2 ps-3">
-                {% for item in moreapp_aviso.recientes %}
-                <li>
-                    #{{ item.numero_correlativo|default:item.id }}
-                    {% if item.nombre_formulario %}— {{ item.nombre_formulario }}{% endif %}
-                    {% if item.orden_id %}· OT #{{ item.orden_id }}{% else %}· sin OT{% endif %}
-                    · {{ item.estado_revision_label|default:item.estado_revision }}
-                </li>
-                {% endfor %}
-            </ul>
-            {% endif %}
+            <div class="small mb-0">Se listan en Pendientes MoreApp. Las completadas siguen en Tareas MoreApp.</div>
         </div>
-        <div class="d-flex flex-column gap-2">
-            <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm {% if moreapp_aviso.nuevos %}btn-danger{% else %}btn-warning{% endif %}">
-                Abrir cola Pendientes MoreApp
-            </a>
-            {% if ordenes_habilitadas %}
-            <a href="{% url 'ordenes_list' %}?cola=validar" class="btn btn-sm btn-outline-secondary">
-                OT por validar
-            </a>
-            {% endif %}
-        </div>
+        <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm btn-warning">
+            Abrir Pendientes MoreApp
+        </a>
     </div>
     {% endif %}
 
@@ -98,8 +69,8 @@
                 <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm delco-dash-btn-outline"><i class="bi bi-cloud-download"></i> MoreApp</a>
                 <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm delco-dash-btn-outline">
                     <i class="bi bi-list-task"></i> Pendientes MoreApp
-                    {% if moreapp_aviso.por_revisar %}
-                    <span class="badge {% if moreapp_aviso.nuevos %}bg-danger{% else %}bg-warning text-dark{% endif %} ms-1">{{ moreapp_aviso.por_revisar }}</span>
+                    {% if moreapp_aviso.tareas_abiertas %}
+                    <span class="badge bg-warning text-dark ms-1">{{ moreapp_aviso.tareas_abiertas }}</span>
                     {% endif %}
                 </a>
                 {% if rol == 'ADMIN' %}
@@ -185,23 +156,42 @@
         </div>
         <div class="col-lg-3 col-md-6">
             <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
-                <div class="card-header card-header-delco py-2">MoreApp sincronización</div>
-                <div class="card-body py-2"><canvas id="graficaMoreappSinc" style="max-height:200px;"></canvas></div>
+                <div class="card-header card-header-delco py-2">Registros por formulario</div>
+                <div class="card-body py-2"><canvas id="graficaMoreappForms" style="max-height:200px;"></canvas></div>
             </div>
         </div>
         <div class="col-lg-3 col-md-6">
             <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
-                <div class="card-header card-header-delco py-2">MoreApp formularios</div>
-                <div class="card-body py-2"><canvas id="graficaMoreappForm" style="max-height:200px;"></canvas></div>
+                <div class="card-header card-header-delco py-2">
+                    Efectividad · Telemetría
+                    {% if moreapp_form_charts.efectividad_pct != None %}
+                    <span class="badge bg-light text-dark ms-1">{{ moreapp_form_charts.efectividad_pct }}% ejecutado</span>
+                    {% endif %}
+                </div>
+                <div class="card-body py-2"><canvas id="graficaTelemetriaEstado" style="max-height:200px;"></canvas></div>
             </div>
         </div>
         <div class="col-lg-3 col-md-6">
             <div class="card delco-panel-card delco-chart-card shadow-sm h-100">
-                <div class="card-header card-header-delco py-2">MoreApp advertencias</div>
-                <div class="card-body py-2"><canvas id="graficaMoreappAdv" style="max-height:200px;"></canvas></div>
+                <div class="card-header card-header-delco py-2">Diagnósticos · Telemetría</div>
+                <div class="card-body py-2"><canvas id="graficaTelemetriaDiag" style="max-height:200px;"></canvas></div>
             </div>
         </div>
     </div>
+    {% if moreapp_form_charts.telemetria_total or moreapp_form_charts.telemetria_muestra %}
+    <p class="small text-muted mt-n2 mb-3">
+        {% if moreapp_form_charts.telemetria_conteo_completo %}
+        Telemetría: efectividad sobre {{ moreapp_form_charts.telemetria_total }} registros en MoreApp.
+        {% else %}
+        Telemetría: muestra de {{ moreapp_form_charts.telemetria_muestra }} visitas recientes{% if moreapp_form_charts.telemetria_total %} · {{ moreapp_form_charts.telemetria_total }} registros en MoreApp{% endif %}.
+        {% endif %}
+        {% if moreapp_form_charts.telemetria_diag_completo %}
+        Diagnósticos con conteo real por causa (no solo las visitas recientes).
+        {% elif moreapp_form_charts.telemetria_conteo_completo and moreapp_form_charts.telemetria_muestra %}
+        Diagnósticos según las {{ moreapp_form_charts.telemetria_muestra }} visitas más recientes.
+        {% endif %}
+    </p>
+    {% endif %}
 
     <!-- 2. Indicadores clave -->
     <div class="delco-dash-section-title"><i class="bi bi-bar-chart text-primary"></i> Indicadores clave</div>
@@ -565,15 +555,20 @@ document.addEventListener('DOMContentLoaded', function() {
     crearDonut({ canvasId: 'graficaMovOrigen', jsonId: 'datos-mov-origen', emptyMessage: 'Sin origen',
         labelGetter: i => i.origen_sistema || 'No informado', valueGetter: i => i.c || 0,
         colorGetter: (_, idx) => PALETTE_BASE[(idx + 1) % PALETTE_BASE.length] });
-    crearDonut({ canvasId: 'graficaMoreappSinc', jsonId: 'datos-moreapp-sinc', emptyMessage: 'Sin sync',
-        labelGetter: i => ESTADO_SYNC_LABELS[i.estado_sincronizacion] || i.estado_sincronizacion,
-        valueGetter: i => i.c || 0, colorGetter: i => ESTADO_SYNC_COLORS[i.estado_sincronizacion] || '#64748b' });
-    crearDonut({ canvasId: 'graficaMoreappForm', jsonId: 'datos-moreapp-formulario', emptyMessage: 'Sin formularios',
-        labelGetter: i => i.nombre_formulario || '(Sin nombre)', valueGetter: i => i.c || 0,
+    crearDonut({ canvasId: 'graficaMoreappForms', jsonId: 'datos-moreapp-forms', emptyMessage: 'Sin formularios asignados',
+        labelGetter: i => i.nombre || '(Sin nombre)', valueGetter: i => i.total || i.c || 0,
         colorGetter: (_, idx) => PALETTE_BASE[(idx + 3) % PALETTE_BASE.length] });
-    crearDonut({ canvasId: 'graficaMoreappAdv', jsonId: 'datos-moreapp-adv', emptyMessage: 'Sin advertencias',
+    crearDonut({ canvasId: 'graficaTelemetriaEstado', jsonId: 'datos-telemetria-estado', emptyMessage: 'Sin visitas de telemetría',
+        labelGetter: i => i.categoria || 'Sin estado', valueGetter: i => i.count || 0,
+        colorGetter: (i, idx) => {
+            const n = String(i.categoria || '').toLowerCase();
+            if (n.indexOf('ejecut') >= 0) return '#198754';
+            if (n.indexOf('inciden') >= 0) return '#dc3545';
+            return PALETTE_BASE[idx % PALETTE_BASE.length];
+        } });
+    crearDonut({ canvasId: 'graficaTelemetriaDiag', jsonId: 'datos-telemetria-diag', emptyMessage: 'Sin diagnósticos',
         labelGetter: i => i.categoria || 'Sin categoría', valueGetter: i => i.count || 0,
-        colorGetter: i => ADV_COLORS[i.categoria] || '#64748b' });
+        colorGetter: (_, idx) => PALETTE_BASE[(idx + 1) % PALETTE_BASE.length] });
 });
 </script>
 {% endblock %}

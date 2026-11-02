@@ -72,13 +72,20 @@ def admin_or_formulario_asignado(view_func):
         if not request.user.is_authenticated:
             messages.error(request, 'Debes iniciar sesión')
             return redirect('login')
-        if getattr(request.user, 'rol', '') == 'ADMIN':
+        rol = getattr(request.user, 'rol', '')
+        if rol == 'ADMIN':
             return view_func(request, *args, **kwargs)
         form_id = str(kwargs.get('form_id') or '')
         from integraciones.models import MoreAppFormularioAsignado
         if form_id and MoreAppFormularioAsignado.objects.filter(
             usuario=request.user, form_id=form_id
         ).exists():
+            return view_func(request, *args, **kwargs)
+        if (
+            form_id
+            and rol in ('ADMINISTRATIVO', 'AUDITOR', 'GERENCIA')
+            and MoreAppFormularioAsignado.objects.filter(form_id=form_id).exists()
+        ):
             return view_func(request, *args, **kwargs)
         messages.error(request, 'No tienes este formulario asignado')
         return HttpResponseForbidden('No tiene este formulario asignado')

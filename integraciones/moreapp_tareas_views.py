@@ -729,9 +729,11 @@ def _qs_tareas_con_relaciones():
     return qs
 
 
-def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True):
+def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True, solo_abiertas: bool = False):
     qs = _qs_tareas_con_relaciones()
     if not aplicar_filtros:
+        if solo_abiertas:
+            qs = qs.exclude(estado=MoreAppTareaEnviada.ESTADO_COMPLETADA)
         return qs
 
     estado_filtro = (request.GET.get("estado") or "").strip()
@@ -742,6 +744,8 @@ def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True):
     fecha_hasta = (request.GET.get("fecha_hasta") or "").strip()
     periodo = (request.GET.get("periodo") or "").strip().lower()
     cola_filtro = (request.GET.get("cola") or "").strip().lower()
+    if solo_abiertas and cola_filtro == "completadas":
+        cola_filtro = ""
     tipo_filtro = (request.GET.get("tipo_trabajo") or "").strip()
     proyecto_filtro = (request.GET.get("proyecto_carga") or "").strip()
     destinatario_filtro = (request.GET.get("destinatario") or "").strip()
@@ -807,6 +811,8 @@ def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True):
                 qs = qs.filter(fecha_creacion__date__lte=d1)
             except ValueError:
                 pass
+    if solo_abiertas:
+        qs = qs.exclude(estado=MoreAppTareaEnviada.ESTADO_COMPLETADA)
     return qs
 
 
@@ -1392,7 +1398,7 @@ def tarea_revisar_view(request, pk: int):
 @require_GET
 @admin_or_administrativo
 def tarea_detalle_view(request, pk: int):
-    from .moreapp_respuestas import contar_archivos, respuestas_desde_registro
+    from .moreapp_respuestas import contar_fotos, respuestas_desde_registro
     from .moreapp_tareas_pdf import campos_rellenados_tarea, tarea_permite_pdf
 
     tarea = get_object_or_404(_qs_tareas_con_relaciones(), pk=pk)
@@ -1434,7 +1440,7 @@ def tarea_detalle_view(request, pk: int):
             "error_visible": error_visible,
             "campos_rellenados": campos_rellenados_tarea(tarea),
             "respuestas": respuestas,
-            "fotos_count": contar_archivos(respuestas),
+            "fotos_count": contar_fotos(respuestas),
             "puede_pdf": tarea_permite_pdf(tarea),
             "registro": registro,
             "submission_id": submission_id,
@@ -1503,6 +1509,14 @@ def tarea_observaciones_view(request, pk: int):
     tarea = get_object_or_404(MoreAppTareaEnviada, pk=pk)
     tarea.observaciones = (request.POST.get("observaciones") or "").strip()
     tarea.save(update_fields=["observaciones"])
+    from .moreapp_tareas_audit import registrar_auditoria_tarea
+
+    registrar_auditoria_tarea(
+        tarea,
+        "MODIFICADA",
+        actor_id=getattr(request.user, "id", None),
+        extra={"campo": "observaciones"},
+    )
     messages.success(request, "Observaciones guardadas.")
     return redirect("moreapp_tarea_detalle", pk=tarea.pk)
 
@@ -1525,6 +1539,13 @@ def _respuesta_eliminar(request, *, message: str, ids: List[int], success: bool 
 def tarea_eliminar_view(request, pk: int):
     tarea = get_object_or_404(MoreAppTareaEnviada, pk=pk)
     numero = tarea.pk
+    from .moreapp_tareas_audit import registrar_auditoria_tarea
+
+    registrar_auditoria_tarea(
+        tarea,
+        "ELIMINADA",
+        actor_id=getattr(request.user, "id", None),
+    )
     tarea.delete()
     return _respuesta_eliminar(
         request,
@@ -1553,9 +1574,7 @@ def tareas_eliminar_masivo_view(request):
             success=False,
             status=400,
         )
-    existentes = list(
-        MoreAppTareaEnviada.objects.filter(pk__in=ids).values_list("pk", flat=True)
-    )
+    existentes = list(MoreAppTareaEnviada.objects.filter(pk__in=ids))
     if not existentes:
         return _respuesta_eliminar(
             request,
@@ -1564,14 +1583,21 @@ def tareas_eliminar_masivo_view(request):
             success=False,
             status=404,
         )
-    MoreAppTareaEnviada.objects.filter(pk__in=existentes).delete()
+    from .moreapp_tareas_audit import registrar_auditoria_tarea
+
+    ids_ok = []
+    actor_id = getattr(request.user, "id", None)
+    for tarea in existentes:
+        registrar_auditoria_tarea(tarea, "ELIMINADA", actor_id=actor_id)
+        ids_ok.append(tarea.pk)
+        tarea.delete()
     return _respuesta_eliminar(
         request,
         message=(
             "Se eliminaron %s tarea(s) de la intranet. Si ya estaban en MoreApp, revócalas allí."
-            % len(existentes)
+            % len(ids_ok)
         ),
-        ids=existentes,
+        ids=ids_ok,
     )
 
 

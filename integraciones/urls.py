@@ -26,7 +26,9 @@ from .moreapp_datos_views import (
 from .moreapp_registros_views import (
     registro_archivo_view,
     registro_detail_view,
+    registro_pdf_view,
     registros_form_view,
+    registros_txt_zip_view,
     ultimo_registro_view,
 )
 from .moreapp_tareas_views import (
@@ -171,9 +173,19 @@ urlpatterns = [
         name='moreapp_api_form_registros',
     ),
     path(
+        'moreapp/api/catalogo/forms/<str:form_id>/registros/txt.zip',
+        registros_txt_zip_view,
+        name='moreapp_api_form_registros_txt_zip',
+    ),
+    path(
         'moreapp/api/catalogo/forms/<str:form_id>/registros/<str:submission_id>/',
         registro_detail_view,
         name='moreapp_api_registro',
+    ),
+    path(
+        'moreapp/api/catalogo/forms/<str:form_id>/registros/<str:submission_id>/pdf/',
+        registro_pdf_view,
+        name='moreapp_api_registro_pdf',
     ),
     path(
         'moreapp/api/catalogo/forms/<str:form_id>/',

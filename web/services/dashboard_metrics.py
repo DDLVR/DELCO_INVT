@@ -52,7 +52,8 @@ def _ids_clientes_posibles_duplicados():
     except Exception:
         return []
 
-    return list(
+    conteo = {}
+    for cliente_id, visitas in (
         OrdenTrabajo.objects.filter(
             eliminado=False,
             fecha_creacion__date__gte=six_month_window_start(),
@@ -61,9 +62,40 @@ def _ids_clientes_posibles_duplicados():
         .exclude(cliente_id__isnull=True)
         .values('cliente_id')
         .annotate(visitas=Count('id'))
-        .filter(visitas__gt=2)
-        .values_list('cliente_id', flat=True)
-    )
+        .values_list('cliente_id', 'visitas')
+    ):
+        if cliente_id:
+            conteo[cliente_id] = conteo.get(cliente_id, 0) + int(visitas or 0)
+
+    try:
+        from ordenes_trabajo.models import IntegracionMoreApp
+
+        por_codigo = {}
+        for datos in (
+            IntegracionMoreApp.objects.filter(
+                eliminado=False,
+                fecha_recepcion__date__gte=six_month_window_start(),
+            )
+            .exclude(estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR'))
+            .values_list('datos_procesados', flat=True)
+        ):
+            if not isinstance(datos, dict):
+                continue
+            codigo = str(datos.get('cliente_codigo') or '').strip()
+            if codigo:
+                por_codigo[codigo] = por_codigo.get(codigo, 0) + 1
+        if por_codigo:
+            from clientes.models import Cliente
+
+            for cliente_id, numero in Cliente.objects.filter(
+                activo=True,
+                numero_cliente__in=list(por_codigo.keys()),
+            ).values_list('id', 'numero_cliente'):
+                conteo[cliente_id] = conteo.get(cliente_id, 0) + por_codigo.get(numero, 0)
+    except Exception:
+        pass
+
+    return [cliente_id for cliente_id, visitas in conteo.items() if visitas > 2]
 
 
 def _ids_clientes_ejecutado_no_actualizado():
@@ -95,6 +127,9 @@ def _ids_clientes_ejecutado_no_actualizado():
         .iterator(chunk_size=500)
     ):
         datos = reg.datos_procesados if isinstance(reg.datos_procesados, dict) else {}
+        estado = str(datos.get('estado') or '').casefold()
+        if 'ejecut' not in estado and estado not in {'ok', 'realizada', 'finalizada'}:
+            continue
         codigo = str(datos.get('cliente_codigo') or '').strip()
         if codigo:
             codigos_moreapp.add(codigo)

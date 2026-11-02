@@ -72,6 +72,93 @@ def register_audit_event(event: AuditEvent) -> None:
     )
 
 
+ACCIONES_ACTIVIDAD = {
+    'CREADA': 'Creada',
+    'MODIFICADA': 'Modificada',
+    'ELIMINADA': 'Eliminada',
+    'COMPLETADA': 'Completada',
+    'ERROR_ENVIO': 'Error de envío',
+}
+
+
+def upsert_activity_audit(
+    *,
+    actor_id,
+    entity: str,
+    entity_id: str,
+    accion: str,
+    snapshot: dict,
+    extra: dict | None = None,
+) -> None:
+    """Un registro por entidad: se actualiza con la actividad nueva, no se duplica la fila."""
+    from django.utils import timezone
+
+    from web.models import AuditLog
+
+    codigo = str(accion or 'MODIFICADA').upper()
+    action = ('TAREA_%s' % codigo)[:80]
+    etiqueta = ACCIONES_ACTIVIDAD.get(codigo, codigo.title())
+    evento = {
+        'cuando': timezone.now().isoformat(),
+        'accion': codigo,
+        'actor_id': actor_id,
+        'detalle': extra or {},
+        'datos': snapshot or {},
+    }
+    try:
+        log = (
+            AuditLog.objects.filter(entity=entity, entity_id=str(entity_id))
+            .order_by('id')
+            .first()
+        )
+        if log is None:
+            register_audit_event(
+                AuditEvent(
+                    actor_id=actor_id,
+                    action=action,
+                    entity=entity,
+                    entity_id=str(entity_id),
+                    field_name='actividad',
+                    old_value=None,
+                    new_value={'actual': snapshot, 'actividad': [evento]},
+                    reason=etiqueta,
+                )
+            )
+            return
+        previo = None
+        actividad = []
+        try:
+            parsed = json.loads(log.new_value or '{}')
+            if isinstance(parsed, dict):
+                previo = parsed.get('actual')
+                if isinstance(parsed.get('actividad'), list):
+                    actividad = list(parsed['actividad'])
+        except Exception:
+            previo = log.new_value
+        actividad.append(evento)
+        log.actor_id = actor_id
+        log.action = action
+        log.field_name = 'actividad'
+        log.old_value = json.dumps(previo, ensure_ascii=False, default=str) if previo is not None else None
+        log.new_value = json.dumps(
+            {'actual': snapshot, 'actividad': actividad},
+            ensure_ascii=False,
+            default=str,
+        )
+        log.reason = ' > '.join(
+            ACCIONES_ACTIVIDAD.get(str(item.get('accion') or ''), str(item.get('accion') or ''))
+            for item in actividad
+        )[:500]
+        log.save()
+    except Exception:
+        logger.exception(
+            'AUDIT_UPSERT_ERROR entity=%s entity_id=%s accion=%s',
+            entity,
+            entity_id,
+            accion,
+        )
+
+
 def audit_field_changes(
     *,
     actor_id: int | None,

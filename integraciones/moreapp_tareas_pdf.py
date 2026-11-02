@@ -239,6 +239,36 @@ def generar_pdf_tarea(tarea: MoreAppTareaEnviada) -> bytes:
             )
         )
         story.append(campos_table)
+    try:
+        from .moreapp_api import download_registration_file
+        from .moreapp_http import assert_safe_id
+        from .moreapp_registro_pdf import anexar_adjuntos_texto
+        from .moreapp_respuestas import respuestas_desde_registro
+
+        registro = getattr(tarea, "integracion", None)
+        respuestas = respuestas_desde_registro(registro) if registro is not None else []
+        sheet = getSampleStyleSheet()
+        pdf_styles = {
+            "label": label,
+            "body": body,
+            "mono": ParagraphStyle(
+                "TareaPdfMono",
+                parent=sheet["Code"],
+                fontName="Courier",
+                fontSize=7.5,
+                leading=9.5,
+            ),
+        }
+
+        def _fetch(file_id: str):
+            try:
+                return download_registration_file(assert_safe_id(file_id, "fileId"))
+            except Exception:
+                return None
+
+        anexar_adjuntos_texto(story, respuestas, pdf_styles, _fetch)
+    except Exception:
+        pass
     doc.build(story)
     return buffer.getvalue()
 

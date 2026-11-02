@@ -108,6 +108,7 @@ from web.services.dashboard_metrics import (
     count_clientes_sin_actualizacion_sci4,
     count_clientes_sin_actualizacion_stb,
 )
+from web.services.dashboard_moreapp_forms import build_dashboard_formularios_moreapp
 from web.services.audit import AuditEvent, audit_field_changes, register_audit_event
 
 logger = logging.getLogger(__name__)
@@ -371,7 +372,7 @@ def dashboard_view(request):
             context['moreapp_sin_ot'] = 0
             context['clientes_reincidentes'] = 0
 
-        from web.perf_cache import cache_get_or_set, TTL_CORTO
+        from web.perf_cache import cache_get_or_set, TTL_CORTO, TTL_MEDIO
 
         def _alarmas_panel():
             return build_panel_alarmas_analistas()
@@ -474,28 +475,30 @@ def dashboard_view(request):
                 eliminado=False,
                 fecha_recepcion__lt=umbral_7d,
             ).count()
-            context['moreapp_sinc_breakdown'] = list(
-                IntegracionMoreApp.objects.filter(eliminado=False)
-                .values('estado_sincronizacion')
-                .annotate(c=Count('id'))
-                .order_by('-c')
-            )
-            context['moreapp_formulario_breakdown'] = list(
-                IntegracionMoreApp.objects.filter(eliminado=False)
-                .values('nombre_formulario')
-                .annotate(c=Count('id'))
-                .order_by('-c')
-            )
-            context['moreapp_adv_breakdown'] = _calcular_adv_breakdown(IntegracionMoreApp)
             context['kpis_tareas_moreapp'] = build_kpis_tareas_moreapp()
         except Exception:
             context['moreapp_pendientes'] = 0
             context['moreapp_con_advertencia'] = 0
             context['moreapp_envejecidos'] = 0
-            context['moreapp_sinc_breakdown'] = []
-            context['moreapp_formulario_breakdown'] = []
-            context['moreapp_adv_breakdown'] = []
             context['kpis_tareas_moreapp'] = {}
+        try:
+            context['moreapp_form_charts'] = cache_get_or_set(
+                'dashboard:moreapp_form_charts_v3',
+                build_dashboard_formularios_moreapp,
+                TTL_MEDIO,
+            )
+        except Exception:
+            context['moreapp_form_charts'] = {
+                'por_formulario': [],
+                'telemetria_estado': [],
+                'telemetria_diagnostico': [],
+                'telemetria_muestra': 0,
+                'telemetria_total': 0,
+                'efectividad_pct': None,
+                'telemetria_conteo_completo': False,
+                'telemetria_diag_completo': False,
+                'error': '',
+            }
 
         return render(request, 'dashboards/admin_dashboard.html', context)
     elif rol == 'TECNICO':
@@ -564,58 +567,57 @@ def _contadores_pendientes_moreapp():
 
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
 def pendientes_operativos_view(request):
-    """
-    Punto 2: Cola formal de operaciones pendientes de revisión (MoreApp).
-    Incluye indicadores de envejecimiento (Punto 11).
-    """
-    from ordenes_trabajo.models import IntegracionMoreApp
-    from django.utils import timezone
-    from datetime import timedelta
+    """Tareas MoreApp que todavía no se completan, para visualizarlas."""
+    from django.core.paginator import Paginator
+
+    from integraciones.models import MoreAppTareaEnviada
+    from integraciones.moreapp_cuentas import anotar_destinatarios_visibles
+    from integraciones.moreapp_tareas_views import (
+        _colas_conteo_tareas,
+        _nombres_grupos_guardados,
+        _queryset_tareas_filtrado,
+    )
     from web.moreapp_avisos import marcar_aviso_moreapp_visto
 
     marcar_aviso_moreapp_visto(request)
 
-    estado = request.GET.get('estado', 'PENDIENTE')
-    if estado not in ('PENDIENTE', 'CON_ADVERTENCIA', 'REVISADO', 'DESCARTADO', 'CRITICA', 'TODOS'):
-        estado = 'PENDIENTE'
-
-    qs = (
-        IntegracionMoreApp.objects.filter(eliminado=False)
-        .select_related('procesado_por')
-        .order_by('-fecha_recepcion')
+    cola_filtro = (request.GET.get('cola') or '').strip().lower()
+    if cola_filtro == 'completadas':
+        cola_filtro = ''
+    buscar = (request.GET.get('buscar') or '').strip()
+    qs = _queryset_tareas_filtrado(request, solo_abiertas=True).order_by('-fecha_creacion', '-id')
+    colas = _colas_conteo_tareas()
+    colas['abiertas'] = (
+        int(colas.get('pendientes') or 0)
+        + int(colas.get('en_campo') or 0)
+        + int(colas.get('errores') or 0)
     )
-    if estado == 'CRITICA':
-        qs = qs.filter(
-            descripcion_alerta__icontains='ALERTA_CRITICA',
-            estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
-        )
-    elif estado != 'TODOS':
-        qs = qs.filter(estado_revision=estado)
-
-    ahora = timezone.now()
-    umbral_7d = ahora - timedelta(days=7)
-    contadores = _contadores_pendientes_moreapp()
-
-    registros = list(qs[:200])
-    for reg in registros:
-        bloqueos = _extraer_bloqueos_operativos_registro(reg)
-        reg.bloqueos_operativos = bloqueos
-        reg.bloqueo_operativo_preview = bloqueos[0]['motivo'] if bloqueos else ''
-        reg.es_alerta_critica = (
-            'ALERTA_CRITICA' in str(reg.descripcion_alerta or '').upper()
-            or any(b.get('es_critica') for b in bloqueos)
-        )
-        reg.alerta_preview = (reg.descripcion_alerta or '')[:160]
-        reg.numero_cliente_display = _numero_cliente_desde_moreapp(reg)
-
-    context = {
-        'registros': registros,
-        'estado_filtro': estado,
-        'contadores': contadores,
-        'ahora': ahora,
-        'umbral_7d': umbral_7d,
-    }
-    return render(request, 'operacional/pendientes.html', context)
+    try:
+        per_page = int(request.GET.get('per_page') or 50)
+    except (TypeError, ValueError):
+        per_page = 50
+    if per_page not in (25, 50, 100):
+        per_page = 50
+    page_obj = Paginator(qs, per_page).get_page(request.GET.get('page') or 1)
+    tareas = list(page_obj.object_list)
+    for tarea in tareas:
+        tarea.grupos_nombres = _nombres_grupos_guardados(tarea.grupos)
+    anotar_destinatarios_visibles(tareas)
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    return render(request, 'operacional/pendientes.html', {
+        'tareas': tareas,
+        'page_obj': page_obj,
+        'query_string': query_params.urlencode(),
+        'cola_filtro': cola_filtro,
+        'buscar': buscar,
+        'colas_conteo': colas,
+        'estados_abiertos': (
+            MoreAppTareaEnviada.ESTADO_PENDIENTE,
+            MoreAppTareaEnviada.ESTADO_ASIGNADA,
+            MoreAppTareaEnviada.ESTADO_ERROR,
+        ),
+    })
 
 
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
@@ -2312,13 +2314,19 @@ def inventario_importar_view(request):
 @login_required
 @admin_or_administrativo
 def registro_errores_view(request):
-    """Vista resumen del registro de errores de importaciones."""
+    """Errores de importaciones Excel y de envíos MoreApp (nueva, listado, Excel, clientes)."""
+    from django.urls import reverse
+
+    from integraciones.models import MoreAppTareaEnviada
+
     q = request.GET.get('q', '').strip()
+    seccion = (request.GET.get('seccion') or 'todas').strip().lower()
+    if seccion not in ('todas', 'importaciones', 'moreapp'):
+        seccion = 'todas'
 
     importaciones = ImportacionExcel.objects.filter(
         fallidas__gt=0
     ).order_by('-fecha_hora')
-
     if q:
         importaciones = importaciones.filter(
             Q(archivo_original__icontains=q)
@@ -2326,11 +2334,36 @@ def registro_errores_view(request):
             | Q(observaciones__icontains=q)
         )
 
+    tareas_error = MoreAppTareaEnviada.objects.filter(
+        estado=MoreAppTareaEnviada.ESTADO_ERROR,
+    ).select_related('creado_por').order_by('-fecha_creacion')
+    if q:
+        tareas_error = tareas_error.filter(
+            Q(form_name__icontains=q)
+            | Q(mensaje__icontains=q)
+            | Q(error__icontains=q)
+            | Q(cuenta__icontains=q)
+            | Q(titulo__icontains=q)
+            | Q(creado_por__nombre_interno__icontains=q)
+        )
+
+    mostrar_importaciones = seccion in ('todas', 'importaciones')
+    mostrar_moreapp = seccion in ('todas', 'moreapp')
+    tareas_error_list = list(tareas_error[:200]) if mostrar_moreapp else []
+
     context = {
-        'importaciones': importaciones,
+        'importaciones': importaciones if mostrar_importaciones else ImportacionExcel.objects.none(),
+        'tareas_error': tareas_error_list,
         'q': q,
+        'seccion': seccion,
         'total_importaciones': importaciones.count(),
         'total_filas_fallidas': sum(i.fallidas for i in importaciones),
+        'total_tareas_error': tareas_error.count(),
+        'url_todas': reverse('registro_errores') + (('?q=' + q) if q else ''),
+        'url_importaciones': reverse('registro_errores') + '?seccion=importaciones' + (('&q=' + q) if q else ''),
+        'url_moreapp': reverse('registro_errores') + '?seccion=moreapp' + (('&q=' + q) if q else ''),
+        'mostrar_importaciones': mostrar_importaciones,
+        'mostrar_moreapp': mostrar_moreapp,
     }
 
     return render(request, 'importaciones/registro_errores.html', context)
@@ -5914,7 +5947,30 @@ def _humanizar_mensaje_sync_moreapp(mensaje: str) -> list:
 
 @login_required
 def reportes_moreapp_list(request):
-    """Lista de registros MoreApp con paginación servidor (no materializa todo el JSON)."""
+    """Formularios que el admin dejó en registros, para revisar sus envíos MoreApp."""
+    _consumir_aviso_export_reportes(request)
+
+    if request.user.rol not in ROLES_REPORTES_LECTURA:
+        messages.error(request, 'No tienes permiso para acceder a Reportes.')
+        return redirect('dashboard')
+
+    from integraciones.moreapp_formularios_views import contexto_formularios_asignados
+
+    try:
+        from integraciones.moreapp_api_ingest import ingest_asignados_si_corresponde
+
+        ingest_asignados_si_corresponde(aplicar_operativo=False)
+    except Exception:
+        pass
+
+    context = contexto_formularios_asignados(request, todos=True)
+    context['origen'] = 'reportes'
+    return render(request, 'reportes/moreapp_registros_hub.html', context)
+
+
+@login_required
+def reportes_moreapp_informes_list(request):
+    """Lista de informes MoreApp sincronizados (carpeta/FTPS)."""
     from django.core.paginator import Paginator
     from ordenes_trabajo.models import IntegracionMoreApp
 
@@ -6434,6 +6490,16 @@ def _entity_ids_por_referencia_auditoria(referencia: str):
     except Exception:
         pass
 
+    try:
+        from integraciones.models import MoreAppTareaEnviada
+        qs = MoreAppTareaEnviada.objects.filter(cuenta=valor)
+        if valor.isdigit():
+            qs = MoreAppTareaEnviada.objects.filter(pk=int(valor)) | qs
+        for pk in qs.values_list('pk', flat=True)[:50]:
+            ids.add(str(pk))
+    except Exception:
+        pass
+
     return list(ids)
 
 
@@ -6478,6 +6544,45 @@ def _enriquecer_referencia_auditoria(registros):
             reg.referencia_label = f'Nº {cliente_map[eid]}'
         elif reg.entity == 'OrdenTrabajo':
             reg.referencia_label = f'OT #{eid}'
+        elif reg.entity == 'MoreAppTarea':
+            cuenta = ''
+            try:
+                import json
+
+                def _resumen_tarea(datos):
+                    if not isinstance(datos, dict):
+                        return None
+                    partes = []
+                    for clave, etiqueta in (
+                        ('titulo', 'título'),
+                        ('formulario', 'formulario'),
+                        ('estado', 'estado'),
+                        ('observaciones', 'obs.'),
+                    ):
+                        if datos.get(clave):
+                            partes.append('%s: %s' % (etiqueta, datos[clave]))
+                    dest = datos.get('destinatarios') or []
+                    if dest:
+                        partes.append('para: %s' % ', '.join(str(x) for x in dest[:4]))
+                    return ' · '.join(partes) if partes else None
+
+                parsed = json.loads(reg.new_value or '{}')
+                actual = parsed.get('actual') if isinstance(parsed, dict) else {}
+                if isinstance(actual, dict) and actual.get('cuenta'):
+                    cuenta = ' · Nº %s' % actual['cuenta']
+                resumen = _resumen_tarea(actual if isinstance(actual, dict) else {})
+                if resumen:
+                    reg.new_value = resumen
+                try:
+                    previo = json.loads(reg.old_value or '')
+                    resumen_prev = _resumen_tarea(previo)
+                    if resumen_prev:
+                        reg.old_value = resumen_prev
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            reg.referencia_label = ('Tarea #%s%s' % (eid, cuenta)) if eid else '—'
         else:
             reg.referencia_label = f'#{eid}' if eid else '—'
     return registros
@@ -6497,7 +6602,7 @@ def auditoria_list_view(request):
         or request.GET.get('entity_id', '').strip()
     )
 
-    qs = AuditLog.objects.select_related('actor').order_by('-created_at')
+    qs = AuditLog.objects.select_related('actor').order_by('-updated_at', '-created_at')
     if entity:
         qs = qs.filter(entity__iexact=entity) if entity in ENTIDAD_LABELS else qs.filter(entity__icontains=entity)
     if action:

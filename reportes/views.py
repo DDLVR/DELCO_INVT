@@ -85,7 +85,8 @@ def _opciones_filtro_reportes():
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR'])
 def reportes_hub_view(request):
     """Hub de reportes con filtros y conteos por informe."""
-    aviso_export = request.session.pop('reportes_aviso_export', None)
+    session = getattr(request, 'session', None)
+    aviso_export = session.pop('reportes_aviso_export', None) if session is not None else None
     if aviso_export:
         messages.warning(request, aviso_export)
 
@@ -102,11 +103,22 @@ def reportes_hub_view(request):
     })
 
     from reportes.operational_scope import hay_actividad_operativa, clientes_operativos_qs
+    from ordenes_trabajo.models import IntegracionMoreApp
+
+    try:
+        from integraciones.moreapp_api_ingest import ingest_asignados_si_corresponde
+
+        ingest_asignados_si_corresponde(aplicar_operativo=False)
+    except Exception:
+        pass
 
     tiene_actividad = hay_actividad_operativa()
-    # Catálogo solo si hay OT o clientes operativos linkeados (MoreApp huérfano no basta)
     hay_datos_exportables = (
-        OrdenTrabajo.objects.filter(eliminado=False).exists() or clientes_operativos_qs().exists()
+        OrdenTrabajo.objects.filter(eliminado=False).exists()
+        or clientes_operativos_qs().exists()
+        or IntegracionMoreApp.objects.filter(eliminado=False).exclude(
+            estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR'),
+        ).exists()
     )
 
     filtros_parseados = parse_report_filters(filters_raw) if hay_datos_exportables else {}

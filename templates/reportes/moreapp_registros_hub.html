@@ -1,0 +1,120 @@
+{% extends 'base.html' %}
+
+{% block title %}Reportes MoreApp{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Reportes</p>
+        <h1 class="h3 mb-1">Reportes MoreApp</h1>
+        <p class="text-muted mb-0">Revisa los registros de los formularios que el administrador dejó en esta sección.</p>
+      </div>
+      {% if user.rol == 'ADMIN' %}
+      <div class="delco-action-bar">
+        <a href="{% url 'moreapp_api_catalogo' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-grid"></i></span>
+          Elegir formularios
+        </a>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-warning">{{ error }}</div>
+  {% endif %}
+
+  <div class="delco-catalogo-filters mb-3">
+    <form method="get">
+      <div class="delco-catalogo-search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <input type="search" class="form-control" id="query" name="query" value="{{ query }}" placeholder="Busca por nombre del formulario…" autocomplete="off">
+      </div>
+      {% if tiene_filtros %}
+      <div class="mt-2">
+        <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-link btn-sm px-0">Limpiar filtros</a>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if not formularios %}
+  <div class="delco-catalogo-empty">
+    <i class="bi bi-inboxes"></i>
+    {% if user.rol == 'ADMIN' %}
+    Aún no hay formularios en registros. Asigna uno desde el catálogo MoreApp para poder revisar aquí sus envíos.
+    {% else %}
+    No hay formularios asignados para revisar. Pide a un administrador que deje los formularios en registros.
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="row g-3">
+    {% for form in formularios %}
+    <div class="col-md-6 col-xl-4">
+      <article class="delco-catalogo-card h-100">
+        <div class="delco-catalogo-card-accent"></div>
+        <div class="delco-catalogo-card-body">
+          <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+            <div class="d-flex align-items-start gap-2 min-w-0">
+              <span class="delco-catalogo-form-icon" aria-hidden="true"><i class="bi bi-clipboard-data"></i></span>
+              <div class="min-w-0">
+                <h2 class="h6 mb-1 text-break">{{ form.name }}</h2>
+                <span class="badge rounded-pill text-bg-{{ form.status_badge }}">{{ form.status|default:"—" }}</span>
+              </div>
+            </div>
+          </div>
+          {% if form.description %}
+          <p class="small text-muted mb-2">{{ form.description|truncatechars:140 }}</p>
+          {% endif %}
+          <div class="delco-catalogo-meta mb-3">
+            <div><i class="bi bi-clock-history me-1"></i>Último registro: <span class="js-ultimo-registro" data-url="{% url 'moreapp_api_form_ultimo_registro' form.id %}">…</span></div>
+            {% if es_admin %}
+            <div>
+              <i class="bi bi-people me-1"></i>
+              {{ form.asignados_count|default:0 }} usuario{{ form.asignados_count|default:0|pluralize }}
+              {% if form.asignados %}
+              · {{ form.asignados|join:", " }}
+              {% endif %}
+            </div>
+            {% endif %}
+          </div>
+          <div class="mt-auto d-flex flex-wrap gap-2">
+            <a class="btn btn-sm btn-primary" href="{% url 'moreapp_api_form_registros' form.id %}?origen=reportes">
+              Revisar registros
+            </a>
+          </div>
+        </div>
+      </article>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var nodes = document.querySelectorAll('.js-ultimo-registro');
+  var index = 0;
+  function nextBatch() {
+    var batch = Array.prototype.slice.call(nodes, index, index + 4);
+    index += 4;
+    if (!batch.length) return;
+    Promise.all(batch.map(function (el) {
+      return fetch(el.getAttribute('data-url'), { credentials: 'same-origin' })
+        .then(function (resp) { return resp.json(); })
+        .then(function (data) {
+          el.textContent = (data && data.date) ? data.date : 'sin registros';
+        })
+        .catch(function () {
+          el.textContent = '—';
+        });
+    })).then(nextBatch);
+  }
+  nextBatch();
+})();
+</script>
+{% endblock %}

@@ -20,16 +20,18 @@ class AuditLog(models.Model):
 	new_value = models.TextField(null=True, blank=True)
 	reason = models.TextField(null=True, blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
 
 	class Meta:
 		verbose_name = 'Auditoría'
 		verbose_name_plural = 'Auditoría'
-		ordering = ['-created_at']
+		ordering = ['-updated_at', '-created_at']
 		indexes = [
 			models.Index(fields=['action']),
 			models.Index(fields=['entity']),
 			models.Index(fields=['entity_id']),
 			models.Index(fields=['created_at']),
+			models.Index(fields=['updated_at']),
 		]
 
 	def __str__(self):

@@ -8,7 +8,7 @@
     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
       <div>
         <div class="delco-action-bar mb-2">
-          <a href="{% url 'moreapp_formularios_list' %}" class="delco-action-btn is-help">
+          <a href="{% if origen == 'reportes' %}{% url 'reportes_moreapp_list' %}{% else %}{% url 'moreapp_formularios_list' %}{% endif %}" class="delco-action-btn is-help">
             <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
             Volver
           </a>
@@ -19,7 +19,7 @@
         </div>
         <p class="delco-catalogo-kicker mb-1">Registros MoreApp</p>
         <h1 class="h3 mb-1">{{ formulario.name|default:"Formulario" }}</h1>
-        <p class="text-muted mb-0">Registros de terreno. Filtra por fecha, técnico o n° de cliente.</p>
+        <p class="text-muted mb-0">Registros de terreno. Filtra por fecha, técnico o n° de cliente.{% if es_lectura %} En Lectura, marca los EJECUTADO que quieras y descarga sus TXT. Desplaza el listado para ver registros anteriores.{% endif %}</p>
       </div>
       <span class="badge rounded-pill bg-{{ formulario.status_badge|default:'secondary' }} delco-registros-status">{{ formulario.status|default:"—" }}</span>
     </div>
@@ -30,6 +30,7 @@
   {% endif %}
 
   <form method="get" class="delco-registros-filters mb-3">
+    {% if origen %}<input type="hidden" name="origen" value="{{ origen }}">{% endif %}
     <div class="row g-2 align-items-end">
       <div class="col-6 col-md-2">
         <label class="form-label small text-muted mb-1" for="fecha_desde">Desde</label>
@@ -60,7 +61,7 @@
       </div>
       {% if tiene_filtros %}
       <div class="col-12">
-        <a href="{% url 'moreapp_api_form_registros' form_id %}" class="btn btn-link btn-sm px-0">Limpiar filtros</a>
+        <a href="{% url 'moreapp_api_form_registros' form_id %}{% if origen %}?origen={{ origen }}{% endif %}" class="btn btn-link btn-sm px-0">Limpiar filtros</a>
       </div>
       {% endif %}
     </div>
@@ -68,61 +69,60 @@
 
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
     <div class="delco-registros-count">
-      <strong>{{ registros|length }}</strong>
-      registro{{ registros|length|pluralize:"s" }}
-      <span class="text-muted">· página {{ page_display|default:1 }}</span>
+      <strong id="js-registros-visibles">{{ registros|length }}</strong>
+      registro{{ registros|length|pluralize:"s" }} en vista
+      {% if es_lectura %}
+      <span class="text-muted">· <span id="js-registros-seleccionados">0</span> seleccionado<span id="js-registros-seleccionados-s">s</span></span>
+      {% endif %}
     </div>
-    <a class="btn btn-sm btn-outline-success" href="?{% if filtros_qs %}{{ filtros_qs }}&{% endif %}export=xlsx">
-      <i class="bi bi-file-earmark-excel"></i> Exportar Excel
-    </a>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      {% if es_lectura %}
+      <label class="delco-registros-selectall mb-0">
+        <input type="checkbox" id="js-select-visibles" form="js-form-txt-zip">
+        Visibles EJECUTADO
+      </label>
+      <button type="submit" class="btn btn-sm btn-primary" id="js-btn-zip-sel" form="js-form-txt-zip" disabled>
+        <i class="bi bi-file-earmark-zip"></i> Descargar seleccionados
+      </button>
+      {% if fecha_desde and fecha_hasta %}
+      <a class="btn btn-sm btn-outline-primary" href="{% url 'moreapp_api_form_registros_txt_zip' form_id %}{% if filtros_qs %}?{{ filtros_qs }}{% endif %}">
+        Todo el rango
+      </a>
+      {% endif %}
+      {% endif %}
+      <a class="btn btn-sm btn-outline-success" href="?export=xlsx{% if filtros_qs %}&amp;{{ filtros_qs }}{% endif %}">
+        <i class="bi bi-file-earmark-excel"></i> Exportar Excel
+      </a>
+    </div>
   </div>
 
+  {% if es_lectura %}
+  <form method="post" action="{% url 'moreapp_api_form_registros_txt_zip' form_id %}" id="js-form-txt-zip" class="mb-0">
+    {% csrf_token %}
+    {% if origen %}<input type="hidden" name="origen" value="{{ origen }}">{% endif %}
+    <input type="hidden" name="fecha_desde" value="{{ fecha_desde }}">
+    <input type="hidden" name="fecha_hasta" value="{{ fecha_hasta }}">
+  {% endif %}
+
   {% if registros %}
-  <div class="delco-registros-list">
-    {% for registro in registros %}
-    <article class="delco-registro-card">
-      <div class="delco-registro-card-accent"></div>
-      <div class="delco-registro-card-body">
-        <div class="delco-registro-card-main">
-          <div class="delco-registro-when" aria-hidden="true">
-            <span class="delco-registro-when-day">{{ registro.created|default:"—" }}</span>
-          </div>
-          <div class="delco-registro-avatar" aria-hidden="true">
-            {{ registro.tecnico|default:"?"|make_list|first|upper }}
-          </div>
-          <div class="min-w-0 flex-grow-1">
-            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
-              <h2 class="h6 mb-0 text-truncate">{{ registro.tecnico|default:"Técnico no informado" }}</h2>
-              {% if registro.status %}
-              <span class="badge rounded-pill text-bg-light border">{{ registro.status }}</span>
-              {% endif %}
-            </div>
-            <div class="small text-muted d-flex flex-wrap gap-3">
-              <span class="delco-registro-when-inline"><i class="bi bi-calendar3 me-1"></i>{{ registro.created|default:"—" }}</span>
-              <span><i class="bi bi-person-vcard me-1"></i>N° cliente {{ registro.cliente|default:"—" }}</span>
-            </div>
-            {% if registro.preview %}
-            <div class="delco-registro-preview mt-2">
-              {% for dato in registro.preview %}
-                {% if dato.text %}
-                <span class="delco-registro-chip{% if 'INCIDENCIA' in dato.text %} delco-chip-warn{% elif 'EJECUTADO' in dato.text or 'CERRADO' in dato.text %} delco-chip-ok{% endif %}">
-                  <span class="text-muted">{{ dato.label }}</span>
-                  {{ dato.text|truncatechars:42 }}
-                </span>
-                {% endif %}
-              {% endfor %}
-            </div>
-            {% endif %}
-          </div>
-        </div>
-        {% if registro.id %}
-        <a class="btn btn-primary delco-registro-card-cta" href="{% url 'moreapp_api_registro' form_id registro.id %}{% if filtros_detalle %}?{{ filtros_detalle }}{% endif %}">
-          Ver contenido <i class="bi bi-arrow-right ms-1"></i>
-        </a>
-        {% endif %}
-      </div>
-    </article>
-    {% endfor %}
+  <div class="delco-registros-scroll" id="js-registros-scroll"
+       data-path="{% url 'moreapp_api_form_registros' form_id %}"
+       data-query="{{ filtros_qs|escape }}"
+       data-detalle="{{ filtros_detalle|escape }}"
+       data-next-page="{{ page|add:1 }}"
+       data-has-next="{% if has_next %}1{% else %}0{% endif %}"
+       data-es-lectura="{% if es_lectura %}1{% else %}0{% endif %}"
+       data-form-id="{{ form_id }}">
+    <div class="delco-registros-list" id="js-registros-list">
+      {% for registro in registros %}
+        {% include "integraciones/_moreapp_registro_card.html" %}
+      {% endfor %}
+    </div>
+    <div class="delco-registros-sentinel" id="js-registros-sentinel" hidden>
+      <span class="js-sentinel-idle">Desplaza para ver registros anteriores</span>
+      <span class="js-sentinel-load" hidden>Cargando registros anteriores…</span>
+      <span class="js-sentinel-end" hidden>No hay más registros en este filtro</span>
+    </div>
   </div>
   {% else %}
   <div class="delco-registros-empty">
@@ -132,17 +132,183 @@
   </div>
   {% endif %}
 
-  {% if has_prev or has_next %}
-  <div class="d-flex justify-content-between mt-3">
-    {% if has_prev %}
-    <a class="btn btn-outline-secondary" href="?{{ filtros_prev }}"><i class="bi bi-chevron-left"></i> Anterior</a>
-    {% else %}
-    <span></span>
-    {% endif %}
-    {% if has_next %}
-    <a class="btn btn-outline-secondary" href="?{{ filtros_next }}">Siguiente <i class="bi bi-chevron-right"></i></a>
-    {% endif %}
-  </div>
+  {% if es_lectura %}
+  </form>
   {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var box = document.getElementById('js-registros-scroll');
+  var list = document.getElementById('js-registros-list');
+  var sentinel = document.getElementById('js-registros-sentinel');
+  var form = document.getElementById('js-form-txt-zip');
+  var selectAll = document.getElementById('js-select-visibles');
+  var btnZip = document.getElementById('js-btn-zip-sel');
+  var countEl = document.getElementById('js-registros-seleccionados');
+  var countS = document.getElementById('js-registros-seleccionados-s');
+  var visiblesEl = document.getElementById('js-registros-visibles');
+  if (!box || !list) return;
+
+  var nextPage = parseInt(box.getAttribute('data-next-page') || '1', 10) || 1;
+  var hasNext = box.getAttribute('data-has-next') === '1';
+  var esLectura = box.getAttribute('data-es-lectura') === '1';
+  var path = box.getAttribute('data-path') || '';
+  var formId = box.getAttribute('data-form-id') || '';
+  var detalleQs = box.getAttribute('data-detalle') || '';
+  var loading = false;
+  var keepSelectAll = false;
+  var maxPages = 20;
+  var loadedExtra = 0;
+
+  function esc(value) {
+    return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function chipClass(text) {
+    var raw = String(text || '');
+    if (raw.indexOf('INCIDENCIA') >= 0) return ' delco-chip-warn';
+    if (raw.indexOf('EJECUTADO') >= 0 || raw.indexOf('CERRADO') >= 0) return ' delco-chip-ok';
+    return '';
+  }
+
+  function pintarCard(registro) {
+    var efectivo = !!registro.efectivo;
+    var inicial = String(registro.inicial || (registro.tecnico || '?')).charAt(0).toUpperCase();
+    var detalle = detalleQs ? ('?' + detalleQs) : '';
+    var html = '<article class="delco-registro-card' + (esLectura && efectivo ? ' is-selectable' : '') + (esLectura && !efectivo ? ' is-muted' : '') + '" data-registro-id="' + esc(registro.id) + '">';
+    html += '<div class="delco-registro-card-accent"></div><div class="delco-registro-card-body"><div class="delco-registro-card-main">';
+    if (esLectura) {
+      html += '<label class="delco-registro-check"><input type="checkbox" name="registro_id" value="' + esc(registro.id) + '"' + (efectivo && registro.id ? '' : ' disabled') + '>';
+      html += '<span class="visually-hidden">Seleccionar</span></label>';
+    }
+    html += '<div class="delco-registro-when" aria-hidden="true"><span class="delco-registro-when-day">' + esc(registro.created || '—') + '</span></div>';
+    html += '<div class="delco-registro-avatar" aria-hidden="true">' + esc(inicial) + '</div>';
+    html += '<div class="min-w-0 flex-grow-1"><div class="d-flex flex-wrap align-items-center gap-2 mb-1">';
+    html += '<h2 class="h6 mb-0 text-truncate">' + esc(registro.tecnico || 'Técnico no informado') + '</h2>';
+    if (registro.status) html += '<span class="badge rounded-pill text-bg-light border">' + esc(registro.status) + '</span>';
+    html += '</div><div class="small text-muted d-flex flex-wrap gap-3">';
+    html += '<span class="delco-registro-when-inline"><i class="bi bi-calendar3 me-1"></i>' + esc(registro.created || '—') + '</span>';
+    html += '<span><i class="bi bi-person-vcard me-1"></i>N° cliente ' + esc(registro.cliente || '—') + '</span></div>';
+    if (registro.preview && registro.preview.length) {
+      html += '<div class="delco-registro-preview mt-2">';
+      registro.preview.forEach(function (dato) {
+        if (!dato || !dato.text) return;
+        html += '<span class="delco-registro-chip' + chipClass(dato.text) + '"><span class="text-muted">' + esc(dato.label) + '</span> ' + esc(String(dato.text).slice(0, 42)) + '</span>';
+      });
+      html += '</div>';
+    }
+    html += '</div></div>';
+    if (registro.id) {
+      html += '<a class="btn btn-primary delco-registro-card-cta" href="' + path + encodeURIComponent(registro.id) + '/' + detalle + '">Ver contenido <i class="bi bi-arrow-right ms-1"></i></a>';
+    }
+    html += '</div></article>';
+    return html;
+  }
+
+  function visibles() {
+    return list.querySelectorAll('article.delco-registro-card').length;
+  }
+
+  function syncSeleccion() {
+    var checks = form ? form.querySelectorAll('input[name="registro_id"]:checked') : [];
+    var n = checks.length;
+    if (countEl) countEl.textContent = String(n);
+    if (countS) countS.textContent = n === 1 ? '' : 's';
+    if (btnZip) btnZip.disabled = n < 1;
+    list.querySelectorAll('article.delco-registro-card').forEach(function (card) {
+      var input = card.querySelector('input[name="registro_id"]');
+      card.classList.toggle('is-selected', !!(input && input.checked));
+    });
+    if (selectAll) {
+      var enabled = list.querySelectorAll('input[name="registro_id"]:not(:disabled)');
+      var checked = list.querySelectorAll('input[name="registro_id"]:not(:disabled):checked');
+      selectAll.checked = enabled.length > 0 && checked.length === enabled.length;
+      keepSelectAll = selectAll.checked;
+    }
+    if (visiblesEl) visiblesEl.textContent = String(visibles());
+  }
+
+  function setSentinel(mode) {
+    if (!sentinel) return;
+    sentinel.hidden = false;
+    sentinel.querySelectorAll('span').forEach(function (el) { el.hidden = true; });
+    var target = sentinel.querySelector('.js-sentinel-' + mode);
+    if (target) target.hidden = false;
+  }
+
+  function loadMore() {
+    if (!hasNext || loading || loadedExtra >= maxPages) {
+      setSentinel(hasNext ? 'idle' : 'end');
+      return;
+    }
+    loading = true;
+    setSentinel('load');
+    var params = new URLSearchParams(window.location.search || '');
+    params.delete('export');
+    params.delete('ajax');
+    params.set('ajax', '1');
+    params.set('page', String(nextPage));
+    fetch(path + '?' + params.toString(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (resp) { return resp.json(); })
+      .then(function (data) {
+        var rows = (data && data.registros) || [];
+        rows.forEach(function (row) {
+          list.insertAdjacentHTML('beforeend', pintarCard(row));
+        });
+        hasNext = !!(data && data.has_next);
+        nextPage += 1;
+        loadedExtra += 1;
+        if (keepSelectAll && esLectura) {
+          list.querySelectorAll('input[name="registro_id"]:not(:disabled)').forEach(function (el) { el.checked = true; });
+        }
+        syncSeleccion();
+        if (!hasNext || loadedExtra >= maxPages) setSentinel('end');
+        else setSentinel('idle');
+      })
+      .catch(function () { setSentinel('idle'); })
+      .then(function () { loading = false; });
+  }
+
+  if (sentinel && hasNext) {
+    setSentinel('idle');
+    if ('IntersectionObserver' in window) {
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) loadMore();
+        });
+      }, { root: box, rootMargin: '80px', threshold: 0.01 });
+      observer.observe(sentinel);
+    }
+  } else if (sentinel) {
+    setSentinel('end');
+  }
+
+  if (form) {
+    form.addEventListener('change', function (ev) {
+      if (ev.target && ev.target.name === 'registro_id') keepSelectAll = false;
+      syncSeleccion();
+    });
+    form.addEventListener('submit', function (ev) {
+      var n = form.querySelectorAll('input[name="registro_id"]:checked').length;
+      if (n < 1) {
+        ev.preventDefault();
+        if (typeof window.showToast === 'function') window.showToast('Selecciona al menos un registro EJECUTADO.', 'warning');
+      }
+    });
+  }
+  if (selectAll) {
+    selectAll.addEventListener('change', function () {
+      keepSelectAll = selectAll.checked;
+      list.querySelectorAll('input[name="registro_id"]:not(:disabled)').forEach(function (el) {
+        el.checked = selectAll.checked;
+      });
+      syncSeleccion();
+    });
+  }
+  syncSeleccion();
+})();
+</script>
 {% endblock %}

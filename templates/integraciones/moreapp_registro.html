@@ -13,6 +13,12 @@
       <span class="delco-action-btn-icon"><i class="bi bi-diagram-3"></i></span>
       Estructura
     </a>
+    {% if registro.id %}
+    <a href="{% url 'moreapp_api_registro_pdf' form_id registro.id %}" class="delco-action-btn is-danger" target="_blank" rel="noopener">
+      <span class="delco-action-btn-icon"><i class="bi bi-file-earmark-pdf"></i></span>
+      Informe PDF
+    </a>
+    {% endif %}
   </div>
 
   <div class="delco-registro-detail-hero mb-3">
@@ -74,7 +80,7 @@
         <span class="delco-catalogo-stat-icon is-ok"><i class="bi bi-list-check"></i></span>
         <div>
           <div class="text-muted small">Campos con valor</div>
-          <div class="fw-semibold">{{ campos_con_valor|length }}{% if fotos_count %} <span class="text-muted fw-normal">· {{ fotos_count }} foto{{ fotos_count|pluralize }}</span>{% endif %}</div>
+          <div class="fw-semibold">{{ campos_con_valor|length }}{% if fotos_count %} <span class="text-muted fw-normal">· {{ fotos_count }} foto{{ fotos_count|pluralize }}</span>{% endif %}{% if adjuntos %} <span class="text-muted fw-normal">· {{ adjuntos|length }} archivo{{ adjuntos|length|pluralize }}</span>{% endif %}</div>
         </div>
       </div>
     </div>
@@ -91,12 +97,40 @@
             <img src="{% url 'moreapp_api_registro_archivo' archivo.id %}" alt="{{ campo.label }}">
             <span>{{ campo.label }}</span>
           </a>
-          {% elif archivo.id %}
-          <a class="delco-campo-file" href="{% url 'moreapp_api_registro_archivo' archivo.id %}">
-            <i class="bi bi-paperclip"></i> {{ campo.label }}
-          </a>
           {% endif %}
         {% endfor %}
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if adjuntos %}
+  <section class="mb-4">
+    <h2 class="h6 text-uppercase text-muted mb-3">Archivos de texto y descargas</h2>
+    <div class="delco-campo-adjuntos">
+      {% for archivo in adjuntos %}
+      <div class="delco-campo-adjunto">
+        <div class="delco-campo-adjunto-head">
+          <i class="bi {% if archivo.is_text %}bi-filetype-txt{% elif archivo.kind == 'pdf' %}bi-file-earmark-pdf{% else %}bi-paperclip{% endif %}"></i>
+          <div>
+            <div class="fw-semibold">{{ archivo.label|default:"Archivo" }}</div>
+            <div class="text-muted small">{{ archivo.name|default:archivo.id }}</div>
+          </div>
+        </div>
+        <div class="delco-campo-adjunto-actions">
+          {% if archivo.url %}
+          <a class="btn btn-sm btn-outline-primary" href="{{ archivo.url }}" target="_blank" rel="noopener">Ver</a>
+          {% endif %}
+          {% if archivo.download_url %}
+          <a class="btn btn-sm btn-primary" href="{{ archivo.download_url }}">Descargar</a>
+          {% endif %}
+        </div>
+        {% if archivo.preview %}
+        <pre class="delco-campo-txt">{{ archivo.preview }}</pre>
+        {% elif archivo.is_text and archivo.url %}
+        <iframe class="delco-campo-txt" src="{{ archivo.url }}" title="{{ archivo.name|default:archivo.label }}"></iframe>
+        {% endif %}
+      </div>
       {% endfor %}
     </div>
   </section>

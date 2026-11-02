@@ -191,3 +191,44 @@ class MoreAppMovimientoTrayectoTests(TestCase):
 		self.assertEqual(mov_viejo.movimiento.tipo, 'RETIRO')
 		self.assertEqual(mov_viejo.movimiento.origen.nombre, 'Instalado en cliente')
 		self.assertEqual(mov_viejo.movimiento.destino.nombre, 'Bodega Principal')
+
+
+class MoreAppApiIngestTests(TestCase):
+	def test_extractor_telemetria_sin_v3_en_el_nombre(self):
+		from integraciones.reader import _extraer_datos_normalizados, _resolver_formulario
+
+		self.assertEqual(_resolver_formulario('Mantenimiento Telemetría'), 'MANTENIMIENTO_TELEMETRIA_V3')
+		datos = _extraer_datos_normalizados({
+			'id': 'sub-tel-1',
+			'info': {'formName': 'Mantenimiento Telemetría', 'date': '2026-11-02T12:00:00.000Z'},
+			'meta': {},
+			'data': {
+				'cliente': '12345',
+				'estado': 'EJECUTADO',
+				'diagnostico': {'name': 'MEDIDOR'},
+				'tipoDeIncidencia': 'CAMBIO',
+				'tecnicoResponsable': {'nombres': 'Juan Perez'},
+			},
+		})
+		self.assertEqual(datos['cliente_codigo'], '12345')
+		self.assertEqual(datos['estado'], 'EJECUTADO')
+		self.assertEqual(datos['diagnostico'], 'MEDIDOR')
+		self.assertEqual(datos['tecnico_responsable'], 'Juan Perez')
+
+	def test_ingest_idempotente_y_sin_operativo(self):
+		from integraciones.moreapp_api_ingest import ingest_submission_items
+
+		item = {
+			'id': 'api-sub-1',
+			'info': {'formName': 'Mantenimiento Telemetría'},
+			'data': {'cliente': '999', 'estado': 'INCIDENCIA', 'diagnostico': 'SIM'},
+		}
+		primero = ingest_submission_items([item], form_name='Mantenimiento Telemetría', aplicar_operativo=False)
+		segundo = ingest_submission_items([item], form_name='Mantenimiento Telemetría', aplicar_operativo=False)
+		self.assertEqual(primero['nuevos'], 1)
+		self.assertEqual(segundo['nuevos'], 0)
+		registro = IntegracionMoreApp.objects.get(moreapp_submission_id='api-sub-1')
+		self.assertEqual(registro.estado_sincronizacion, 'PROCESADO')
+		self.assertEqual(registro.datos_procesados.get('estado'), 'INCIDENCIA')
+		self.assertEqual(registro.datos_procesados.get('diagnostico'), 'SIM')
+		self.assertFalse(registro.actualizo_cliente)

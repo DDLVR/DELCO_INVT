@@ -1,293 +1,168 @@
 {% extends 'base.html' %}
-{% load static %}
-{% load custom_filters %}
 
-{% block title %}Cola de Pendientes Operativos{% endblock %}
+{% block title %}Pendientes MoreApp{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4 delco-catalogo">
-
-    <div class="delco-catalogo-hero mb-3">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-            <div>
-                <p class="delco-catalogo-kicker mb-1">MoreApp</p>
-                <h1 class="h3 mb-1">Pendientes operativos</h1>
-                <p class="text-muted mb-0">Cola de revisión: pendientes, advertencias y acciones rápidas.</p>
-            </div>
-            <div class="delco-action-bar">
-                <a href="{% url 'dashboard' %}" class="delco-action-btn is-help">
-                    <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
-                    Dashboard
-                </a>
-                <a href="{% url 'reportes_moreapp_list' %}" class="delco-action-btn is-export">
-                    <span class="delco-action-btn-icon"><i class="bi bi-cloud-download"></i></span>
-                    Registros
-                </a>
-            </div>
-        </div>
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">MoreApp</p>
+        <h1 class="h3 mb-1">Pendientes MoreApp</h1>
+        <p class="text-muted mb-0">Tareas que todavía no se completan. Aquí solo se visualizan; para crear o editar usa Tareas MoreApp.</p>
+      </div>
+      <div class="delco-action-bar">
+        <a href="{% url 'moreapp_tareas_list' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-send-check"></i></span>
+          Tareas MoreApp
+        </a>
+      </div>
     </div>
+  </div>
 
-    {# Filtros rápidos con contadores #}
-    <div class="card shadow-sm mb-4 delco-panel-card">
-        <div class="card-body py-3">
-            <label class="form-label mb-2 small fw-semibold">Estado de revisión</label>
-            <div class="d-flex flex-wrap gap-2 align-items-center">
-                <a href="?estado=PENDIENTE"
-                   class="btn btn-sm {% if estado_filtro == 'PENDIENTE' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-                    <i class="bi bi-clock"></i> Revisión pendiente
-                    <span class="badge delco-badge-muted ms-1" id="contador-PENDIENTE">{{ contadores.PENDIENTE }}</span>
-                </a>
-                <a href="?estado=CRITICA"
-                   class="btn btn-sm {% if estado_filtro == 'CRITICA' %}btn-danger{% else %}btn-outline-danger{% endif %}">
-                    <i class="bi bi-exclamation-octagon"></i> Críticas
-                    <span class="badge delco-badge-muted ms-1" id="contador-CRITICA">{{ contadores.CRITICA }}</span>
-                </a>
-                <a href="?estado=CON_ADVERTENCIA"
-                   class="btn btn-sm {% if estado_filtro == 'CON_ADVERTENCIA' %}btn-warning{% else %}btn-outline-warning{% endif %}">
-                    <i class="bi bi-exclamation-triangle"></i> Con advertencia
-                    <span class="badge delco-badge-muted ms-1" id="contador-CON_ADVERTENCIA">{{ contadores.CON_ADVERTENCIA }}</span>
-                </a>
-                <a href="?estado=REVISADO"
-                   class="btn btn-sm {% if estado_filtro == 'REVISADO' %}btn-success{% else %}btn-outline-success{% endif %}">
-                    <i class="bi bi-check-circle"></i> Revisados
-                    <span class="badge delco-badge-muted ms-1" id="contador-REVISADO">{{ contadores.REVISADO }}</span>
-                </a>
-                <a href="?estado=DESCARTADO"
-                   class="btn btn-sm {% if estado_filtro == 'DESCARTADO' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-                    <i class="bi bi-x-circle"></i> Descartados
-                    <span class="badge delco-badge-muted ms-1" id="contador-DESCARTADO">{{ contadores.DESCARTADO }}</span>
-                </a>
-                <a href="?estado=TODOS"
-                   class="btn btn-sm {% if estado_filtro == 'TODOS' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
-                    <i class="bi bi-grid"></i> Todos
-                </a>
-                <span class="badge bg-danger ms-md-2 {% if not contadores.envejecidos %}d-none{% endif %}" id="badge-envejecidos">
-                    <i class="bi bi-hourglass-split"></i> <span id="contador-envejecidos">{{ contadores.envejecidos }}</span> sin revisar &gt;7 días
-                </span>
-            </div>
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-list-check"></i></span>
+        <div>
+          <div class="text-muted small">Sin completar</div>
+          <div class="fs-4 fw-semibold">{{ colas_conteo.abiertas|default:0 }}</div>
         </div>
+      </div>
     </div>
-
-    {# Tabla de registros #}
-    <div class="card shadow-sm delco-panel-card">
-        <div class="card-header delco-card-header-muted py-2 d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-table me-1"></i> Registros en cola</span>
-            <span class="small text-muted"><span id="contador-vista">{{ registros|length }}</span> en esta vista</span>
+    <div class="col-6 col-md-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-info"><i class="bi bi-person-check"></i></span>
+        <div>
+          <div class="text-muted small">En campo</div>
+          <div class="fs-4 fw-semibold">{{ colas_conteo.en_campo|default:0 }}</div>
         </div>
-        <div class="card-body p-0">
-            <div class="table-responsive delco-table-wrap">
-                <table class="table table-hover table-sm delco-table-compact mb-0 align-middle">
-                    <thead class="table-delco">
-                        <tr>
-                            <th>ID</th>
-                            <th>Formulario</th>
-                            <th>Nº Cliente</th>
-                            <th>Recibido</th>
-                            <th>Antigüedad</th>
-                            <th>Estado sincr.</th>
-                            <th>Revisión</th>
-                            <th>Alerta</th>
-                            <th>Bloqueo</th>
-                            <th class="text-end">Acciones</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for reg in registros %}
-                        {% with dias_ant=reg.fecha_recepcion|timesince %}
-                        <tr id="fila-{{ reg.pk }}"
-                            {% if reg.es_alerta_critica %}class="table-danger"
-                            {% elif reg.estado_revision == 'CON_ADVERTENCIA' %}class="table-warning"
-                            {% elif reg.fecha_recepcion < umbral_7d and reg.estado_revision == 'PENDIENTE' %}class="table-danger"
-                            {% endif %}>
-                            <td class="fw-bold">
-                                <a href="{% url 'reportes_moreapp_detalle' reg.pk %}" class="text-decoration-none">#{{ reg.pk }}</a>
-                            </td>
-                            <td class="small">{{ reg.nombre_formulario|truncatechars:35 }}</td>
-                            <td>
-                                {% if reg.numero_cliente_display %}
-                                <strong>{{ reg.numero_cliente_display }}</strong>
-                                {% else %}
-                                <span class="text-muted small">—</span>
-                                {% endif %}
-                            </td>
-                            <td class="small text-nowrap">{{ reg.fecha_recepcion|date:"d/m/Y H:i" }}</td>
-                            <td>
-                                {% if reg.fecha_recepcion < umbral_7d and reg.estado_revision == 'PENDIENTE' %}
-                                    <span class="badge bg-danger">
-                                        <i class="bi bi-hourglass-split"></i> {{ dias_ant }}
-                                    </span>
-                                {% else %}
-                                    <small class="text-muted">{{ dias_ant }}</small>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% badge_moreapp_sync reg.estado_sincronizacion %}
-                            </td>
-                            <td>
-                                <span id="badge-revision-{{ reg.pk }}" class="badge {{ reg.estado_revision|badge_moreapp_revision_class }}">
-                                    {{ reg.get_estado_revision_display }}
-                                </span>
-                            </td>
-                            <td>
-                                {% if reg.es_alerta_critica %}
-                                    <span class="badge bg-danger">Crítica</span>
-                                    <div class="small text-danger mt-1" title="{{ reg.descripcion_alerta }}">{{ reg.alerta_preview|truncatechars:70 }}</div>
-                                {% elif reg.descripcion_alerta %}
-                                    <span class="small text-muted" title="{{ reg.descripcion_alerta }}">{{ reg.alerta_preview|truncatechars:50 }}</span>
-                                {% else %}
-                                    <span class="text-muted small">—</span>
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if reg.bloqueos_operativos %}
-                                    <span class="badge bg-danger" title="{{ reg.bloqueo_operativo_preview|truncatechars:140 }}">
-                                        <i class="bi bi-shield-exclamation"></i> {{ reg.bloqueos_operativos|length }}
-                                    </span>
-                                {% else %}
-                                    <span class="text-muted small">—</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end">
-                                <div class="btn-group btn-group-sm">
-                                    <a href="{% url 'reportes_moreapp_detalle' reg.pk %}"
-                                       class="btn btn-outline-primary" title="Ver detalle">
-                                        <i class="bi bi-eye"></i>
-                                    </a>
-                                    {% if reg.estado_revision != 'REVISADO' %}
-                                    <button type="button"
-                                            class="btn btn-outline-success btn-marcar"
-                                            data-pk="{{ reg.pk }}"
-                                            data-nuevo-estado="REVISADO"
-                                            title="Marcar como revisado">
-                                        <i class="bi bi-check-lg"></i>
-                                    </button>
-                                    {% endif %}
-                                    {% if reg.estado_revision != 'DESCARTADO' %}
-                                    <button type="button"
-                                            class="btn btn-outline-secondary btn-marcar"
-                                            data-pk="{{ reg.pk }}"
-                                            data-nuevo-estado="DESCARTADO"
-                                            title="Descartar">
-                                        <i class="bi bi-x-lg"></i>
-                                    </button>
-                                    {% endif %}
-                                </div>
-                            </td>
-                        </tr>
-                        {% endwith %}
-                        {% empty %}
-                        <tr>
-                            <td colspan="10" class="text-center text-muted py-5">
-                                <i class="bi bi-check2-all fs-3 d-block mb-2"></i>
-                                Sin registros con este filtro.
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+      </div>
     </div>
+    <div class="col-6 col-md-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-hourglass-split"></i></span>
+        <div>
+          <div class="text-muted small">Sin asignar</div>
+          <div class="fs-4 fw-semibold">{{ colas_conteo.pendientes|default:0 }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon {% if colas_conteo.errores %}is-danger{% else %}is-muted{% endif %}"><i class="bi bi-exclamation-triangle"></i></span>
+        <div>
+          <div class="text-muted small">Con error / vencidas</div>
+          <div class="fs-4 fw-semibold">{% if colas_conteo.errores or colas_conteo.vencidas %}{{ colas_conteo.errores|default:0 }} / {{ colas_conteo.vencidas|default:0 }}{% else %}0{% endif %}</div>
+        </div>
+      </div>
+    </div>
+  </div>
 
+  <div class="delco-catalogo-filters mb-3">
+    <div class="delco-catalogo-chip-row mb-3">
+      <span class="small text-muted d-none d-md-inline">Cola</span>
+      <div class="delco-catalogo-chips">
+        <a href="{% url 'pendientes_operativos' %}" class="delco-catalogo-chip {% if not cola_filtro %}is-active{% endif %}">
+          Todas abiertas <span class="badge bg-dark">{{ colas_conteo.abiertas|default:0 }}</span>
+        </a>
+        <a href="?cola=en_campo" class="delco-catalogo-chip {% if cola_filtro == 'en_campo' %}is-active{% endif %}">
+          En campo <span class="badge bg-dark">{{ colas_conteo.en_campo|default:0 }}</span>
+        </a>
+        <a href="?cola=pendientes" class="delco-catalogo-chip {% if cola_filtro == 'pendientes' %}is-active{% endif %}">
+          Sin asignar <span class="badge bg-dark">{{ colas_conteo.pendientes|default:0 }}</span>
+        </a>
+        <a href="?cola=vencidas" class="delco-catalogo-chip {% if cola_filtro == 'vencidas' %}is-active{% endif %}">
+          Vencidas <span class="badge bg-dark">{{ colas_conteo.vencidas|default:0 }}</span>
+        </a>
+        <a href="?cola=errores" class="delco-catalogo-chip {% if cola_filtro == 'errores' %}is-active{% endif %}">
+          Con error <span class="badge bg-dark">{{ colas_conteo.errores|default:0 }}</span>
+        </a>
+      </div>
+    </div>
+    <form method="get" class="row g-2 align-items-end">
+      {% if cola_filtro %}<input type="hidden" name="cola" value="{{ cola_filtro }}">{% endif %}
+      <div class="col-md-6 col-xl-4">
+        <label class="form-label small mb-1" for="buscarPendientes">Buscar</label>
+        <input type="search" id="buscarPendientes" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Título, cuenta, formulario…">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
+        <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="delco-catalogo-panel">
+    <div class="delco-catalogo-panel-head">
+      <strong>Tareas sin completar</strong>
+      <span class="badge bg-secondary">{{ page_obj.paginator.count }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Título / Mensaje</th>
+            <th class="d-none d-md-table-cell">Formulario</th>
+            <th>Estado</th>
+            <th class="d-none d-md-table-cell">CUENTA</th>
+            <th class="d-none d-lg-table-cell">Destinatarios</th>
+            <th class="d-none d-md-table-cell">Creada</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tarea in tareas %}
+          <tr>
+            <td><a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="fw-bold text-decoration-none">#{{ tarea.pk }}</a></td>
+            <td class="delco-cell-wrap">
+              <div class="fw-semibold">{{ tarea.titulo|default:tarea.mensaje }}</div>
+              {% if tarea.titulo and tarea.mensaje and tarea.titulo != tarea.mensaje %}
+              <div class="small text-muted">{{ tarea.mensaje }}</div>
+              {% endif %}
+            </td>
+            <td class="d-none d-md-table-cell">{{ tarea.form_name|default:tarea.form_id }}</td>
+            <td>
+              {% if tarea.estado == 'ERROR' or tarea.error %}
+              <span class="badge text-bg-danger">Error</span>
+              {% elif tarea.estado == 'ASIGNADA' %}
+              <span class="badge text-bg-primary">Asignada</span>
+              {% else %}
+              <span class="badge text-bg-secondary">{{ tarea.get_estado_display }}</span>
+              {% endif %}
+            </td>
+            <td class="d-none d-md-table-cell">{{ tarea.cuenta|default:"—" }}</td>
+            <td class="d-none d-lg-table-cell small">
+              {% if tarea.destinatarios_visibles %}{{ tarea.destinatarios_visibles|join:", " }}{% elif tarea.destinatarios %}{{ tarea.destinatarios|join:", " }}{% endif %}
+              {% if tarea.grupos_nombres %}<div class="text-muted">Grupos: {{ tarea.grupos_nombres|join:", " }}</div>{% endif %}
+            </td>
+            <td class="d-none d-md-table-cell">{{ tarea.fecha_creacion|date:"d/m/Y H:i" }}</td>
+            <td>
+              <a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i> Ver</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="8" class="text-center text-muted py-4">No hay tareas pendientes. Las completadas se ven en Tareas MoreApp.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.has_other_pages %}
+    <div class="d-flex justify-content-between align-items-center p-2">
+      <span class="small text-muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      <div class="btn-group btn-group-sm">
+        {% if page_obj.has_previous %}
+        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-const CSRFTOKEN = '{{ csrf_token }}';
-const ESTADO_FILTRO = '{{ estado_filtro }}';
-
-const BADGE_REVISION_CLASS = {
-    'REVISADO': 'badge bg-success',
-    'CON_ADVERTENCIA': 'badge bg-warning text-dark',
-    'DESCARTADO': 'badge delco-badge-muted',
-    'PENDIENTE': 'badge bg-primary',
-};
-
-function actualizarContadores(contadores) {
-    if (!contadores) return;
-    ['PENDIENTE', 'CON_ADVERTENCIA', 'REVISADO', 'DESCARTADO', 'CRITICA'].forEach(function(key) {
-        const el = document.getElementById('contador-' + key);
-        if (el && contadores[key] !== undefined) {
-            el.textContent = contadores[key];
-        }
-    });
-    const env = document.getElementById('contador-envejecidos');
-    const badgeEnv = document.getElementById('badge-envejecidos');
-    if (env && contadores.envejecidos !== undefined) {
-        env.textContent = contadores.envejecidos;
-        if (badgeEnv) {
-            badgeEnv.classList.toggle('d-none', !contadores.envejecidos);
-        }
-    }
-}
-
-function actualizarContadorVista() {
-    const tbody = document.querySelector('table.delco-table-compact tbody');
-    const contadorVista = document.getElementById('contador-vista');
-    if (!tbody || !contadorVista) return;
-    const filas = tbody.querySelectorAll('tr[id^="fila-"]');
-    contadorVista.textContent = filas.length;
-    if (filas.length === 0 && !tbody.querySelector('.fila-vacia')) {
-        const tr = document.createElement('tr');
-        tr.className = 'fila-vacia';
-        tr.innerHTML = '<td colspan="10" class="text-center text-muted py-5">' +
-            '<i class="bi bi-check2-all fs-3 d-block mb-2"></i>' +
-            'Sin registros con este filtro.</td>';
-        tbody.appendChild(tr);
-    }
-}
-
-function debeQuitarDeVista(nuevoEstado) {
-    if (ESTADO_FILTRO === 'TODOS') return false;
-    if (ESTADO_FILTRO === 'CRITICA') {
-        return nuevoEstado === 'REVISADO' || nuevoEstado === 'DESCARTADO';
-    }
-    return nuevoEstado !== ESTADO_FILTRO;
-}
-
-document.querySelectorAll('.btn-marcar').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-        const pk = this.dataset.pk;
-        const nuevoEstado = this.dataset.nuevoEstado;
-        const boton = this;
-
-        fetch('{% url "moreapp_marcar_revision" 0 %}'.replace('/0/', `/${pk}/`), {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': CSRFTOKEN,
-                'X-Requested-With': 'XMLHttpRequest',
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `estado_revision=${nuevoEstado}`,
-        })
-        .then(r => {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-        })
-        .then(data => {
-            if (!data.success) {
-                alert('Error al actualizar: ' + (data.error || 'desconocido'));
-                return;
-            }
-            actualizarContadores(data.contadores);
-
-            if (debeQuitarDeVista(data.estado_revision)) {
-                const fila = document.getElementById('fila-' + pk);
-                if (fila) fila.remove();
-                actualizarContadorVista();
-                return;
-            }
-
-            const badge = document.getElementById('badge-revision-' + pk);
-            if (badge) {
-                badge.textContent = data.estado_revision_display;
-                badge.className = BADGE_REVISION_CLASS[data.estado_revision] || 'badge delco-badge-muted';
-            }
-            boton.disabled = true;
-        })
-        .catch(() => alert('Error de red al actualizar el estado.'));
-    });
-});
-</script>
 {% endblock %}

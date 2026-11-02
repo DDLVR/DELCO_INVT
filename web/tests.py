@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.http import HttpResponse
 from django.contrib.messages.storage.fallback import FallbackStorage
 from django.contrib.sessions.middleware import SessionMiddleware
@@ -882,3 +884,63 @@ class RestriccionJustificacionPunto4Tests(TestCase):
 		joined = ' '.join(result.warnings)
 		self.assertIn('fuera de servicio', joined.lower())
 		self.assertIn('Puerto dañado', joined)
+
+
+class DashboardFormulariosMoreAppTests(TestCase):
+	@override_settings(MOREAPP_API_ENABLED=True, MOREAPP_API_KEY='test', MOREAPP_CUSTOMER_ID='1')
+	@mock.patch('integraciones.moreapp_api.list_submissions')
+	def test_telemetria_agrega_estado_y_diagnostico(self, mocked_subs):
+		from integraciones.models import MoreAppFormularioAsignado
+		from usuarios.models import Usuario
+		from web.services.dashboard_moreapp_forms import build_dashboard_formularios_moreapp
+
+		admin = Usuario.objects.create_user(
+			rut='10101010-1',
+			email='dash-forms@delco.cl',
+			password='admin1234',
+			nombre='Dash',
+			apellido='Forms',
+			nombre_interno='dash_forms',
+			rol='ADMIN',
+			is_active=True,
+		)
+		MoreAppFormularioAsignado.objects.create(
+			usuario=admin,
+			form_id='abc123abc123abc123abc123',
+			form_name='Mantenimiento Telemetria V3',
+		)
+		def _fake_list(_form_id, _page=0, payload=None):
+			payload = payload or {}
+			query = payload.get('query') or []
+			if query:
+				valor = (query[0] or {}).get('value')
+				if valor == 'EJECUTADO':
+					return {'totalSize': 200, 'elements': []}
+				if valor == 'INCIDENCIA':
+					return {'totalSize': 100, 'elements': []}
+				if valor == 'MODEM - DESPROGRAMADO':
+					return {'totalSize': 80, 'elements': []}
+				if valor == 'SIMCARD - SIN COBERTURA':
+					return {'totalSize': 20, 'elements': []}
+				return {'totalSize': 0, 'elements': []}
+			return {
+				'totalSize': 300,
+				'elements': [
+					{'data': {'estado': 'EJECUTADO', 'diagnostico': 'MODEM - DESPROGRAMADO'}},
+					{'data': {'estado': 'EJECUTADO', 'diagnostico': 'MODEM - DESPROGRAMADO'}},
+					{'data': {'estado': 'INCIDENCIA', 'diagnostico': 'SIMCARD - SIN COBERTURA'}},
+				],
+			}
+
+		mocked_subs.side_effect = _fake_list
+		charts = build_dashboard_formularios_moreapp()
+		self.assertEqual(charts['por_formulario'][0]['total'], 300)
+		self.assertTrue(charts['telemetria_conteo_completo'])
+		self.assertEqual(charts['efectividad_pct'], 66.7)
+		estados = {row['categoria']: row['count'] for row in charts['telemetria_estado']}
+		self.assertEqual(estados.get('EJECUTADO'), 200)
+		self.assertEqual(estados.get('INCIDENCIA'), 100)
+		self.assertTrue(charts['telemetria_diag_completo'])
+		diags = {row['categoria']: row['count'] for row in charts['telemetria_diagnostico']}
+		self.assertEqual(diags.get('MODEM - DESPROGRAMADO'), 80)
+		self.assertEqual(diags.get('SIMCARD - SIN COBERTURA'), 20)

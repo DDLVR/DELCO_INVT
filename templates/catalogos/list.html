@@ -5,27 +5,36 @@
 {% block content %}
 <div class="container-fluid py-4 delco-catalogo">
     <div class="delco-catalogo-hero mb-3">
-        <p class="delco-catalogo-kicker mb-1">Diagnóstico</p>
-        <h1 class="h3 mb-1">Catálogo de causas y soluciones</h1>
-        <p class="text-muted mb-0">Causas frecuentes y acciones recomendadas para estandarizar el mantenimiento.</p>
+        <p class="delco-catalogo-kicker mb-1">Control</p>
+        <h1 class="h3 mb-1">Catálogo de diagnóstico</h1>
+        <p class="text-muted mb-0">
+            Guía de la intranet actual: el técnico recibe la tarea en MoreApp, no por correo.
+            Incluye fallos de envío, listado y terreno (medidor, SIM, módem).
+        </p>
     </div>
 
-    <div class="card shadow-sm mb-4 delco-panel-card">
+    <div class="card shadow-sm mb-3 delco-panel-card">
         <div class="card-body">
             <form method="get" class="row g-2 align-items-end">
                 <div class="col-md-4">
-                    <label class="form-label">Categoría</label>
-                    <select name="categoria" class="form-select">
+                    <label class="form-label" for="catalogoDiagCategoria">Categoría</label>
+                    <select name="categoria" id="catalogoDiagCategoria" class="form-select">
                         <option value="">Todas</option>
                         {% for value, label in categorias %}
                         <option value="{{ value }}" {% if categoria_actual == value %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                     </select>
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-5">
+                    <label class="form-label" for="catalogoDiagQ">Buscar</label>
+                    <input type="text" name="q" id="catalogoDiagQ" value="{{ q }}" class="form-control"
+                           placeholder="Causa, MoreApp, listado, medidor…">
+                </div>
+                <div class="col-md-3">
                     <button type="submit" class="btn btn-primary w-100">Filtrar</button>
                 </div>
             </form>
+            <p class="small text-muted mb-0 mt-2">{{ total }} registro{{ total|pluralize }}</p>
         </div>
     </div>
 
@@ -36,7 +45,7 @@
                     <tr>
                         <th>Categoría</th>
                         <th>Origen / Causa</th>
-                        <th>Solución</th>
+                        <th>Qué hacer</th>
                     </tr>
                 </thead>
                 <tbody>

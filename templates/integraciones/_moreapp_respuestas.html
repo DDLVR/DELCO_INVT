@@ -18,9 +18,23 @@
               <span>{{ archivo.name|default:campo.label }}</span>
             </a>
             {% elif archivo.url %}
-            <a class="delco-campo-file" href="{{ archivo.url }}" target="_blank" rel="noopener">
-              <i class="bi bi-paperclip"></i> {{ archivo.name|default:campo.label }}
-            </a>
+            <div class="delco-campo-adjunto">
+              <div class="delco-campo-adjunto-head">
+                <i class="bi {% if archivo.is_text %}bi-filetype-txt{% elif archivo.kind == 'pdf' %}bi-file-earmark-pdf{% else %}bi-paperclip{% endif %}"></i>
+                <span>{{ archivo.name|default:campo.label }}</span>
+              </div>
+              <div class="delco-campo-adjunto-actions">
+                <a class="btn btn-sm btn-outline-primary" href="{{ archivo.url }}" target="_blank" rel="noopener">Ver</a>
+                {% if archivo.download_url %}
+                <a class="btn btn-sm btn-primary" href="{{ archivo.download_url }}">Descargar</a>
+                {% endif %}
+              </div>
+              {% if archivo.preview %}
+              <pre class="delco-campo-txt">{{ archivo.preview }}</pre>
+              {% elif archivo.is_text %}
+              <iframe class="delco-campo-txt" src="{{ archivo.url }}" title="{{ archivo.name|default:campo.label }}"></iframe>
+              {% endif %}
+            </div>
             {% elif archivo.id %}
             <div class="delco-campo-file text-muted">{{ archivo.id }}</div>
             {% endif %}

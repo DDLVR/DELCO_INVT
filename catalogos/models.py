@@ -5,6 +5,8 @@ class CatalogoDiagnostico(models.Model):
     """Catálogo de causas y soluciones (PDF punto 10)."""
 
     CATEGORIA_CHOICES = [
+        ('INTRANET', 'Intranet'),
+        ('TAREAS', 'Tareas MoreApp'),
         ('SISTEMA', 'Sistema'),
         ('SIMCARD', 'SIMCard'),
         ('MODEM', 'Módem'),

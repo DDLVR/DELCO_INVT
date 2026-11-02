@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, Iterable, List, Optional
+from os.path import splitext
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from django.urls import NoReverseMatch, reverse
 
@@ -33,7 +34,27 @@ _FILE_HINTS = (
     "drawing",
     "panoram",
     "evidencia",
+    "csv",
+    "txt",
 )
+_IMAGE_EXT = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+_TEXT_EXT = {".txt", ".csv", ".log", ".json", ".xml"}
+_IMAGE_HINTS = (
+    "foto",
+    "photo",
+    "image",
+    "imagen",
+    "firma",
+    "signature",
+    "dibujo",
+    "drawing",
+    "panoram",
+    "caratula",
+    "evidencia",
+    "fachada",
+)
+_TEXT_HINTS = ("csv", "txt", "log", "formato")
+_TEXT_PRINTABLE = set("\t\n\r") | set(chr(c) for c in range(32, 127))
 
 
 def _texto(value: Any) -> str:
@@ -98,16 +119,103 @@ def _file_id(value: Any) -> str:
     return ""
 
 
-def _archivo_url(file_id: str) -> str:
+def _archivo_url(file_id: str, download: bool = False) -> str:
     if not file_id:
         return ""
     try:
-        return reverse("moreapp_api_registro_archivo", args=[file_id])
+        href = reverse("moreapp_api_registro_archivo", args=[file_id])
     except NoReverseMatch:
         return ""
+    if download:
+        return href + ("&" if "?" in href else "?") + "download=1"
+    return href
 
 
-def _fila_archivo(value: Any, fotos_locales: Optional[List[Dict[str, Any]]] = None) -> Dict[str, str]:
+def _kind_archivo(nombre: str, content_type: str, field_key: str = "") -> str:
+    ctype = (content_type or "").split(";")[0].strip().lower()
+    ext = splitext(nombre or "")[1].lower()
+    key = (field_key or "").casefold()
+    if ctype.startswith("image/") or ext in _IMAGE_EXT:
+        return "image"
+    if ctype == "application/pdf" or ext == ".pdf":
+        return "pdf"
+    if ctype.startswith("text/") or "csv" in ctype or "json" in ctype or "xml" in ctype or ext in _TEXT_EXT:
+        return "text"
+    if any(hint in key for hint in _TEXT_HINTS) and not any(hint in key for hint in _IMAGE_HINTS):
+        return "text"
+    if any(hint in key for hint in _IMAGE_HINTS):
+        return "image"
+    return "file"
+
+
+def _parece_texto(sample: str) -> bool:
+    if not sample or not sample.strip():
+        return False
+    ok = sum(1 for ch in sample if ch in _TEXT_PRINTABLE or ord(ch) >= 160)
+    return (ok / float(len(sample))) >= 0.85
+
+
+def sniff_archivo(content: bytes, filename: str = "", content_type: str = "", field_key: str = "") -> Tuple[str, str, str]:
+    nombre = (filename or "").strip() or "archivo"
+    ctype = (content_type or "").split(";")[0].strip().lower()
+    if ctype in ("application/octet-stream", "binary/octet-stream", "application/download"):
+        ctype = ""
+    kind = _kind_archivo(nombre, ctype, field_key)
+    raw = content or b""
+    head = raw[:16]
+    if kind == "file" and raw:
+        if head.startswith(b"\xff\xd8\xff"):
+            kind, ctype = "image", "image/jpeg"
+        elif head.startswith(b"\x89PNG"):
+            kind, ctype = "image", "image/png"
+        elif head.startswith(b"%PDF"):
+            kind, ctype = "pdf", "application/pdf"
+        else:
+            decoded = ""
+            for encoding in ("utf-8", "latin-1"):
+                try:
+                    decoded = raw[:4096].decode(encoding)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if _parece_texto(decoded):
+                kind = "text"
+                ext = splitext(nombre)[1].lower()
+                if ext == ".csv" or ("," in decoded[:200] and "\n" in decoded[:400]):
+                    ctype = "text/csv; charset=utf-8"
+                else:
+                    ctype = "text/plain; charset=utf-8"
+    if kind == "image" and not str(ctype).startswith("image/"):
+        ctype = "image/jpeg"
+    elif kind == "pdf":
+        ctype = "application/pdf"
+    elif kind == "text" and not str(ctype).startswith("text/") and "csv" not in str(ctype):
+        ctype = "text/plain; charset=utf-8"
+    elif not ctype:
+        ctype = "application/octet-stream"
+    ext = splitext(nombre)[1].lower()
+    if kind == "text" and not ext:
+        nombre = nombre + (".csv" if "csv" in ctype else ".txt")
+    elif kind == "pdf" and ext != ".pdf":
+        nombre = nombre + ".pdf"
+    return kind, ctype, nombre
+
+
+def texto_desde_bytes(content: bytes, limit: int = 80000) -> str:
+    raw = (content or b"")[:limit]
+    for encoding in ("utf-8-sig", "utf-8", "latin-1"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+def _fila_archivo(
+    value: Any,
+    fotos_locales: Optional[List[Dict[str, Any]]] = None,
+    field_key: str = "",
+) -> Dict[str, str]:
     file_id = _file_id(value)
     nombre = ""
     content_type = ""
@@ -117,7 +225,6 @@ def _fila_archivo(value: Any, fotos_locales: Optional[List[Dict[str, Any]]] = No
         nombre = str(value.get("filename") or value.get("fileName") or value.get("name") or "")
         content_type = str(value.get("contentType") or value.get("mimeType") or "")
         url = str(value.get("url") or value.get("downloadUrl") or value.get("href") or "")
-    is_image = (not content_type) or content_type.startswith("image/") or bool(file_id)
     if fotos_locales and file_id:
         for foto in fotos_locales:
             if str(foto.get("gridfs_id") or "") == file_id or str(foto.get("gridfs_ref") or "").endswith(file_id):
@@ -125,13 +232,18 @@ def _fila_archivo(value: Any, fotos_locales: Optional[List[Dict[str, Any]]] = No
                 url = media_url or url or str(foto.get("url") or "")
                 nombre = nombre or str(foto.get("nombre_archivo") or "")
                 break
+    kind = _kind_archivo(nombre, content_type, field_key)
     href = media_url or url or _archivo_url(file_id)
+    download_url = _archivo_url(file_id, download=True) if file_id else href
     return {
         "id": file_id,
         "name": nombre or file_id,
         "content_type": content_type,
-        "is_image": "1" if is_image else "",
+        "kind": kind,
+        "is_image": "1" if kind == "image" else "",
+        "is_text": "1" if kind == "text" else "",
         "url": href,
+        "download_url": download_url,
         "media_url": media_url,
     }
 
@@ -209,7 +321,7 @@ def _valor_a_campo(
         campo["text"] = "Sí" if value else "No"
         return campo
     if _es_archivo(value):
-        archivo = _fila_archivo(value, fotos_locales)
+        archivo = _fila_archivo(value, fotos_locales, field_key=key)
         if archivo.get("id") or archivo.get("url"):
             campo["files"] = [archivo]
         return _marcar_ancho(campo)
@@ -219,7 +331,7 @@ def _valor_a_campo(
         filas: List[List[Dict[str, Any]]] = []
         for item in value:
             if _es_archivo(item) or (isinstance(item, str) and item.startswith("gridfs://")):
-                archivo = _fila_archivo(item, fotos_locales)
+                archivo = _fila_archivo(item, fotos_locales, field_key=key)
                 if archivo.get("id") or archivo.get("url"):
                     files.append(archivo)
             elif isinstance(item, dict):
@@ -344,14 +456,66 @@ def respuestas_desde_registro(registro) -> List[Dict[str, Any]]:
     return extra + campos
 
 
-def contar_archivos(campos: List[Dict[str, Any]]) -> int:
-    total = 0
+def iter_archivos(campos: List[Dict[str, Any]]) -> Iterable[Tuple[str, Dict[str, Any]]]:
     for campo in campos or []:
-        total += len(campo.get("files") or [])
-        total += contar_archivos(campo.get("children") or [])
+        label = str(campo.get("label") or campo.get("key") or "Archivo")
+        for archivo in campo.get("files") or []:
+            yield label, archivo
+        yield from iter_archivos(campo.get("children") or [])
         for fila in campo.get("rows") or []:
-            total += contar_archivos(fila)
-    return total
+            yield from iter_archivos(fila)
+
+
+def contar_archivos(campos: List[Dict[str, Any]]) -> int:
+    return sum(1 for _label, _archivo in iter_archivos(campos))
+
+
+def contar_fotos(campos: List[Dict[str, Any]]) -> int:
+    return sum(1 for _label, archivo in iter_archivos(campos) if archivo.get("is_image"))
+
+
+def enriquecer_archivos(campos: List[Dict[str, Any]], fetch_file, max_files: int = 8) -> None:
+    """Completa tipo/nombre/preview descargando adjuntos que no se reconocen como foto."""
+    revisados = 0
+    for _label, archivo in iter_archivos(campos):
+        if revisados >= max_files:
+            break
+        if archivo.get("is_image"):
+            continue
+        file_id = str(archivo.get("id") or "")
+        if not file_id:
+            continue
+        revisados += 1
+        try:
+            descargado = fetch_file(file_id)
+        except Exception:
+            descargado = None
+        if not descargado:
+            continue
+        raw = descargado.get("content") or b""
+        kind, ctype, nombre = sniff_archivo(
+            raw,
+            descargado.get("filename") or archivo.get("name") or file_id,
+            descargado.get("content_type") or archivo.get("content_type") or "",
+        )
+        archivo["kind"] = kind
+        archivo["content_type"] = ctype
+        archivo["name"] = nombre
+        archivo["is_image"] = "1" if kind == "image" else ""
+        archivo["is_text"] = "1" if kind == "text" else ""
+        if kind == "text":
+            archivo["preview"] = texto_desde_bytes(raw)[:12000]
+
+
+def archivos_no_imagen(campos: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for label, archivo in iter_archivos(campos):
+        if archivo.get("is_image"):
+            continue
+        fila = dict(archivo)
+        fila["label"] = label
+        out.append(fila)
+    return out
 
 
 def campo_tiene_valor(campo: Dict[str, Any]) -> bool:
