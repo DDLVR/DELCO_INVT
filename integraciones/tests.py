@@ -215,6 +215,22 @@ class MoreAppApiIngestTests(TestCase):
 		self.assertEqual(datos['diagnostico'], 'MEDIDOR')
 		self.assertEqual(datos['tecnico_responsable'], 'Juan Perez')
 
+	def test_extractor_location_texto_no_rompe_ingesta(self):
+		from integraciones.reader import _extraer_datos_normalizados
+
+		datos = _extraer_datos_normalizados({
+			'info': {'formName': 'Visita generica'},
+			'meta': {},
+			'data': {
+				'cliente': '555',
+				'location': 'Santiago Centro',
+				'tecnicoResponsable': 'Ana Soto',
+			},
+		})
+		self.assertEqual(datos['location'], 'Santiago Centro')
+		self.assertEqual(datos['cliente_codigo'], '555')
+		self.assertEqual(datos['tecnico_responsable'], 'Ana Soto')
+
 	def test_ingest_idempotente_y_sin_operativo(self):
 		from integraciones.moreapp_api_ingest import ingest_submission_items
 

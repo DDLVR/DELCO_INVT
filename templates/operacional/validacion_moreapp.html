@@ -64,7 +64,7 @@
     <div class="delco-catalogo-chip-row mb-3">
       <span class="small text-muted d-none d-md-inline">Cola</span>
       <div class="delco-catalogo-chips">
-        <a href="{% url 'validacion_moreapp' %}" class="delco-catalogo-chip {% if not cola %}is-active{% endif %}">
+        <a href="/operacional/validacion-moreapp/" class="delco-catalogo-chip {% if not cola %}is-active{% endif %}">
           Todas <span class="badge bg-dark">{{ contadores.por_validar|default:0 }}</span>
         </a>
         <a href="?cola=pendientes" class="delco-catalogo-chip {% if cola == 'pendientes' %}is-active{% endif %}">
@@ -89,7 +89,7 @@
       </div>
       <div class="col-auto">
         <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
-        <a href="{% url 'validacion_moreapp' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+        <a href="/operacional/validacion-moreapp/" class="btn btn-sm btn-outline-secondary">Limpiar</a>
       </div>
     </form>
   </div>

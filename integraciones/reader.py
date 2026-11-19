@@ -1901,6 +1901,17 @@ def _extraer_registro_medidores_telemetria(data: dict, info: dict, meta: dict) -
     }
 
 
+def _dict_o_vacio(valor):
+    return valor if isinstance(valor, dict) else {}
+
+
+def _texto_location(valor) -> str:
+    """MoreApp manda la ubicación como dict o, a veces, como texto plano."""
+    if isinstance(valor, dict):
+        return _as_text(valor.get('formattedValue') or valor.get('address') or '')
+    return _as_text(valor)
+
+
 def _extraer_datos_normalizados(data: dict) -> Dict[str, Any]:
     """
     Extrae los campos operativos clave de un registration.json
@@ -1927,8 +1938,14 @@ def _extraer_datos_normalizados(data: dict) -> Dict[str, Any]:
         return _extraer_registro_medidores_telemetria(data, info, meta)
 
     # --- Formularios genéricos (Mantenimiento, Registro de Medidores, etc.) ---
+    if not isinstance(campos, dict):
+        campos = {}
     buscar_cliente = campos.get('buscarCliente', {})
+    if not isinstance(buscar_cliente, dict):
+        buscar_cliente = {}
     cliente_mantenimiento = campos.get('clienteParaMantenimiento', {})
+    if not isinstance(cliente_mantenimiento, dict):
+        cliente_mantenimiento = {}
     fuentes = [campos, buscar_cliente, cliente_mantenimiento, data]
 
     return {
@@ -1957,17 +1974,17 @@ def _extraer_datos_normalizados(data: dict) -> Dict[str, Any]:
                 fuentes,
                 ['tecnicoresponsable', 'tecnico responsable', 'tecnico'],
             ))
-            or campos.get('tECNICORESPONSABLE', {}).get('NOMBRES', '')
-            or campos.get('tecnicoResponsable', {}).get('NOMBRES', '')
-            or campos.get('tcnicoResponsableCertelec', {}).get('nombres', '')
+            or _as_text(_dict_o_vacio(campos.get('tECNICORESPONSABLE')).get('NOMBRES'))
+            or _as_text(_dict_o_vacio(campos.get('tecnicoResponsable')).get('NOMBRES'))
+            or _as_text(_dict_o_vacio(campos.get('tcnicoResponsableCertelec')).get('nombres'))
         ),
         'tecnico_asistente': (
-            campos.get('tcnicoAsistente', {}).get('NOMBRES', '')
-            or campos.get('tecnicoAsistente', {}).get('NOMBRES', '')
+            _as_text(_dict_o_vacio(campos.get('tcnicoAsistente')).get('NOMBRES'))
+            or _as_text(_dict_o_vacio(campos.get('tecnicoAsistente')).get('NOMBRES'))
         ),
         'observacion': _as_text(_valor_campo_fuentes(fuentes, ['observacion', 'observacion del trabajo'])),
         'fecha_trabajo': _as_text(_valor_campo_fuentes(fuentes, ['fecha', 'fecha de la visita'])),
-        'location': campos.get('location', {}).get('formattedValue', ''),
+        'location': _texto_location(campos.get('location')),
     }
 
 
