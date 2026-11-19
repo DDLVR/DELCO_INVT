@@ -26,7 +26,7 @@
                 {% if moreapp_aviso.advertencias %}Con advertencia: <strong>{{ moreapp_aviso.advertencias }}</strong>.{% endif %}
             </div>
         </div>
-        <a href="{% url 'validacion_moreapp' %}" class="btn btn-sm btn-primary">
+        <a href="{{ delco_rutas.validacion_moreapp }}" class="btn btn-sm btn-primary">
             Abrir cola de validación
         </a>
     </div>
@@ -91,7 +91,7 @@
                     <span class="badge bg-warning text-dark ms-1">{{ moreapp_aviso.tareas_abiertas }}</span>
                     {% endif %}
                 </a>
-                <a href="{% url 'validacion_moreapp' %}" class="btn btn-sm delco-dash-btn-outline">
+                <a href="{{ delco_rutas.validacion_moreapp }}" class="btn btn-sm delco-dash-btn-outline">
                     <i class="bi bi-clipboard-check"></i> Validar informes
                     {% if moreapp_aviso.por_revisar %}
                     <span class="badge bg-primary ms-1">{{ moreapp_aviso.por_revisar }}</span>
@@ -358,19 +358,19 @@
                         {% if moreapp_envejecidos %}
                         <div class="d-flex justify-content-between align-items-center border rounded p-2 delco-timeline-item">
                             <div><span class="fw-bold text-danger">{{ moreapp_envejecidos }}</span> <span class="small text-muted">sin revisar &gt; 7 días</span></div>
-                            <a href="{% url 'validacion_moreapp' %}?cola=envejecidos" class="btn btn-sm btn-outline-danger">Validar</a>
+                            <a href="{{ delco_rutas.validacion_moreapp }}?cola=envejecidos" class="btn btn-sm btn-outline-danger">Validar</a>
                         </div>
                         {% endif %}
                         {% if moreapp_con_advertencia %}
                         <div class="d-flex justify-content-between align-items-center border rounded p-2 delco-timeline-item">
                             <div><span class="fw-bold text-warning">{{ moreapp_con_advertencia }}</span> <span class="small text-muted">con advertencias</span></div>
-                            <a href="{% url 'validacion_moreapp' %}?cola=advertencia" class="btn btn-sm btn-outline-warning">Validar</a>
+                            <a href="{{ delco_rutas.validacion_moreapp }}?cola=advertencia" class="btn btn-sm btn-outline-warning">Validar</a>
                         </div>
                         {% endif %}
                         {% if moreapp_pendientes %}
                         <div class="d-flex justify-content-between align-items-center border rounded p-2 delco-timeline-item">
                             <div><span class="fw-bold text-primary">{{ moreapp_pendientes }}</span> <span class="small text-muted">informes por validar</span></div>
-                            <a href="{% url 'validacion_moreapp' %}" class="btn btn-sm btn-outline-primary">Validar</a>
+                            <a href="{{ delco_rutas.validacion_moreapp }}" class="btn btn-sm btn-outline-primary">Validar</a>
                         </div>
                         {% endif %}
                     </div>

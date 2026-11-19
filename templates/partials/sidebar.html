@@ -62,7 +62,7 @@
         <span class="badge bg-warning text-dark ms-1">{{ moreapp_aviso.tareas_abiertas }}</span>
         {% endif %}
       </a>
-      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'validacion_moreapp' %}active bg-primary text-white{% endif %}" href="{% url 'validacion_moreapp' %}">
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'validacion_moreapp' %}active bg-primary text-white{% endif %}" href="{{ delco_rutas.validacion_moreapp }}">
         <i class="bi bi-clipboard-check me-2"></i> Validar informes
         {% if moreapp_aviso.por_revisar %}
         <span class="badge bg-primary ms-1">{{ moreapp_aviso.por_revisar }}</span>

@@ -11,6 +11,7 @@ _API_FALLBACKS = {
     'api_buscar_medidores': '/api/buscar-medidores/',
     'api_obtener_medidor': '/api/medidores/',
     'clientes_modificar_masivo': '/clientes/modificar-masivo/',
+    'validacion_moreapp': '/operacional/validacion-moreapp/',
 }
 
 
@@ -44,7 +45,10 @@ def delco_api_urls(request):
             'buscar_clientes': _safe_reverse('api_buscar_clientes'),
             'buscar_medidores': _safe_reverse('api_buscar_medidores'),
             'clientes_modificar_masivo': _safe_reverse('clientes_modificar_masivo'),
-        }
+        },
+        'delco_rutas': {
+            'validacion_moreapp': _safe_reverse('validacion_moreapp'),
+        },
     }
 
 
