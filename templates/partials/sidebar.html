@@ -62,6 +62,12 @@
         <span class="badge bg-warning text-dark ms-1">{{ moreapp_aviso.tareas_abiertas }}</span>
         {% endif %}
       </a>
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'validacion_moreapp' %}active bg-primary text-white{% endif %}" href="{% url 'validacion_moreapp' %}">
+        <i class="bi bi-clipboard-check me-2"></i> Validar informes
+        {% if moreapp_aviso.por_revisar %}
+        <span class="badge bg-primary ms-1">{{ moreapp_aviso.por_revisar }}</span>
+        {% endif %}
+      </a>
       {% url 'cargas_hub' as cargas_hub_url %}
       {% if cargas_hub_url %}
       <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'cargas_hub' or request.resolver_match.url_name == 'cargas_list' or request.resolver_match.url_name == 'cargas_crear' or request.resolver_match.url_name == 'cargas_detalle' %}active bg-primary text-white{% endif %}" href="{{ cargas_hub_url }}">

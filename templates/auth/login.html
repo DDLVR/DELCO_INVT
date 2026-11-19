@@ -49,6 +49,11 @@
     .btn-primary:hover {
       background-color: #2c5282;
     }
+    .btn-primary:disabled {
+      background-color: #1a3a5c;
+      opacity: 0.75;
+      cursor: wait;
+    }
     .logo {
       text-align: center;
       margin-bottom: 30px;
@@ -103,7 +108,7 @@
         </div>
         {% endif %}
 
-        <form method="post">
+        <form method="post" id="form-login">
           {% csrf_token %}
 
           <div class="mb-3">
@@ -123,8 +128,25 @@
             <input type="password" name="password" class="form-control" placeholder="Contraseña" required>
           </div>
 
-          <button class="btn btn-primary w-100" type="submit">Iniciar Sesión</button>
+          <button class="btn btn-primary w-100" type="submit" id="btn-login">Iniciar Sesión</button>
         </form>
+        <script>
+        (function () {
+          var form = document.getElementById('form-login');
+          var btn = document.getElementById('btn-login');
+          if (!form || !btn) return;
+          form.addEventListener('submit', function (event) {
+            if (form.dataset.enviando === '1') {
+              event.preventDefault();
+              return;
+            }
+            form.dataset.enviando = '1';
+            btn.disabled = true;
+            btn.setAttribute('aria-busy', 'true');
+            btn.textContent = 'Ingresando…';
+          });
+        }());
+        </script>
 
       </div>
     </div>

@@ -82,6 +82,7 @@ class IntegracionMoreAppAdmin(admin.ModelAdmin):
         'orden',
         'estado_sincronizacion',
         'estado_revision',
+        'revisado_nombre',
         'alerta_doble_trabajo',
         'fecha_recepcion',
         'actualizo_cliente',
@@ -104,7 +105,16 @@ class IntegracionMoreAppAdmin(admin.ModelAdmin):
             'fields': ('moreapp_submission_id', 'orden')
         }),
         ('Estado', {
-            'fields': ('estado_sincronizacion', 'estado_revision', 'alerta_doble_trabajo', 'descripcion_alerta', 'mensaje_error')
+            'fields': (
+                'estado_sincronizacion',
+                'estado_revision',
+                'revisado_por',
+                'revisado_nombre',
+                'fecha_revision',
+                'alerta_doble_trabajo',
+                'descripcion_alerta',
+                'mensaje_error',
+            )
         }),
         ('Datos', {
             'fields': ('datos_recibidos', 'datos_procesados'),

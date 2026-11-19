@@ -50,11 +50,9 @@ from .moreapp_tareas_lote import (
     MAX_LOTE,
     destino_listado,
     fila_cliente_en_fuente,
-    parse_fecha_lote,
     parse_filas_listado,
     mensaje_tarea_listado,
     parse_lote_archivo,
-    parse_ubicacion_lote,
     plantilla_xlsx,
     resolver_destinatario,
     resolver_formulario,
@@ -625,13 +623,6 @@ def _cliente_por_id(raw) -> Optional[Cliente]:
     if pk <= 0:
         return None
     return Cliente.objects.filter(pk=pk).first()
-
-
-def _cliente_por_cuenta(numero: str) -> Optional[Cliente]:
-    numero = (numero or "").strip()
-    if not numero:
-        return None
-    return Cliente.objects.filter(activo=True, numero_cliente=numero).first()
 
 
 def _sugerencias_proyecto() -> List[str]:
@@ -1843,8 +1834,6 @@ def tarea_lote_csv_view(request):
         )
     truncado = total_filas > MAX_LOTE
 
-    campos_cache: Dict[str, List[Dict[str, Any]]] = {}
-    ds_cache: Dict[str, List[Dict[str, Any]]] = {}
     resultados = []
     enviadas = 0
     for idx, fila in enumerate(filas, start=2):
@@ -1889,16 +1878,6 @@ def tarea_lote_csv_view(request):
         mensaje = (fila.get("mensaje") or "").strip()[:500]
         if not mensaje:
             mensaje = "Tarea asignada desde la intranet"
-        cliente = (fila.get("cliente") or "").strip()
-        if cliente:
-            mensaje = ("%s · %s" % (mensaje, cliente))[:500]
-        limite = _dt_from_local(parse_fecha_lote(fila.get("fecha") or ""))
-        ubicacion, lat, lng = parse_ubicacion_lote(fila.get("ubicacion") or "")
-        ficha = _cliente_por_cuenta(cliente) if cliente else None
-        if ficha and not ubicacion:
-            ubicacion = ficha.direccion
-        campos = _campos_formulario(form_id, campos_cache)
-        data = _precarga_search_cliente(campos, cliente, ds_cache)
         _tarea, error = _enviar_tarea_registrada(
             form_id=form_id,
             form_name=str(form.get("name") or form_id),
@@ -1906,17 +1885,17 @@ def tarea_lote_csv_view(request):
             groups_sel=groups_sel,
             all_recipients=all_recipients,
             mensaje=mensaje,
-            data=data,
-            limite=limite,
-            ubicacion=ubicacion,
-            lat=lat,
-            lng=lng,
+            data={},
+            limite=None,
+            ubicacion="",
+            lat="",
+            lng="",
             user=request.user,
-            cuenta=cliente,
-            cliente=ficha,
+            cuenta="",
+            cliente=None,
         )
         resultado["ok"] = not error
-        resultado["precarga"] = bool(data)
+        resultado["precarga"] = False
         resultado["error"] = error
         if resultado["ok"]:
             enviadas += 1

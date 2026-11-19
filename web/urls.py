@@ -11,7 +11,7 @@ from .views import (
     movimientos_list_view, movimientos_detalle_view, movimientos_historial_equipo_view, movimientos_importar_moreapp_webhook,
     reportes_moreapp_list, reportes_moreapp_detalle, reportes_moreapp_sincronizar, reportes_moreapp_eliminar,
     reportes_moreapp_eliminar_masivo,
-    pendientes_operativos_view, moreapp_marcar_revision_view, moreapp_reprocesar_view,
+    pendientes_operativos_view, validacion_moreapp_view, moreapp_marcar_revision_view, moreapp_reprocesar_view,
     auditoria_list_view,
     api_buscar_medidores, api_buscar_clientes, api_buscar_tecnicos, api_obtener_medidor,
 )
@@ -180,6 +180,7 @@ urlpatterns = [
 
     # Vistas operativas (Puntos 2, 8, 9, 11)
     path('operacional/pendientes/', pendientes_operativos_view, name='pendientes_operativos'),
+    path('operacional/validacion-moreapp/', validacion_moreapp_view, name='validacion_moreapp'),
     path('cargas/', cargas_hub_view, name='cargas_hub'),
     path('cargas/listado/', cargas_list_view, name='cargas_list'),
     path('cargas/crear/', cargas_crear_view, name='cargas_crear'),

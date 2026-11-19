@@ -42,21 +42,7 @@
           </button>
         </form>
         {% endif %}
-        {% if mostrar_panel_operativo %}
-        {% if registro.estado_revision == 'PENDIENTE' or registro.estado_revision == 'CON_ADVERTENCIA' %}
-        <form method="post"
-              action="{% url 'moreapp_marcar_revision' registro.pk %}"
-              class="form-marcar-revision-detalle">
-          {% csrf_token %}
-          <input type="hidden" name="estado_revision" value="REVISADO">
-          <button type="submit" class="delco-action-btn is-import">
-            <span class="delco-action-btn-icon"><i class="bi bi-check2-circle"></i></span>
-            Revisado
-          </button>
-        </form>
-        {% endif %}
-        {% endif %}
-        <a href="{% url 'reportes_moreapp_list' %}" class="delco-action-btn is-help">
+        <a href="{{ volver_url }}" class="delco-action-btn is-help">
           <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
           Volver
         </a>
@@ -92,7 +78,7 @@
       {% elif registro.descripcion_alerta %}
         <div class="mt-1">{{ registro.descripcion_alerta }}</div>
       {% endif %}
-      <div class="small mt-2">Revisa inventario/cliente, corrige la asignación manualmente y luego marca como revisado.</div>
+      <div class="small mt-2">Revisa inventario y cliente, corrige la asignación y luego valida el informe.</div>
     </div>
   </div>
   {% elif bloqueos_operativos %}
@@ -122,6 +108,62 @@
     <i class="bi bi-x-circle-fill me-2"></i><strong>Error:</strong> {{ registro.mensaje_error }}
   </div>
   {% endif %}
+
+  <div class="card shadow-sm mb-4 delco-panel-card" id="validacion-informe">
+    <div class="card-header card-header-delco py-2">
+      <h6 class="mb-0"><i class="bi bi-clipboard-check"></i> Validación</h6>
+    </div>
+    <div class="card-body">
+      {% if registro.estado_revision == 'REVISADO' %}
+      <p class="mb-1">
+        <span class="badge bg-success">Validado</span>
+        {% if registro.revisado_nombre %}
+        por <strong>{{ registro.revisado_nombre }}</strong>
+        {% endif %}
+        {% if registro.fecha_revision %}
+        el {{ registro.fecha_revision|date:"d/m/Y H:i" }}
+        {% endif %}
+      </p>
+      <p class="small text-muted mb-0">Quedó registrada la cuenta con la que se validó el informe.</p>
+      {% elif registro.estado_revision == 'DESCARTADO' %}
+      <p class="mb-1">
+        <span class="badge bg-secondary">Descartado</span>
+        {% if registro.revisado_nombre %}
+        por <strong>{{ registro.revisado_nombre }}</strong>
+        {% endif %}
+        {% if registro.fecha_revision %}
+        el {{ registro.fecha_revision|date:"d/m/Y H:i" }}
+        {% endif %}
+      </p>
+      {% elif not informe_completo %}
+      <p class="mb-0 text-muted">El informe todavía no está completo. La validación se habilita cuando llega con las respuestas del formulario.</p>
+      {% elif mostrar_panel_operativo %}
+      <p class="mb-3">El informe está completo. Al validarlo queda tu nombre, el de esta cuenta.</p>
+      <div class="d-flex flex-wrap gap-2">
+        <form method="post" action="{% url 'moreapp_marcar_revision' registro.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="estado_revision" value="REVISADO">
+          <input type="hidden" name="next" value="{% url 'reportes_moreapp_detalle' registro.pk %}">
+          <button type="submit" class="btn btn-success">
+            <i class="bi bi-check2-circle me-1"></i> Validar informe
+          </button>
+        </form>
+        <form method="post"
+              action="{% url 'moreapp_marcar_revision' registro.pk %}"
+              onsubmit="return confirm('¿Descartar este informe? Sale de la cola de validación.');">
+          {% csrf_token %}
+          <input type="hidden" name="estado_revision" value="DESCARTADO">
+          <input type="hidden" name="next" value="{% url 'reportes_moreapp_detalle' registro.pk %}">
+          <button type="submit" class="btn btn-outline-secondary">
+            <i class="bi bi-x-circle me-1"></i> Descartar
+          </button>
+        </form>
+      </div>
+      {% else %}
+      <p class="mb-0 text-muted">Pendiente de validación. La registra un administrativo con su cuenta.</p>
+      {% endif %}
+    </div>
+  </div>
 
   {% if moreapp_geo or moreapp_fotos %}
   <div class="card shadow-sm mb-4 delco-panel-card">

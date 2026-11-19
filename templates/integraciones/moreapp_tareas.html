@@ -698,8 +698,7 @@
         ? '<span class="badge text-bg-success">Enviada</span>' + (item.precarga ? '<div class="small text-muted">Search precargado</div>' : '')
         : '<span class="badge text-bg-danger">Error</span><div class="small text-danger">' + escapeHtml(item.error || '') + '</div>';
       return '<tr><td>' + escapeHtml(item.fila) + '</td><td>' + escapeHtml(item.formulario) +
-        '</td><td class="small">' + escapeHtml(item.destinatario) + '</td><td>' +
-        escapeHtml(item.cliente || '—') + '</td><td>' + estado + '</td></tr>';
+        '</td><td class="small">' + escapeHtml(item.destinatario) + '</td><td>' + estado + '</td></tr>';
     }).join('');
     box.style.display = 'block';
     if (window.showToast) {

@@ -36,6 +36,35 @@ def _asignar_estado_revision(registro, nuevo_estado: str) -> None:
     registro.estado_revision = nuevo_estado
 
 
+def reclasificar_pendientes_con_alerta() -> int:
+    """Pasa a con advertencia los informes abiertos que ya traen alerta y siguen en pendiente."""
+    from django.db.models import Q
+    from ordenes_trabajo.models import IntegracionMoreApp
+
+    actualizados = IntegracionMoreApp.objects.filter(
+        eliminado=False,
+        estado_revision='PENDIENTE',
+    ).filter(
+        Q(alerta_doble_trabajo=True) | ~Q(descripcion_alerta='')
+    ).update(estado_revision='CON_ADVERTENCIA')
+    return int(actualizados)
+
+
+def _estado_revision_tras_llegada(registro, resumen) -> None:
+    """Deja el informe en la cola hasta que un administrativo lo valide.
+
+    Con advertencia si hay pendientes o doble trabajo. Si no, pendiente.
+    No marca REVISADO: esa confirmación es manual.
+    """
+    pendientes = len(resumen.get('pendientes_revision') or [])
+    alerta = bool(getattr(registro, 'alerta_doble_trabajo', False))
+    texto_alerta = str(getattr(registro, 'descripcion_alerta', '') or '').strip()
+    if pendientes or alerta or texto_alerta:
+        _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
+    else:
+        _asignar_estado_revision(registro, 'PENDIENTE')
+
+
 def _append_descripcion_alerta(registro, detalle: str) -> None:
     """Agrega un tramo a descripcion_alerta sin duplicar el mismo texto."""
     nuevo = str(detalle or '').strip()
@@ -1506,11 +1535,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
         elif sim_ip:
             _agregar_pendiente('SIM', sim_ip, 'IP dejada de SIM no encontrada en inventario')
 
-        # Punto 8: estado_revision para el bloque REG_MEDIDORES
-        if resumen['pendientes_revision'] or registro.alerta_doble_trabajo:
-            _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
-        else:
-            _asignar_estado_revision(registro, 'REVISADO')
+        _estado_revision_tras_llegada(registro, resumen)
 
         if cliente_obj:
             from ordenes_trabajo.sync import vincular_moreapp_a_orden
@@ -1641,13 +1666,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
     elif sim_ip:
         _agregar_pendiente('SIM', sim_ip, 'IP de SIM no encontrada en inventario')
 
-    # Punto 8: establecer estado_revision según resultados
-    if resumen['pendientes_revision']:
-        _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
-    elif registro.alerta_doble_trabajo:
-        _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
-    else:
-        _asignar_estado_revision(registro, 'REVISADO')
+    _estado_revision_tras_llegada(registro, resumen)
 
     # Vincular informe entrante con orden de trabajo del cliente
     if cliente_obj:
@@ -2478,6 +2497,8 @@ def procesar_payload_moreapp(
                     datos_norm=datos_norm,
                     nombre_formulario=nombre_formulario,
                 )
+            else:
+                _estado_revision_tras_llegada(existente, {'pendientes_revision': []})
             existente.datos_recibidos = data
             existente.datos_procesados = _finalizar_datos_procesados(datos_norm, data, existente, resumen_operativo)
             existente.nombre_formulario = nombre_formulario
@@ -2535,6 +2556,8 @@ def procesar_payload_moreapp(
                 datos_norm=datos_norm,
                 nombre_formulario=nombre_formulario,
             )
+        else:
+            _estado_revision_tras_llegada(registro, {'pendientes_revision': []})
         registro.datos_procesados = _finalizar_datos_procesados(datos_norm, data, registro, resumen_operativo)
         update_fields = ['datos_procesados', 'estado_revision', 'alerta_doble_trabajo', 'descripcion_alerta']
         if aplicar_operativo:

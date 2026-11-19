@@ -5,7 +5,6 @@ from __future__ import annotations
 import csv
 import io
 import re
-from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from .moreapp_fuentes import fold_header
@@ -31,11 +30,6 @@ _COL_ALIASES = {
     "ubicacion": ("ubicacion", "ubicación", "location", "direccion", "dirección"),
     "cliente": ("cliente", "cuenta", "numerocliente", "nrocliente", "numero"),
 }
-
-_LATLNG = re.compile(
-    r"^\s*(-?\d+(?:\.\d+)?)\s*[,;\s]\s*(-?\d+(?:\.\d+)?)\s*$"
-)
-
 
 def _norm(value: Any) -> str:
     return fold_header(str(value or ""))
@@ -101,7 +95,7 @@ def parse_lote_csv(content: bytes) -> Tuple[List[Dict[str, str]], int]:
         return [], 0
     parsed = _filas_desde_headers(rows_iter[0], rows_iter[1:])
     if parsed is None:
-        raise ValueError("El archivo debe incluir las columnas formulario y destinatario.")
+        raise ValueError("El archivo debe incluir las columnas Mensaje, Formulario y Destinatario.")
     return parsed
 
 
@@ -132,7 +126,7 @@ def parse_lote_xlsx(content: bytes) -> Tuple[List[Dict[str, str]], int]:
         if parsed is None:
             continue
         return parsed
-    raise ValueError("El archivo debe incluir las columnas formulario y destinatario.")
+    raise ValueError("El archivo debe incluir las columnas Mensaje, Formulario y Destinatario.")
 
 
 def parse_lote_archivo(nombre: str, content: bytes) -> Tuple[List[Dict[str, str]], int]:
@@ -142,29 +136,6 @@ def parse_lote_archivo(nombre: str, content: bytes) -> Tuple[List[Dict[str, str]
     else:
         rows, total = parse_lote_csv(content)
     return rows, total
-
-
-def parse_fecha_lote(value: str) -> str:
-    raw = (value or "").strip()
-    if not raw:
-        return ""
-    for fmt in ("%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%d", "%d/%m/%Y %H:%M", "%d/%m/%Y"):
-        try:
-            parsed = datetime.strptime(raw, fmt)
-            return parsed.strftime("%Y-%m-%dT%H:%M")
-        except ValueError:
-            continue
-    return ""
-
-
-def parse_ubicacion_lote(value: str) -> Tuple[str, str, str]:
-    raw = (value or "").strip()
-    if not raw:
-        return "", "", ""
-    match = _LATLNG.match(raw)
-    if match:
-        return raw, match.group(1), match.group(2)
-    return raw, "", ""
 
 
 def split_destinatarios(value: str) -> List[str]:
@@ -197,20 +168,10 @@ def fila_cliente_en_fuente(
 
 
 _PLANTILLA_COLUMNAS = (
-    "formulario",
-    "destinatario",
-    "mensaje",
-    "fecha",
-    "ubicacion",
-    "cliente",
+    "Mensaje",
+    "Formulario",
+    "Destinatario",
 )
-
-
-def plantilla_csv() -> bytes:
-    buffer = io.StringIO()
-    writer = csv.writer(buffer, delimiter=";")
-    writer.writerow(_PLANTILLA_COLUMNAS)
-    return buffer.getvalue().encode("utf-8-sig")
 
 
 def plantilla_xlsx() -> bytes:
@@ -220,20 +181,14 @@ def plantilla_xlsx() -> bytes:
     from openpyxl.comments import Comment
 
     ayudas = {
-        "formulario": "Nombre o ID del formulario publicado en MoreApp.",
-        "destinatario": "Nombre del técnico enlazado, correo MoreApp, o el nombre del grupo.",
-        "mensaje": "Texto corto que ve quien recibe la tarea.",
-        "fecha": "Fecha límite opcional, por ejemplo 2026-10-23 09:00.",
-        "ubicacion": "Dirección, o latitud y longitud separadas por coma.",
-        "cliente": "Número de cliente (CUENTA). Si coincide el Search, se precarga.",
+        "Mensaje": "Texto corto que ve quien recibe la tarea.",
+        "Formulario": "Nombre o ID del formulario publicado en MoreApp.",
+        "Destinatario": "Nombre del técnico enlazado, correo MoreApp, o el nombre del grupo.",
     }
     anchos = {
-        "formulario": 28,
-        "destinatario": 32,
-        "mensaje": 36,
-        "fecha": 22,
-        "ubicacion": 28,
-        "cliente": 18,
+        "Mensaje": 36,
+        "Formulario": 28,
+        "Destinatario": 32,
     }
     wb = Workbook()
     ws = wb.active
@@ -248,7 +203,7 @@ def plantilla_xlsx() -> bytes:
         cell.comment = Comment(ayudas[nombre], "DELCO")
         ws.column_dimensions[get_column_letter(col)].width = anchos[nombre]
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = "A1:F1"
+    ws.auto_filter.ref = "A1:C1"
 
     guia = wb.create_sheet("Instrucciones")
     guia["A1"] = "Columna"
@@ -262,8 +217,8 @@ def plantilla_xlsx() -> bytes:
         guia.cell(row=idx, column=2, value=ayudas[nombre])
     guia.column_dimensions["A"].width = 18
     guia.column_dimensions["B"].width = 70
-    guia["A8"] = "Una fila = una tarea. Completa desde la fila 2. No juntes varios campos en la misma celda."
-    guia.merge_cells("A8:B8")
+    guia["A6"] = "Una fila = una tarea. Completa desde la fila 2 solo Mensaje, Formulario y Destinatario."
+    guia.merge_cells("A6:B6")
 
     buffer = io.BytesIO()
     wb.save(buffer)

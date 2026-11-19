@@ -783,6 +783,24 @@ class IntegracionMoreApp(models.Model):
         db_index=True,
         help_text='Estado de revisión operativa del registro',
     )
+    revisado_por = models.ForeignKey(
+        Usuario,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='informes_moreapp_revisados',
+        help_text='Cuenta que validó o descartó el informe',
+    )
+    revisado_nombre = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text='Nombre de la cuenta al momento de validar o descartar',
+    )
+    fecha_revision = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text='Cuándo se validó o descartó el informe',
+    )
 
     eliminado = models.BooleanField(
         default=False,

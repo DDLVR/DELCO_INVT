@@ -68,20 +68,47 @@ def _timestamp_visto(request) -> Optional[timezone.datetime]:
     return dt
 
 
+def reclasificar_informes_si_corresponde() -> int:
+    """Reubica informes viejos con alerta, como máximo una vez por minuto.
+
+    Devuelve cuántos cambió en esta pasada. Si ya corrió hace poco, devuelve 0
+    sin volver a escribir.
+    """
+    from django.core.cache import cache
+    from integraciones.reader import reclasificar_pendientes_con_alerta
+    from web.perf_cache import _en_tests
+
+    if not _en_tests() and cache.get('moreapp:reclasificar_hecho'):
+        return 0
+    actualizados = int(reclasificar_pendientes_con_alerta())
+    if not _en_tests():
+        cache.set('moreapp:reclasificar_hecho', 1, TTL_CORTO)
+    return actualizados
+
+
 def _conteos_globales_aviso() -> Dict[str, int]:
     """COUNTs globales (sin sesión); cacheados para no pegarle a la DB en cada request."""
 
     def _calc():
+        reclasificados = reclasificar_informes_si_corresponde()
+        if reclasificados:
+            from web.perf_cache import cache_invalidate
+            cache_invalidate('moreapp:list_kpis', 'moreapp:adv_breakdown', 'moreapp:tareas_kpis')
+        from django.db.models import Count, Q
+
         ahora = timezone.now()
-        qs = _qs_por_revisar()
-        pendientes = qs.filter(estado_revision='PENDIENTE').count()
-        advertencias = qs.filter(estado_revision='CON_ADVERTENCIA').count()
-        llegaron_hoy = qs.filter(fecha_recepcion__gte=ahora - timedelta(hours=24)).count()
+        totales = _qs_por_revisar().aggregate(
+            pendientes=Count('id', filter=Q(estado_revision='PENDIENTE')),
+            advertencias=Count('id', filter=Q(estado_revision='CON_ADVERTENCIA')),
+            llegaron_hoy=Count('id', filter=Q(fecha_recepcion__gte=ahora - timedelta(hours=24))),
+        )
+        pendientes = totales['pendientes']
+        advertencias = totales['advertencias']
         return {
             'pendientes': pendientes,
             'advertencias': advertencias,
             'por_revisar': pendientes + advertencias,
-            'llegaron_hoy': llegaron_hoy,
+            'llegaron_hoy': totales['llegaron_hoy'],
         }
 
     return cache_get_or_set('moreapp:aviso_conteos', _calc, TTL_CORTO)

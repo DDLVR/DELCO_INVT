@@ -14,6 +14,24 @@
     {{ moreapp_form_charts.telemetria_estado|json_script:"datos-telemetria-estado" }}
     {{ moreapp_form_charts.telemetria_diagnostico|json_script:"datos-telemetria-diag" }}
 
+    {% if moreapp_aviso.por_revisar %}
+    <div class="alert alert-primary border shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-start gap-3" role="status">
+        <div>
+            <div class="fw-semibold mb-1">
+                <i class="bi bi-clipboard-check me-1"></i>
+                Hay {{ moreapp_aviso.por_revisar }} informe(s) MoreApp por validar
+            </div>
+            <div class="small mb-0">
+                Llegaron de terreno y esperan confirmación de un administrativo.
+                {% if moreapp_aviso.advertencias %}Con advertencia: <strong>{{ moreapp_aviso.advertencias }}</strong>.{% endif %}
+            </div>
+        </div>
+        <a href="{% url 'validacion_moreapp' %}" class="btn btn-sm btn-primary">
+            Abrir cola de validación
+        </a>
+    </div>
+    {% endif %}
+
     {% if moreapp_aviso.tareas_abiertas %}
     <div class="alert alert-warning border shadow-sm mb-3 d-flex flex-wrap justify-content-between align-items-start gap-3" role="status">
         <div>
@@ -71,6 +89,12 @@
                     <i class="bi bi-list-task"></i> Pendientes MoreApp
                     {% if moreapp_aviso.tareas_abiertas %}
                     <span class="badge bg-warning text-dark ms-1">{{ moreapp_aviso.tareas_abiertas }}</span>
+                    {% endif %}
+                </a>
+                <a href="{% url 'validacion_moreapp' %}" class="btn btn-sm delco-dash-btn-outline">
+                    <i class="bi bi-clipboard-check"></i> Validar informes
+                    {% if moreapp_aviso.por_revisar %}
+                    <span class="badge bg-primary ms-1">{{ moreapp_aviso.por_revisar }}</span>
                     {% endif %}
                 </a>
                 {% if rol == 'ADMIN' %}
@@ -334,19 +358,19 @@
                         {% if moreapp_envejecidos %}
                         <div class="d-flex justify-content-between align-items-center border rounded p-2 delco-timeline-item">
                             <div><span class="fw-bold text-danger">{{ moreapp_envejecidos }}</span> <span class="small text-muted">sin revisar &gt; 7 días</span></div>
-                            <a href="{% url 'reportes_moreapp_list' %}?revision=PENDIENTE" class="btn btn-sm btn-outline-danger">Revisar</a>
+                            <a href="{% url 'validacion_moreapp' %}?cola=envejecidos" class="btn btn-sm btn-outline-danger">Validar</a>
                         </div>
                         {% endif %}
                         {% if moreapp_con_advertencia %}
                         <div class="d-flex justify-content-between align-items-center border rounded p-2 delco-timeline-item">
                             <div><span class="fw-bold text-warning">{{ moreapp_con_advertencia }}</span> <span class="small text-muted">con advertencias</span></div>
-                            <a href="{% url 'reportes_moreapp_list' %}?revision=CON_ADVERTENCIA" class="btn btn-sm btn-outline-warning">Ver</a>
+                            <a href="{% url 'validacion_moreapp' %}?cola=advertencia" class="btn btn-sm btn-outline-warning">Validar</a>
                         </div>
                         {% endif %}
                         {% if moreapp_pendientes %}
                         <div class="d-flex justify-content-between align-items-center border rounded p-2 delco-timeline-item">
-                            <div><span class="fw-bold text-primary">{{ moreapp_pendientes }}</span> <span class="small text-muted">MoreApp pendientes de revisión</span></div>
-                            <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm btn-outline-primary">Cola MoreApp</a>
+                            <div><span class="fw-bold text-primary">{{ moreapp_pendientes }}</span> <span class="small text-muted">informes por validar</span></div>
+                            <a href="{% url 'validacion_moreapp' %}" class="btn btn-sm btn-outline-primary">Validar</a>
                         </div>
                         {% endif %}
                     </div>

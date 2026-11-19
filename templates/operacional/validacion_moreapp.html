@@ -1,0 +1,176 @@
+{% extends 'base.html' %}
+{% load custom_filters %}
+
+{% block title %}Validar informes MoreApp{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4 delco-catalogo">
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">MoreApp</p>
+        <h1 class="h3 mb-1">Validar informes</h1>
+        <p class="text-muted mb-0">Informes que ya llegaron y todavía no confirma un administrativo. Validar los saca de esta cola.</p>
+      </div>
+      <div class="delco-action-bar">
+        <a href="{% url 'reportes_moreapp_list' %}" class="delco-action-btn is-help">
+          <span class="delco-action-btn-icon"><i class="bi bi-clipboard-data"></i></span>
+          Reportes MoreApp
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-inbox"></i></span>
+        <div>
+          <div class="text-muted small">Por validar</div>
+          <div class="fs-4 fw-semibold">{{ contadores.por_validar|default:0 }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon is-info"><i class="bi bi-hourglass-split"></i></span>
+        <div>
+          <div class="text-muted small">Sin advertencia</div>
+          <div class="fs-4 fw-semibold">{{ contadores.PENDIENTE|default:0 }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-exclamation-triangle"></i></span>
+        <div>
+          <div class="text-muted small">Con advertencia</div>
+          <div class="fs-4 fw-semibold">{{ contadores.CON_ADVERTENCIA|default:0 }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon {% if contadores.envejecidos %}is-danger{% else %}is-muted{% endif %}"><i class="bi bi-clock-history"></i></span>
+        <div>
+          <div class="text-muted small">Sin validar &gt; 7 días</div>
+          <div class="fs-4 fw-semibold">{{ contadores.envejecidos|default:0 }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="delco-catalogo-filters mb-3">
+    <div class="delco-catalogo-chip-row mb-3">
+      <span class="small text-muted d-none d-md-inline">Cola</span>
+      <div class="delco-catalogo-chips">
+        <a href="{% url 'validacion_moreapp' %}" class="delco-catalogo-chip {% if not cola %}is-active{% endif %}">
+          Todas <span class="badge bg-dark">{{ contadores.por_validar|default:0 }}</span>
+        </a>
+        <a href="?cola=pendientes" class="delco-catalogo-chip {% if cola == 'pendientes' %}is-active{% endif %}">
+          Sin advertencia <span class="badge bg-dark">{{ contadores.PENDIENTE|default:0 }}</span>
+        </a>
+        <a href="?cola=advertencia" class="delco-catalogo-chip {% if cola == 'advertencia' %}is-active{% endif %}">
+          Con advertencia <span class="badge bg-dark">{{ contadores.CON_ADVERTENCIA|default:0 }}</span>
+        </a>
+        <a href="?cola=envejecidos" class="delco-catalogo-chip {% if cola == 'envejecidos' %}is-active{% endif %}">
+          Más de 7 días <span class="badge bg-dark">{{ contadores.envejecidos|default:0 }}</span>
+        </a>
+        <a href="?cola=validados" class="delco-catalogo-chip {% if cola == 'validados' %}is-active{% endif %}">
+          Validados <span class="badge bg-dark">{{ contadores.REVISADO|default:0 }}</span>
+        </a>
+      </div>
+    </div>
+    <form method="get" class="row g-2 align-items-end">
+      {% if cola %}<input type="hidden" name="cola" value="{{ cola }}">{% endif %}
+      <div class="col-md-6 col-xl-4">
+        <label class="form-label small mb-1" for="buscarValidacion">Buscar</label>
+        <input type="search" id="buscarValidacion" name="q" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Formulario, cliente, ID…">
+      </div>
+      <div class="col-auto">
+        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
+        <a href="{% url 'validacion_moreapp' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
+      </div>
+    </form>
+  </div>
+
+  <div class="delco-catalogo-panel">
+    <div class="delco-catalogo-panel-head">
+      <strong>Informes por validar</strong>
+      <span class="badge bg-secondary">{{ page_obj.paginator.count }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead>
+          <tr>
+            <th>Informe</th>
+            <th>Cliente</th>
+            <th class="d-none d-md-table-cell">Técnico</th>
+            <th class="d-none d-lg-table-cell">Llegó</th>
+            <th>Estado</th>
+            <th class="d-none d-md-table-cell">{% if cola == 'validados' %}Validó{% else %}Qué falta{% endif %}</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for reg in registros %}
+          <tr>
+            <td class="delco-cell-wrap">
+              <a href="{% url 'reportes_moreapp_detalle' reg.pk %}?next={{ request.get_full_path|urlencode }}" class="fw-bold text-decoration-none">
+                {{ reg.nombre_formulario|default:"Informe" }}
+              </a>
+              <div class="small text-muted">#{{ reg.numero_correlativo|default:reg.pk }}</div>
+            </td>
+            <td class="small delco-cell-wrap">
+              {% if reg.cliente_visible %}
+                {{ reg.cliente_visible }}
+                {% if reg.cliente_codigo_visible and reg.cliente_codigo_visible != reg.cliente_visible %}
+                <div class="text-muted">{{ reg.cliente_codigo_visible }}</div>
+                {% endif %}
+              {% else %}
+                <span class="text-muted">Sin cliente</span>
+              {% endif %}
+            </td>
+            <td class="small d-none d-md-table-cell">{{ reg.tecnico_visible|default:"—" }}</td>
+            <td class="small text-nowrap d-none d-lg-table-cell">
+              {{ reg.fecha_visible|date:"d/m/Y H:i" }}
+              {% if reg.envejecido %}<div class="text-danger">Más de 7 días</div>{% endif %}
+            </td>
+            <td>{% badge_moreapp_revision reg.estado_revision reg.get_estado_revision_display %}</td>
+            <td class="small d-none d-md-table-cell delco-cell-wrap">
+              {% if cola == 'validados' %}
+                {% if reg.revisado_nombre %}{{ reg.revisado_nombre }}{% else %}<span class="text-muted">Sin cuenta registrada</span>{% endif %}
+                {% if reg.fecha_revision %}<div class="text-muted">{{ reg.fecha_revision|date:"d/m/Y H:i" }}</div>{% endif %}
+              {% elif reg.alerta_preview %}{{ reg.alerta_preview }}{% else %}<span class="text-muted">Listo para validar</span>{% endif %}
+            </td>
+            <td class="text-end text-nowrap">
+              <a href="{% url 'reportes_moreapp_detalle' reg.pk %}?next={{ request.get_full_path|urlencode }}" class="btn btn-sm btn-outline-primary">Abrir informe</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-center text-muted py-4">
+              <i class="bi bi-check2-circle fs-4 d-block mb-2"></i>
+              {% if cola == 'validados' %}No hay informes validados{% if buscar %} con este filtro{% endif %}.{% else %}No hay informes pendientes de validación{% if buscar or cola %} con este filtro{% endif %}.{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 p-3">
+      <span class="small text-muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+      <div class="btn-group btn-group-sm">
+        {% if page_obj.has_previous %}
+        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        {% endif %}
+        {% if page_obj.has_next %}
+        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

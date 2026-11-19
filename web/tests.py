@@ -944,3 +944,136 @@ class DashboardFormulariosMoreAppTests(TestCase):
 		diags = {row['categoria']: row['count'] for row in charts['telemetria_diagnostico']}
 		self.assertEqual(diags.get('MODEM - DESPROGRAMADO'), 80)
 		self.assertEqual(diags.get('SIMCARD - SIN COBERTURA'), 20)
+
+
+class ValidacionMoreAppColaTests(TestCase):
+	"""Cola de informes MoreApp que debe validar un administrativo."""
+
+	def setUp(self):
+		self.password = 'admin1234'
+		self.admin = Usuario.objects.create_user(
+			rut='71717171-7',
+			email='admin_valida@delco.cl',
+			password=self.password,
+			nombre='Admin',
+			apellido='Valida',
+			nombre_interno='admin_valida',
+			rol='ADMINISTRATIVO',
+			is_active=True,
+		)
+		self.tecnico = Usuario.objects.create_user(
+			rut='72727272-2',
+			email='tec_valida@delco.cl',
+			password=self.password,
+			nombre='Tecnico',
+			apellido='Valida',
+			nombre_interno='tec_valida',
+			rol='TECNICO',
+			is_active=True,
+		)
+		self.client = Client()
+
+	def _registro(self, submission_id, estado='PENDIENTE', cliente='Cliente Norte'):
+		from ordenes_trabajo.models import IntegracionMoreApp
+
+		return IntegracionMoreApp.objects.create(
+			moreapp_submission_id=submission_id,
+			estado_sincronizacion='PROCESADO',
+			estado_revision=estado,
+			nombre_formulario='Mantenimiento Telemetria V3',
+			numero_correlativo=41,
+			datos_recibidos={'data': {'estado': 'EJECUTADO'}},
+			datos_procesados={'cliente_nombre': cliente, 'cliente_codigo': '9001'},
+		)
+
+	def test_advertencia_vieja_entra_en_mas_de_7_dias(self):
+		from datetime import timedelta
+		from django.utils import timezone
+		from ordenes_trabajo.models import IntegracionMoreApp
+
+		registro = self._registro('cola-vieja-adv', estado='CON_ADVERTENCIA', cliente='Advertencia Vieja')
+		IntegracionMoreApp.objects.filter(pk=registro.pk).update(
+			fecha_recepcion=timezone.now() - timedelta(days=10)
+		)
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		resp = self.client.get(reverse('validacion_moreapp') + '?cola=envejecidos')
+		self.assertContains(resp, 'Advertencia Vieja')
+
+	def test_cola_muestra_pendientes_y_oculta_validados(self):
+		self._registro('cola-pend-1', cliente='Pendiente Visible')
+		self._registro('cola-ok-1', estado='REVISADO', cliente='Ya Validado Oculto')
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		resp = self.client.get(reverse('validacion_moreapp'))
+		self.assertEqual(resp.status_code, 200)
+		self.assertContains(resp, 'Pendiente Visible')
+		self.assertNotContains(resp, 'Ya Validado Oculto')
+
+	def test_tecnico_no_entra_a_la_cola(self):
+		self.assertTrue(self.client.login(rut=self.tecnico.rut, password=self.password))
+		resp = self.client.get(reverse('validacion_moreapp'))
+		self.assertEqual(resp.status_code, 403)
+
+	def test_validar_saca_el_informe_de_la_cola(self):
+		registro = self._registro('cola-validar-1', cliente='Sale De La Cola')
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		resp = self.client.post(
+			reverse('moreapp_marcar_revision', args=[registro.pk]),
+			{
+				'estado_revision': 'REVISADO',
+				'next': '/operacional/validacion-moreapp/',
+			},
+		)
+		self.assertRedirects(resp, '/operacional/validacion-moreapp/')
+		registro.refresh_from_db()
+		self.assertEqual(registro.estado_revision, 'REVISADO')
+		self.assertEqual(registro.revisado_por_id, self.admin.id)
+		self.assertEqual(registro.revisado_nombre, 'Admin Valida')
+		self.assertIsNotNone(registro.fecha_revision)
+		lista = self.client.get(reverse('validacion_moreapp'))
+		self.assertNotContains(lista, 'Sale De La Cola')
+		validados = self.client.get(reverse('validacion_moreapp') + '?cola=validados')
+		self.assertContains(validados, 'Sale De La Cola')
+		self.assertContains(validados, 'Admin Valida')
+
+	def test_detalle_muestra_quien_valido(self):
+		registro = self._registro('cola-nombre-1', cliente='Con Nombre')
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		self.client.post(
+			reverse('moreapp_marcar_revision', args=[registro.pk]),
+			{'estado_revision': 'REVISADO'},
+		)
+		detalle = self.client.get(reverse('reportes_moreapp_detalle', args=[registro.pk]))
+		self.assertContains(detalle, 'Admin Valida')
+		self.assertContains(detalle, 'id="validacion-informe"')
+
+	def test_informe_incompleto_no_se_valida(self):
+		from ordenes_trabajo.models import IntegracionMoreApp
+
+		registro = IntegracionMoreApp.objects.create(
+			moreapp_submission_id='cola-incompleto-1',
+			estado_sincronizacion='ERROR_JSON',
+			estado_revision='PENDIENTE',
+			nombre_formulario='A medias',
+			datos_recibidos={},
+			datos_procesados={},
+		)
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		resp = self.client.post(
+			reverse('moreapp_marcar_revision', args=[registro.pk]),
+			{'estado_revision': 'REVISADO'},
+		)
+		self.assertRedirects(resp, reverse('reportes_moreapp_detalle', args=[registro.pk]))
+		registro.refresh_from_db()
+		self.assertEqual(registro.estado_revision, 'PENDIENTE')
+		self.assertEqual(registro.revisado_nombre, '')
+		detalle = self.client.get(reverse('reportes_moreapp_detalle', args=[registro.pk]))
+		self.assertContains(detalle, 'todavía no está completo')
+
+	def test_next_externo_no_se_sigue(self):
+		registro = self._registro('cola-next-1')
+		self.assertTrue(self.client.login(rut=self.admin.rut, password=self.password))
+		resp = self.client.post(
+			reverse('moreapp_marcar_revision', args=[registro.pk]),
+			{'estado_revision': 'REVISADO', 'next': 'https://example.com/robo'},
+		)
+		self.assertRedirects(resp, reverse('reportes_moreapp_detalle', args=[registro.pk]))

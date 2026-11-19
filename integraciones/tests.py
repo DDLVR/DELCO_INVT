@@ -232,3 +232,47 @@ class MoreAppApiIngestTests(TestCase):
 		self.assertEqual(registro.datos_procesados.get('estado'), 'INCIDENCIA')
 		self.assertEqual(registro.datos_procesados.get('diagnostico'), 'SIM')
 		self.assertFalse(registro.actualizo_cliente)
+		self.assertEqual(registro.estado_revision, 'PENDIENTE')
+
+
+class MoreAppValidacionAdministrativaTests(TestCase):
+	"""Un informe que llega queda pendiente hasta que un administrativo lo valide."""
+
+	def test_payload_nuevo_no_queda_revisado(self):
+		resultado = procesar_payload_moreapp(_payload_minimo('sub-validar-1'), ruta_context='webhook-test')
+		self.assertEqual(resultado['resultado'], 'nuevo')
+		registro = IntegracionMoreApp.objects.get(moreapp_submission_id='sub-validar-1')
+		self.assertEqual(registro.estado_revision, 'PENDIENTE')
+
+	def test_ingesta_sin_operativo_conserva_advertencia_en_estado(self):
+		from unittest import mock
+		payload = _payload_minimo('sub-alerta-sin-op')
+		with mock.patch('integraciones.reader._detectar_alerta_doble_trabajo', return_value=(True, 'Doble trabajo de prueba')):
+			procesar_payload_moreapp(payload, ruta_context='api', aplicar_operativo=False)
+		registro = IntegracionMoreApp.objects.get(moreapp_submission_id='sub-alerta-sin-op')
+		self.assertTrue(registro.alerta_doble_trabajo)
+		self.assertEqual(registro.estado_revision, 'CON_ADVERTENCIA')
+
+	def test_bloqueo_sin_pendiente_no_baja_a_limpio(self):
+		from integraciones.reader import _estado_revision_tras_llegada
+		registro = IntegracionMoreApp.objects.create(
+			moreapp_submission_id='sub-bloqueo-vacio',
+			estado_sincronizacion='PROCESADO',
+			estado_revision='CON_ADVERTENCIA',
+			alerta_doble_trabajo=False,
+			descripcion_alerta='BLOQUEO_OPERATIVO | MODEM: sin medidor',
+			datos_recibidos={'id': 'sub-bloqueo-vacio', 'info': {}, 'data': {}},
+			datos_procesados={},
+		)
+		_estado_revision_tras_llegada(registro, {'pendientes_revision': []})
+		self.assertEqual(registro.estado_revision, 'CON_ADVERTENCIA')
+
+	def test_reproceso_no_reabre_un_informe_ya_validado(self):
+		procesar_payload_moreapp(_payload_minimo('sub-validar-2'), ruta_context='webhook-test')
+		registro = IntegracionMoreApp.objects.get(moreapp_submission_id='sub-validar-2')
+		registro.estado_revision = 'REVISADO'
+		registro.save(update_fields=['estado_revision'])
+
+		procesar_payload_moreapp(_payload_minimo('sub-validar-2'), ruta_context='webhook-test')
+		registro.refresh_from_db()
+		self.assertEqual(registro.estado_revision, 'REVISADO')

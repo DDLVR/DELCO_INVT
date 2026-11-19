@@ -2092,9 +2092,10 @@ class MoreAppApiModulosTests(TestCase):
         wb = load_workbook(io.BytesIO(resp.content))
         ws = wb.active
         self.assertEqual(
-            [ws.cell(1, col).value for col in range(1, 7)],
-            ['formulario', 'destinatario', 'mensaje', 'fecha', 'ubicacion', 'cliente'],
+            [ws.cell(1, col).value for col in range(1, 4)],
+            ['Mensaje', 'Formulario', 'Destinatario'],
         )
+        self.assertIsNone(ws.cell(1, 4).value)
         self.assertIsNone(ws.cell(2, 1).value)
         self.assertNotEqual(ws.cell(1, 1).value, ws.cell(1, 2).value)
 
@@ -2157,10 +2158,10 @@ class MoreAppApiModulosTests(TestCase):
         }
         mocked_create.side_effect = [{'id': 'task-csv-1'}, {'id': 'task-csv-2'}]
         csv_body = (
-            'formulario,destinatario,mensaje,fecha,ubicacion,cliente\n'
-            'Instalacion,campo@more.app,Visita,2026-10-23 09:00,,1001\n'
-            'Instalacion,Terreno,Visita grupo,,,\n'
-            'No existe,campo@more.app,Mal,,,,\n'
+            'Mensaje,Formulario,Destinatario\n'
+            'Visita,Instalacion,campo@more.app\n'
+            'Visita grupo,Instalacion,Terreno\n'
+            'Mal,No existe,campo@more.app\n'
         )
         self.client.login(username=self.admin.rut, password=self.password)
         resp = self.client.post(
@@ -2177,7 +2178,8 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(mocked_create.call_count, 2)
         primera = mocked_create.call_args_list[0][0][1]
         self.assertEqual(primera['recipients'], ['campo@more.app'])
-        self.assertEqual(primera['data']['cliente1']['CUENTA'], '1001')
+        self.assertEqual(primera['message'], 'Visita')
+        self.assertEqual(primera['data'], {})
         segunda = mocked_create.call_args_list[1][0][1]
         self.assertEqual(segunda['recipients'], ['campo@more.app'])
         self.assertEqual(segunda['data'], {})
@@ -2508,8 +2510,8 @@ class MoreAppApiModulosTests(TestCase):
     def test_lote_csv_cuenta_filas_sobre_el_maximo(self):
         from integraciones.moreapp_tareas_lote import MAX_LOTE, parse_lote_csv
 
-        body = 'formulario,destinatario,mensaje,fecha,ubicacion,cliente\n'
-        body += ''.join('F%s,a@b.c,m,,,,\n' % idx for idx in range(MAX_LOTE + 1))
+        body = 'Mensaje,Formulario,Destinatario\n'
+        body += ''.join('m,F%s,a@b.c\n' % idx for idx in range(MAX_LOTE + 1))
         rows, total = parse_lote_csv(body.encode('utf-8'))
         self.assertEqual(total, MAX_LOTE + 1)
         self.assertEqual(len(rows), MAX_LOTE)
@@ -2523,8 +2525,9 @@ class MoreAppApiModulosTests(TestCase):
         from integraciones.moreapp_tareas_lote import parse_lote_xlsx, plantilla_xlsx
 
         wb = load_workbook(BytesIO(plantilla_xlsx()))
-        wb['Tareas']['A2'] = 'Instalacion'
-        wb['Tareas']['B2'] = 'campo@more.app'
+        wb['Tareas']['A2'] = 'Visita'
+        wb['Tareas']['B2'] = 'Instalacion'
+        wb['Tareas']['C2'] = 'campo@more.app'
         wb.active = wb['Instrucciones']
         buf = BytesIO()
         wb.save(buf)

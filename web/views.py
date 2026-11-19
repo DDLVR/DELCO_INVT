@@ -254,25 +254,23 @@ def _consumir_aviso_export_reportes(request):
 
 def login_view(request):
     """Autenticación de usuarios con RUT"""
-    # Si ya está logueado, no mostrar login
     if request.user.is_authenticated:
         return redirect('dashboard')
 
     if request.method == "POST":
-        rut = request.POST.get("username")  # RUT
+        rut = (request.POST.get("username") or "").strip()
         password = request.POST.get("password")
-        # Limpiar el RUT: quitar puntos y guion
         rut_limpio = rut.replace('.', '').replace('-', '').upper()
         from usuarios.models import Usuario
         try:
-            # Buscar usuario por rut en ambos formatos
-            usuario = Usuario.objects.filter(rut=rut).first()
-            if not usuario:
-                usuario = Usuario.objects.filter(rut=rut_limpio).first()
+            candidatos = {
+                usuario.rut: usuario
+                for usuario in Usuario.objects.filter(rut__in=[rut, rut_limpio])
+            }
+            usuario = candidatos.get(rut) or candidatos.get(rut_limpio)
             if not usuario:
                 messages.error(request, "RUT no encontrado en el sistema.")
             else:
-                # Intentar autenticar
                 user = authenticate(request, username=usuario.rut, password=password)
                 if user is not None:
                     login(request, user)
@@ -281,8 +279,7 @@ def login_view(request):
                     request.session.set_expiry(int(getattr(settings, 'ABSOLUTE_SESSION_TIMEOUT_SECONDS', 28800)))
                     messages.success(request, f"Bienvenido {usuario.nombre_interno}!")
                     return redirect('dashboard')
-                else:
-                    messages.error(request, "Contraseña incorrecta.")
+                messages.error(request, "Contraseña incorrecta.")
         except Exception as e:
             messages.error(request, f"Error: {str(e)}")
 
@@ -471,7 +468,7 @@ def dashboard_view(request):
             # Envejecimiento: registros con revisión pendiente > 7 días (Punto 11)
             umbral_7d = ahora - timedelta(days=7)
             context['moreapp_envejecidos'] = IntegracionMoreApp.objects.filter(
-                estado_revision='PENDIENTE',
+                estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
                 eliminado=False,
                 fecha_recepcion__lt=umbral_7d,
             ).count()
@@ -541,28 +538,155 @@ def dashboard_view(request):
 # ========== VISTAS OPERATIVAS (Puntos 2, 8, 9, 11) ==========
 
 def _contadores_pendientes_moreapp():
-    """Contadores de la cola operativa MoreApp (excluye soft-deleted)."""
-    from ordenes_trabajo.models import IntegracionMoreApp
-    from django.utils import timezone
+    """Contadores de la cola operativa MoreApp en una sola consulta."""
     from datetime import timedelta
+    from django.db.models import Count, Q
+    from django.utils import timezone
+    from ordenes_trabajo.models import IntegracionMoreApp
 
-    qs_activos = IntegracionMoreApp.objects.filter(eliminado=False)
     umbral_7d = timezone.now() - timedelta(days=7)
-    # Críticas solo cuentan si aún requieren revisión operativa
-    critica_qs = qs_activos.filter(
-        descripcion_alerta__icontains='ALERTA_CRITICA',
+    abiertos = ('PENDIENTE', 'CON_ADVERTENCIA')
+    return IntegracionMoreApp.objects.filter(eliminado=False).aggregate(
+        PENDIENTE=Count('id', filter=Q(estado_revision='PENDIENTE')),
+        CON_ADVERTENCIA=Count('id', filter=Q(estado_revision='CON_ADVERTENCIA')),
+        REVISADO=Count('id', filter=Q(estado_revision='REVISADO')),
+        DESCARTADO=Count('id', filter=Q(estado_revision='DESCARTADO')),
+        CRITICA=Count('id', filter=Q(
+            descripcion_alerta__icontains='ALERTA_CRITICA',
+            estado_revision__in=abiertos,
+        )),
+        envejecidos=Count('id', filter=Q(
+            estado_revision__in=abiertos,
+            fecha_recepcion__lt=umbral_7d,
+        )),
+    )
+
+
+def _destino_moreapp_interno(valor, default):
+    """Acepta solo volver a la cola de validación o al detalle/listado MoreApp."""
+    from urllib.parse import urlsplit
+    import re
+
+    texto = (valor or '').strip()
+    if not texto or any(ch in texto for ch in ('\r', '\n', '\\')):
+        return default
+    partes = urlsplit(texto)
+    if partes.scheme or partes.netloc:
+        return default
+    path = partes.path or ''
+    if not path.startswith('/'):
+        return default
+    permitidas = {
+        '/operacional/validacion-moreapp',
+        '/reportes/moreapp',
+    }
+    detalle = re.compile(r'^/reportes/moreapp/\d+/?$')
+    normal = path.rstrip('/') or '/'
+    if normal not in permitidas and not detalle.match(path):
+        return default
+    consulta = f'?{partes.query}' if partes.query else ''
+    return path + consulta
+
+
+@role_required(['ADMIN', 'ADMINISTRATIVO'])
+def validacion_moreapp_view(request):
+    """Cola de informes MoreApp que un administrativo todavía no valida."""
+    from datetime import timedelta
+    from django.core.paginator import Paginator
+    from django.utils import timezone
+    from ordenes_trabajo.models import IntegracionMoreApp
+    from web.moreapp_avisos import marcar_aviso_moreapp_visto
+
+    marcar_aviso_moreapp_visto(request)
+    from web.moreapp_avisos import (
+        invalidar_caches_aviso_moreapp,
+        reclasificar_informes_si_corresponde,
+    )
+
+    if reclasificar_informes_si_corresponde():
+        invalidar_caches_aviso_moreapp()
+
+    cola = (request.GET.get('cola') or '').strip().lower()
+    if cola not in ('pendientes', 'advertencia', 'envejecidos', 'validados'):
+        cola = ''
+    buscar = (request.GET.get('q') or '').strip()
+    try:
+        per_page = int(request.GET.get('per_page') or 50)
+    except (TypeError, ValueError):
+        per_page = 50
+    if per_page not in (25, 50, 100):
+        per_page = 50
+
+    umbral_7d = timezone.now() - timedelta(days=7)
+    abiertos = IntegracionMoreApp.objects.filter(
+        eliminado=False,
         estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
     )
-    return {
-        'PENDIENTE': qs_activos.filter(estado_revision='PENDIENTE').count(),
-        'CON_ADVERTENCIA': qs_activos.filter(estado_revision='CON_ADVERTENCIA').count(),
-        'REVISADO': qs_activos.filter(estado_revision='REVISADO').count(),
-        'DESCARTADO': qs_activos.filter(estado_revision='DESCARTADO').count(),
-        'CRITICA': critica_qs.count(),
-        'envejecidos': qs_activos.filter(
-            estado_revision='PENDIENTE', fecha_recepcion__lt=umbral_7d
-        ).count(),
-    }
+    contadores = _contadores_pendientes_moreapp()
+    contadores['por_validar'] = contadores['PENDIENTE'] + contadores['CON_ADVERTENCIA']
+
+    if cola == 'validados':
+        qs = IntegracionMoreApp.objects.filter(
+            eliminado=False,
+            estado_revision='REVISADO',
+        ).order_by('-fecha_revision', '-id')
+    else:
+        qs = abiertos.order_by('fecha_recepcion', 'id')
+        if cola == 'pendientes':
+            qs = qs.filter(estado_revision='PENDIENTE')
+        elif cola == 'advertencia':
+            qs = qs.filter(estado_revision='CON_ADVERTENCIA')
+        elif cola == 'envejecidos':
+            qs = qs.filter(
+                estado_revision__in=('PENDIENTE', 'CON_ADVERTENCIA'),
+                fecha_recepcion__lt=umbral_7d,
+            )
+    if buscar:
+        qs = qs.filter(
+            Q(nombre_formulario__icontains=buscar)
+            | Q(moreapp_submission_id__icontains=buscar)
+            | Q(datos_procesados__cliente_nombre__icontains=buscar)
+            | Q(datos_procesados__cliente_codigo__icontains=buscar)
+            | Q(descripcion_alerta__icontains=buscar)
+            | Q(revisado_nombre__icontains=buscar)
+        )
+
+    page_obj = Paginator(qs, per_page).get_page(request.GET.get('page') or 1)
+    registros = list(page_obj.object_list)
+    for reg in registros:
+        datos = reg.datos_procesados if isinstance(reg.datos_procesados, dict) else {}
+        bloqueos = _extraer_bloqueos_operativos_registro(reg)
+        reg.cliente_visible = datos.get('cliente_nombre') or datos.get('cliente_codigo') or ''
+        reg.cliente_codigo_visible = datos.get('cliente_codigo') or ''
+        reg.fecha_visible = _fecha_desde_json_moreapp(reg)
+        reg.tecnico_visible = _tecnico_visible_moreapp(reg)
+        reg.envejecido = bool(
+            reg.estado_revision in ('PENDIENTE', 'CON_ADVERTENCIA')
+            and reg.fecha_recepcion
+            and reg.fecha_recepcion < umbral_7d
+        )
+        if bloqueos:
+            primero = bloqueos[0]
+            equipo = ' '.join(
+                filter(None, [primero.get('tipo_equipo'), primero.get('identificador')])
+            ).strip()
+            motivo = (primero.get('motivo') or '').strip()
+            reg.alerta_preview = f'{equipo + ": " if equipo else ""}{motivo}'.strip()[:180]
+        else:
+            reg.alerta_preview = (reg.descripcion_alerta or '')[:180]
+
+    query_params = request.GET.copy()
+    query_params.pop('page', None)
+    return render(request, 'operacional/validacion_moreapp.html', {
+        'registros': registros,
+        'page_obj': page_obj,
+        'query_string': query_params.urlencode(),
+        'cola': cola,
+        'buscar': buscar,
+        'per_page': per_page,
+        'contadores': contadores,
+        'puede_validar': True,
+    })
 
 
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
@@ -620,13 +744,38 @@ def pendientes_operativos_view(request):
     })
 
 
+_ESTADOS_SYNC_INCOMPLETOS = {
+    'PENDIENTE', 'PROCESANDO', 'ERROR', 'ERROR_JSON', 'ERROR_LECTURA',
+}
+
+
+def informe_moreapp_completo(registro) -> bool:
+    """El informe llegó con las respuestas del formulario y no quedó a medias."""
+    if (getattr(registro, 'estado_sincronizacion', None) or '') in _ESTADOS_SYNC_INCOMPLETOS:
+        return False
+    payload = registro.datos_recibidos if isinstance(registro.datos_recibidos, dict) else {}
+    data = payload.get('data') if isinstance(payload, dict) else None
+    return isinstance(data, dict) and bool(data)
+
+
+def _nombre_cuenta_usuario(usuario) -> str:
+    partes = [
+        str(getattr(usuario, 'nombre', '') or '').strip(),
+        str(getattr(usuario, 'apellido', '') or '').strip(),
+    ]
+    nombre = ' '.join(parte for parte in partes if parte)
+    return nombre or str(getattr(usuario, 'nombre_interno', '') or '').strip() or str(getattr(usuario, 'rut', '') or '').strip()
+
+
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
 @require_POST
 def moreapp_marcar_revision_view(request, pk):
     """
-    Punto 8 y 9: Marca un registro MoreApp con un nuevo estado de revisión.
-    Acepta: REVISADO, DESCARTADO, CON_ADVERTENCIA.
+    Valida o descarta un informe MoreApp desde el apartado del detalle.
+    Solo un informe completo se puede validar o descartar.
     """
+    from django.urls import reverse
+    from django.utils import timezone
     from ordenes_trabajo.models import IntegracionMoreApp
     from web.moreapp_avisos import invalidar_caches_aviso_moreapp
 
@@ -640,10 +789,34 @@ def moreapp_marcar_revision_view(request, pk):
         return redirect('reportes_moreapp_detalle', pk=pk)
 
     registro = get_object_or_404(IntegracionMoreApp, pk=pk, eliminado=False)
+    if nuevo_estado in ('REVISADO', 'DESCARTADO') and not informe_moreapp_completo(registro):
+        if es_ajax:
+            return JsonResponse({'success': False, 'error': 'El informe todavía no está completo'}, status=400)
+        messages.error(request, 'El informe todavía no está completo. Se puede validar cuando llegue completo.')
+        return redirect('reportes_moreapp_detalle', pk=pk)
+
     estado_anterior = registro.estado_revision
     registro.estado_revision = nuevo_estado
-    registro.save(update_fields=['estado_revision'])
+    update_fields = ['estado_revision', 'revisado_por', 'revisado_nombre', 'fecha_revision']
+    if nuevo_estado in ('REVISADO', 'DESCARTADO'):
+        registro.revisado_por = request.user
+        registro.revisado_nombre = _nombre_cuenta_usuario(request.user)
+        registro.fecha_revision = timezone.now()
+    else:
+        registro.revisado_por = None
+        registro.revisado_nombre = ''
+        registro.fecha_revision = None
+    registro.save(update_fields=update_fields)
     invalidar_caches_aviso_moreapp()
+    if nuevo_estado == 'REVISADO':
+        motivo = 'Validación administrativa del informe MoreApp'
+        mensaje = f'Informe validado por {registro.revisado_nombre}.'
+    elif nuevo_estado == 'DESCARTADO':
+        motivo = 'Informe MoreApp descartado en la validación administrativa'
+        mensaje = f'Informe descartado por {registro.revisado_nombre}.'
+    else:
+        motivo = 'Cambio de estado de revisión operativa MoreApp'
+        mensaje = f'Estado de revisión actualizado a: {registro.get_estado_revision_display()}'
     register_audit_event(
         AuditEvent(
             actor_id=getattr(request.user, 'id', None),
@@ -653,13 +826,16 @@ def moreapp_marcar_revision_view(request, pk):
             field_name='estado_revision',
             old_value=estado_anterior,
             new_value=nuevo_estado,
-            reason='Cambio de estado de revisión operativa MoreApp',
+            reason=motivo,
         )
     )
 
     if not es_ajax:
-        messages.success(request, f'Estado de revisión actualizado a: {registro.get_estado_revision_display()}')
-        return redirect('reportes_moreapp_detalle', pk=pk)
+        messages.success(request, mensaje)
+        return redirect(_destino_moreapp_interno(
+            request.POST.get('next'),
+            reverse('reportes_moreapp_detalle', kwargs={'pk': pk}),
+        ))
 
     return JsonResponse({
         'success': True,
@@ -6258,6 +6434,7 @@ def reportes_moreapp_detalle(request, pk):
         'bloqueos_operativos': bloqueos_operativos,
         'movimientos_operativos': movimientos_operativos,
         'mostrar_panel_operativo': request.user.rol in ('ADMIN', 'ADMINISTRATIVO'),
+        'informe_completo': informe_moreapp_completo(registro),
         'es_alerta_critica': (
             'ALERTA_CRITICA' in str(registro.descripcion_alerta or '').upper()
             or any(b.get('es_critica') for b in bloqueos_operativos)
@@ -6267,6 +6444,10 @@ def reportes_moreapp_detalle(request, pk):
         'moreapp_fotos_disponibles': sum(1 for f in moreapp_fotos if f.get('disponible')),
         'respuestas_formulario': respuestas_formulario,
         'fotos_respuestas_count': contar_archivos(respuestas_formulario),
+        'volver_url': _destino_moreapp_interno(
+            request.GET.get('next'),
+            '/reportes/moreapp/',
+        ),
     })
 
 
