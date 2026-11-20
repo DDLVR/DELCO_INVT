@@ -20,7 +20,7 @@ from .moreapp_asignaciones import (
 )
 from .moreapp_permisos import anotar_accesos_en_formularios, cargar_usuarios_moreapp_con_permisos
 from .moreapp_catalogo_views import _catalogo_return_url, _fold_text, _form_row
-from .moreapp_http import assert_safe_id
+from .moreapp_api import assert_safe_id
 
 
 def contexto_formularios_asignados(request, *, todos: bool = False):

@@ -21,20 +21,31 @@
     </div>
   </div>
 
-  <!-- Filtro select por rol -->
-  <div class="row mb-3">
-    <div class="col-md-4">
-      <div class="card delco-form-section border-0">
-        <div class="card-body py-3">
-          <label for="filtro-rol" class="form-label mb-2">Filtrar por rol:</label>
-          <select id="filtro-rol" class="form-select">
-            <option value="">Todos</option>
-            {% for rol in roles_order %}
-              <option value="{{ rol }}">{{ rol }}</option>
-            {% endfor %}
+  <div class="delco-filtro-builder mb-3" data-filtro-auto data-navegacion="pagina">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label small mb-1">Tipo de filtro</label>
+        <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+        <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+        <div data-filtro-panel="rol" data-filtro-titulo="Rol" data-filtro-param="rol" class="d-none">
+          <select id="filtro-rol" class="form-select form-select-sm" data-orden-lista="no" aria-label="Rol">
+            <option value="">Elige</option>
+            {% for rol in roles_order %}<option value="{{ rol }}">{{ rol }}</option>{% endfor %}
           </select>
         </div>
       </div>
+      <div class="col-12 col-md-auto">
+        <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+      </div>
+    </div>
+    <div class="delco-filtro-activos js-filtro-activos">
+      {% if request.GET.rol %}
+      <a class="delco-filtro-chip" href="?{% url_sin 'rol' %}"><span class="delco-filtro-chip-tipo">Rol</span><span>{{ request.GET.rol }}</span><i class="bi bi-x-lg"></i></a>
+      <a class="delco-filtro-limpiar" href="{% url 'usuarios_list' %}">Quitar filtros</a>
+      {% endif %}
     </div>
   </div>
 
@@ -168,17 +179,10 @@
 <script>
 // Filtro select por rol y popups de edición/borrado
 document.addEventListener('DOMContentLoaded', function() {
-  const filtroRol = document.getElementById('filtro-rol');
   const filas = document.querySelectorAll('#usuarios-tbody tr');
-  filtroRol.addEventListener('change', function() {
-    const valor = this.value;
-    filas.forEach(fila => {
-      if (!valor || fila.getAttribute('data-rol') === valor) {
-        fila.style.display = '';
-      } else {
-        fila.style.display = 'none';
-      }
-    });
+  const rolActivo = new URLSearchParams(window.location.search).get('rol') || '';
+  filas.forEach(fila => {
+    fila.style.display = (!rolActivo || fila.getAttribute('data-rol') === rolActivo) ? '' : 'none';
   });
 
   // Modal editar usuario

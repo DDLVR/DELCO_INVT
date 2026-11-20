@@ -23,7 +23,7 @@
         {% url 'moreapp_tareas_exportar' as moreapp_tareas_exportar_url %}
         {% if moreapp_tareas_exportar_url %}
         <div class="delco-action-split">
-          <a href="{{ moreapp_tareas_exportar_url }}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}" class="delco-action-btn is-export">
+          <a href="{{ moreapp_tareas_exportar_url }}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}" class="delco-action-btn is-export js-export-filtradas" data-export-base="{{ moreapp_tareas_exportar_url }}">
             <span class="delco-action-btn-icon"><i class="bi bi-download"></i></span>
             <span class="delco-action-label-lg">Exportar</span>
             <span class="delco-action-label-sm">Excel</span>
@@ -34,7 +34,7 @@
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
             <li>
-              <a class="dropdown-item" href="{{ moreapp_tareas_exportar_url }}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}">
+              <a class="dropdown-item js-export-filtradas" data-export-base="{{ moreapp_tareas_exportar_url }}" href="{{ moreapp_tareas_exportar_url }}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}">
                 Exportar filtradas
               </a>
             </li>
@@ -113,10 +113,10 @@
     </div>
     <div class="col-6 col-md-4 col-xl-2">
       <div class="delco-catalogo-stat">
-        <span class="delco-catalogo-stat-icon {% if kpis_tareas.vencidas %}is-danger{% else %}is-muted{% endif %}"><i class="bi bi-exclamation-triangle"></i></span>
+        <span class="delco-catalogo-stat-icon {% if resumen.vencidas %}is-danger{% else %}is-muted{% endif %}"><i class="bi bi-exclamation-triangle"></i></span>
         <div>
           <div class="text-muted small">Vencidas</div>
-          <div class="fs-4 fw-semibold {% if kpis_tareas.vencidas %}text-danger{% endif %}" data-kpi="kpis.vencidas">{{ kpis_tareas.vencidas|default:0 }}</div>
+          <div class="fs-4 fw-semibold {% if resumen.vencidas %}text-danger{% endif %}" data-kpi="resumen.vencidas">{{ resumen.vencidas|default:0 }}</div>
         </div>
       </div>
     </div>
@@ -133,6 +133,7 @@
 
   <p class="text-muted small mb-3">Flujo: Delco crea la tarea → MoreApp avisa al destinatario → el formulario se completa en la app → Delco revisa el contenido y el PDF.</p>
 
+  <div id="js-tareas-por-form">
   {% if resumen.por_formulario %}
   <div class="row g-3 mb-3">
     <div class="col-md-6">
@@ -152,88 +153,110 @@
     </div>
   </div>
   {% endif %}
+  </div>
 
   <div class="delco-catalogo-filters mb-3">
-      <div class="delco-catalogo-chip-row mb-3">
-        <span class="small text-muted d-none d-md-inline">Cola</span>
-        <div class="delco-catalogo-chips">
-          <a href="{% url 'moreapp_tareas_list' %}" class="delco-catalogo-chip {% if not cola_filtro %}is-active{% endif %}">Todas</a>
-          <a href="?cola=pendientes" class="delco-catalogo-chip {% if cola_filtro == 'pendientes' %}is-active{% endif %}">
-            Sin asignar <span class="badge bg-dark" data-cola-count="pendientes">{{ colas_conteo.pendientes|default:0 }}</span>
+      <div class="delco-filtro-builder">
+        <div class="row g-2 align-items-end">
+          <div class="col-12 col-md-4 col-xl-3">
+            <label class="form-label small mb-1" for="js-filtro-tipo">Tipo de filtro</label>
+            <select id="js-filtro-tipo" class="form-select form-select-sm" data-orden-lista="no">
+              <option value="">Elige un filtro</option>
+              <option value="cola">Cola</option>
+              <option value="estado">Estado</option>
+              <option value="formulario">Formulario</option>
+              <option value="tipo_trabajo">Tipo de trabajo</option>
+              <option value="cuenta">CUENTA</option>
+              <option value="proyecto_carga">Proyecto / Carga</option>
+              <option value="destinatario">Destinatario</option>
+              <option value="buscar">Buscar</option>
+              <option value="fecha">Fecha</option>
+              <option value="periodo">Periodo</option>
+            </select>
+          </div>
+          <div class="col-12 col-md-4 col-xl-3">
+            <label class="form-label small mb-1" id="js-filtro-valor-label" for="js-filtro-vacio">Qué buscar</label>
+            <input id="js-filtro-vacio" class="form-control form-control-sm" placeholder="Primero elige el tipo" disabled>
+            <div data-filtro-panel="cola" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Cola">
+                <option value="">Elige una cola</option>
+                <option value="pendientes">Sin asignar ({{ colas_conteo.pendientes|default:0 }})</option>
+                <option value="en_campo">En campo ({{ colas_conteo.en_campo|default:0 }})</option>
+                <option value="completadas">Completadas ({{ colas_conteo.completadas|default:0 }})</option>
+                <option value="vencidas">Vencidas ({{ colas_conteo.vencidas|default:0 }})</option>
+                <option value="errores">Con error ({{ colas_conteo.errores|default:0 }})</option>
+              </select>
+            </div>
+            <div data-filtro-panel="estado" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Estado">
+                <option value="">Elige un estado</option>
+                {% for value, label in estados_filtro %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div data-filtro-panel="formulario" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Formulario">
+                <option value="">Elige un formulario</option>
+                {% for nombre in formularios_filtro %}
+                <option value="{{ nombre }}">{{ nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div data-filtro-panel="tipo_trabajo" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Tipo de trabajo">
+                <option value="">Elige un tipo</option>
+                {% for tipo_code, tipo_nombre in tipos_trabajo %}
+                <option value="{{ tipo_code }}">{{ tipo_nombre }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div data-filtro-panel="cuenta" class="d-none">
+              <input type="text" class="form-control form-control-sm" placeholder="Nº de cliente" aria-label="CUENTA">
+            </div>
+            <div data-filtro-panel="proyecto_carga" class="d-none">
+              <input type="text" class="form-control form-control-sm" placeholder="Nombre del proyecto" aria-label="Proyecto">
+            </div>
+            <div data-filtro-panel="destinatario" class="d-none">
+              <input type="text" class="form-control form-control-sm" placeholder="Técnico o correo" aria-label="Destinatario">
+            </div>
+            <div data-filtro-panel="buscar" class="d-none">
+              <input type="text" class="form-control form-control-sm" placeholder="Título, mensaje, proyecto…" aria-label="Buscar">
+            </div>
+            <div data-filtro-panel="fecha" class="d-none">
+              <input type="date" class="form-control form-control-sm" aria-label="Desde">
+            </div>
+            <div data-filtro-panel="periodo" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Periodo">
+                <option value="">Elige un periodo</option>
+                <option value="7">Últimos 7 días</option>
+                <option value="30">Últimos 30 días</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-12 col-md-3 col-xl-3 d-none" id="js-filtro-rango">
+            <label class="form-label small mb-1" for="js-filtro-hasta">Hasta</label>
+            <input type="date" id="js-filtro-hasta" class="form-control form-control-sm">
+          </div>
+          <div class="col-12 col-md-auto">
+            <button type="button" class="btn btn-sm btn-primary" id="js-filtro-agregar">
+              <i class="bi bi-plus-lg"></i> Agregar filtro
+            </button>
+          </div>
+        </div>
+        <div class="delco-filtro-activos" id="js-filtro-activos">
+          {% for filtro in filtros_activos %}
+          <a class="delco-filtro-chip" data-delco-partial="1" href="?{{ filtro.quitar }}" title="Quitar este filtro">
+            <span class="delco-filtro-chip-tipo">{{ filtro.titulo }}</span>
+            <span>{{ filtro.valor }}</span>
+            <i class="bi bi-x-lg" aria-hidden="true"></i>
           </a>
-          <a href="?cola=en_campo" class="delco-catalogo-chip {% if cola_filtro == 'en_campo' %}is-active{% endif %}">
-            En campo <span class="badge bg-dark" data-cola-count="en_campo">{{ colas_conteo.en_campo|default:0 }}</span>
-          </a>
-          <a href="?cola=completadas" class="delco-catalogo-chip {% if cola_filtro == 'completadas' %}is-active{% endif %}">
-            Completadas <span class="badge bg-dark" data-cola-count="completadas">{{ colas_conteo.completadas|default:0 }}</span>
-          </a>
-          <a href="?cola=vencidas" class="delco-catalogo-chip {% if cola_filtro == 'vencidas' %}is-active{% endif %}">
-            Vencidas <span class="badge bg-dark" data-cola-count="vencidas">{{ colas_conteo.vencidas|default:0 }}</span>
-          </a>
-          <a href="?cola=errores" class="delco-catalogo-chip {% if cola_filtro == 'errores' %}is-active{% endif %}">
-            Con error <span class="badge bg-dark" data-cola-count="errores">{{ colas_conteo.errores|default:0 }}</span>
-          </a>
+          {% endfor %}
+          {% if filtros_activos %}
+          <a class="delco-filtro-limpiar" data-delco-partial="1" href="?{{ query_sin_filtros }}">Quitar filtros</a>
+          {% endif %}
         </div>
       </div>
-      <form method="get" class="row g-2 align-items-end">
-        <div class="col-6 col-md-4 col-xl-2">
-          <label class="form-label small mb-1">Estado</label>
-          <select name="estado" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            {% for value, label in estados_filtro %}
-            <option value="{{ value }}" {% if estado_filtro == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <label class="form-label small mb-1">Formulario</label>
-          <select name="formulario" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            {% for nombre in formularios_filtro %}
-            <option value="{{ nombre }}" {% if form_filtro == nombre %}selected{% endif %}>{{ nombre }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <label class="form-label small mb-1">Tipo de trabajo</label>
-          <select name="tipo_trabajo" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            {% for tipo_code, tipo_nombre in tipos_trabajo %}
-            <option value="{{ tipo_code }}" {% if tipo_filtro == tipo_code %}selected{% endif %}>{{ tipo_nombre }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <label class="form-label small mb-1">CUENTA</label>
-          <input type="text" name="cuenta" class="form-control form-control-sm" value="{{ cuenta_filtro }}" placeholder="Nº cliente">
-        </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <label class="form-label small mb-1">Proyecto / Carga</label>
-          <input type="text" name="proyecto_carga" class="form-control form-control-sm" value="{{ proyecto_filtro }}" placeholder="Filtrar proyecto…">
-        </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <label class="form-label small mb-1">Destinatario</label>
-          <input type="text" name="destinatario" class="form-control form-control-sm" value="{{ destinatario_filtro }}" placeholder="Técnico o correo">
-        </div>
-        <div class="col-12 col-md-4 col-xl-2">
-          <label class="form-label small mb-1">Buscar</label>
-          <input type="text" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Título, mensaje, proyecto…">
-        </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <label class="form-label small mb-1">Desde</label>
-          <input type="date" name="fecha_desde" class="form-control form-control-sm" value="{{ fecha_desde }}">
-        </div>
-        <div class="col-6 col-md-4 col-xl-2">
-          <label class="form-label small mb-1">Hasta</label>
-          <input type="date" name="fecha_hasta" class="form-control form-control-sm" value="{{ fecha_hasta }}">
-        </div>
-        <div class="col-12 d-flex flex-wrap gap-2 mt-2">
-          <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
-          <a href="?periodo=7" class="btn btn-sm {% if periodo == '7' %}btn-success{% else %}btn-outline-success{% endif %}">Últimos 7 días</a>
-          <a href="?periodo=30" class="btn btn-sm {% if periodo == '30' %}btn-success{% else %}btn-outline-success{% endif %}">Últimos 30 días</a>
-          <a href="{% url 'moreapp_tareas_list' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
-        </div>
-      </form>
   </div>
 
   <div class="delco-catalogo-panel">
@@ -250,6 +273,7 @@
       </div>
       <span class="badge bg-secondary"><span data-kpi="resumen.total">{{ resumen.total|default:0 }}</span> resultado(s)</span>
     </div>
+      <div id="js-tareas-lista">
       <div class="table-responsive">
         <table class="table table-hover mb-0 align-middle" data-cola-filtro="{{ cola_filtro|default:'' }}">
           <thead>
@@ -352,14 +376,15 @@
       <span class="text-muted small">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
       <div class="btn-group btn-group-sm">
         {% if page_obj.has_previous %}
-        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        <a class="btn btn-outline-secondary" data-delco-partial="1" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
         {% endif %}
         {% if page_obj.has_next %}
-        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+        <a class="btn btn-outline-secondary" data-delco-partial="1" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
         {% endif %}
       </div>
     </div>
     {% endif %}
+      </div>
   </div>
 </div>
 
@@ -370,6 +395,175 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+(function () {
+  var tipo = document.getElementById('js-filtro-tipo');
+  var rango = document.getElementById('js-filtro-rango');
+  var label = document.getElementById('js-filtro-valor-label');
+  var vacio = document.getElementById('js-filtro-vacio');
+  var btn = document.getElementById('js-filtro-agregar');
+  if (!tipo || !btn) return;
+
+  function panelActual() {
+    return document.querySelector('[data-filtro-panel="' + tipo.value + '"]');
+  }
+
+  function mostrar() {
+    var clave = tipo.value;
+    document.querySelectorAll('[data-filtro-panel]').forEach(function (el) {
+      el.classList.toggle('d-none', el.getAttribute('data-filtro-panel') !== clave);
+    });
+    if (vacio) vacio.classList.toggle('d-none', !!clave);
+    if (rango) rango.classList.toggle('d-none', clave !== 'fecha');
+    if (label) label.textContent = clave === 'fecha' ? 'Desde' : 'Qué buscar';
+  }
+
+  tipo.addEventListener('change', mostrar);
+  mostrar();
+  document.querySelectorAll('[data-filtro-panel] input').forEach(function (input) {
+    input.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        btn.click();
+      }
+    });
+  });
+
+  var cargaFiltro = null;
+
+  function limpiarValorUsado() {
+    var box = panelActual();
+    if (!box) return;
+    box.querySelectorAll('input, select').forEach(function (el) { el.value = ''; });
+    var hasta = document.getElementById('js-filtro-hasta');
+    if (hasta && tipo.value === 'fecha') hasta.value = '';
+  }
+
+  function syncExport(search) {
+    var q = search ? String(search).replace(/^\?/, '') : '';
+    document.querySelectorAll('a.js-export-filtradas').forEach(function (a) {
+      var base = a.getAttribute('data-export-base') || '';
+      if (!base) return;
+      a.href = base + (q ? ('?filtrar=1&' + q) : '?filtrar=1');
+    });
+  }
+
+  function resetSeleccion() {
+    var btnSel = document.getElementById('btnEliminarTareasSel');
+    var labelSel = document.getElementById('tareasSelLabel');
+    if (btnSel) btnSel.disabled = true;
+    if (labelSel) labelSel.textContent = '0 seleccionadas';
+  }
+
+  function cargarLista(url, opts) {
+    opts = opts || {};
+    var destino = new URL(url, window.location.href);
+    if (destino.pathname !== window.location.pathname) {
+      window.location.assign(destino.href);
+      return;
+    }
+    var lista = document.getElementById('js-tareas-lista');
+    var chips = document.getElementById('js-filtro-activos');
+    if (!lista) {
+      window.location.assign(destino.href);
+      return;
+    }
+    if (cargaFiltro && cargaFiltro.abort) {
+      try { cargaFiltro.abort(); } catch (e) { /* ignore */ }
+    }
+    cargaFiltro = new AbortController();
+    var token = cargaFiltro;
+    lista.classList.add('is-loading');
+    if (btn) btn.disabled = true;
+    fetch(destino.href, {
+      credentials: 'same-origin',
+      signal: token.signal,
+      headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'text/html' }
+    })
+      .then(function (resp) { return resp.text(); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        var nextLista = doc.getElementById('js-tareas-lista');
+        var nextChips = doc.getElementById('js-filtro-activos');
+        if (!nextLista) throw new Error('sin listado');
+        lista.innerHTML = nextLista.innerHTML;
+        if (chips && nextChips) chips.innerHTML = nextChips.innerHTML;
+        var forms = document.getElementById('js-tareas-por-form');
+        var nextForms = doc.getElementById('js-tareas-por-form');
+        if (forms && nextForms) forms.innerHTML = nextForms.innerHTML;
+        doc.querySelectorAll('[data-kpi]').forEach(function (src) {
+          var key = src.getAttribute('data-kpi');
+          document.querySelectorAll('[data-kpi="' + key + '"]').forEach(function (el) {
+            if (lista.contains(el)) return;
+            el.textContent = src.textContent;
+            if (key === 'resumen.vencidas') {
+              el.classList.toggle('text-danger', (parseInt(src.textContent, 10) || 0) > 0);
+            }
+          });
+        });
+        var search = destino.search ? destino.search.slice(1) : '';
+        if (opts.history !== 'none') {
+          window.history.pushState({ delcoFiltro: 1 }, '', destino.pathname + destino.search);
+        }
+        syncExport(search);
+        resetSeleccion();
+        if (opts.limpiar) limpiarValorUsado();
+      })
+      .catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        if (typeof window.showToast === 'function') {
+          window.showToast('No se pudo actualizar el listado.', 'danger');
+        }
+      })
+      .then(function () {
+        if (cargaFiltro !== token) return;
+        lista.classList.remove('is-loading');
+        if (btn) btn.disabled = false;
+      });
+  }
+
+  btn.addEventListener('click', function () {
+    var clave = tipo.value;
+    if (!clave) return;
+    var params = new URLSearchParams(window.location.search);
+    params.delete('page');
+    if (clave === 'fecha') {
+      var desdeEl = document.querySelector('[data-filtro-panel="fecha"] input');
+      var hastaEl = document.getElementById('js-filtro-hasta');
+      var desde = desdeEl ? desdeEl.value : '';
+      var hasta = hastaEl ? hastaEl.value : '';
+      if (!desde && !hasta) return;
+      if (desde) params.set('fecha_desde', desde);
+      else params.delete('fecha_desde');
+      if (hasta) params.set('fecha_hasta', hasta);
+      else params.delete('fecha_hasta');
+      params.delete('periodo');
+    } else if (clave === 'periodo') {
+      var selPeriodo = document.querySelector('[data-filtro-panel="periodo"] select');
+      if (!selPeriodo || !selPeriodo.value) return;
+      params.set('periodo', selPeriodo.value);
+      params.delete('fecha_desde');
+      params.delete('fecha_hasta');
+    } else {
+      var box = panelActual();
+      var input = box && box.querySelector('select, input');
+      var valor = input ? String(input.value || '').trim() : '';
+      if (!valor) return;
+      params.set(clave, valor);
+    }
+    var texto = params.toString();
+    cargarLista(window.location.pathname + (texto ? ('?' + texto) : ''), { limpiar: true });
+  });
+
+  document.addEventListener('click', function (ev) {
+    var link = ev.target && ev.target.closest ? ev.target.closest('a[data-delco-partial]') : null;
+    if (!link) return;
+    if (ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+    ev.preventDefault();
+    cargarLista(link.href, { history: 'push' });
+  });
+})();
+</script>
 <script>
 (function () {
   var refreshSeconds = Number({{ tareas_auto_refresh_seconds|default:20 }}) || 20;
@@ -436,18 +630,29 @@
       setText('[data-kpi="resumen.completadas"]', data.resumen.completadas || 0);
       setText('[data-kpi="resumen.con_informe"]', data.resumen.con_informe || 0);
       setText('[data-kpi="resumen.errores"]', data.resumen.errores || 0);
-    }
-    if (data.kpis) {
-      var vencidas = data.kpis.vencidas || 0;
-      document.querySelectorAll('[data-kpi="kpis.vencidas"]').forEach(function (el) {
-        el.textContent = vencidas;
+      setText('[data-kpi="resumen.vencidas"]', data.resumen.vencidas || 0);
+      var vencidas = data.resumen.vencidas || 0;
+      document.querySelectorAll('[data-kpi="resumen.vencidas"]').forEach(function (el) {
         el.classList.toggle('text-danger', vencidas > 0);
       });
     }
     if (data.colas) {
-      Object.keys(data.colas).forEach(function (key) {
-        setText('[data-cola-count="' + key + '"]', data.colas[key] || 0);
-      });
+      var etiquetasCola = {
+        pendientes: 'Sin asignar',
+        en_campo: 'En campo',
+        completadas: 'Completadas',
+        vencidas: 'Vencidas',
+        errores: 'Con error'
+      };
+      var selCola = document.querySelector('[data-filtro-panel="cola"] select');
+      if (selCola) {
+        Array.prototype.forEach.call(selCola.options, function (opt) {
+          if (!etiquetasCola[opt.value]) return;
+          var estaba = opt.selected;
+          opt.textContent = etiquetasCola[opt.value] + ' (' + (data.colas[opt.value] || 0) + ')';
+          opt.selected = estaba;
+        });
+      }
     }
   }
 
@@ -525,14 +730,17 @@
   function quitarFilasTareas(ids) {
     var set = {};
     (ids || []).forEach(function (id) { set[String(id)] = true; });
+    var quitadas = 0;
     document.querySelectorAll('tr[data-tarea-id]').forEach(function (row) {
-      if (set[row.getAttribute('data-tarea-id')]) row.remove();
+      if (set[row.getAttribute('data-tarea-id')]) {
+        quitadas += 1;
+        row.remove();
+      }
     });
-    var totalEl = document.querySelector('[data-kpi="resumen.total"]');
-    if (totalEl) {
-      var left = document.querySelectorAll('tr[data-tarea-id]').length;
-      totalEl.textContent = String(left);
-    }
+    document.querySelectorAll('[data-kpi="resumen.total"]').forEach(function (el) {
+      var actual = parseInt(String(el.textContent).replace(/\D/g, ''), 10) || 0;
+      el.textContent = String(Math.max(0, actual - quitadas));
+    });
     actualizarSeleccionTareas();
   }
 

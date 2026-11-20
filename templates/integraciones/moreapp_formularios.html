@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Formularios asignados{% endblock %}
 
@@ -29,17 +30,28 @@
   {% endif %}
 
   <div class="delco-catalogo-filters mb-3">
-    <form method="get">
-      <div class="delco-catalogo-search">
-        <i class="bi bi-search" aria-hidden="true"></i>
-        <input type="search" class="form-control" id="query" name="query" value="{{ query }}" placeholder="Busca por nombre del formulario…" autocomplete="off">
+    <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-1">Tipo de filtro</label>
+          <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+        </div>
+        <div class="col-12 col-md-5">
+          <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+          <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+          <div data-filtro-panel="query" data-filtro-titulo="Buscar" data-filtro-param="query" class="d-none">
+            <input type="search" class="form-control form-control-sm" id="query" placeholder="Nombre del formulario…" autocomplete="off" aria-label="Buscar">
+          </div>
+        </div>
+        <div class="col-12 col-md-auto">
+          <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+        </div>
       </div>
-      {% if tiene_filtros %}
-      <div class="mt-2">
-        <a href="{% url 'moreapp_formularios_list' %}" class="btn btn-link btn-sm px-0">Limpiar filtros</a>
+      <div class="delco-filtro-activos js-filtro-activos">
+        {% if query %}<a class="delco-filtro-chip" href="?{% url_sin 'query' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ query }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if tiene_filtros %}<a class="delco-filtro-limpiar" href="{% url 'moreapp_formularios_list' %}">Quitar filtros</a>{% endif %}
       </div>
-      {% endif %}
-    </form>
+    </div>
   </div>
 
   {% if not formularios %}

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Catálogo MoreApp API{% endblock %}
 
@@ -86,80 +87,75 @@
   {% endif %}
 
   <div class="delco-catalogo-filters mb-3">
-    <form method="get" id="js-catalogo-form" class="d-flex flex-column gap-3">
-      <div class="delco-catalogo-search">
-        <i class="bi bi-search" aria-hidden="true"></i>
-        <input type="search"
-               name="query"
-               id="js-catalogo-buscar"
-               class="form-control"
-               value="{{ query }}"
-               placeholder="Busca por nombre, descripción, asignado o ID…"
-               autocomplete="off">
-        <button type="button" class="btn btn-sm btn-link text-muted js-catalogo-clear-q {% if not query %}d-none{% endif %}" aria-label="Limpiar búsqueda">
-          <i class="bi bi-x-circle"></i>
-        </button>
-      </div>
-
-      <div class="d-flex flex-wrap align-items-center gap-2">
-        <span class="small text-muted">Estado</span>
-        <div class="delco-catalogo-chips" id="js-filtro-estado">
-          <button type="button" class="delco-catalogo-chip {% if not estado %}is-active{% endif %}" data-estado="">Todos</button>
-          <button type="button" class="delco-catalogo-chip {% if estado == 'ACTIVE' %}is-active{% endif %}" data-estado="ACTIVE">Activos</button>
-          <button type="button" class="delco-catalogo-chip {% if estado == 'HIDDEN' %}is-active{% endif %}" data-estado="HIDDEN">Ocultos MoreApp</button>
-          <button type="button" class="delco-catalogo-chip {% if estado == 'TRASH' %}is-active{% endif %}" data-estado="TRASH">Papelera</button>
-        </div>
-        <input type="hidden" name="estado" id="js-estado" value="{{ estado }}">
-      </div>
-
-      <div class="d-flex flex-wrap align-items-center gap-2">
-        <span class="small text-muted">Asignación</span>
-        <div class="delco-catalogo-chips" id="js-filtro-asignacion">
-          <button type="button" class="delco-catalogo-chip {% if not asignacion %}is-active{% endif %}" data-asignacion="">Todas</button>
-          <button type="button" class="delco-catalogo-chip {% if asignacion == 'con' %}is-active{% endif %}" data-asignacion="con">Con asignados</button>
-          <button type="button" class="delco-catalogo-chip {% if asignacion == 'sin' %}is-active{% endif %}" data-asignacion="sin">Sin asignar</button>
-        </div>
-        <input type="hidden" name="asignacion" id="js-asignacion" value="{{ asignacion }}">
-      </div>
-
+    <form method="get" id="js-catalogo-form" class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
       <div class="row g-2 align-items-end">
-        <div class="col-6 col-md-2">
-          <label class="form-label small text-muted mb-1" for="fecha_desde">Último registro desde</label>
-          <input type="date" name="fecha_desde" id="fecha_desde" class="form-control" value="{{ fecha_desde }}">
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-1">Tipo de filtro</label>
+          <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
         </div>
-        <div class="col-6 col-md-2">
-          <label class="form-label small text-muted mb-1" for="fecha_hasta">Hasta</label>
-          <input type="date" name="fecha_hasta" id="fecha_hasta" class="form-control" value="{{ fecha_hasta }}">
-        </div>
-        <div class="col-md-4">
-          <div class="small text-muted mb-1">Rango rápido</div>
-          <div class="delco-catalogo-chips">
-            <button type="button" class="delco-catalogo-chip js-rango" data-rango="7">7 días</button>
-            <button type="button" class="delco-catalogo-chip js-rango" data-rango="30">30 días</button>
-            <button type="button" class="delco-catalogo-chip js-rango" data-rango="mes">Este mes</button>
+        <div class="col-12 col-md-4">
+          <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+          <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+          <div data-filtro-panel="query" data-filtro-titulo="Buscar" data-filtro-param="query" class="d-none">
+            <input type="search" name="query" id="js-catalogo-buscar" class="form-control form-control-sm" value="{{ query }}" placeholder="Nombre, descripción, asignado o ID…" autocomplete="off" aria-label="Buscar">
+          </div>
+          <div data-filtro-panel="estado" data-filtro-titulo="Estado" data-filtro-param="estado" class="d-none">
+            <select name="estado" id="js-estado" class="form-select form-select-sm" data-orden-lista="no" aria-label="Estado">
+              <option value="">Elige un estado</option>
+              <option value="ACTIVE" {% if estado == 'ACTIVE' %}selected{% endif %}>Activos</option>
+              <option value="HIDDEN" {% if estado == 'HIDDEN' %}selected{% endif %}>Ocultos MoreApp</option>
+              <option value="TRASH" {% if estado == 'TRASH' %}selected{% endif %}>Papelera</option>
+            </select>
+          </div>
+          <div data-filtro-panel="asignacion" data-filtro-titulo="Asignación" data-filtro-param="asignacion" class="d-none">
+            <select name="asignacion" id="js-asignacion" class="form-select form-select-sm" data-orden-lista="no" aria-label="Asignación">
+              <option value="">Elige</option>
+              <option value="con" {% if asignacion == 'con' %}selected{% endif %}>Con asignados</option>
+              <option value="sin" {% if asignacion == 'sin' %}selected{% endif %}>Sin asignar</option>
+            </select>
+          </div>
+          <div data-filtro-panel="fecha" data-filtro-titulo="Último registro" data-filtro-modo="fecha" class="d-none">
+            <input type="date" name="fecha_desde" id="fecha_desde" class="form-control form-control-sm" value="{{ fecha_desde }}" aria-label="Desde">
+          </div>
+          <div data-filtro-panel="rango" data-filtro-titulo="Rango" data-filtro-modo="rango" class="d-none">
+            <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Rango">
+              <option value="">Elige</option>
+              <option value="7">7 días</option>
+              <option value="30">30 días</option>
+              <option value="mes">Este mes</option>
+            </select>
+          </div>
+          <div data-filtro-panel="orden" data-filtro-titulo="Orden" data-filtro-param="orden" class="d-none">
+            <select name="orden" id="js-orden" class="form-select form-select-sm" data-orden-lista="no" aria-label="Orden">
+              <option value="nombre" {% if orden != 'asignados' and orden != 'registro' %}selected{% endif %}>Nombre</option>
+              <option value="asignados" {% if orden == 'asignados' %}selected{% endif %}>Más asignados</option>
+              <option value="registro" {% if orden == 'registro' %}selected{% endif %}>Último registro</option>
+            </select>
+          </div>
+          <div data-filtro-panel="mostrar_ocultos" data-filtro-titulo="Ocultos por mí" data-filtro-param="mostrar_ocultos" class="d-none">
+            <select name="mostrar_ocultos" id="mostrarOcultos" class="form-select form-select-sm" data-orden-lista="no" aria-label="Ocultos">
+              <option value="">No</option>
+              <option value="1" {% if mostrar_ocultos %}selected{% endif %}>Mostrar los que oculté{% if ocultos_en_catalogo %} ({{ ocultos_en_catalogo }}){% endif %}</option>
+            </select>
           </div>
         </div>
-        <div class="col-md-2">
-          <label class="form-label small text-muted mb-1" for="js-orden">Orden</label>
-          <select name="orden" id="js-orden" class="form-select">
-            <option value="nombre" {% if orden != 'asignados' and orden != 'registro' %}selected{% endif %}>Nombre</option>
-            <option value="asignados" {% if orden == 'asignados' %}selected{% endif %}>Más asignados</option>
-            <option value="registro" {% if orden == 'registro' %}selected{% endif %}>Último registro</option>
-          </select>
+        <div class="col-12 col-md-3 d-none js-filtro-rango">
+          <label class="form-label small mb-1">Hasta</label>
+          <input type="date" name="fecha_hasta" id="fecha_hasta" class="form-control form-control-sm js-filtro-hasta" value="{{ fecha_hasta }}">
         </div>
-        <div class="col-md-2">
-          <div class="form-check mt-md-4">
-            <input class="form-check-input" type="checkbox" name="mostrar_ocultos" value="1" id="mostrarOcultos" {% if mostrar_ocultos %}checked{% endif %}>
-            <label class="form-check-label" for="mostrarOcultos">Mostrar los que oculté{% if ocultos_en_catalogo %} ({{ ocultos_en_catalogo }}){% endif %}</label>
-          </div>
+        <div class="col-12 col-md-auto">
+          <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
         </div>
       </div>
-
-      {% if tiene_filtros %}
-      <div>
-        <a href="{% url 'moreapp_api_catalogo' %}" class="btn btn-link btn-sm px-0">Limpiar filtros</a>
+      <div class="delco-filtro-activos js-filtro-activos">
+        {% if query %}<a class="delco-filtro-chip" href="?{% url_sin 'query' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ query }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if estado %}<a class="delco-filtro-chip" href="?{% url_sin 'estado' %}"><span class="delco-filtro-chip-tipo">Estado</span><span>{{ estado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if asignacion %}<a class="delco-filtro-chip" href="?{% url_sin 'asignacion' %}"><span class="delco-filtro-chip-tipo">Asignación</span><span>{{ asignacion }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if fecha_desde or fecha_hasta %}<a class="delco-filtro-chip" href="?{% url_sin 'fecha_desde' 'fecha_hasta' %}"><span class="delco-filtro-chip-tipo">Fecha</span><span>{{ fecha_desde|default:"…" }} → {{ fecha_hasta|default:"…" }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if orden == 'asignados' or orden == 'registro' %}<a class="delco-filtro-chip" href="?{% url_sin 'orden' %}"><span class="delco-filtro-chip-tipo">Orden</span><span>{{ orden }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if mostrar_ocultos %}<a class="delco-filtro-chip" href="?{% url_sin 'mostrar_ocultos' %}"><span class="delco-filtro-chip-tipo">Ocultos</span><span>Visibles</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if tiene_filtros %}<a class="delco-filtro-limpiar" href="{% url 'moreapp_api_catalogo' %}">Quitar filtros</a>{% endif %}
       </div>
-      {% endif %}
     </form>
   </div>
 
@@ -427,7 +423,7 @@
     if (f.orden && f.orden !== 'nombre') params.set('orden', f.orden);
     if (f.desde) params.set('fecha_desde', f.desde);
     if (f.hasta) params.set('fecha_hasta', f.hasta);
-    if (mostrarOcultos && mostrarOcultos.checked) params.set('mostrar_ocultos', '1');
+    if (mostrarOcultos && (mostrarOcultos.checked || mostrarOcultos.value === '1')) params.set('mostrar_ocultos', '1');
     var next = catalogPath + (params.toString() ? ('?' + params.toString()) : '');
     if (window.history && window.history.replaceState) {
       window.history.replaceState(null, '', next);
@@ -559,7 +555,6 @@
   if (mostrarOcultos) {
     mostrarOcultos.addEventListener('change', function () {
       syncUrl();
-      if (form) form.submit();
     });
   }
   if (form) {

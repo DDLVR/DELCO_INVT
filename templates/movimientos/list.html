@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% load static %}
+{% load custom_filters %}
 
 {% block title %}Movimientos de Inventario{% endblock %}
 
@@ -98,69 +99,66 @@
       <span class="fw-semibold small">Filtros</span>
     </div>
     <div class="card-body py-3">
-      <form method="GET" id="filtrosForm">
+      <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
         <div class="row g-2 align-items-end">
-          <div class="col-md-2">
-            <label class="form-label mb-1 small fw-semibold">Tipo</label>
-            <select name="tipo" class="form-select form-select-sm" id="selectTipo">
-              <option value="">Todos</option>
-              {% for codigo, nombre in tipos_movimiento %}
-              <option value="{{ codigo }}" {% if tipo_filtro == codigo %}selected{% endif %}>{{ nombre }}</option>
-              {% endfor %}
-            </select>
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1">Tipo de filtro</label>
+            <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
           </div>
-          <div class="col-md-2">
-            <label class="form-label mb-1 small fw-semibold">Desde</label>
-            <input type="date" name="fecha_desde" class="form-control form-control-sm" value="{{ fecha_desde }}">
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+            <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+            <div data-filtro-panel="tipo" data-filtro-titulo="Tipo" data-filtro-param="tipo" class="d-none">
+              <select id="selectTipo" class="form-select form-select-sm" data-orden-lista="no" aria-label="Tipo">
+                <option value="">Elige un tipo</option>
+                {% for codigo, nombre in tipos_movimiento %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}
+              </select>
+            </div>
+            <div data-filtro-panel="fecha" data-filtro-titulo="Fecha" data-filtro-modo="fecha" class="d-none">
+              <input type="date" class="form-control form-control-sm" aria-label="Desde">
+            </div>
+            <div data-filtro-panel="responsable" data-filtro-titulo="Responsable" data-filtro-param="responsable" class="d-none">
+              <select class="form-select form-select-sm" aria-label="Responsable">
+                <option value="">Elige</option>
+                {% for resp in responsables %}<option value="{{ resp.id }}">{{ resp.nombre_interno }}</option>{% endfor %}
+              </select>
+            </div>
+            <div data-filtro-panel="origen_sistema" data-filtro-titulo="Origen" data-filtro-param="origen_sistema" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Origen">
+                <option value="">Elige</option>
+                {% for codigo, nombre in origen_sistema_choices %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}
+              </select>
+            </div>
+            <div data-filtro-panel="entidad_eliminada" data-filtro-titulo="Entidad eliminada" data-filtro-param="entidad_eliminada" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Entidad">
+                <option value="">Elige</option>
+                {% for codigo, nombre in entidades_eliminacion %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}
+              </select>
+            </div>
+            <div data-filtro-panel="q" data-filtro-titulo="Buscar" data-filtro-param="q" class="d-none">
+              <input type="text" class="form-control form-control-sm" placeholder="OT, responsable, identificador…" aria-label="Buscar">
+            </div>
           </div>
-          <div class="col-md-2">
-            <label class="form-label mb-1 small fw-semibold">Hasta</label>
-            <input type="date" name="fecha_hasta" class="form-control form-control-sm" value="{{ fecha_hasta }}">
+          <div class="col-12 col-md-3 d-none js-filtro-rango">
+            <label class="form-label small mb-1">Hasta</label>
+            <input type="date" class="form-control form-control-sm js-filtro-hasta">
           </div>
-          <div class="col-md-2">
-            <label class="form-label mb-1 small fw-semibold">Responsable</label>
-            <select name="responsable" class="form-select form-select-sm">
-              <option value="">Todos</option>
-              {% for resp in responsables %}
-              <option value="{{ resp.id }}" {% if responsable_id|stringformat:"s" == resp.id|stringformat:"s" %}selected{% endif %}>
-                {{ resp.nombre_interno }}
-              </option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label mb-1 small fw-semibold">Origen sistema</label>
-            <select name="origen_sistema" class="form-select form-select-sm">
-              <option value="">Todos</option>
-              {% for codigo, nombre in origen_sistema_choices %}
-              <option value="{{ codigo }}" {% if origen_sistema == codigo %}selected{% endif %}>{{ nombre }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label mb-1 small fw-semibold">Entidad eliminada</label>
-            <select name="entidad_eliminada" class="form-select form-select-sm">
-              <option value="">Todas</option>
-              {% for codigo, nombre in entidades_eliminacion %}
-              <option value="{{ codigo }}" {% if entidad_eliminada == codigo %}selected{% endif %}>{{ nombre }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label mb-1 small fw-semibold">Buscar</label>
-            <input type="text" name="q" class="form-control form-control-sm"
-                   placeholder="OT, responsable, identificador…" value="{{ busqueda }}">
-          </div>
-          <div class="col-12 d-flex gap-2 justify-content-end">
-            <button type="submit" class="btn btn-sm btn-primary">
-              <i class="bi bi-search"></i> Filtrar
-            </button>
-            <a href="{% url 'movimientos_list' %}" class="btn btn-sm btn-outline-secondary">
-              <i class="bi bi-x"></i> Limpiar
-            </a>
+          <div class="col-12 col-md-auto">
+            <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
           </div>
         </div>
-      </form>
+        <div class="delco-filtro-activos js-filtro-activos">
+          {% if tipo_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'tipo' %}"><span class="delco-filtro-chip-tipo">Tipo</span><span>{% for codigo, nombre in tipos_movimiento %}{% if codigo == tipo_filtro %}{{ nombre }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if fecha_desde or fecha_hasta %}<a class="delco-filtro-chip" href="?{% url_sin 'fecha_desde' 'fecha_hasta' %}"><span class="delco-filtro-chip-tipo">Fecha</span><span>{{ fecha_desde|default:"…" }} → {{ fecha_hasta|default:"…" }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if responsable_id %}<a class="delco-filtro-chip" href="?{% url_sin 'responsable' %}"><span class="delco-filtro-chip-tipo">Responsable</span><span>{% for resp in responsables %}{% if responsable_id|stringformat:"s" == resp.id|stringformat:"s" %}{{ resp.nombre_interno }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if origen_sistema %}<a class="delco-filtro-chip" href="?{% url_sin 'origen_sistema' %}"><span class="delco-filtro-chip-tipo">Origen</span><span>{% for codigo, nombre in origen_sistema_choices %}{% if codigo == origen_sistema %}{{ nombre }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if entidad_eliminada %}<a class="delco-filtro-chip" href="?{% url_sin 'entidad_eliminada' %}"><span class="delco-filtro-chip-tipo">Entidad</span><span>{% for codigo, nombre in entidades_eliminacion %}{% if codigo == entidad_eliminada %}{{ nombre }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if busqueda %}<a class="delco-filtro-chip" href="?{% url_sin 'q' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ busqueda }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if tipo_filtro or fecha_desde or fecha_hasta or responsable_id or origen_sistema or entidad_eliminada or busqueda %}
+          <a class="delco-filtro-limpiar" href="?{% url_sin 'tipo' 'fecha_desde' 'fecha_hasta' 'responsable' 'origen_sistema' 'entidad_eliminada' 'q' %}">Quitar filtros</a>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </div>
 

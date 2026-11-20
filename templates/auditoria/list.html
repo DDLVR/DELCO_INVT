@@ -13,42 +13,75 @@
 
     <div class="card shadow-sm mb-4 delco-panel-card">
         <div class="card-body">
-            <form method="get" class="row g-2 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label mb-1" for="filtroEntidad">Entidad</label>
-                    <select name="entity" id="filtroEntidad" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todas</option>
-                        {% for op in entidades_opciones %}
-                        <option value="{{ op.codigo }}" {% if entity == op.codigo %}selected{% endif %}>{{ op.label }}</option>
-                        {% endfor %}
+            <div class="delco-filtro-builder" data-filtro-auto data-lista="js-lista-auditoria">
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-4 col-xl-3">
+                  <label class="form-label small mb-1">Tipo de filtro</label>
+                  <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+                </div>
+                <div class="col-12 col-md-4 col-xl-3">
+                  <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+                  <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+                  <div data-filtro-panel="entity" data-filtro-titulo="Entidad" data-filtro-param="entity" class="d-none">
+                    <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Entidad">
+                      <option value="">Elige una entidad</option>
+                      {% for op in entidades_opciones %}
+                      <option value="{{ op.codigo }}">{{ op.label }}</option>
+                      {% endfor %}
                     </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label mb-1" for="filtroAccion">Acción</label>
-                    <select name="action" id="filtroAccion" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todas</option>
-                        {% for op in acciones_opciones %}
-                        <option value="{{ op.codigo }}" {% if action == op.codigo %}selected{% endif %}>{{ op.label }}</option>
-                        {% endfor %}
+                  </div>
+                  <div data-filtro-panel="action" data-filtro-titulo="Acción" data-filtro-param="action" class="d-none">
+                    <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Acción">
+                      <option value="">Elige una acción</option>
+                      {% for op in acciones_opciones %}
+                      <option value="{{ op.codigo }}">{{ op.label }}</option>
+                      {% endfor %}
                     </select>
+                  </div>
+                  <div data-filtro-panel="referencia" data-filtro-titulo="Referencia" data-filtro-param="referencia" class="d-none">
+                    <input type="text" class="form-control form-control-sm" placeholder="Ej: 208 o 3047206" aria-label="Referencia">
+                  </div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label mb-1" for="filtroReferencia">Correlativo / Nº cliente</label>
-                    <input type="text" name="referencia" id="filtroReferencia" class="form-control form-control-sm" value="{{ referencia }}" placeholder="Ej: 208 o 3047206">
-                    <small class="text-muted">Correlativo MoreApp, Nº de cliente o ID interno.</small>
+                <div class="col-12 col-md-3 d-none js-filtro-rango">
+                  <label class="form-label small mb-1">Hasta</label>
+                  <input type="date" class="form-control form-control-sm js-filtro-hasta">
                 </div>
-                <div class="col-md-3 d-flex gap-2">
-                    <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Filtrar</button>
-                    <a href="{% url 'auditoria_list' %}" class="btn btn-outline-secondary btn-sm">Limpiar</a>
+                <div class="col-12 col-md-auto">
+                  <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
                 </div>
-            </form>
+              </div>
+              <div class="delco-filtro-activos js-filtro-activos">
+                {% if entity %}
+                <a class="delco-filtro-chip" data-delco-partial="1" href="?{% url_sin 'entity' %}">
+                  <span class="delco-filtro-chip-tipo">Entidad</span>
+                  <span>{% for op in entidades_opciones %}{% if op.codigo == entity %}{{ op.label }}{% endif %}{% endfor %}</span>
+                  <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </a>
+                {% endif %}
+                {% if action %}
+                <a class="delco-filtro-chip" data-delco-partial="1" href="?{% url_sin 'action' %}">
+                  <span class="delco-filtro-chip-tipo">Acción</span>
+                  <span>{% for op in acciones_opciones %}{% if op.codigo == action %}{{ op.label }}{% endif %}{% endfor %}</span>
+                  <i class="bi bi-x-lg" aria-hidden="true"></i>
+                </a>
+                {% endif %}
+                {% if referencia %}
+                <a class="delco-filtro-chip" data-delco-partial="1" href="?{% url_sin 'referencia' %}">
+                  <span class="delco-filtro-chip-tipo">Referencia</span><span>{{ referencia }}</span><i class="bi bi-x-lg" aria-hidden="true"></i>
+                </a>
+                {% endif %}
+                {% if entity or action or referencia %}
+                <a class="delco-filtro-limpiar" data-delco-partial="1" href="?{% url_sin 'entity' 'action' 'referencia' %}">Quitar filtros</a>
+                {% endif %}
+              </div>
+            </div>
         </div>
     </div>
 
     <div class="alert alert-info py-2">Mostrando hasta 500 registros. Total filtrado: <strong>{{ total }}</strong>.</div>
 
     <div class="card shadow-sm delco-panel-card">
-        <div class="table-responsive">
+        <div class="table-responsive" id="js-lista-auditoria">
             <table class="table table-sm table-hover mb-0 align-middle">
                 <thead class="table-delco">
                     <tr>

@@ -57,6 +57,14 @@ from clientes.models import Cliente
 from inventario.models import Medidor, SimCard, Modem
 from web.decorators import admin_only
 from web.services.audit import AuditEvent, register_audit_event
+from web.services.listado import (
+    consulta_sin_pagina,
+    conteo_por_campo,
+    leer_textos_get,
+    paginar_consulta,
+    parse_fecha_iso,
+    top_por_campo,
+)
 
 
 def puede_editar_observaciones_orden(orden, usuario):
@@ -149,8 +157,6 @@ def ordenes_list_view(request):
     """
     Lista de órdenes de trabajo con filtros y paginación servidor.
     """
-    from django.core.paginator import Paginator
-
     usuario = request.user
     base_ordenes = _queryset_ordenes_filtrado(request, aplicar_filtros=False)
     ordenes_qs = _queryset_ordenes_filtrado(request)
@@ -166,16 +172,9 @@ def ordenes_list_view(request):
     orden_filtro = (request.GET.get('orden') or 'id').strip().lower()
     orden_dir = (request.GET.get('dir') or 'asc').strip().lower()
 
-    try:
-        per_page = int(request.GET.get('per_page') or 50)
-    except (TypeError, ValueError):
-        per_page = 50
-    if per_page not in (25, 50, 100):
-        per_page = 50
-
     total_alertas_duplicado = ordenes_qs.filter(alerta_duplicado=True).count()
     # Conservar orden del queryset filtrado (incluye orden=proyecto_carga, etc.)
-    page_obj = Paginator(ordenes_qs, per_page).get_page(request.GET.get('page') or 1)
+    page_obj, per_page = paginar_consulta(request, ordenes_qs)
 
     tecnicos = usuarios_asignables_ot()
     # Solo clientes con OT (cap) — no cargar todo el padrón en el filtro
@@ -197,8 +196,7 @@ def ordenes_list_view(request):
         if t:
             tecnico_filtro_label = etiqueta_asignable(t)
 
-    query_params = request.GET.copy()
-    query_params.pop('page', None)
+    query_params = consulta_sin_pagina(request.GET)
 
     context = {
         'ordenes': page_obj.object_list,
@@ -238,8 +236,7 @@ def ordenes_terminadas_view(request):
     Vista de consulta de trabajos terminados (realizadas / validadas / finalizadas)
     con filtros y resumen para seguimiento administrativo.
     """
-    from datetime import datetime, timedelta
-    from django.core.paginator import Paginator
+    from datetime import timedelta
     from django.db.models import Count
 
     usuario = request.user
@@ -251,15 +248,30 @@ def ordenes_terminadas_view(request):
         estado__in=ESTADOS_TERMINADOS,
     )
 
-    estado_filtro = (request.GET.get('estado') or '').strip()
-    tipo_filtro = (request.GET.get('tipo_trabajo') or '').strip()
-    tecnico_filtro = (request.GET.get('tecnico') or '').strip()
-    cliente_filtro = (request.GET.get('cliente') or '').strip()
-    buscar = (request.GET.get('buscar') or '').strip()
-    proyecto_filtro = (request.GET.get('proyecto_carga') or '').strip()
-    fecha_desde = (request.GET.get('fecha_desde') or '').strip()
-    fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
-    periodo = (request.GET.get('periodo') or '').strip().lower()
+    textos = leer_textos_get(
+        request,
+        (
+            "estado",
+            "tipo_trabajo",
+            "tecnico",
+            "cliente",
+            "buscar",
+            "proyecto_carga",
+            "fecha_desde",
+            "fecha_hasta",
+            "periodo",
+        ),
+        ("periodo",),
+    )
+    estado_filtro = textos["estado"]
+    tipo_filtro = textos["tipo_trabajo"]
+    tecnico_filtro = textos["tecnico"]
+    cliente_filtro = textos["cliente"]
+    buscar = textos["buscar"]
+    proyecto_filtro = textos["proyecto_carga"]
+    fecha_desde = textos["fecha_desde"]
+    fecha_hasta = textos["fecha_hasta"]
+    periodo = textos["periodo"]
 
     qs = base
     if estado_filtro and estado_filtro in ESTADOS_TERMINADOS:
@@ -297,22 +309,22 @@ def ordenes_terminadas_view(request):
         )
     else:
         if fecha_desde:
-            try:
-                d0 = datetime.strptime(fecha_desde, '%Y-%m-%d').date()
+            d0 = parse_fecha_iso(fecha_desde)
+            if d0:
                 qs = qs.filter(
                     Q(fecha_fin_ejecucion__date__gte=d0)
                     | Q(fecha_fin_ejecucion__isnull=True, fecha_creacion__date__gte=d0)
                 )
-            except ValueError:
+            else:
                 fecha_desde = ''
         if fecha_hasta:
-            try:
-                d1 = datetime.strptime(fecha_hasta, '%Y-%m-%d').date()
+            d1 = parse_fecha_iso(fecha_hasta)
+            if d1:
                 qs = qs.filter(
                     Q(fecha_fin_ejecucion__date__lte=d1)
                     | Q(fecha_fin_ejecucion__isnull=True, fecha_creacion__date__lte=d1)
                 )
-            except ValueError:
+            else:
                 fecha_hasta = ''
 
     qs = qs.select_related(
@@ -324,31 +336,19 @@ def ordenes_terminadas_view(request):
     ).order_by('-fecha_fin_ejecucion', '-id')
 
     total = qs.count()
-    resumen_estado = {
-        row['estado']: row['n']
-        for row in qs.values('estado').annotate(n=Count('id'))
-    }
+    resumen_estado = conteo_por_campo(qs, alias="n")
     por_tecnico = list(
         qs.exclude(tecnico_responsable__isnull=True)
         .values('tecnico_responsable__nombre_interno')
         .annotate(n=Count('id'))
         .order_by('-n')[:8]
     )
-    por_tipo = list(
-        qs.values('tipo_trabajo').annotate(n=Count('id')).order_by('-n')
-    )
+    por_tipo = top_por_campo(qs, "tipo_trabajo", limite=None, alias="n")
     con_moreapp = qs.filter(moreapp_count__gt=0).count()
     con_informe_pdf = qs.filter(informes_count__gt=0).count()
     con_adjuntos = qs.filter(adjuntos_count__gt=0).count()
 
-    try:
-        per_page = int(request.GET.get('per_page') or 50)
-    except (TypeError, ValueError):
-        per_page = 50
-    if per_page not in (25, 50, 100):
-        per_page = 50
-
-    page_obj = Paginator(qs, per_page).get_page(request.GET.get('page') or 1)
+    page_obj, per_page = paginar_consulta(request, qs)
 
     tecnicos = usuarios_asignables_ot()
     tecnico_filtro_label = ''
@@ -368,8 +368,7 @@ def ordenes_terminadas_view(request):
         else:
             cliente_filtro_label = cliente_filtro
 
-    query_params = request.GET.copy()
-    query_params.pop('page', None)
+    query_params = consulta_sin_pagina(request.GET)
 
     tipo_labels = dict(OrdenTrabajo.TIPO_TRABAJO_CHOICES)
     por_tipo_display = [

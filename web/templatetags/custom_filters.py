@@ -351,3 +351,14 @@ def vacio(value, default='—'):
     if value in (None, '', []):
         return mark_safe(default) if default == '—' else default
     return value
+
+
+@register.simple_tag(takes_context=True)
+def url_sin(context, *claves):
+    """Querystring actual sin page ni esas claves. Para la pastilla Quitar de un filtro."""
+    from web.services.listado import quitar_de_consulta
+
+    request = context.get("request")
+    if request is None:
+        return ""
+    return quitar_de_consulta(request.GET, *claves)

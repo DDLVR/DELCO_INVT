@@ -14,8 +14,7 @@ def usuarios_asignables_ot(*, solo_activos: bool = True):
     qs = Usuario.objects.filter(rol__in=ROLES_ASIGNABLES_OT)
     if solo_activos:
         qs = qs.filter(is_active=True)
-    # Técnicos primero, luego administrativos; dentro de cada rol por nombre.
-    return qs.order_by('rol', 'nombre_interno')
+    return qs.order_by('nombre_interno', 'rut')
 
 
 def get_usuario_asignable(pk) -> Usuario:

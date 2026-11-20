@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Pendientes MoreApp{% endblock %}
 
@@ -60,37 +61,58 @@
   </div>
 
   <div class="delco-catalogo-filters mb-3">
-    <div class="delco-catalogo-chip-row mb-3">
-      <span class="small text-muted d-none d-md-inline">Cola</span>
-      <div class="delco-catalogo-chips">
-        <a href="{% url 'pendientes_operativos' %}" class="delco-catalogo-chip {% if not cola_filtro %}is-active{% endif %}">
-          Todas abiertas <span class="badge bg-dark">{{ colas_conteo.abiertas|default:0 }}</span>
+    <div class="delco-filtro-builder" data-filtro-auto data-lista="js-lista-pendientes">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-4 col-xl-3">
+          <label class="form-label small mb-1">Tipo de filtro</label>
+          <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no">
+            <option value="">Elige un filtro</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-4 col-xl-3">
+          <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+          <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+          <div data-filtro-panel="cola" data-filtro-titulo="Cola" data-filtro-param="cola" class="d-none">
+            <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Cola">
+              <option value="">Elige una cola</option>
+              <option value="en_campo">En campo ({{ colas_conteo.en_campo|default:0 }})</option>
+              <option value="pendientes">Sin asignar ({{ colas_conteo.pendientes|default:0 }})</option>
+              <option value="vencidas">Vencidas ({{ colas_conteo.vencidas|default:0 }})</option>
+              <option value="errores">Con error ({{ colas_conteo.errores|default:0 }})</option>
+            </select>
+          </div>
+          <div data-filtro-panel="buscar" data-filtro-titulo="Buscar" data-filtro-param="buscar" class="d-none">
+            <input type="search" class="form-control form-control-sm" placeholder="Título, cuenta, formulario…" aria-label="Buscar">
+          </div>
+        </div>
+        <div class="col-12 col-md-3 col-xl-3 d-none js-filtro-rango">
+          <label class="form-label small mb-1">Hasta</label>
+          <input type="date" class="form-control form-control-sm js-filtro-hasta">
+        </div>
+        <div class="col-12 col-md-auto">
+          <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+        </div>
+      </div>
+      <div class="delco-filtro-activos js-filtro-activos">
+        {% if cola_filtro %}
+        <a class="delco-filtro-chip" data-delco-partial="1" href="?{% url_sin 'cola' %}">
+          <span class="delco-filtro-chip-tipo">Cola</span>
+          <span>{% if cola_filtro == 'en_campo' %}En campo{% elif cola_filtro == 'pendientes' %}Sin asignar{% elif cola_filtro == 'vencidas' %}Vencidas{% elif cola_filtro == 'errores' %}Con error{% else %}{{ cola_filtro }}{% endif %}</span>
+          <i class="bi bi-x-lg" aria-hidden="true"></i>
         </a>
-        <a href="?cola=en_campo" class="delco-catalogo-chip {% if cola_filtro == 'en_campo' %}is-active{% endif %}">
-          En campo <span class="badge bg-dark">{{ colas_conteo.en_campo|default:0 }}</span>
+        {% endif %}
+        {% if buscar %}
+        <a class="delco-filtro-chip" data-delco-partial="1" href="?{% url_sin 'buscar' %}">
+          <span class="delco-filtro-chip-tipo">Buscar</span>
+          <span>{{ buscar }}</span>
+          <i class="bi bi-x-lg" aria-hidden="true"></i>
         </a>
-        <a href="?cola=pendientes" class="delco-catalogo-chip {% if cola_filtro == 'pendientes' %}is-active{% endif %}">
-          Sin asignar <span class="badge bg-dark">{{ colas_conteo.pendientes|default:0 }}</span>
-        </a>
-        <a href="?cola=vencidas" class="delco-catalogo-chip {% if cola_filtro == 'vencidas' %}is-active{% endif %}">
-          Vencidas <span class="badge bg-dark">{{ colas_conteo.vencidas|default:0 }}</span>
-        </a>
-        <a href="?cola=errores" class="delco-catalogo-chip {% if cola_filtro == 'errores' %}is-active{% endif %}">
-          Con error <span class="badge bg-dark">{{ colas_conteo.errores|default:0 }}</span>
-        </a>
+        {% endif %}
+        {% if cola_filtro or buscar %}
+        <a class="delco-filtro-limpiar" data-delco-partial="1" href="?{% url_sin 'cola' 'buscar' %}">Quitar filtros</a>
+        {% endif %}
       </div>
     </div>
-    <form method="get" class="row g-2 align-items-end">
-      {% if cola_filtro %}<input type="hidden" name="cola" value="{{ cola_filtro }}">{% endif %}
-      <div class="col-md-6 col-xl-4">
-        <label class="form-label small mb-1" for="buscarPendientes">Buscar</label>
-        <input type="search" id="buscarPendientes" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Título, cuenta, formulario…">
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
-        <a href="{% url 'pendientes_operativos' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
-      </div>
-    </form>
   </div>
 
   <div class="delco-catalogo-panel">
@@ -98,6 +120,7 @@
       <strong>Tareas sin completar</strong>
       <span class="badge bg-secondary">{{ page_obj.paginator.count }}</span>
     </div>
+    <div id="js-lista-pendientes">
     <div class="table-responsive">
       <table class="table table-hover mb-0 align-middle">
         <thead>
@@ -155,14 +178,15 @@
       <span class="small text-muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
       <div class="btn-group btn-group-sm">
         {% if page_obj.has_previous %}
-        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        <a class="btn btn-outline-secondary" data-delco-partial="1" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
         {% endif %}
         {% if page_obj.has_next %}
-        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+        <a class="btn btn-outline-secondary" data-delco-partial="1" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
         {% endif %}
       </div>
     </div>
     {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

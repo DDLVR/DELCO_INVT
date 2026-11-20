@@ -133,61 +133,75 @@
     <!-- Filtros -->
     <div class="card delco-panel-card mb-3">
         <div class="card-body">
-            <form method="get" class="row g-2 align-items-end">
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Estado</label>
-                    <select name="estado" class="form-select form-select-sm">
-                        <option value="">Todos terminados</option>
-                        {% for value, label in estados_terminados %}
-                        <option value="{{ value }}" {% if estado_filtro == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
+            <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-4">
+                  <label class="form-label small mb-1">Tipo de filtro</label>
+                  <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+                </div>
+                <div class="col-12 col-md-4">
+                  <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+                  <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+                  <div data-filtro-panel="estado" data-filtro-titulo="Estado" data-filtro-param="estado" class="d-none">
+                    <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Estado">
+                      <option value="">Elige</option>
+                      {% for value, label in estados_terminados %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
                     </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Tipo</label>
-                    <select name="tipo_trabajo" class="form-select form-select-sm">
-                        <option value="">Todos</option>
-                        {% for value, label in tipos_trabajo %}
-                        <option value="{{ value }}" {% if tipo_filtro == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
+                  </div>
+                  <div data-filtro-panel="tipo_trabajo" data-filtro-titulo="Tipo" data-filtro-param="tipo_trabajo" class="d-none">
+                    <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Tipo">
+                      <option value="">Elige</option>
+                      {% for value, label in tipos_trabajo %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
                     </select>
+                  </div>
+                  {% if request.user.rol != 'TECNICO' %}
+                  <div data-filtro-panel="tecnico" data-filtro-titulo="Técnico" data-filtro-param="tecnico" class="d-none">
+                    <input type="hidden" data-filtro-valor id="filtroTecnicoTermId" value="">
+                    <input type="text" class="form-control form-control-sm" id="filtroTecnicoTermLabel" placeholder="Buscar técnico…" autocomplete="off" data-ac-url="{{ delco_api.buscar_tecnicos }}?ambito=ot" data-ac-hidden="#filtroTecnicoTermId">
+                  </div>
+                  {% endif %}
+                  <div data-filtro-panel="cliente" data-filtro-titulo="Cliente" data-filtro-param="cliente" class="d-none">
+                    <input type="text" class="form-control form-control-sm" placeholder="Nº cliente" aria-label="Cliente">
+                  </div>
+                  <div data-filtro-panel="proyecto_carga" data-filtro-titulo="Proyecto" data-filtro-param="proyecto_carga" class="d-none">
+                    <input type="text" class="form-control form-control-sm" placeholder="Proyecto…" aria-label="Proyecto">
+                  </div>
+                  <div data-filtro-panel="buscar" data-filtro-titulo="Buscar" data-filtro-param="buscar" class="d-none">
+                    <input type="text" class="form-control form-control-sm" placeholder="Título / cliente / proyecto" aria-label="Buscar">
+                  </div>
+                  <div data-filtro-panel="fecha" data-filtro-titulo="Fecha" data-filtro-modo="fecha" data-filtro-borra="periodo" class="d-none">
+                    <input type="date" class="form-control form-control-sm" aria-label="Desde">
+                  </div>
+                  <div data-filtro-panel="periodo" data-filtro-titulo="Periodo" data-filtro-param="periodo" data-filtro-borra="fecha_desde,fecha_hasta" class="d-none">
+                    <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Periodo">
+                      <option value="">Elige</option>
+                      <option value="7">Últimos 7 días</option>
+                      <option value="30">Últimos 30 días</option>
+                    </select>
+                  </div>
                 </div>
-                {% if request.user.rol != 'TECNICO' %}
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Técnico</label>
-                    <input type="hidden" name="tecnico" id="filtroTecnicoTermId" value="{{ tecnico_filtro }}">
-                    <input type="text" class="form-control form-control-sm" id="filtroTecnicoTermLabel"
-                           value="{{ tecnico_filtro_label }}" placeholder="Buscar técnico…" autocomplete="off"
-                           data-ac-url="{{ delco_api.buscar_tecnicos }}?ambito=ot" data-ac-hidden="#filtroTecnicoTermId">
+                <div class="col-12 col-md-3 d-none js-filtro-rango">
+                  <label class="form-label small mb-1">Hasta</label>
+                  <input type="date" class="form-control form-control-sm js-filtro-hasta">
                 </div>
+                <div class="col-12 col-md-auto">
+                  <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+                </div>
+              </div>
+              <div class="delco-filtro-activos js-filtro-activos">
+                {% if estado_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'estado' %}"><span class="delco-filtro-chip-tipo">Estado</span><span>{% for value, label in estados_terminados %}{% if value == estado_filtro %}{{ label }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if tipo_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'tipo_trabajo' %}"><span class="delco-filtro-chip-tipo">Tipo</span><span>{% for value, label in tipos_trabajo %}{% if value == tipo_filtro %}{{ label }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if tecnico_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'tecnico' %}"><span class="delco-filtro-chip-tipo">Técnico</span><span>{{ tecnico_filtro_label|default:tecnico_filtro }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if cliente_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'cliente' %}"><span class="delco-filtro-chip-tipo">Cliente</span><span>{{ cliente_filtro }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if proyecto_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'proyecto_carga' %}"><span class="delco-filtro-chip-tipo">Proyecto</span><span>{{ proyecto_filtro }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if buscar %}<a class="delco-filtro-chip" href="?{% url_sin 'buscar' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ buscar }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if fecha_desde or fecha_hasta %}<a class="delco-filtro-chip" href="?{% url_sin 'fecha_desde' 'fecha_hasta' %}"><span class="delco-filtro-chip-tipo">Fecha</span><span>{{ fecha_desde|default:"…" }} → {{ fecha_hasta|default:"…" }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if periodo %}<a class="delco-filtro-chip" href="?{% url_sin 'periodo' %}"><span class="delco-filtro-chip-tipo">Periodo</span><span>Últimos {{ periodo }} días</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if estado_filtro or tipo_filtro or tecnico_filtro or cliente_filtro or proyecto_filtro or buscar or fecha_desde or fecha_hasta or periodo %}
+                <a class="delco-filtro-limpiar" href="{% url 'ordenes_terminadas' %}">Quitar filtros</a>
                 {% endif %}
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Cliente</label>
-                    <input type="text" name="cliente" class="form-control form-control-sm" value="{{ cliente_filtro }}" placeholder="Nº cliente">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Proyecto / Carga</label>
-                    <input type="text" name="proyecto_carga" class="form-control form-control-sm" value="{{ proyecto_filtro }}" placeholder="Proyecto…">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Buscar</label>
-                    <input type="text" name="buscar" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Título / cliente / proyecto">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Desde</label>
-                    <input type="date" name="fecha_desde" class="form-control form-control-sm" value="{{ fecha_desde }}">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small mb-1">Hasta</label>
-                    <input type="date" name="fecha_hasta" class="form-control form-control-sm" value="{{ fecha_hasta }}">
-                </div>
-                <div class="col-12 d-flex flex-wrap gap-2 mt-2">
-                    <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
-                    <a href="?periodo=7" class="btn btn-sm {% if periodo == '7' %}btn-success{% else %}btn-outline-success{% endif %}">Últimos 7 días</a>
-                    <a href="?periodo=30" class="btn btn-sm {% if periodo == '30' %}btn-success{% else %}btn-outline-success{% endif %}">Últimos 30 días</a>
-                    <a href="{% url 'ordenes_terminadas' %}" class="btn btn-sm btn-outline-secondary">Limpiar</a>
-                </div>
-            </form>
+              </div>
+            </div>
         </div>
     </div>
 

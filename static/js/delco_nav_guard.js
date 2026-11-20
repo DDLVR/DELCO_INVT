@@ -86,6 +86,7 @@
     if (link.getAttribute('target') && link.getAttribute('target') !== '_self') return true;
     if (link.hasAttribute('download')) return true;
     if (link.getAttribute('data-delco-full-nav') === '1') return true;
+    if (link.getAttribute('data-delco-partial') === '1') return true;
     if (link.getAttribute('data-bs-toggle') && !link.classList.contains('app-nav-link')) return true;
     if (link.getAttribute('data-bs-dismiss')) return true;
     if (!sameOrigin(href)) return true;

@@ -61,37 +61,58 @@
   </div>
 
   <div class="delco-catalogo-filters mb-3">
-    <div class="delco-catalogo-chip-row mb-3">
-      <span class="small text-muted d-none d-md-inline">Cola</span>
-      <div class="delco-catalogo-chips">
-        <a href="/operacional/validacion-moreapp/" class="delco-catalogo-chip {% if not cola %}is-active{% endif %}">
-          Todas <span class="badge bg-dark">{{ contadores.por_validar|default:0 }}</span>
+    <div class="delco-filtro-builder" data-filtro-auto data-lista="js-lista-validacion">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-4 col-xl-3">
+          <label class="form-label small mb-1">Tipo de filtro</label>
+          <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no">
+            <option value="">Elige un filtro</option>
+          </select>
+        </div>
+        <div class="col-12 col-md-4 col-xl-3">
+          <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+          <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+          <div data-filtro-panel="cola" data-filtro-titulo="Cola" data-filtro-param="cola" class="d-none">
+            <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Cola">
+              <option value="">Elige una cola</option>
+              <option value="pendientes">Sin advertencia ({{ contadores.PENDIENTE|default:0 }})</option>
+              <option value="advertencia">Con advertencia ({{ contadores.CON_ADVERTENCIA|default:0 }})</option>
+              <option value="envejecidos">Más de 7 días ({{ contadores.envejecidos|default:0 }})</option>
+              <option value="validados">Validados ({{ contadores.REVISADO|default:0 }})</option>
+            </select>
+          </div>
+          <div data-filtro-panel="q" data-filtro-titulo="Buscar" data-filtro-param="q" class="d-none">
+            <input type="search" class="form-control form-control-sm" placeholder="Formulario, cliente, ID…" aria-label="Buscar">
+          </div>
+        </div>
+        <div class="col-12 col-md-3 col-xl-3 d-none js-filtro-rango">
+          <label class="form-label small mb-1">Hasta</label>
+          <input type="date" class="form-control form-control-sm js-filtro-hasta">
+        </div>
+        <div class="col-12 col-md-auto">
+          <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+        </div>
+      </div>
+      <div class="delco-filtro-activos js-filtro-activos">
+        {% if cola %}
+        <a class="delco-filtro-chip" data-delco-partial="1" href="?{% url_sin 'cola' %}" title="Quitar este filtro">
+          <span class="delco-filtro-chip-tipo">Cola</span>
+          <span>{% if cola == 'pendientes' %}Sin advertencia{% elif cola == 'advertencia' %}Con advertencia{% elif cola == 'envejecidos' %}Más de 7 días{% elif cola == 'validados' %}Validados{% else %}{{ cola }}{% endif %}</span>
+          <i class="bi bi-x-lg" aria-hidden="true"></i>
         </a>
-        <a href="?cola=pendientes" class="delco-catalogo-chip {% if cola == 'pendientes' %}is-active{% endif %}">
-          Sin advertencia <span class="badge bg-dark">{{ contadores.PENDIENTE|default:0 }}</span>
+        {% endif %}
+        {% if buscar %}
+        <a class="delco-filtro-chip" data-delco-partial="1" href="?{% url_sin 'q' %}" title="Quitar este filtro">
+          <span class="delco-filtro-chip-tipo">Buscar</span>
+          <span>{{ buscar }}</span>
+          <i class="bi bi-x-lg" aria-hidden="true"></i>
         </a>
-        <a href="?cola=advertencia" class="delco-catalogo-chip {% if cola == 'advertencia' %}is-active{% endif %}">
-          Con advertencia <span class="badge bg-dark">{{ contadores.CON_ADVERTENCIA|default:0 }}</span>
-        </a>
-        <a href="?cola=envejecidos" class="delco-catalogo-chip {% if cola == 'envejecidos' %}is-active{% endif %}">
-          Más de 7 días <span class="badge bg-dark">{{ contadores.envejecidos|default:0 }}</span>
-        </a>
-        <a href="?cola=validados" class="delco-catalogo-chip {% if cola == 'validados' %}is-active{% endif %}">
-          Validados <span class="badge bg-dark">{{ contadores.REVISADO|default:0 }}</span>
-        </a>
+        {% endif %}
+        {% if cola or buscar %}
+        <a class="delco-filtro-limpiar" data-delco-partial="1" href="?{% url_sin 'cola' 'q' %}">Quitar filtros</a>
+        {% endif %}
       </div>
     </div>
-    <form method="get" class="row g-2 align-items-end">
-      {% if cola %}<input type="hidden" name="cola" value="{{ cola }}">{% endif %}
-      <div class="col-md-6 col-xl-4">
-        <label class="form-label small mb-1" for="buscarValidacion">Buscar</label>
-        <input type="search" id="buscarValidacion" name="q" class="form-control form-control-sm" value="{{ buscar }}" placeholder="Formulario, cliente, ID…">
-      </div>
-      <div class="col-auto">
-        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-funnel"></i> Filtrar</button>
-        <a href="/operacional/validacion-moreapp/" class="btn btn-sm btn-outline-secondary">Limpiar</a>
-      </div>
-    </form>
   </div>
 
   <div class="delco-catalogo-panel">
@@ -99,6 +120,7 @@
       <strong>Informes por validar</strong>
       <span class="badge bg-secondary">{{ page_obj.paginator.count }}</span>
     </div>
+    <div id="js-lista-validacion">
     <div class="table-responsive">
       <table class="table table-hover mb-0 align-middle">
         <thead>
@@ -163,14 +185,15 @@
       <span class="small text-muted">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
       <div class="btn-group btn-group-sm">
         {% if page_obj.has_previous %}
-        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
+        <a class="btn btn-outline-secondary" data-delco-partial="1" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.previous_page_number }}">Anterior</a>
         {% endif %}
         {% if page_obj.has_next %}
-        <a class="btn btn-outline-secondary" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
+        <a class="btn btn-outline-secondary" data-delco-partial="1" href="?{% if query_string %}{{ query_string }}&{% endif %}page={{ page_obj.next_page_number }}">Siguiente</a>
         {% endif %}
       </div>
     </div>
     {% endif %}
+    </div>
   </div>
 </div>
 {% endblock %}

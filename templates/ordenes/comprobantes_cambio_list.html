@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Comprobantes de cambio de medidor{% endblock %}
 
@@ -20,14 +21,28 @@
     </div>
   </div>
 
-  <form method="get" class="row g-2 mb-3">
-    <div class="col-md-8">
-      <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Buscar por cliente, serie o OT…">
+  <div class="delco-filtro-builder mb-3" data-filtro-auto data-navegacion="pagina">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label small mb-1">Tipo de filtro</label>
+        <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+      </div>
+      <div class="col-12 col-md-5">
+        <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+        <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+        <div data-filtro-panel="q" data-filtro-titulo="Buscar" data-filtro-param="q" class="d-none">
+          <input type="search" class="form-control form-control-sm" placeholder="Cliente, serie o OT…" aria-label="Buscar">
+        </div>
+      </div>
+      <div class="col-12 col-md-auto">
+        <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+      </div>
     </div>
-    <div class="col-md-4">
-      <button type="submit" class="btn btn-outline-primary w-100">Buscar</button>
+    <div class="delco-filtro-activos js-filtro-activos">
+      {% if q %}<a class="delco-filtro-chip" href="?{% url_sin 'q' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ q }}</span><i class="bi bi-x-lg"></i></a>
+      <a class="delco-filtro-limpiar" href="?{% url_sin 'q' %}">Quitar filtros</a>{% endif %}
     </div>
-  </form>
+  </div>
 
   <div class="card delco-panel-card">
     <div class="table-responsive">

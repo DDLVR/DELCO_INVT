@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import unicodedata
-from datetime import datetime
 from typing import Any, Dict, List
 from urllib.parse import urlencode
 
@@ -16,6 +15,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from web.decorators import admin_only, admin_or_formulario_asignado
+from web.services.listado import es_ajax, parse_fecha_iso
 
 from .models import MoreAppFormularioOculto, MoreAppFuenteInterna
 from .moreapp_cuentas import aplicar_vinculos_a_usuarios, guardar_vinculo, listar_tecnicos_moreapp
@@ -41,7 +41,7 @@ from .moreapp_api import (
 )
 from .moreapp_fechas import format_moreapp_when
 from .moreapp_fuentes import parse_uploaded_fuente, upsert_filas
-from .moreapp_http import assert_safe_id
+from .moreapp_api import assert_safe_id
 
 _WIDGET_LABELS = {
     "photo": "Foto",
@@ -74,11 +74,7 @@ def _fold_text(value: Any) -> str:
 
 def _fecha_param(raw: Any) -> str:
     text = str(raw or "").strip()
-    try:
-        datetime.strptime(text, "%Y-%m-%d")
-    except (TypeError, ValueError):
-        return ""
-    return text
+    return text if parse_fecha_iso(text) else ""
 
 
 def _catalogo_qs(
@@ -1018,13 +1014,6 @@ def catalogo_usuarios_view(request):
     return render(request, "integraciones/moreapp_usuarios.html", context)
 
 
-def _es_ajax_catalogo(request) -> bool:
-    return (
-        (request.headers.get("X-Requested-With") or "") == "XMLHttpRequest"
-        or "application/json" in (request.headers.get("Accept") or "").lower()
-    )
-
-
 @admin_only
 @require_POST
 def catalogo_usuarios_vincular_view(request):
@@ -1042,7 +1031,7 @@ def catalogo_usuarios_vincular_view(request):
         actualizado_por=request.user,
     )
     if error:
-        if _es_ajax_catalogo(request):
+        if es_ajax(request):
             return JsonResponse({"ok": False, "error": error}, status=400)
         messages.error(request, error)
         return redirect("usuarios_moreapp")
@@ -1054,7 +1043,7 @@ def catalogo_usuarios_vincular_view(request):
         nombre = ""
         mensaje = "Se quitó el técnico de %s." % email
         tecnico_id_out = ""
-    if _es_ajax_catalogo(request):
+    if es_ajax(request):
         return JsonResponse(
             {
                 "ok": True,

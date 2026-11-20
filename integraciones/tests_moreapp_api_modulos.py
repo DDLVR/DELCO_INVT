@@ -106,7 +106,7 @@ class MoreAppApiModulosTests(TestCase):
         MOREAPP_API_KEY='test-key',
         MOREAPP_CUSTOMER_ID='123',
     )
-    @mock.patch('integraciones.moreapp_datos_views.list_users')
+    @mock.patch('integraciones.moreapp_visualizacion_views.list_users')
     def test_json_users_modulo_datos(self, mocked_users):
         mocked_users.return_value = [{'id': 'u1', 'emailAddress': 'tec@delco.cl'}]
         self.client.login(username=self.admin.rut, password=self.password)
@@ -3185,7 +3185,7 @@ class MoreAppTareaCicloTests(TestCase):
 
     def test_auditoria_tarea_un_solo_registro_actualizado(self):
         from web.models import AuditLog
-        from integraciones.moreapp_tareas_audit import registrar_auditoria_tarea
+        from integraciones.moreapp_tareas_ciclo import registrar_auditoria_tarea
 
         tarea = self._tarea()
         self.assertEqual(

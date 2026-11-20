@@ -10,14 +10,9 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import requires_csrf_token
 
+from web.services.listado import es_ajax
+
 logger = logging.getLogger('django.request')
-
-
-def _quiere_json(request) -> bool:
-    accept = (request.headers.get('Accept') or '').lower()
-    if 'application/json' in accept:
-        return True
-    return (request.headers.get('X-Requested-With') or '') == 'XMLHttpRequest'
 
 
 def _es_staff_interno(request) -> bool:
@@ -75,7 +70,7 @@ def server_error_view(request, template_name='500.html'):
         if tip or msg:
             payload['debug_hint'] = f'{tip}: {msg}'.strip(': ')
 
-    if _quiere_json(request):
+    if es_ajax(request):
         return JsonResponse(payload, status=500)
 
     context = {

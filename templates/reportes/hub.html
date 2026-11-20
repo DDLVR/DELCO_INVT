@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Reportes operativos{% endblock %}
 
@@ -51,101 +52,69 @@
                 <span class="badge bg-info text-dark">Filtros activos</span>
                 {% endif %}
             </div>
-            <form method="get" id="formFiltrosReportes" class="row g-2 align-items-end">
-                <div class="col-md-2">
-                    <label class="form-label mb-1" for="filtroPeriodo">Período</label>
-                    <select name="periodo" id="filtroPeriodo" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="" {% if not filters.periodo %}selected{% endif %}>Todo</option>
-                        <option value="hoy" {% if filters.periodo == 'hoy' %}selected{% endif %}>Hoy</option>
-                        <option value="7" {% if filters.periodo == '7' %}selected{% endif %}>Últimos 7 días</option>
-                        <option value="30" {% if filters.periodo == '30' %}selected{% endif %}>Últimos 30 días</option>
-                        <option value="mes" {% if filters.periodo == 'mes' %}selected{% endif %}>Este mes</option>
+            <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-4">
+                  <label class="form-label small mb-1">Tipo de filtro</label>
+                  <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+                </div>
+                <div class="col-12 col-md-4">
+                  <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+                  <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+                  <div data-filtro-panel="periodo" data-filtro-titulo="Período" data-filtro-param="periodo" class="d-none">
+                    <select id="filtroPeriodo" class="form-select form-select-sm" data-orden-lista="no" aria-label="Período">
+                      <option value="">Elige un período</option>
+                      <option value="hoy">Hoy</option>
+                      <option value="7">Últimos 7 días</option>
+                      <option value="30">Últimos 30 días</option>
+                      <option value="mes">Este mes</option>
                     </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label mb-1" for="filtroEstadoOt">Estado OT</label>
-                    <select name="estado_ot" id="filtroEstadoOt" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todos</option>
-                        {% for codigo, label in estados_ot %}
-                        <option value="{{ codigo }}" {% if filters.estado_ot == codigo %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
+                  </div>
+                  <div data-filtro-panel="estado_ot" data-filtro-titulo="Estado OT" data-filtro-param="estado_ot" class="d-none">
+                    <select id="filtroEstadoOt" class="form-select form-select-sm" data-orden-lista="no" aria-label="Estado">
+                      <option value="">Elige un estado</option>
+                      {% for codigo, label in estados_ot %}<option value="{{ codigo }}">{{ label }}</option>{% endfor %}
                     </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label mb-1" for="filtroTipoTrabajo">Tipo trabajo</label>
-                    <select name="tipo_trabajo" id="filtroTipoTrabajo" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todos</option>
-                        {% for codigo, label in tipos_trabajo %}
-                        <option value="{{ codigo }}" {% if filters.tipo_trabajo == codigo %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
+                  </div>
+                  <div data-filtro-panel="tipo_trabajo" data-filtro-titulo="Tipo de trabajo" data-filtro-param="tipo_trabajo" class="d-none">
+                    <select id="filtroTipoTrabajo" class="form-select form-select-sm" data-orden-lista="no" aria-label="Tipo">
+                      <option value="">Elige un tipo</option>
+                      {% for codigo, label in tipos_trabajo %}<option value="{{ codigo }}">{{ label }}</option>{% endfor %}
                     </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label mb-1" for="filtroTecnico">Técnico</label>
-                    <select name="tecnico_id" id="filtroTecnico" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todos</option>
-                        {% for tecnico in tecnicos %}
-                        <option value="{{ tecnico.id }}" {% if filters.tecnico_id == tecnico.id|stringformat:"s" %}selected{% endif %}>
-                            {{ tecnico.nombre_interno }}
-                        </option>
-                        {% empty %}
-                        <option value="" disabled>Sin técnicos</option>
-                        {% endfor %}
+                  </div>
+                  <div data-filtro-panel="tecnico_id" data-filtro-titulo="Técnico" data-filtro-param="tecnico_id" class="d-none">
+                    <select id="filtroTecnico" class="form-select form-select-sm" aria-label="Técnico">
+                      <option value="">Elige un técnico</option>
+                      {% for tecnico in tecnicos %}<option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}</option>{% endfor %}
                     </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label mb-1" for="filtroEmpresa">Empresa</label>
-                    <select name="empresa" id="filtroEmpresa" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todas</option>
-                        {% for emp in empresas %}
-                        <option value="{{ emp }}" {% if filters.empresa == emp %}selected{% endif %}>{{ emp }}</option>
-                        {% empty %}
-                        <option value="" disabled>Sin empresa</option>
-                        {% endfor %}
+                  </div>
+                  <div data-filtro-panel="empresa" data-filtro-titulo="Empresa" data-filtro-param="empresa" class="d-none">
+                    <select id="filtroEmpresa" class="form-select form-select-sm" aria-label="Empresa">
+                      <option value="">Elige una empresa</option>
+                      {% for emp in empresas %}<option value="{{ emp }}">{{ emp }}</option>{% endfor %}
                     </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label mb-1" for="filtroComuna">Comuna</label>
-                    <select name="comuna" id="filtroComuna" class="form-select form-select-sm" onchange="this.form.submit()">
-                        <option value="">Todas</option>
-                        {% for c in comunas %}
-                        <option value="{{ c }}" {% if filters.comuna == c %}selected{% endif %}>{{ c }}</option>
-                        {% empty %}
-                        <option value="" disabled>Sin comuna</option>
-                        {% endfor %}
+                  </div>
+                  <div data-filtro-panel="comuna" data-filtro-titulo="Comuna" data-filtro-param="comuna" class="d-none">
+                    <select id="filtroComuna" class="form-select form-select-sm" aria-label="Comuna">
+                      <option value="">Elige una comuna</option>
+                      {% for c in comunas %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
                     </select>
+                  </div>
                 </div>
-                <div class="col-12 d-flex flex-wrap gap-2 align-items-center mt-1">
-                    <a href="{% url 'reportes_hub' %}" class="btn btn-outline-secondary btn-sm">
-                        <i class="bi bi-arrow-clockwise"></i> Limpiar filtros
-                    </a>
-                    <span class="text-muted small">
-                        El período usa la fecha de creación de la OT. Al cambiar un filtro se actualizan los conteos.
-                    </span>
+                <div class="col-12 col-md-auto">
+                  <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
                 </div>
-            </form>
-            {% if filtros_activos %}
-            <div class="d-flex flex-wrap gap-1 mt-3">
-                {% if filters.periodo %}
-                <span class="badge delco-badge-muted">Período: {{ filters.periodo }}</span>
-                {% endif %}
-                {% if filters.estado_ot %}
-                <span class="badge delco-badge-muted">Estado: {{ filters.estado_ot }}</span>
-                {% endif %}
-                {% if filters.tipo_trabajo %}
-                <span class="badge delco-badge-muted">Tipo: {{ filters.tipo_trabajo }}</span>
-                {% endif %}
-                {% if filters.tecnico_id %}
-                <span class="badge delco-badge-muted">Técnico #{{ filters.tecnico_id }}</span>
-                {% endif %}
-                {% if filters.empresa %}
-                <span class="badge delco-badge-muted">Empresa: {{ filters.empresa }}</span>
-                {% endif %}
-                {% if filters.comuna %}
-                <span class="badge delco-badge-muted">Comuna: {{ filters.comuna }}</span>
-                {% endif %}
+              </div>
+              <div class="delco-filtro-activos js-filtro-activos">
+                {% if filters.periodo %}<a class="delco-filtro-chip" href="?{% url_sin 'periodo' %}"><span class="delco-filtro-chip-tipo">Período</span><span>{{ filters.periodo }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if filters.estado_ot %}<a class="delco-filtro-chip" href="?{% url_sin 'estado_ot' %}"><span class="delco-filtro-chip-tipo">Estado</span><span>{% for codigo, label in estados_ot %}{% if codigo == filters.estado_ot %}{{ label }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if filters.tipo_trabajo %}<a class="delco-filtro-chip" href="?{% url_sin 'tipo_trabajo' %}"><span class="delco-filtro-chip-tipo">Tipo</span><span>{% for codigo, label in tipos_trabajo %}{% if codigo == filters.tipo_trabajo %}{{ label }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if filters.tecnico_id %}<a class="delco-filtro-chip" href="?{% url_sin 'tecnico_id' %}"><span class="delco-filtro-chip-tipo">Técnico</span><span>{% for tecnico in tecnicos %}{% if filters.tecnico_id == tecnico.id|stringformat:"s" %}{{ tecnico.nombre_interno }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if filters.empresa %}<a class="delco-filtro-chip" href="?{% url_sin 'empresa' %}"><span class="delco-filtro-chip-tipo">Empresa</span><span>{{ filters.empresa }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if filters.comuna %}<a class="delco-filtro-chip" href="?{% url_sin 'comuna' %}"><span class="delco-filtro-chip-tipo">Comuna</span><span>{{ filters.comuna }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                {% if filtros_activos %}<a class="delco-filtro-limpiar" href="{% url 'reportes_hub' %}">Quitar filtros</a>{% endif %}
+              </div>
             </div>
-            {% endif %}
         </div>
     </div>
 

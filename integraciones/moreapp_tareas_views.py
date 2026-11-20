@@ -8,8 +8,7 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.contrib import messages
-from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -18,6 +17,18 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from clientes.models import Cliente
 from web.decorators import admin_or_administrativo
+from web.services.listado import (
+    consulta_sin_pagina,
+    conteo_por_campo,
+    es_ajax,
+    fecha_legible,
+    leer_textos_get,
+    paginar_consulta,
+    parse_fecha_iso,
+    pastilla_filtro,
+    quitar_de_consulta,
+    top_por_campo,
+)
 
 from .models import MoreAppFormularioAsignado, MoreAppTareaEnviada
 from .moreapp_api import (
@@ -37,7 +48,7 @@ from .moreapp_cuentas import (
     emails_que_coinciden_tecnico,
     etiquetas_destinatarios,
 )
-from .moreapp_http import assert_safe_id
+from .moreapp_api import assert_safe_id
 from .moreapp_permisos import (
     anotar_permisos_grupos,
     anotar_permisos_usuarios,
@@ -156,6 +167,7 @@ def _formularios_activos(usuario=None) -> List[Dict[str, Any]]:
         if permitidos is not None and form_id not in permitidos:
             continue
         rows.append(row)
+    rows.sort(key=lambda row: (row.get("name") or "").casefold())
     return rows
 
 
@@ -720,6 +732,45 @@ def _qs_tareas_con_relaciones():
     return qs
 
 
+_CLAVES_FILTRO_TAREA = (
+    "estado",
+    "formulario",
+    "tipo_trabajo",
+    "cuenta",
+    "proyecto_carga",
+    "destinatario",
+    "buscar",
+    "fecha_desde",
+    "fecha_hasta",
+    "periodo",
+    "cola",
+)
+
+
+def _filtros_get(request) -> Dict[str, str]:
+    """Un solo lugar lee los parámetros del listado, la exportación y el sondeo."""
+    return leer_textos_get(request, _CLAVES_FILTRO_TAREA, ("periodo", "cola"))
+
+
+def _resumen_tareas_qs(qs) -> Dict[str, Any]:
+    """Totales del queryset ya filtrado, para la pantalla y el sondeo.
+    Caso futuro: otro resumen por estado; adapta choices, informe y fecha límite.
+    """
+    por_estado = conteo_por_campo(qs)
+    return {
+        "total": qs.count(),
+        "abiertas": por_estado.get(MoreAppTareaEnviada.ESTADO_ASIGNADA, 0),
+        "completadas": por_estado.get(MoreAppTareaEnviada.ESTADO_COMPLETADA, 0),
+        "errores": por_estado.get(MoreAppTareaEnviada.ESTADO_ERROR, 0),
+        "con_informe": qs.filter(integracion__isnull=False).count(),
+        "vencidas": qs.filter(
+            estado=MoreAppTareaEnviada.ESTADO_ASIGNADA,
+            fecha_limite__lt=timezone.now(),
+        ).count(),
+        "por_formulario": top_por_campo(qs, "form_name", limite=8, alias="n", omitir_vacio=True),
+    }
+
+
 def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True, solo_abiertas: bool = False):
     qs = _qs_tareas_con_relaciones()
     if not aplicar_filtros:
@@ -727,19 +778,20 @@ def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True, solo_abi
             qs = qs.exclude(estado=MoreAppTareaEnviada.ESTADO_COMPLETADA)
         return qs
 
-    estado_filtro = (request.GET.get("estado") or "").strip()
-    form_filtro = (request.GET.get("formulario") or "").strip()
-    cuenta_filtro = (request.GET.get("cuenta") or "").strip()
-    buscar = (request.GET.get("buscar") or "").strip()
-    fecha_desde = (request.GET.get("fecha_desde") or "").strip()
-    fecha_hasta = (request.GET.get("fecha_hasta") or "").strip()
-    periodo = (request.GET.get("periodo") or "").strip().lower()
-    cola_filtro = (request.GET.get("cola") or "").strip().lower()
+    filtros = _filtros_get(request)
+    estado_filtro = filtros["estado"]
+    form_filtro = filtros["formulario"]
+    cuenta_filtro = filtros["cuenta"]
+    buscar = filtros["buscar"]
+    fecha_desde = filtros["fecha_desde"]
+    fecha_hasta = filtros["fecha_hasta"]
+    periodo = filtros["periodo"]
+    cola_filtro = filtros["cola"]
     if solo_abiertas and cola_filtro == "completadas":
         cola_filtro = ""
-    tipo_filtro = (request.GET.get("tipo_trabajo") or "").strip()
-    proyecto_filtro = (request.GET.get("proyecto_carga") or "").strip()
-    destinatario_filtro = (request.GET.get("destinatario") or "").strip()
+    tipo_filtro = filtros["tipo_trabajo"]
+    proyecto_filtro = filtros["proyecto_carga"]
+    destinatario_filtro = filtros["destinatario"]
 
     if cola_filtro == "pendientes":
         qs = qs.filter(estado=MoreAppTareaEnviada.ESTADO_PENDIENTE)
@@ -791,17 +843,13 @@ def _queryset_tareas_filtrado(request, *, aplicar_filtros: bool = True, solo_abi
         qs = qs.filter(fecha_creacion__gte=ahora - timedelta(days=30))
     else:
         if fecha_desde:
-            try:
-                d0 = datetime.strptime(fecha_desde, "%Y-%m-%d").date()
+            d0 = parse_fecha_iso(fecha_desde)
+            if d0:
                 qs = qs.filter(fecha_creacion__date__gte=d0)
-            except ValueError:
-                pass
         if fecha_hasta:
-            try:
-                d1 = datetime.strptime(fecha_hasta, "%Y-%m-%d").date()
+            d1 = parse_fecha_iso(fecha_hasta)
+            if d1:
                 qs = qs.filter(fecha_creacion__date__lte=d1)
-            except ValueError:
-                pass
     if solo_abiertas:
         qs = qs.exclude(estado=MoreAppTareaEnviada.ESTADO_COMPLETADA)
     return qs
@@ -867,22 +915,69 @@ def _exportar_tareas_excel(tareas: List[MoreAppTareaEnviada]):
     return wb
 
 
+_COLAS_TAREA = {
+    "pendientes": "Sin asignar",
+    "en_campo": "En campo",
+    "completadas": "Completadas",
+    "vencidas": "Vencidas",
+    "errores": "Con error",
+}
+
+
+def _filtros_activos_tareas(params, filtros: Dict[str, str]) -> List[Dict[str, str]]:
+    """Pastillas de los filtros aplicados, con el enlace para quitar solo ese."""
+    estados = dict(MoreAppTareaEnviada.ESTADO_CHOICES)
+    tipos = dict(getattr(MoreAppTareaEnviada, "TIPO_TRABAJO_CHOICES", ()))
+    activos = []
+
+    def agregar(claves, titulo, valor):
+        pastilla = pastilla_filtro(params, claves, titulo, valor)
+        if pastilla:
+            activos.append(pastilla)
+
+    agregar(("estado",), "Estado", estados.get(filtros["estado"], filtros["estado"]))
+    agregar(("formulario",), "Formulario", filtros["formulario"])
+    agregar(("tipo_trabajo",), "Tipo", tipos.get(filtros["tipo_trabajo"], filtros["tipo_trabajo"]))
+    agregar(("cuenta",), "CUENTA", filtros["cuenta"])
+    agregar(("proyecto_carga",), "Proyecto", filtros["proyecto_carga"])
+    agregar(("destinatario",), "Destinatario", filtros["destinatario"])
+    agregar(("buscar",), "Buscar", filtros["buscar"])
+    if filtros["cola"] in _COLAS_TAREA:
+        agregar(("cola",), "Cola", _COLAS_TAREA[filtros["cola"]])
+    desde, hasta = filtros["fecha_desde"], filtros["fecha_hasta"]
+    if desde or hasta:
+        agregar(
+            ("fecha_desde", "fecha_hasta"),
+            "Fecha",
+            "%s → %s" % (
+                fecha_legible(desde) if desde else "…",
+                fecha_legible(hasta) if hasta else "…",
+            ),
+        )
+    if filtros["periodo"] in ("7", "30"):
+        agregar(("periodo",), "Periodo", "Últimos %s días" % filtros["periodo"])
+    return activos
+
+
 def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote_modal: str = ""):
     context = dict(extra or {})
-    context.setdefault("formularios", [])
-    context.setdefault("usuarios", [])
-    context.setdefault("grupos", [])
-    context.setdefault("error", "")
-    context.setdefault("form_id", "")
-    context.setdefault("mensaje", "")
-    context.setdefault("fecha_limite", "")
-    context.setdefault("usuarios_sel", [])
-    context.setdefault("grupos_sel", [])
-    context.setdefault("clientes", [])
-    context.setdefault("clientes_sel", [])
-    context.setdefault("numeros_extra", "")
-    context.setdefault("archivo_nombre", "")
-    context.setdefault("resultados", [])
+    for clave, vacio in (
+        ("formularios", []),
+        ("usuarios", []),
+        ("grupos", []),
+        ("error", ""),
+        ("form_id", ""),
+        ("mensaje", ""),
+        ("fecha_limite", ""),
+        ("usuarios_sel", []),
+        ("grupos_sel", []),
+        ("clientes", []),
+        ("clientes_sel", []),
+        ("numeros_extra", ""),
+        ("archivo_nombre", ""),
+        ("resultados", []),
+    ):
+        context.setdefault(clave, vacio)
     context.setdefault("max_lote", MAX_LOTE)
     context.setdefault("max_cantidad", MAX_CANTIDAD)
     context.setdefault("max_filas_listado", MAX_FILAS_LISTADO)
@@ -890,7 +985,6 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
     from .moreapp_tareas_ciclo import (
         conteos_alertas_tareas,
         intervalo_auto_sync_tareas,
-        kpis_tareas,
         sincronizar_tareas_si_corresponde,
     )
 
@@ -899,43 +993,12 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
     except Exception:
         pass
 
-    user = getattr(request, "user", None)
-    context["tareas_aviso"] = conteos_alertas_tareas(user)
-
-    estado_filtro = (request.GET.get("estado") or "").strip()
-    form_filtro = (request.GET.get("formulario") or "").strip()
-    cuenta_filtro = (request.GET.get("cuenta") or "").strip()
-    buscar = (request.GET.get("buscar") or "").strip()
-    fecha_desde = (request.GET.get("fecha_desde") or "").strip()
-    fecha_hasta = (request.GET.get("fecha_hasta") or "").strip()
-    periodo = (request.GET.get("periodo") or "").strip().lower()
-    cola_filtro = (request.GET.get("cola") or "").strip().lower()
-    tipo_filtro = (request.GET.get("tipo_trabajo") or "").strip()
-    proyecto_filtro = (request.GET.get("proyecto_carga") or "").strip()
-    destinatario_filtro = (request.GET.get("destinatario") or "").strip()
-
+    context["tareas_aviso"] = conteos_alertas_tareas(getattr(request, "user", None))
+    filtros = _filtros_get(request)
     qs = _queryset_tareas_filtrado(request)
+    resumen = _resumen_tareas_qs(qs)
 
-    resumen_estado = {
-        row["estado"]: row["c"] for row in qs.values("estado").annotate(c=Count("id"))
-    }
-    por_formulario = list(
-        qs.exclude(form_name="")
-        .values("form_name")
-        .annotate(n=Count("id"))
-        .order_by("-n")[:8]
-    )
-    total = qs.count()
-    con_informe = qs.filter(integracion__isnull=False).count()
-    con_completadas = resumen_estado.get(MoreAppTareaEnviada.ESTADO_COMPLETADA, 0)
-
-    try:
-        per_page = int(request.GET.get("per_page") or 50)
-    except (TypeError, ValueError):
-        per_page = 50
-    if per_page not in (25, 50, 100):
-        per_page = 50
-    page_obj = Paginator(qs, per_page).get_page(request.GET.get("page") or 1)
+    page_obj, per_page = paginar_consulta(request, qs)
     tareas = list(page_obj.object_list)
     for tarea in tareas:
         tarea.grupos_nombres = _nombres_grupos_guardados(tarea.grupos)
@@ -943,54 +1006,27 @@ def _render_tareas_list(request, extra: Optional[Dict[str, Any]] = None, *, lote
         tarea.puede_pdf = tarea.estado == MoreAppTareaEnviada.ESTADO_COMPLETADA
     anotar_destinatarios_visibles(tareas)
 
-    query_params = request.GET.copy()
-    query_params.pop("page", None)
-    formularios_filtro = list(
-        MoreAppTareaEnviada.objects.exclude(form_name="")
-        .values_list("form_name", flat=True)
-        .distinct()
-        .order_by("form_name")
-    )
-    context.update(
-        {
-            "tareas": tareas,
-            "page_obj": page_obj,
-            "query_string": query_params.urlencode(),
-            "kpis_tareas": kpis_tareas(),
-            "tareas_auto_refresh_seconds": intervalo_auto_sync_tareas(),
-            "estado_filtro": estado_filtro,
-            "form_filtro": form_filtro,
-            "cuenta_filtro": cuenta_filtro,
-            "buscar": buscar,
-            "fecha_desde": fecha_desde,
-            "fecha_hasta": fecha_hasta,
-            "periodo": periodo,
-            "cola_filtro": cola_filtro,
-            "tipo_filtro": tipo_filtro,
-            "proyecto_filtro": proyecto_filtro,
-            "destinatario_filtro": destinatario_filtro,
-            "colas_conteo": _colas_conteo_tareas(),
-            "tipos_trabajo": getattr(MoreAppTareaEnviada, "TIPO_TRABAJO_CHOICES", ()),
-            "formularios_filtro": formularios_filtro,
-            "estados_filtro": MoreAppTareaEnviada.ESTADO_CHOICES,
-            "resumen": {
-                "total": total,
-                "abiertas": resumen_estado.get(MoreAppTareaEnviada.ESTADO_ASIGNADA, 0),
-                "completadas": con_completadas,
-                "errores": resumen_estado.get(MoreAppTareaEnviada.ESTADO_ERROR, 0),
-                "con_informe": con_informe,
-                "por_formulario": por_formulario,
-            },
-        }
-    )
+    query_params = consulta_sin_pagina(request.GET)
+    context.update({
+        "tareas": tareas,
+        "page_obj": page_obj,
+        "query_string": query_params.urlencode(),
+        "tareas_auto_refresh_seconds": intervalo_auto_sync_tareas(),
+        "filtros_activos": _filtros_activos_tareas(query_params, filtros),
+        "query_sin_filtros": quitar_de_consulta(query_params, *_CLAVES_FILTRO_TAREA),
+        "cola_filtro": filtros["cola"],
+        "colas_conteo": _colas_conteo_tareas(),
+        "tipos_trabajo": getattr(MoreAppTareaEnviada, "TIPO_TRABAJO_CHOICES", ()),
+        "formularios_filtro": list(
+            MoreAppTareaEnviada.objects.exclude(form_name="")
+            .values_list("form_name", flat=True)
+            .distinct()
+            .order_by("form_name")
+        ),
+        "estados_filtro": MoreAppTareaEnviada.ESTADO_CHOICES,
+        "resumen": resumen,
+    })
     return render(request, "integraciones/moreapp_tareas.html", context)
-
-
-def _es_ajax(request) -> bool:
-    return (
-        (request.headers.get("X-Requested-With") or "") == "XMLHttpRequest"
-        or "application/json" in (request.headers.get("Accept") or "").lower()
-    )
 
 
 def _payload_lote_csv(
@@ -1041,7 +1077,7 @@ def _respuesta_lote_csv(
         archivo_nombre=archivo_nombre,
         truncado=truncado,
     )
-    if _es_ajax(request):
+    if es_ajax(request):
         return JsonResponse(payload, status=status)
     if success and not fallidas:
         messages.success(request, message)
@@ -1259,7 +1295,6 @@ def tareas_estado_view(request):
     from .moreapp_tareas_ciclo import (
         _CACHE_TAREAS_AUTO_SYNC,
         intervalo_auto_sync_tareas,
-        kpis_tareas,
         revisar_tarea_desde_api,
         sincronizar_tareas_desde_api,
         sincronizar_tareas_si_corresponde,
@@ -1326,26 +1361,16 @@ def tareas_estado_view(request):
         else:
             qs = qs.none()
         filtrado = _queryset_tareas_filtrado(request)
-        resumen_estado = {
-            row["estado"]: row["c"] for row in filtrado.values("estado").annotate(c=Count("id"))
-        }
+        resumen = _resumen_tareas_qs(filtrado)
         payload = {
             "ok": True,
             "stats": {
                 "completadas": int(stats.get("completadas") or 0),
                 "revisadas": int(stats.get("revisadas") or 0),
             },
-            "kpis": {
-                "vencidas": kpis_tareas().get("vencidas") or 0,
-            },
+            "kpis": {"vencidas": resumen["vencidas"]},
             "colas": _colas_conteo_tareas(),
-            "resumen": {
-                "total": filtrado.count(),
-                "abiertas": resumen_estado.get(MoreAppTareaEnviada.ESTADO_ASIGNADA, 0),
-                "completadas": resumen_estado.get(MoreAppTareaEnviada.ESTADO_COMPLETADA, 0),
-                "errores": resumen_estado.get(MoreAppTareaEnviada.ESTADO_ERROR, 0),
-                "con_informe": filtrado.filter(integracion__isnull=False).count(),
-            },
+            "resumen": resumen,
             "tareas": [_payload_estado_tarea(tarea) for tarea in qs],
         }
         if force:
@@ -1460,20 +1485,7 @@ def tarea_pdf_view(request, pk: int):
 
 @admin_or_administrativo
 def tareas_exportar_view(request):
-    filter_keys = (
-        "estado",
-        "formulario",
-        "cuenta",
-        "buscar",
-        "cola",
-        "tipo_trabajo",
-        "proyecto_carga",
-        "destinatario",
-        "fecha_desde",
-        "fecha_hasta",
-        "periodo",
-    )
-    tiene_filtros = any((request.GET.get(k) or "").strip() for k in filter_keys)
+    tiene_filtros = any((request.GET.get(k) or "").strip() for k in _CLAVES_FILTRO_TAREA)
     forzar_filtrar = request.GET.get("filtrar") == "1"
     exportar_todas = request.GET.get("todas") == "1"
     usar_filtros = (not exportar_todas) and (forzar_filtrar or tiene_filtros)
@@ -1500,7 +1512,7 @@ def tarea_observaciones_view(request, pk: int):
     tarea = get_object_or_404(MoreAppTareaEnviada, pk=pk)
     tarea.observaciones = (request.POST.get("observaciones") or "").strip()
     tarea.save(update_fields=["observaciones"])
-    from .moreapp_tareas_audit import registrar_auditoria_tarea
+    from .moreapp_tareas_ciclo import registrar_auditoria_tarea
 
     registrar_auditoria_tarea(
         tarea,
@@ -1513,7 +1525,7 @@ def tarea_observaciones_view(request, pk: int):
 
 
 def _respuesta_eliminar(request, *, message: str, ids: List[int], success: bool = True, status: int = 200):
-    if _es_ajax(request):
+    if es_ajax(request):
         return JsonResponse(
             {"success": success, "ok": success, "message": message, "ids": ids},
             status=status,
@@ -1530,7 +1542,7 @@ def _respuesta_eliminar(request, *, message: str, ids: List[int], success: bool 
 def tarea_eliminar_view(request, pk: int):
     tarea = get_object_or_404(MoreAppTareaEnviada, pk=pk)
     numero = tarea.pk
-    from .moreapp_tareas_audit import registrar_auditoria_tarea
+    from .moreapp_tareas_ciclo import registrar_auditoria_tarea
 
     registrar_auditoria_tarea(
         tarea,
@@ -1574,7 +1586,7 @@ def tareas_eliminar_masivo_view(request):
             success=False,
             status=404,
         )
-    from .moreapp_tareas_audit import registrar_auditoria_tarea
+    from .moreapp_tareas_ciclo import registrar_auditoria_tarea
 
     ids_ok = []
     actor_id = getattr(request.user, "id", None)
@@ -1648,7 +1660,7 @@ def tarea_crear_view(request):
         context["grupos"] = grupos
     except (MoreAppApiConfigError, MoreAppApiError) as exc:
         context["error"] = str(exc)
-        if request.method == "POST" and _es_ajax(request):
+        if request.method == "POST" and es_ajax(request):
             return JsonResponse(
                 {"success": False, "ok": False, "message": str(exc), "error": str(exc)},
                 status=400,
@@ -1661,7 +1673,7 @@ def tarea_crear_view(request):
 
     def _fail_crear(msg: str, status: int = 400):
         context["error"] = msg
-        if _es_ajax(request):
+        if es_ajax(request):
             return JsonResponse(
                 {"success": False, "ok": False, "message": msg, "error": msg},
                 status=status,
@@ -1758,7 +1770,7 @@ def tarea_crear_view(request):
     ok_msg = (
         "Tarea creada. MoreApp avisa dentro de la app (no por correo) y aparece en Tareas del celular o tablet."
     )
-    if _es_ajax(request):
+    if es_ajax(request):
         return JsonResponse(
             {
                 "success": True,

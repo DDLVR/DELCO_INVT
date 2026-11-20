@@ -241,7 +241,7 @@ def generar_pdf_tarea(tarea: MoreAppTareaEnviada) -> bytes:
         story.append(campos_table)
     try:
         from .moreapp_api import download_registration_file
-        from .moreapp_http import assert_safe_id
+        from .moreapp_api import assert_safe_id
         from .moreapp_registro_pdf import anexar_adjuntos_texto
         from .moreapp_respuestas import respuestas_desde_registro
 

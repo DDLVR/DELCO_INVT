@@ -15,13 +15,19 @@ from .moreapp_catalogo_views import (
     catalogo_quitar_fuente_view,
     catalogo_usuarios_view,
 )
-from .moreapp_datos_views import (
+from .moreapp_visualizacion_views import (
     v1_datos_export_fields,
     v1_datos_file_download,
     v1_datos_submission_detail,
     v1_datos_submissions_list,
     v1_datos_user_detail,
     v1_datos_users_list,
+    v1_visualizacion_datasource_detail,
+    v1_visualizacion_datasources_list,
+    v1_visualizacion_form_detail,
+    v1_visualizacion_form_version_detail,
+    v1_visualizacion_form_versions,
+    v1_visualizacion_forms_list,
 )
 from .moreapp_registros_views import (
     registro_archivo_view,
@@ -51,15 +57,6 @@ from .moreapp_tareas_views import (
     tareas_list_view,
     tareas_sincronizar_view,
 )
-from .moreapp_visualizacion_views import (
-    v1_visualizacion_datasource_detail,
-    v1_visualizacion_datasources_list,
-    v1_visualizacion_form_detail,
-    v1_visualizacion_form_version_detail,
-    v1_visualizacion_form_versions,
-    v1_visualizacion_forms_list,
-)
-
 urlpatterns = [
     # Webhook para MoreApp (recibe archivos FPTs)
     path('moreapp/', webhook_moreapp, name='webhook_moreapp'),

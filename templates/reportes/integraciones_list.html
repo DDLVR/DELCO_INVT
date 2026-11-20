@@ -209,82 +209,67 @@
   <!-- Filtros -->
   <div class="card shadow-sm mb-4 delco-panel-card">
     <div class="card-body">
-      <div class="mb-3">
-        <label class="form-label mb-2 small fw-semibold">Formularios</label>
-        <form method="GET" class="d-flex flex-wrap gap-2">
-          <input type="hidden" name="q" value="{{ q }}">
-          <input type="hidden" name="estado" value="{{ estado_actual }}">
-          <input type="hidden" name="alerta" value="{{ alerta_actual }}">
-          <input type="hidden" name="bloqueo" value="{{ bloqueo_actual }}">
-          <input type="hidden" name="revision" value="{{ revision_actual }}">
-          <input type="hidden" name="kpi" value="{{ kpi_actual }}">
-
-          <button type="submit"
-                  class="btn btn-sm {% if not formulario_actual %}btn-primary{% else %}btn-outline-primary{% endif %}">
-            Todos
-          </button>
-          {% for f in formularios %}
-          <button type="submit"
-                  name="formulario"
-                  value="{{ f.nombre_formulario }}"
-                  class="btn btn-sm {% if formulario_actual == f.nombre_formulario %}btn-primary{% else %}btn-outline-primary{% endif %}">
-            {{ f.nombre_formulario|default:"(Sin nombre)" }}
-            <span class="badge delco-badge-muted ms-1">{{ f.total }}</span>
-          </button>
-          {% endfor %}
-        </form>
+      <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
+        <div class="row g-2 align-items-end">
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1">Tipo de filtro</label>
+            <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+          </div>
+          <div class="col-12 col-md-5">
+            <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+            <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+            <div data-filtro-panel="q" data-filtro-titulo="Buscar" data-filtro-param="q" class="d-none">
+              <input type="text" class="form-control form-control-sm" placeholder="Formulario, ID, cliente…" aria-label="Buscar">
+            </div>
+            <div data-filtro-panel="estado" data-filtro-titulo="Estado" data-filtro-param="estado" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Estado">
+                <option value="">Elige</option>
+                {% for codigo, nombre in estados_choices %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}
+              </select>
+            </div>
+            <div data-filtro-panel="alerta" data-filtro-titulo="Alertas" data-filtro-param="alerta" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Alertas">
+                <option value="">Elige</option>
+                <option value="1">Solo con alerta</option>
+                <option value="critica">Solo críticas</option>
+              </select>
+            </div>
+            <div data-filtro-panel="bloqueo" data-filtro-titulo="Bloqueo" data-filtro-param="bloqueo" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Bloqueo">
+                <option value="">Elige</option>
+                <option value="1">Solo con bloqueo</option>
+              </select>
+            </div>
+            <div data-filtro-panel="revision" data-filtro-titulo="Revisión" data-filtro-param="revision" class="d-none">
+              <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Revisión">
+                <option value="">Elige</option>
+                {% for codigo, nombre in revision_choices %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}
+              </select>
+            </div>
+            <div data-filtro-panel="formulario" data-filtro-titulo="Formulario" data-filtro-param="formulario" class="d-none">
+              <select class="form-select form-select-sm" aria-label="Formulario">
+                <option value="">Elige</option>
+                {% for f in formularios %}<option value="{{ f.nombre_formulario }}">{{ f.nombre_formulario|default:"(Sin nombre)" }} ({{ f.total }})</option>{% endfor %}
+              </select>
+            </div>
+          </div>
+          <div class="col-12 col-md-auto">
+            <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+          </div>
+        </div>
+        <div class="delco-filtro-activos js-filtro-activos">
+          {% if q %}<a class="delco-filtro-chip" href="?{% url_sin 'q' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ q }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if estado_actual %}<a class="delco-filtro-chip" href="?{% url_sin 'estado' %}"><span class="delco-filtro-chip-tipo">Estado</span><span>{% for codigo, nombre in estados_choices %}{% if estado_actual == codigo %}{{ nombre }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if alerta_actual %}<a class="delco-filtro-chip" href="?{% url_sin 'alerta' %}"><span class="delco-filtro-chip-tipo">Alertas</span><span>{% if alerta_actual == 'critica' %}Solo críticas{% else %}Solo con alerta{% endif %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if bloqueo_actual %}<a class="delco-filtro-chip" href="?{% url_sin 'bloqueo' %}"><span class="delco-filtro-chip-tipo">Bloqueo</span><span>Solo con bloqueo</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if revision_actual %}<a class="delco-filtro-chip" href="?{% url_sin 'revision' %}"><span class="delco-filtro-chip-tipo">Revisión</span><span>{% for codigo, nombre in revision_choices %}{% if revision_actual == codigo %}{{ nombre }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if formulario_actual %}<a class="delco-filtro-chip" href="?{% url_sin 'formulario' %}"><span class="delco-filtro-chip-tipo">Formulario</span><span>{{ formulario_actual }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if kpi_actual %}<a class="delco-filtro-chip" href="?{% url_sin 'kpi' %}"><span class="delco-filtro-chip-tipo">Indicador</span><span>{{ kpi_actual }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if q or estado_actual or alerta_actual or bloqueo_actual or revision_actual or formulario_actual or kpi_actual %}
+          <a class="delco-filtro-limpiar" href="{% url 'reportes_moreapp_list' %}">Quitar filtros</a>
+          {% endif %}
+        </div>
       </div>
-
-      <form method="GET" class="row g-2 align-items-end">
-        <div class="col-md-4">
-          <label class="form-label mb-1 small fw-semibold">Buscar</label>
-          <input type="text" name="q" value="{{ q }}" class="form-control form-control-sm"
-                 placeholder="Formulario, ID, cliente…">
-        </div>
-        <div class="col-md-3">
-          <label class="form-label mb-1 small fw-semibold">Estado</label>
-          <select name="estado" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            {% for codigo, nombre in estados_choices %}
-            <option value="{{ codigo }}" {% if estado_actual == codigo %}selected{% endif %}>{{ nombre }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label mb-1 small fw-semibold">Alertas</label>
-          <select name="alerta" class="form-select form-select-sm">
-            <option value="">Todas</option>
-            <option value="1" {% if alerta_actual == '1' %}selected{% endif %}>Solo con alerta</option>
-            <option value="critica" {% if alerta_actual == 'critica' %}selected{% endif %}>Solo críticas</option>
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label mb-1 small fw-semibold">Bloqueo operativo</label>
-          <select name="bloqueo" class="form-select form-select-sm">
-            <option value="">Todos</option>
-            <option value="1" {% if bloqueo_actual == '1' %}selected{% endif %}>Solo con bloqueo</option>
-          </select>
-        </div>
-        <div class="col-md-2">
-          <label class="form-label mb-1 small fw-semibold">Revisión</label>
-          <select name="revision" class="form-select form-select-sm">
-            <option value="">Todas</option>
-            {% for codigo, nombre in revision_choices %}
-            <option value="{{ codigo }}" {% if revision_actual == codigo %}selected{% endif %}>{{ nombre }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <input type="hidden" name="formulario" value="{{ formulario_actual }}">
-        <input type="hidden" name="kpi" value="{{ kpi_actual }}">
-        <div class="col-md-auto">
-          <button type="submit" class="btn btn-sm btn-primary">
-            <i class="bi bi-search"></i> Filtrar
-          </button>
-          <a href="{% url 'reportes_moreapp_list' %}" class="btn btn-sm btn-outline-secondary ms-1">
-            <i class="bi bi-x"></i> Limpiar
-          </a>
-        </div>
-      </form>
     </div>
   </div>
 

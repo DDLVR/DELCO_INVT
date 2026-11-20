@@ -1713,15 +1713,10 @@ def _extraer_lectura(data: dict, info: dict, meta: dict) -> Dict[str, Any]:
       data.fechaDeLaVisita                    → fecha de la visita
       data.location                           → geolocalización
     """
-    campos = data.get('data', {})
-    cli_man = campos.get('clienteParaMantenimiento', {})
-    if not isinstance(cli_man, dict):
-        cli_man = {}
-    tecnico = campos.get('tecnicoResponsable', {})
-    if not isinstance(tecnico, dict):
-        tecnico = {}
-    location = campos.get('location', {})
-    location_str = location.get('formattedValue', '') if isinstance(location, dict) else _as_text(location)
+    campos = _bloque_data(data)
+    cli_man = _dict_o_vacio(campos.get('clienteParaMantenimiento'))
+    tecnico = _dict_o_vacio(campos.get('tecnicoResponsable'))
+    location_str = _texto_location(campos.get('location'))
 
     return {
         'form_name': info.get('formName', ''),
@@ -1762,20 +1757,11 @@ def _extraer_mantenimiento(data: dict, info: dict, meta: dict) -> Dict[str, Any]
     Extrae campos del formulario Mantenimiento Telemetria V3 usando
     acceso directo a las claves reales del JSON.
     """
-    campos = data.get('data', {})
-    cli_man = campos.get('clienteParaMantenimiento', {})
-    if not isinstance(cli_man, dict):
-        cli_man = {}
-
-    tecnico = campos.get('tecnicoResponsable', {})
-    if not isinstance(tecnico, dict):
-        tecnico = {}
-    asistente = campos.get('tecnicoAsistente', {})
-    if not isinstance(asistente, dict):
-        asistente = {}
-
-    location = campos.get('location', {})
-    location_str = location.get('formattedValue', '') if isinstance(location, dict) else _as_text(location)
+    campos = _bloque_data(data)
+    cli_man = _dict_o_vacio(campos.get('clienteParaMantenimiento'))
+    tecnico = _dict_o_vacio(campos.get('tecnicoResponsable'))
+    asistente = _dict_o_vacio(campos.get('tecnicoAsistente'))
+    location_str = _texto_location(campos.get('location'))
 
     return {
         'form_name': info.get('formName', ''),
@@ -1833,23 +1819,12 @@ def _extraer_registro_medidores_telemetria(data: dict, info: dict, meta: dict) -
     Extrae campos del formulario Registro de Medidores y Telemetria V3
     usando acceso directo a las claves reales del JSON.
     """
-    campos = data.get('data', {})
-    buscar = campos.get('buscarCliente', {})
-    if not isinstance(buscar, dict):
-        buscar = {}
-
-    tecnico_delco = campos.get('tECNICORESPONSABLE', {})
-    if not isinstance(tecnico_delco, dict):
-        tecnico_delco = {}
-    tecnico_certelec = campos.get('tcnicoResponsableCertelec', {})
-    if not isinstance(tecnico_certelec, dict):
-        tecnico_certelec = {}
-    tecnico_asistente = campos.get('tcnicoAsistente', {})
-    if not isinstance(tecnico_asistente, dict):
-        tecnico_asistente = {}
-
-    location = campos.get('location', {})
-    location_str = location.get('formattedValue', '') if isinstance(location, dict) else _as_text(location)
+    campos = _bloque_data(data)
+    buscar = _dict_o_vacio(campos.get('buscarCliente'))
+    tecnico_delco = _dict_o_vacio(campos.get('tECNICORESPONSABLE'))
+    tecnico_certelec = _dict_o_vacio(campos.get('tcnicoResponsableCertelec'))
+    tecnico_asistente = _dict_o_vacio(campos.get('tcnicoAsistente'))
+    location_str = _texto_location(campos.get('location'))
 
     numero_medidor_dejado = _as_text(campos.get('numeroDeMedidorDejado'))
     numero_modem = _as_text(campos.get('numeroDeModem1'))
@@ -1901,12 +1876,19 @@ def _extraer_registro_medidores_telemetria(data: dict, info: dict, meta: dict) -
     }
 
 
+def _bloque_data(data):
+    """Nodo data de un payload MoreApp. Reutilizar: otro formulario. No renombres las claves internas."""
+    campos = data.get('data') if isinstance(data, dict) else None
+    return campos if isinstance(campos, dict) else {}
+
+
 def _dict_o_vacio(valor):
+    """Dict de MoreApp, o {}. Reutilizar: info, meta o un campo objeto. No inventa claves."""
     return valor if isinstance(valor, dict) else {}
 
 
 def _texto_location(valor) -> str:
-    """MoreApp manda la ubicación como dict o, a veces, como texto plano."""
+    """Ubicación MoreApp, dict o texto. Reutilizar: otro location. Adapta formattedValue o address."""
     if isinstance(valor, dict):
         return _as_text(valor.get('formattedValue') or valor.get('address') or '')
     return _as_text(valor)
@@ -1918,9 +1900,9 @@ def _extraer_datos_normalizados(data: dict) -> Dict[str, Any]:
     para consulta rápida en Reportes sin tener que parsear el JSON completo.
     Despacha a una función específica según el formulario detectado.
     """
-    info = data.get('info', {})
-    meta = data.get('meta', {})
-    campos = data.get('data', {})
+    info = _dict_o_vacio(data.get('info') if isinstance(data, dict) else None)
+    meta = _dict_o_vacio(data.get('meta') if isinstance(data, dict) else None)
+    campos = _bloque_data(data)
 
     nombre_formulario = info.get('formName', '')
     formulario_canonico = _resolver_formulario(nombre_formulario)
@@ -1938,14 +1920,8 @@ def _extraer_datos_normalizados(data: dict) -> Dict[str, Any]:
         return _extraer_registro_medidores_telemetria(data, info, meta)
 
     # --- Formularios genéricos (Mantenimiento, Registro de Medidores, etc.) ---
-    if not isinstance(campos, dict):
-        campos = {}
-    buscar_cliente = campos.get('buscarCliente', {})
-    if not isinstance(buscar_cliente, dict):
-        buscar_cliente = {}
-    cliente_mantenimiento = campos.get('clienteParaMantenimiento', {})
-    if not isinstance(cliente_mantenimiento, dict):
-        cliente_mantenimiento = {}
+    buscar_cliente = _dict_o_vacio(campos.get('buscarCliente'))
+    cliente_mantenimiento = _dict_o_vacio(campos.get('clienteParaMantenimiento'))
     fuentes = [campos, buscar_cliente, cliente_mantenimiento, data]
 
     return {

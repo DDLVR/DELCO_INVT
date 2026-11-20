@@ -137,7 +137,7 @@
 
 <body class="bg-body-tertiary delco-app overflow-x-hidden">
 <script>try{if(localStorage.getItem('delco-sidebar-collapsed')==='1'){document.body.classList.add('delco-sidebar-collapsed');}}catch(e){}</script>
-<script src="{% static 'js/delco_nav_guard.js' %}?v=shell4"></script>
+<script src="{% static 'js/delco_nav_guard.js' %}?v=shell5"></script>
 
   <!-- Navbar -->
   {% include "partials/navbar.html" %}
@@ -199,7 +199,8 @@
   <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 
   <script src="{% static 'js/delco_autocomplete.js' %}"></script>
-  <script src="{% static 'js/delco_ux.js' %}"></script>
+  <script src="{% static 'js/delco_ux.js' %}?v={{ delco_js_v|default:'1' }}"></script>
+  <script src="{% static 'js/delco_filtros.js' %}?v=filtros1"></script>
   <script src="{% static 'js/delco_rut.js' %}"></script>
   <script src="{% static 'js/delco_charts.js' %}"></script>
 

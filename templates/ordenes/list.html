@@ -86,126 +86,102 @@
     </div>
     {% endif %}
 
-    <!-- Colas operativas -->
-    {% if request.user.rol != 'TECNICO' %}
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="d-flex flex-wrap gap-2">
-                <a href="{% url 'ordenes_list' %}" class="btn btn-sm {% if not cola_filtro %}btn-primary{% else %}btn-outline-primary{% endif %}">Todas</a>
-                <a href="?cola=sin_asignar" class="btn btn-sm {% if cola_filtro == 'sin_asignar' %}btn-warning{% elif colas_conteo.sin_asignar %}btn-outline-warning{% else %}btn-outline-secondary opacity-50{% endif %}" {% if not colas_conteo.sin_asignar and cola_filtro != 'sin_asignar' %}title="Sin casos"{% endif %}>
-                    OT sin asignar <span class="badge bg-dark">{{ colas_conteo.sin_asignar }}</span>
-                </a>
-                <a href="?cola=en_campo" class="btn btn-sm {% if cola_filtro == 'en_campo' %}btn-info{% elif colas_conteo.en_campo %}btn-outline-info{% else %}btn-outline-secondary opacity-50{% endif %}" {% if not colas_conteo.en_campo and cola_filtro != 'en_campo' %}title="Sin casos"{% endif %}>
-                    OT en campo <span class="badge bg-dark">{{ colas_conteo.en_campo }}</span>
-                </a>
-                <a href="?cola=esperando_moreapp" class="btn btn-sm {% if cola_filtro == 'esperando_moreapp' %}btn-primary{% elif colas_conteo.esperando_moreapp %}btn-outline-primary{% else %}btn-outline-secondary opacity-50{% endif %}" {% if not colas_conteo.esperando_moreapp and cola_filtro != 'esperando_moreapp' %}title="Sin casos"{% endif %}>
-                    OT sin MoreApp <span class="badge bg-dark">{{ colas_conteo.esperando_moreapp }}</span>
-                </a>
-                <a href="?cola=post_moreapp" class="btn btn-sm {% if cola_filtro == 'post_moreapp' %}btn-info text-dark{% elif colas_conteo.post_moreapp %}btn-outline-info{% else %}btn-outline-secondary opacity-50{% endif %}">
-                    OT post-MoreApp <span class="badge bg-dark">{{ colas_conteo.post_moreapp }}</span>
-                </a>
-                <a href="?cola=validar" class="btn btn-sm {% if cola_filtro == 'validar' %}btn-success{% elif colas_conteo.validar %}btn-outline-success{% else %}btn-outline-secondary opacity-50{% endif %}">
-                    OT por validar <span class="badge bg-dark">{{ colas_conteo.validar }}</span>
-                </a>
-                <a href="?cola=pendientes" class="btn btn-sm {% if cola_filtro == 'pendientes' %}btn-danger{% elif colas_conteo.pendientes %}btn-outline-danger{% else %}btn-outline-secondary opacity-50{% endif %}">
-                    OT pendientes <span class="badge bg-dark">{{ colas_conteo.pendientes }}</span>
-                </a>
-                <a href="?cola=observadas" class="btn btn-sm {% if cola_filtro == 'observadas' %}btn-dark{% elif colas_conteo.observadas %}btn-outline-dark{% else %}btn-outline-secondary opacity-50{% endif %}">
-                    OT observadas <span class="badge bg-dark">{{ colas_conteo.observadas }}</span>
-                </a>
-            </div>
-            <p class="text-muted small mt-2 mb-0">Flujo: Delco crea → técnico ejecuta → MoreApp informa → Delco valida. Las colas en gris (0) no tienen casos ahora. La revisión de informes es en <strong>Pendientes MoreApp</strong>.</p>
+    <div class="delco-filtro-builder mb-3" data-filtro-auto data-navegacion="pagina">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-4 col-xl-3">
+          <label class="form-label small mb-1">Tipo de filtro</label>
+          <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
         </div>
-    </div>
-    {% endif %}
-
-    <!-- Filtros -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card bg-body-secondary border-0">
-                <div class="card-body">
-                    <form method="get" class="row g-3 align-items-end">
-                        {% if alarma %}<input type="hidden" name="alarma" value="{{ alarma }}">{% endif %}
-                        <div class="col-md-2">
-                            <label class="form-label">Estado</label>
-                            <select name="estado" class="form-select">
-                                <option value="">Todos</option>
-                                {% for estado_code, estado_nombre in estados %}
-                                <option value="{{ estado_code }}" {% if estado_code == estado_filtro %}selected{% endif %}>
-                                    {{ estado_nombre }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Tipo Trabajo</label>
-                            <select name="tipo_trabajo" class="form-select">
-                                <option value="">Todos</option>
-                                {% for tipo_code, tipo_nombre in tipos_trabajo %}
-                                <option value="{{ tipo_code }}" {% if tipo_code == tipo_filtro %}selected{% endif %}>
-                                    {{ tipo_nombre }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        {% if request.user.rol != 'TECNICO' %}
-                        <div class="col-md-2">
-                            <label class="form-label">Técnico</label>
-                            <input type="hidden" name="tecnico" id="filtroTecnicoId" value="{{ tecnico_filtro|default:'' }}">
-                            <div class="delco-ac"
-                                 data-ac-url="{{ delco_api.buscar_tecnicos }}?ambito=ot"
-                                 data-ac-hidden="#filtroTecnicoId"
-                                 data-ac-min="2">
-                                <input type="text" class="form-control delco-ac-input" placeholder="Buscar técnico o administrativo..."
-                                       value="{{ tecnico_filtro_label|default:'' }}" autocomplete="off">
-                                <div class="delco-ac-results list-group shadow-sm d-none"></div>
-                            </div>
-                        </div>
-                        {% endif %}
-                        <div class="col-md-2">
-                            <label class="form-label">Cliente</label>
-                            <input type="hidden" name="cliente" id="filtroClienteId" value="{{ cliente_filtro|default:'' }}">
-                            <div class="delco-ac"
-                                 data-ac-url="{{ delco_api.buscar_clientes }}"
-                                 data-ac-hidden="#filtroClienteId"
-                                 data-ac-min="2">
-                                <input type="text" class="form-control delco-ac-input" placeholder="Buscar cliente..."
-                                       value="{{ cliente_filtro_label|default:'' }}" autocomplete="off">
-                                <div class="delco-ac-results list-group shadow-sm d-none"></div>
-                            </div>
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Proyecto / Carga</label>
-                            <input type="text" name="proyecto_carga" class="form-control" placeholder="Filtrar proyecto…" value="{{ proyecto_filtro }}">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Buscar</label>
-                            <input type="text" name="buscar" class="form-control" placeholder="Título, descripción, proyecto…" value="{{ buscar }}">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">Ordenar por</label>
-                            <div class="input-group">
-                                <select name="orden" class="form-select">
-                                    <option value="id" {% if orden_filtro == 'id' %}selected{% endif %}>ID</option>
-                                    <option value="proyecto" {% if orden_filtro == 'proyecto' or orden_filtro == 'proyecto_carga' %}selected{% endif %}>Proyecto / Carga</option>
-                                    <option value="fecha" {% if orden_filtro == 'fecha' or orden_filtro == 'fecha_creacion' %}selected{% endif %}>Fecha</option>
-                                    <option value="estado" {% if orden_filtro == 'estado' %}selected{% endif %}>Estado</option>
-                                    <option value="titulo" {% if orden_filtro == 'titulo' %}selected{% endif %}>Título</option>
-                                </select>
-                                <select name="dir" class="form-select" style="max-width:5.5rem">
-                                    <option value="asc" {% if orden_dir != 'desc' %}selected{% endif %}>Asc</option>
-                                    <option value="desc" {% if orden_dir == 'desc' %}selected{% endif %}>Desc</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-1 d-flex gap-2">
-                            <button type="submit" class="btn btn-primary"><i class="bi bi-funnel"></i></button>
-                            <a href="{% url 'ordenes_list' %}" class="btn btn-secondary"><i class="bi bi-x"></i></a>
-                        </div>
-                    </form>
-                </div>
+        <div class="col-12 col-md-4 col-xl-3">
+          <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+          <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+          {% if request.user.rol != 'TECNICO' %}
+          <div data-filtro-panel="cola" data-filtro-titulo="Cola" data-filtro-param="cola" class="d-none">
+            <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Cola">
+              <option value="">Elige una cola</option>
+              <option value="sin_asignar">Sin asignar ({{ colas_conteo.sin_asignar }})</option>
+              <option value="en_campo">En campo ({{ colas_conteo.en_campo }})</option>
+              <option value="esperando_moreapp">Sin MoreApp ({{ colas_conteo.esperando_moreapp }})</option>
+              <option value="post_moreapp">Post-MoreApp ({{ colas_conteo.post_moreapp }})</option>
+              <option value="validar">Por validar ({{ colas_conteo.validar }})</option>
+              <option value="pendientes">Pendientes ({{ colas_conteo.pendientes }})</option>
+              <option value="observadas">Observadas ({{ colas_conteo.observadas }})</option>
+            </select>
+          </div>
+          {% endif %}
+          <div data-filtro-panel="estado" data-filtro-titulo="Estado" data-filtro-param="estado" class="d-none">
+            <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Estado">
+              <option value="">Elige un estado</option>
+              {% for estado_code, estado_nombre in estados %}<option value="{{ estado_code }}">{{ estado_nombre }}</option>{% endfor %}
+            </select>
+          </div>
+          <div data-filtro-panel="tipo_trabajo" data-filtro-titulo="Tipo de trabajo" data-filtro-param="tipo_trabajo" class="d-none">
+            <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Tipo">
+              <option value="">Elige un tipo</option>
+              {% for tipo_code, tipo_nombre in tipos_trabajo %}<option value="{{ tipo_code }}">{{ tipo_nombre }}</option>{% endfor %}
+            </select>
+          </div>
+          {% if request.user.rol != 'TECNICO' %}
+          <div data-filtro-panel="tecnico" data-filtro-titulo="Técnico" data-filtro-param="tecnico" class="d-none">
+            <input type="hidden" data-filtro-valor id="filtroTecnicoId" value="">
+            <div class="delco-ac" data-ac-url="{{ delco_api.buscar_tecnicos }}?ambito=ot" data-ac-hidden="#filtroTecnicoId" data-ac-min="2">
+              <input type="text" class="form-control form-control-sm delco-ac-input" placeholder="Buscar técnico…" autocomplete="off">
+              <div class="delco-ac-results list-group shadow-sm d-none"></div>
             </div>
+          </div>
+          {% endif %}
+          <div data-filtro-panel="cliente" data-filtro-titulo="Cliente" data-filtro-param="cliente" class="d-none">
+            <input type="hidden" data-filtro-valor id="filtroClienteId" value="">
+            <div class="delco-ac" data-ac-url="{{ delco_api.buscar_clientes }}" data-ac-hidden="#filtroClienteId" data-ac-min="2">
+              <input type="text" class="form-control form-control-sm delco-ac-input" placeholder="Buscar cliente…" autocomplete="off">
+              <div class="delco-ac-results list-group shadow-sm d-none"></div>
+            </div>
+          </div>
+          <div data-filtro-panel="proyecto_carga" data-filtro-titulo="Proyecto" data-filtro-param="proyecto_carga" class="d-none">
+            <input type="text" class="form-control form-control-sm" placeholder="Proyecto…" aria-label="Proyecto">
+          </div>
+          <div data-filtro-panel="buscar" data-filtro-titulo="Buscar" data-filtro-param="buscar" class="d-none">
+            <input type="text" class="form-control form-control-sm" placeholder="Título, descripción…" aria-label="Buscar">
+          </div>
+          <div data-filtro-panel="orden" data-filtro-titulo="Orden" data-filtro-param="orden" class="d-none">
+            <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Orden">
+              <option value="">Elige</option>
+              <option value="id">ID</option>
+              <option value="proyecto">Proyecto / Carga</option>
+              <option value="fecha">Fecha</option>
+              <option value="estado">Estado</option>
+              <option value="titulo">Título</option>
+            </select>
+          </div>
+          <div data-filtro-panel="dir" data-filtro-titulo="Dirección" data-filtro-param="dir" class="d-none">
+            <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Dirección">
+              <option value="">Elige</option>
+              <option value="asc">Ascendente</option>
+              <option value="desc">Descendente</option>
+            </select>
+          </div>
         </div>
+        <div class="col-12 col-md-auto">
+          <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+        </div>
+      </div>
+      <div class="delco-filtro-activos js-filtro-activos">
+        {% if cola_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'cola' %}"><span class="delco-filtro-chip-tipo">Cola</span><span>{{ cola_filtro }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if estado_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'estado' %}"><span class="delco-filtro-chip-tipo">Estado</span><span>{% for c, n in estados %}{% if c == estado_filtro %}{{ n }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if tipo_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'tipo_trabajo' %}"><span class="delco-filtro-chip-tipo">Tipo</span><span>{% for c, n in tipos_trabajo %}{% if c == tipo_filtro %}{{ n }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if tecnico_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'tecnico' %}"><span class="delco-filtro-chip-tipo">Técnico</span><span>{{ tecnico_filtro_label|default:tecnico_filtro }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if cliente_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'cliente' %}"><span class="delco-filtro-chip-tipo">Cliente</span><span>{{ cliente_filtro_label|default:cliente_filtro }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if proyecto_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'proyecto_carga' %}"><span class="delco-filtro-chip-tipo">Proyecto</span><span>{{ proyecto_filtro }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if buscar %}<a class="delco-filtro-chip" href="?{% url_sin 'buscar' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ buscar }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if orden_filtro and orden_filtro != 'id' %}<a class="delco-filtro-chip" href="?{% url_sin 'orden' %}"><span class="delco-filtro-chip-tipo">Orden</span><span>{{ orden_filtro }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if orden_dir == 'desc' %}<a class="delco-filtro-chip" href="?{% url_sin 'dir' %}"><span class="delco-filtro-chip-tipo">Dirección</span><span>Descendente</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if cola_filtro or estado_filtro or tipo_filtro or tecnico_filtro or cliente_filtro or proyecto_filtro or buscar or orden_dir == 'desc' or orden_filtro and orden_filtro != 'id' %}
+        <a class="delco-filtro-limpiar" href="?{% url_sin 'cola' 'estado' 'tipo_trabajo' 'tecnico' 'cliente' 'proyecto_carga' 'buscar' 'orden' 'dir' %}">Quitar filtros</a>
+        {% endif %}
+      </div>
+      {% if request.user.rol != 'TECNICO' %}
+      <p class="text-muted small mt-2 mb-0">Flujo: Delco crea → técnico ejecuta → MoreApp informa → Delco valida. La revisión de informes es en <strong>Pendientes MoreApp</strong>.</p>
+      {% endif %}
     </div>
 
     <!-- Tabla -->

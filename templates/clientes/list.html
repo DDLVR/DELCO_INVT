@@ -81,117 +81,113 @@
       {% endif %}
       <div class="card delco-form-section border-0">
         <div class="card-body">
-          <form method="get" id="formFiltrosClientes" class="row g-2 align-items-end">
-            {% if alarma %}<input type="hidden" name="alarma" value="{{ alarma }}">{% endif %}
-            <div class="col-md-1">
-              <label for="tablaLength" class="form-label mb-1">Mostrar</label>
-              <select name="per_page" id="tablaLength" class="form-select form-select-sm" onchange="this.form.submit()">
-                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                <option value="50" {% if per_page == 50 or not per_page %}selected{% endif %}>50</option>
-                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
-              </select>
-            </div>
-            <div class="col-md-3">
-              <label for="filtroQClientes" class="form-label mb-1">Buscar</label>
-              <input type="text" id="filtroQClientes" name="q" class="form-control form-control-sm" placeholder="Nº, nombre, proyecto, marca, serie, IP..." value="{{ q|default:'' }}">
-            </div>
-            <div class="col-md-2">
-              <label for="filtroNumeroCliente" class="form-label mb-1">Nº Cliente</label>
-              <input type="text" id="filtroNumeroCliente" name="numero_cliente" class="form-control form-control-sm" placeholder="Ej: 2930789" value="{{ numero_cliente_seleccionado|default:'' }}">
-            </div>
-            <div class="col-md-2">
-              <label for="filtroNombreCliente" class="form-label mb-1">Nombre</label>
-              <input type="text" id="filtroNombreCliente" name="nombre" class="form-control form-control-sm" placeholder="Nombre o razón social" value="{{ nombre_seleccionado|default:'' }}">
-            </div>
-            <div class="col-md-2">
-              <label for="filtroProyecto" class="form-label mb-1">Proyecto</label>
-              <select id="filtroProyecto" name="proyecto" class="form-select form-select-sm" onchange="this.form.submit()">
-                <option value="">Todos</option>
-                <option value="SIN PROYECTO" {% if proyecto_seleccionado|upper == 'SIN PROYECTO' %}selected{% endif %}>Sin proyecto</option>
-                {% for proyecto in proyectos_disponibles %}
-                <option value="{{ proyecto }}" {% if proyecto == proyecto_seleccionado %}selected{% endif %}>{{ proyecto }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label for="filtroComuna" class="form-label mb-1">Comuna</label>
-              <select id="filtroComuna" name="comuna" class="form-select form-select-sm" onchange="this.form.submit()">
-                <option value="">Todas</option>
-                {% for comuna in comunas_disponibles %}
-                <option value="{{ comuna }}" {% if comuna == comuna_seleccionada %}selected{% endif %}>{{ comuna }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label for="filtroSector" class="form-label mb-1">Sector</label>
-              <select id="filtroSector" name="sector" class="form-select form-select-sm" onchange="this.form.submit()">
-                <option value="">Todos</option>
-                {% for sector in sectores_disponibles %}
-                <option value="{{ sector }}" {% if sector == sector_seleccionado %}selected{% endif %}>{{ sector }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label for="filtroTipoSuministro" class="form-label mb-1">Tipo suministro</label>
-              <select id="filtroTipoSuministro" name="tipo_suministro" class="form-select form-select-sm" onchange="this.form.submit()">
-                <option value="">Todos</option>
-                {% for tipo in tipos_suministro_disponibles %}
-                <option value="{{ tipo }}" {% if tipo == tipo_suministro_seleccionado %}selected{% endif %}>{{ tipo }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label for="filtroMarcaMedidor" class="form-label mb-1">Marca medidor</label>
-              <select id="filtroMarcaMedidor" name="marca" class="form-select form-select-sm" onchange="this.form.submit()">
-                <option value="">Todas</option>
-                {% for marca in marcas_disponibles %}
-                <option value="{{ marca }}" {% if marca == marca_seleccionada %}selected{% endif %}>{{ marca }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label for="filtroSerieMedidor" class="form-label mb-1">Serie medidor</label>
-              <input type="text" id="filtroSerieMedidor" name="serie" class="form-control form-control-sm" placeholder="Buscar serie..." value="{{ serie_seleccionada|default:'' }}">
-            </div>
-            <div class="col-md-2">
-              <label for="filtroEmpresa" class="form-label mb-1">Empresa</label>
-              <select id="filtroEmpresa" name="empresa" class="form-select form-select-sm" onchange="this.form.submit()">
-                <option value="">Todas</option>
-                {% for empresa in empresas_disponibles %}
-                <option value="{{ empresa }}" {% if empresa == empresa_seleccionada %}selected{% endif %}>{{ empresa }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div class="col-md-2">
-              <label for="filtroIpCliente" class="form-label mb-1">IP</label>
-              <input type="text" id="filtroIpCliente" name="ip" class="form-control form-control-sm" placeholder="Ej: 10.1.1.1" value="{{ ip_seleccionada|default:'' }}">
-            </div>
-            <div class="col-md-2 d-flex gap-2">
-              <button type="submit" class="btn btn-primary btn-sm flex-grow-1" id="btnAplicarFiltroTabla">
-                <i class="bi bi-funnel"></i> Filtrar
-              </button>
-              <a href="{% url 'clientes_list' %}" class="btn btn-secondary btn-sm" id="btnLimpiarFiltroTabla" title="Limpiar filtros">
-                <i class="bi bi-arrow-clockwise"></i>
-              </a>
-            </div>
-            <div class="col-12">
-              <div class="form-check form-switch mt-2">
-                <input class="form-check-input" type="checkbox" name="solo_duplicados" value="1" id="tablaSoloDuplicados" {% if solo_duplicados %}checked{% endif %} onchange="this.form.submit()">
-                <label class="form-check-label small fw-semibold text-danger" for="tablaSoloDuplicados">
-                  Mostrar solo clientes duplicados
-                </label>
+          <div class="d-flex justify-content-end align-items-center gap-2 mb-2">
+            <label class="small mb-0" for="tablaLength">Mostrar</label>
+            <select id="tablaLength" class="form-select form-select-sm" style="width:auto" data-orden-lista="no" onchange="var p=new URLSearchParams(location.search); p.set('per_page', this.value); p.delete('page'); location.search=p.toString();">
+              <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+              <option value="50" {% if per_page == 50 or not per_page %}selected{% endif %}>50</option>
+              <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+              <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+            </select>
+          </div>
+          <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
+            <div class="row g-2 align-items-end">
+              <div class="col-12 col-md-4">
+                <label class="form-label small mb-1">Tipo de filtro</label>
+                <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
               </div>
-              {% if page_obj %}
-              <p class="text-muted small mb-0 mt-2">
-                Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
-                · {{ total_clientes }} cliente{{ total_clientes|pluralize }}
-                {% if total_fichas != total_clientes %} ({{ total_fichas }} fichas){% endif %}.
-                Usa el menú Exportar para descargar el padrón o la ficha completa.
-              </p>
+              <div class="col-12 col-md-4">
+                <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+                <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+                <div data-filtro-panel="q" data-filtro-titulo="Buscar" data-filtro-param="q" class="d-none">
+                  <input type="text" id="filtroQClientes" class="form-control form-control-sm" placeholder="Nº, nombre, proyecto, marca, serie, IP..." aria-label="Buscar">
+                </div>
+                <div data-filtro-panel="numero_cliente" data-filtro-titulo="Nº cliente" data-filtro-param="numero_cliente" class="d-none">
+                  <input type="text" id="filtroNumeroCliente" class="form-control form-control-sm" placeholder="Ej: 2930789" aria-label="Nº cliente">
+                </div>
+                <div data-filtro-panel="nombre" data-filtro-titulo="Nombre" data-filtro-param="nombre" class="d-none">
+                  <input type="text" id="filtroNombreCliente" class="form-control form-control-sm" placeholder="Nombre o razón social" aria-label="Nombre">
+                </div>
+                <div data-filtro-panel="proyecto" data-filtro-titulo="Proyecto" data-filtro-param="proyecto" class="d-none">
+                  <select id="filtroProyecto" class="form-select form-select-sm" aria-label="Proyecto">
+                    <option value="">Elige</option>
+                    <option value="SIN PROYECTO">Sin proyecto</option>
+                    {% for proyecto in proyectos_disponibles %}<option value="{{ proyecto }}">{{ proyecto }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div data-filtro-panel="comuna" data-filtro-titulo="Comuna" data-filtro-param="comuna" class="d-none">
+                  <select id="filtroComuna" class="form-select form-select-sm" aria-label="Comuna">
+                    <option value="">Elige</option>
+                    {% for comuna in comunas_disponibles %}<option value="{{ comuna }}">{{ comuna }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div data-filtro-panel="sector" data-filtro-titulo="Sector" data-filtro-param="sector" class="d-none">
+                  <select id="filtroSector" class="form-select form-select-sm" aria-label="Sector">
+                    <option value="">Elige</option>
+                    {% for sector in sectores_disponibles %}<option value="{{ sector }}">{{ sector }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div data-filtro-panel="tipo_suministro" data-filtro-titulo="Tipo suministro" data-filtro-param="tipo_suministro" class="d-none">
+                  <select id="filtroTipoSuministro" class="form-select form-select-sm" aria-label="Tipo suministro">
+                    <option value="">Elige</option>
+                    {% for tipo in tipos_suministro_disponibles %}<option value="{{ tipo }}">{{ tipo }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div data-filtro-panel="marca" data-filtro-titulo="Marca medidor" data-filtro-param="marca" class="d-none">
+                  <select id="filtroMarcaMedidor" class="form-select form-select-sm" aria-label="Marca">
+                    <option value="">Elige</option>
+                    {% for marca in marcas_disponibles %}<option value="{{ marca }}">{{ marca }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div data-filtro-panel="serie" data-filtro-titulo="Serie medidor" data-filtro-param="serie" class="d-none">
+                  <input type="text" id="filtroSerieMedidor" class="form-control form-control-sm" placeholder="Buscar serie..." aria-label="Serie">
+                </div>
+                <div data-filtro-panel="empresa" data-filtro-titulo="Empresa" data-filtro-param="empresa" class="d-none">
+                  <select id="filtroEmpresa" class="form-select form-select-sm" aria-label="Empresa">
+                    <option value="">Elige</option>
+                    {% for empresa in empresas_disponibles %}<option value="{{ empresa }}">{{ empresa }}</option>{% endfor %}
+                  </select>
+                </div>
+                <div data-filtro-panel="ip" data-filtro-titulo="IP" data-filtro-param="ip" class="d-none">
+                  <input type="text" id="filtroIpCliente" class="form-control form-control-sm" placeholder="Ej: 10.1.1.1" aria-label="IP">
+                </div>
+                <div data-filtro-panel="solo_duplicados" data-filtro-titulo="Duplicados" data-filtro-param="solo_duplicados" class="d-none">
+                  <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Duplicados">
+                    <option value="">Elige</option>
+                    <option value="1">Solo clientes duplicados</option>
+                  </select>
+                </div>
+              </div>
+              <div class="col-12 col-md-auto">
+                <button type="button" class="btn btn-sm btn-primary js-filtro-agregar" id="btnAplicarFiltroTabla"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+              </div>
+            </div>
+            <div class="delco-filtro-activos js-filtro-activos">
+              {% if q %}<a class="delco-filtro-chip" href="?{% url_sin 'q' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ q }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if numero_cliente_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'numero_cliente' %}"><span class="delco-filtro-chip-tipo">Nº cliente</span><span>{{ numero_cliente_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if nombre_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'nombre' %}"><span class="delco-filtro-chip-tipo">Nombre</span><span>{{ nombre_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if proyecto_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'proyecto' %}"><span class="delco-filtro-chip-tipo">Proyecto</span><span>{{ proyecto_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if comuna_seleccionada %}<a class="delco-filtro-chip" href="?{% url_sin 'comuna' %}"><span class="delco-filtro-chip-tipo">Comuna</span><span>{{ comuna_seleccionada }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if sector_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'sector' %}"><span class="delco-filtro-chip-tipo">Sector</span><span>{{ sector_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if tipo_suministro_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'tipo_suministro' %}"><span class="delco-filtro-chip-tipo">Tipo suministro</span><span>{{ tipo_suministro_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if marca_seleccionada %}<a class="delco-filtro-chip" href="?{% url_sin 'marca' %}"><span class="delco-filtro-chip-tipo">Marca</span><span>{{ marca_seleccionada }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if serie_seleccionada %}<a class="delco-filtro-chip" href="?{% url_sin 'serie' %}"><span class="delco-filtro-chip-tipo">Serie</span><span>{{ serie_seleccionada }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if empresa_seleccionada %}<a class="delco-filtro-chip" href="?{% url_sin 'empresa' %}"><span class="delco-filtro-chip-tipo">Empresa</span><span>{{ empresa_seleccionada }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if ip_seleccionada %}<a class="delco-filtro-chip" href="?{% url_sin 'ip' %}"><span class="delco-filtro-chip-tipo">IP</span><span>{{ ip_seleccionada }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if solo_duplicados %}<a class="delco-filtro-chip" href="?{% url_sin 'solo_duplicados' %}"><span class="delco-filtro-chip-tipo">Duplicados</span><span>Solo duplicados</span><i class="bi bi-x-lg"></i></a>{% endif %}
+              {% if q or numero_cliente_seleccionado or nombre_seleccionado or proyecto_seleccionado or comuna_seleccionada or sector_seleccionado or tipo_suministro_seleccionado or marca_seleccionada or serie_seleccionada or empresa_seleccionada or ip_seleccionada or solo_duplicados %}
+              <a class="delco-filtro-limpiar" id="btnLimpiarFiltroTabla" href="{% url 'clientes_list' %}{% if alarma %}?alarma={{ alarma|urlencode }}{% endif %}">Quitar filtros</a>
               {% endif %}
             </div>
-          </form>
+            {% if page_obj %}
+            <p class="text-muted small mb-0 mt-2">
+              Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
+              · {{ total_clientes }} cliente{{ total_clientes|pluralize }}
+              {% if total_fichas != total_clientes %} ({{ total_fichas }} fichas){% endif %}.
+              Usa el menú Exportar para descargar el padrón o la ficha completa.
+            </p>
+            {% endif %}
+          </div>
         </div>
       </div>
     </div>

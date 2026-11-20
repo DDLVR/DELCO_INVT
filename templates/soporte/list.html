@@ -25,30 +25,42 @@
     </div>
   </div>
 
-  <form method="get" class="row g-2 mb-3">
-    <div class="col-md-4">
-      <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Buscar título o descripción">
+  <div class="delco-filtro-builder mb-3" data-filtro-auto data-navegacion="pagina">
+    <div class="row g-2 align-items-end">
+      <div class="col-12 col-md-4">
+        <label class="form-label small mb-1">Tipo de filtro</label>
+        <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+        <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+        <div data-filtro-panel="q" data-filtro-titulo="Buscar" data-filtro-param="q" class="d-none">
+          <input type="search" class="form-control form-control-sm" placeholder="Título o descripción" aria-label="Buscar">
+        </div>
+        <div data-filtro-panel="estado" data-filtro-titulo="Estado" data-filtro-param="estado" class="d-none">
+          <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Estado">
+            <option value="">Elige un estado</option>
+            {% for codigo, nombre in estados %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}
+          </select>
+        </div>
+        <div data-filtro-panel="prioridad" data-filtro-titulo="Prioridad" data-filtro-param="prioridad" class="d-none">
+          <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Prioridad">
+            <option value="">Elige una prioridad</option>
+            {% for codigo, nombre in prioridades %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
+      <div class="col-12 col-md-auto">
+        <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+      </div>
     </div>
-    <div class="col-md-3">
-      <select name="estado" class="form-select">
-        <option value="">Todos los estados</option>
-        {% for codigo, nombre in estados %}
-        <option value="{{ codigo }}" {% if estado_filtro == codigo %}selected{% endif %}>{{ nombre }}</option>
-        {% endfor %}
-      </select>
+    <div class="delco-filtro-activos js-filtro-activos">
+      {% if q %}<a class="delco-filtro-chip" href="?{% url_sin 'q' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ q }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+      {% if estado_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'estado' %}"><span class="delco-filtro-chip-tipo">Estado</span><span>{% for codigo, nombre in estados %}{% if codigo == estado_filtro %}{{ nombre }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+      {% if prioridad_filtro %}<a class="delco-filtro-chip" href="?{% url_sin 'prioridad' %}"><span class="delco-filtro-chip-tipo">Prioridad</span><span>{% for codigo, nombre in prioridades %}{% if codigo == prioridad_filtro %}{{ nombre }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+      {% if q or estado_filtro or prioridad_filtro %}<a class="delco-filtro-limpiar" href="?{% url_sin 'q' 'estado' 'prioridad' %}">Quitar filtros</a>{% endif %}
     </div>
-    <div class="col-md-3">
-      <select name="prioridad" class="form-select">
-        <option value="">Todas las prioridades</option>
-        {% for codigo, nombre in prioridades %}
-        <option value="{{ codigo }}" {% if prioridad_filtro == codigo %}selected{% endif %}>{{ nombre }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="col-md-2">
-      <button class="btn btn-outline-primary w-100" type="submit">Filtrar</button>
-    </div>
-  </form>
+  </div>
 
   <div class="card delco-panel-card shadow-sm">
     <div class="table-responsive delco-table-wrap">

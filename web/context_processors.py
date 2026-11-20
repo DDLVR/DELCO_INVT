@@ -67,4 +67,7 @@ def _mtime_version(rel_path: str) -> str:
 
 def delco_static_version(request):
     """Expone delco_css_v para ?v= en app.css (producción no re-collectstatic)."""
-    return {'delco_css_v': _mtime_version('css/app.css')}
+    return {
+        'delco_css_v': _mtime_version('css/app.css'),
+        'delco_js_v': _mtime_version('js/delco_ux.js'),
+    }

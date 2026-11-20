@@ -14,6 +14,7 @@ from io import BytesIO
 
 from usuarios.models import Usuario
 from web.decorators import admin_or_administrativo
+from web.services.listado import es_ajax
 from web.services.audit import AuditEvent, register_audit_event
 
 from .import_excel import exportar_cargas_excel, importar_cargas_excel, resumen_importacion
@@ -458,12 +459,6 @@ def cargas_crear_view(request):
     """
     from clientes.models import Cliente
 
-    def _quiere_json():
-        return (
-            request.headers.get('X-Requested-With') == 'XMLHttpRequest'
-            or 'application/json' in (request.headers.get('Accept') or '')
-        )
-
     if request.method != 'POST':
         return redirect(reverse('cargas_list') + '?nueva=1')
 
@@ -480,7 +475,7 @@ def cargas_crear_view(request):
 
     if not cliente:
         msg = 'Debes seleccionar un cliente existente de la base de datos. Si no aparece, créalo primero.'
-        if _quiere_json():
+        if es_ajax(request):
             return JsonResponse({'success': False, 'message': msg}, status=400)
         messages.error(request, msg)
         return redirect(reverse('cargas_list') + '?nueva=1')
@@ -488,7 +483,7 @@ def cargas_crear_view(request):
     titulo = (cliente.numero_cliente or '').strip()
     if not titulo:
         msg = 'El cliente seleccionado no tiene número de cliente válido.'
-        if _quiere_json():
+        if es_ajax(request):
             return JsonResponse({'success': False, 'message': msg}, status=400)
         messages.error(request, msg)
         return redirect(reverse('cargas_list') + '?nueva=1')
@@ -510,7 +505,7 @@ def cargas_crear_view(request):
         url_referencia=(request.POST.get('url_referencia') or '').strip(),
     )
     ok_msg = f'ID {carga.pk} creada · cliente {titulo}.'
-    if _quiere_json():
+    if es_ajax(request):
         return JsonResponse({
             'success': True,
             'message': ok_msg,

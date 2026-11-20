@@ -9,6 +9,8 @@ from unicodedata import combining, normalize
 from django.db.models import Count, Q
 from django.utils import timezone
 
+from web.services.listado import parse_fecha_iso
+
 from clientes.models import Cliente
 from ordenes_trabajo.models import IntegracionMoreApp, OrdenTrabajo
 from usuarios.models import Usuario
@@ -125,8 +127,8 @@ def parse_report_filters(params) -> Dict[str, Any]:
     fecha_desde, fecha_hasta = _fechas_desde_periodo(periodo)
     # Compatibilidad: si aún llegan fechas manuales, usarlas
     if not periodo:
-        fecha_desde = _parse_date((params.get('fecha_desde') or '').strip()) or fecha_desde
-        fecha_hasta = _parse_date((params.get('fecha_hasta') or '').strip()) or fecha_hasta
+        fecha_desde = parse_fecha_iso((params.get('fecha_desde') or '').strip()) or fecha_desde
+        fecha_hasta = parse_fecha_iso((params.get('fecha_hasta') or '').strip()) or fecha_hasta
 
     return {
         'periodo': periodo or None,
@@ -155,15 +157,6 @@ def _fechas_desde_periodo(periodo: str):
     if periodo in {'mes', 'este_mes'}:
         return hoy.replace(day=1), hoy
     return None, None
-
-
-def _parse_date(value: str) -> Optional[date]:
-    if not value:
-        return None
-    try:
-        return datetime.strptime(value, '%Y-%m-%d').date()
-    except ValueError:
-        return None
 
 
 def _aware_start(day: date) -> datetime:

@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Registro de Errores{% endblock %}
 
@@ -11,24 +12,38 @@
                 <h1 class="h3 mb-1">Registro de errores</h1>
                 <p class="text-muted mb-0">Importaciones Excel y fallos de envío MoreApp (nueva tarea, listado, Excel y clientes).</p>
             </div>
-            <form method="get" class="d-flex gap-2 align-items-center flex-wrap">
-                {% if seccion and seccion != 'todas' %}
-                <input type="hidden" name="seccion" value="{{ seccion }}">
-                {% endif %}
-                <input type="text" name="q" value="{{ q }}" class="form-control"
-                       placeholder="Buscar archivo, formulario, cuenta u observación">
-                <button class="delco-action-btn is-add" type="submit">
-                    <span class="delco-action-btn-icon"><i class="bi bi-search"></i></span>
-                    Buscar
-                </button>
-            </form>
+            <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina" style="min-width:min(100%, 36rem)">
+                <div class="row g-2 align-items-end">
+                    <div class="col-12 col-md-4">
+                        <label class="form-label small mb-1">Tipo de filtro</label>
+                        <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+                    </div>
+                    <div class="col-12 col-md-5">
+                        <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+                        <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+                        <div data-filtro-panel="q" data-filtro-titulo="Buscar" data-filtro-param="q" class="d-none">
+                            <input type="text" class="form-control form-control-sm" placeholder="Archivo, formulario, cuenta u observación" aria-label="Buscar">
+                        </div>
+                        <div data-filtro-panel="seccion" data-filtro-titulo="Sección" data-filtro-param="seccion" class="d-none">
+                            <select class="form-select form-select-sm" data-orden-lista="no" aria-label="Sección">
+                                <option value="">Elige</option>
+                                <option value="todas">Todas</option>
+                                <option value="importaciones">Importaciones Excel</option>
+                                <option value="moreapp">Tareas MoreApp</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-auto">
+                        <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+                    </div>
+                </div>
+                <div class="delco-filtro-activos js-filtro-activos">
+                    {% if q %}<a class="delco-filtro-chip" href="?{% url_sin 'q' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ q }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                    {% if seccion and seccion != 'todas' %}<a class="delco-filtro-chip" href="?{% url_sin 'seccion' %}"><span class="delco-filtro-chip-tipo">Sección</span><span>{% if seccion == 'importaciones' %}Importaciones Excel{% elif seccion == 'moreapp' %}Tareas MoreApp{% else %}{{ seccion }}{% endif %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                    {% if q or seccion == 'importaciones' or seccion == 'moreapp' %}<a class="delco-filtro-limpiar" href="{{ url_todas }}">Quitar filtros</a>{% endif %}
+                </div>
+            </div>
         </div>
-    </div>
-
-    <div class="d-flex flex-wrap gap-2 mb-3">
-        <a class="btn btn-sm {% if seccion == 'todas' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_todas }}">Todas</a>
-        <a class="btn btn-sm {% if seccion == 'importaciones' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_importaciones }}">Importaciones Excel</a>
-        <a class="btn btn-sm {% if seccion == 'moreapp' %}btn-primary{% else %}btn-outline-primary{% endif %}" href="{{ url_moreapp }}">Tareas MoreApp</a>
     </div>
 
     <div class="row g-2 mb-3">

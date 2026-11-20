@@ -109,6 +109,7 @@ from web.services.dashboard_metrics import (
     count_clientes_sin_actualizacion_stb,
 )
 from web.services.dashboard_moreapp_forms import build_dashboard_formularios_moreapp
+from web.services.listado import consulta_sin_pagina, leer_textos_get, paginar_consulta, parse_fecha_iso
 from web.services.audit import AuditEvent, audit_field_changes, register_audit_event
 
 logger = logging.getLogger(__name__)
@@ -592,7 +593,6 @@ def _destino_moreapp_interno(valor, default):
 def validacion_moreapp_view(request):
     """Cola de informes MoreApp que un administrativo todavía no valida."""
     from datetime import timedelta
-    from django.core.paginator import Paginator
     from django.utils import timezone
     from ordenes_trabajo.models import IntegracionMoreApp
     from web.moreapp_avisos import marcar_aviso_moreapp_visto
@@ -606,17 +606,11 @@ def validacion_moreapp_view(request):
     if reclasificar_informes_si_corresponde():
         invalidar_caches_aviso_moreapp()
 
-    cola = (request.GET.get('cola') or '').strip().lower()
+    textos = leer_textos_get(request, ("cola", "q"), ("cola",))
+    cola = textos["cola"]
     if cola not in ('pendientes', 'advertencia', 'envejecidos', 'validados'):
         cola = ''
-    buscar = (request.GET.get('q') or '').strip()
-    try:
-        per_page = int(request.GET.get('per_page') or 50)
-    except (TypeError, ValueError):
-        per_page = 50
-    if per_page not in (25, 50, 100):
-        per_page = 50
-
+    buscar = textos["q"]
     umbral_7d = timezone.now() - timedelta(days=7)
     abiertos = IntegracionMoreApp.objects.filter(
         eliminado=False,
@@ -651,7 +645,7 @@ def validacion_moreapp_view(request):
             | Q(revisado_nombre__icontains=buscar)
         )
 
-    page_obj = Paginator(qs, per_page).get_page(request.GET.get('page') or 1)
+    page_obj, per_page = paginar_consulta(request, qs)
     registros = list(page_obj.object_list)
     for reg in registros:
         datos = reg.datos_procesados if isinstance(reg.datos_procesados, dict) else {}
@@ -675,8 +669,7 @@ def validacion_moreapp_view(request):
         else:
             reg.alerta_preview = (reg.descripcion_alerta or '')[:180]
 
-    query_params = request.GET.copy()
-    query_params.pop('page', None)
+    query_params = consulta_sin_pagina(request.GET)
     return render(request, 'operacional/validacion_moreapp.html', {
         'registros': registros,
         'page_obj': page_obj,
@@ -692,8 +685,6 @@ def validacion_moreapp_view(request):
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
 def pendientes_operativos_view(request):
     """Tareas MoreApp que todavía no se completan, para visualizarlas."""
-    from django.core.paginator import Paginator
-
     from integraciones.models import MoreAppTareaEnviada
     from integraciones.moreapp_cuentas import anotar_destinatarios_visibles
     from integraciones.moreapp_tareas_views import (
@@ -705,10 +696,11 @@ def pendientes_operativos_view(request):
 
     marcar_aviso_moreapp_visto(request)
 
-    cola_filtro = (request.GET.get('cola') or '').strip().lower()
+    textos = leer_textos_get(request, ("cola", "buscar"), ("cola",))
+    cola_filtro = textos["cola"]
     if cola_filtro == 'completadas':
         cola_filtro = ''
-    buscar = (request.GET.get('buscar') or '').strip()
+    buscar = textos["buscar"]
     qs = _queryset_tareas_filtrado(request, solo_abiertas=True).order_by('-fecha_creacion', '-id')
     colas = _colas_conteo_tareas()
     colas['abiertas'] = (
@@ -716,19 +708,12 @@ def pendientes_operativos_view(request):
         + int(colas.get('en_campo') or 0)
         + int(colas.get('errores') or 0)
     )
-    try:
-        per_page = int(request.GET.get('per_page') or 50)
-    except (TypeError, ValueError):
-        per_page = 50
-    if per_page not in (25, 50, 100):
-        per_page = 50
-    page_obj = Paginator(qs, per_page).get_page(request.GET.get('page') or 1)
+    page_obj, per_page = paginar_consulta(request, qs)
     tareas = list(page_obj.object_list)
     for tarea in tareas:
         tarea.grupos_nombres = _nombres_grupos_guardados(tarea.grupos)
     anotar_destinatarios_visibles(tareas)
-    query_params = request.GET.copy()
-    query_params.pop('page', None)
+    query_params = consulta_sin_pagina(request.GET)
     return render(request, 'operacional/pendientes.html', {
         'tareas': tareas,
         'page_obj': page_obj,
@@ -906,7 +891,6 @@ def _ids_estado_por_busqueda(texto: str):
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR', 'TECNICO'])
 def inventario_list_view(request):
     """Listado de equipos en inventario con filtros"""
-    from django.core.paginator import Paginator
     from types import SimpleNamespace
     
     from usuarios.models import Usuario
@@ -914,8 +898,6 @@ def inventario_list_view(request):
     tipo = request.GET.get('tipo', 'medidor')
     if tipo == 'todos':
         tipo = 'medidor'
-    page_num = request.GET.get('page', '1')
-    per_page_raw = request.GET.get('per_page', '50')
     busqueda = request.GET.get('q', '').strip()
     campo_busqueda = request.GET.get('campo', 'all').strip()
     estado_filtro = request.GET.get('estado', '').strip()
@@ -933,12 +915,6 @@ def inventario_list_view(request):
 
     # Tamaño de página permitido (optimizado)
     per_page_options = [10, 25, 50, 100]
-    try:
-        per_page = int(per_page_raw)
-    except (TypeError, ValueError):
-        per_page = 50
-    if per_page not in per_page_options:
-        per_page = 50
     
     def _equipo_contiene_valor(equipo_row, valor: str) -> bool:
         return valor in ' '.join([
@@ -1239,8 +1215,7 @@ def inventario_list_view(request):
         total_filtrado = equipos.count()
     else:
         total_filtrado = len(equipos)
-    paginador = Paginator(equipos, per_page)
-    page_obj = paginador.get_page(page_num)
+    page_obj, per_page = paginar_consulta(request, equipos, opciones=per_page_options)
     equipos = page_obj.object_list
 
     # Compatibilidad: evitar que el template acceda a atributos que aun no existen
@@ -1284,15 +1259,14 @@ def inventario_list_view(request):
                     or ''
                 )
 
-    query_params = request.GET.copy()
-    query_params.pop('page', None)
+    query_params = consulta_sin_pagina(request.GET)
     query_string = query_params.urlencode()
     
     # Obtener opciones para filtros (solo estados de negocio definidos)
     if tipo in ('medidor', 'modem'):
         estados_permitidos = ['En bodega', 'En Trayecto', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja', 'En peaje']
         estados_disponibles = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
-        estados_disponibles.sort(key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99)
+        estados_disponibles.sort(key=lambda e: (e.nombre or '').casefold())
     elif tipo == 'sim':
         estados_permitidos = [
             'En bodega', 'En Trayecto', 'Instalado', 'Retirado',
@@ -1307,13 +1281,11 @@ def inventario_list_view(request):
                 Q(nombre__in=estados_permitidos) | Q(id__in=ids_usados)
             ).distinct()
         )
-        estados_disponibles.sort(
-            key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99
-        )
+        estados_disponibles.sort(key=lambda e: (e.nombre or '').casefold())
     else:
         estados_permitidos = ['En bodega', 'En Trayecto', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja']
         estados_disponibles = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
-        estados_disponibles.sort(key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99)
+        estados_disponibles.sort(key=lambda e: (e.nombre or '').casefold())
     from web.perf_cache import cache_get_or_set, TTL_MEDIO
 
     ubicaciones_disponibles = Ubicacion.objects.all()
@@ -3146,7 +3118,6 @@ def usuario_reset_password_view(request, pk):
 @login_required
 def clientes_list_view(request):
     """Lista de clientes activos con paginación servidor (no carga todo el padrón en HTML)."""
-    from django.core.paginator import Paginator
     from django.db.models import Count
     from web.services.filtros_export import es_sin_proyecto, queryset_clientes_filtrado
 
@@ -3163,12 +3134,6 @@ def clientes_list_view(request):
     nombre_filtro = (request.GET.get('nombre') or request.GET.get('customer_name') or '').strip()
     solo_duplicados = (request.GET.get('solo_duplicados') or '') == '1'
     alarma = (request.GET.get('alarma') or '').strip().lower()
-    try:
-        per_page = int(request.GET.get('per_page') or 50)
-    except (TypeError, ValueError):
-        per_page = 50
-    if per_page not in (25, 50, 100, 200):
-        per_page = 50
 
     base_activos = queryset_clientes_filtrado(request, aplicar_filtros=False)
     clientes_qs = queryset_clientes_filtrado(request, aplicar_filtros=True)
@@ -3218,11 +3183,10 @@ def clientes_list_view(request):
 
     total_fichas = clientes_qs.count()
     total_clientes = clientes_qs.values('numero_cliente').distinct().count()
-    page_obj = Paginator(clientes_qs, per_page).get_page(request.GET.get('page') or 1)
+    page_obj, per_page = paginar_consulta(request, clientes_qs, opciones=(25, 50, 100, 200))
     ultima_importacion_clientes = ImportacionExcel.objects.filter(tipo='CLIENTES').order_by('-id').first()
 
-    query_params = request.GET.copy()
-    query_params.pop('page', None)
+    query_params = consulta_sin_pagina(request.GET)
 
     from web.services.dashboard_metrics import ALARMAS_CLIENTES_LABELS
     alarma_label = ALARMAS_CLIENTES_LABELS.get(alarma, '')
@@ -3617,11 +3581,7 @@ def cliente_crear_view(request):
         messages.success(request, f'Cliente {numero_cliente} creado correctamente.')
         return redirect('clientes_list')
 
-    estados_permitidos = ['En bodega', 'En Trayecto', 'Instalado', 'Retirado', 'En reparación', 'Dado de baja', 'En peaje']
-    estados_disponibles = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
-    estados_disponibles.sort(
-        key=lambda e: estados_permitidos.index(e.nombre) if e.nombre in estados_permitidos else 99
-    )
+    estados_disponibles.sort(key=lambda e: (e.nombre or '').casefold())
 
     asignados_ids = set(
         Cliente.objects.filter(activo=True, medidor_actual_id__isnull=False)
@@ -3665,6 +3625,7 @@ def cliente_editar_view(request, pk):
     cliente = get_object_or_404(Cliente, pk=pk, activo=True)
 
     def _quiere_json():
+        """La ficha también pide JSON con format=json o ajax=1."""
         if request.GET.get('format') == 'json' or request.POST.get('ajax') == '1':
             return True
         accept = (request.headers.get('Accept') or '').lower()
@@ -4719,31 +4680,22 @@ def movimientos_list_view(request):
             entidad_eliminada=entidad_eliminada,
         )
     
-    if fecha_desde:
-        try:
-            from django.utils import timezone as _tz
-            fecha_desde_dt = _tz.make_aware(
-                datetime.strptime(fecha_desde, '%Y-%m-%d'),
-                _tz.get_current_timezone(),
-            )
-            movimientos = movimientos.filter(fecha_hora__gte=fecha_desde_dt)
-        except ValueError:
-            pass
-
-    if fecha_hasta:
-        try:
-            from django.utils import timezone as _tz
-            from datetime import time as _time
-            fecha_hasta_dt = _tz.make_aware(
-                datetime.combine(
-                    datetime.strptime(fecha_hasta, '%Y-%m-%d').date(),
-                    _time.max,
-                ),
-                _tz.get_current_timezone(),
-            )
-            movimientos = movimientos.filter(fecha_hora__lte=fecha_hasta_dt)
-        except ValueError:
-            pass
+    if fecha_desde or fecha_hasta:
+        from datetime import time as _time
+        from django.utils import timezone as _tz
+        zona = _tz.get_current_timezone()
+        if fecha_desde:
+            dia_desde = parse_fecha_iso(fecha_desde)
+            if dia_desde is not None:
+                movimientos = movimientos.filter(
+                    fecha_hora__gte=_tz.make_aware(datetime.combine(dia_desde, _time.min), zona),
+                )
+        if fecha_hasta:
+            dia_hasta = parse_fecha_iso(fecha_hasta)
+            if dia_hasta is not None:
+                movimientos = movimientos.filter(
+                    fecha_hora__lte=_tz.make_aware(datetime.combine(dia_hasta, _time.max), zona),
+                )
     
     if responsable_id:
         movimientos = movimientos.filter(responsable_id=responsable_id)
@@ -4832,8 +4784,7 @@ def movimientos_list_view(request):
         for mov in movimientos_render:
             if mov.moreapp_submission_id:
                 mov.moreapp_registro_id = reporte_por_submission.get(mov.moreapp_submission_id)
-    query_params = request.GET.copy()
-    query_params.pop('page', None)
+    query_params = consulta_sin_pagina(request.GET)
     query_string = query_params.urlencode()
 
     context = {
@@ -6147,7 +6098,6 @@ def reportes_moreapp_list(request):
 @login_required
 def reportes_moreapp_informes_list(request):
     """Lista de informes MoreApp sincronizados (carpeta/FTPS)."""
-    from django.core.paginator import Paginator
     from ordenes_trabajo.models import IntegracionMoreApp
 
     _consumir_aviso_export_reportes(request)
@@ -6168,13 +6118,6 @@ def reportes_moreapp_informes_list(request):
     q = request.GET.get('q', '')
     formulario = request.GET.get('formulario', '')
     kpi = request.GET.get('kpi', '')
-    try:
-        per_page = int(request.GET.get('per_page') or 50)
-    except (TypeError, ValueError):
-        per_page = 50
-    if per_page not in (25, 50, 100):
-        per_page = 50
-
     qs = qs_base
     if estado:
         qs = qs.filter(estado_sincronizacion=estado)
@@ -6241,7 +6184,7 @@ def reportes_moreapp_informes_list(request):
         ).order_by('-fecha_recepcion')
 
     total = qs.count()
-    page_obj = Paginator(qs, per_page).get_page(request.GET.get('page') or 1)
+    page_obj, per_page = paginar_consulta(request, qs)
     registros = list(page_obj.object_list)
 
     for reg in registros:
@@ -6303,8 +6246,7 @@ def reportes_moreapp_informes_list(request):
 
     kpis = cache_get_or_set('moreapp:list_kpis', _kpis_moreapp, TTL_CORTO)
 
-    query_params = request.GET.copy()
-    query_params.pop('page', None)
+    query_params = consulta_sin_pagina(request.GET)
 
     moreapp_ops = None
     if request.user.rol in ROLES_REPORTES_GESTION:

@@ -20,7 +20,7 @@ def catalogo_diagnostico_list_view(request):
 
     return render(request, 'catalogos/list.html', {
         'items': qs.order_by('orden', 'categoria', 'origen'),
-        'categorias': CatalogoDiagnostico.CATEGORIA_CHOICES,
+        'categorias': sorted(CatalogoDiagnostico.CATEGORIA_CHOICES, key=lambda item: item[1].casefold()),
         'categoria_actual': categoria,
         'q': q,
         'total': qs.count(),

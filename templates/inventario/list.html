@@ -118,106 +118,108 @@
         <div class="col-12">
             <div class="card bg-body-secondary border-0">
                 <div class="card-body">
-                    <form method="get" class="row g-2 align-items-end">
-                        <input type="hidden" name="tipo" value="{{ tipo }}">
-                        <div class="col-md-2">
-                            <label class="form-label mb-1">Carga por página</label>
-                            <select name="per_page" class="form-select form-select-sm">
-                                {% for opt in per_page_options %}
-                                <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
-                                {% endfor %}
+                    <div class="d-flex justify-content-end align-items-center gap-2 mb-2">
+                      <label class="small mb-0">Carga por página</label>
+                      <select class="form-select form-select-sm" style="width:auto" data-orden-lista="no" onchange="var p=new URLSearchParams(location.search); p.set('per_page', this.value); p.delete('page'); location.search=p.toString();">
+                        {% for opt in per_page_options %}
+                        <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
+                      <div class="row g-2 align-items-end">
+                        <div class="col-12 col-md-4">
+                          <label class="form-label small mb-1">Tipo de filtro</label>
+                          <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+                        </div>
+                        <div class="col-12 col-md-5">
+                          <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+                          <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+                          <div data-filtro-panel="estado" data-filtro-titulo="Estado" data-filtro-param="estado" class="d-none">
+                            <select id="filtroEstado" class="form-select form-select-sm" aria-label="Estado">
+                              <option value="">Elige un estado</option>
+                              {% for estado in estados_disponibles %}<option value="{{ estado.id }}">{{ estado.nombre }}</option>{% endfor %}
                             </select>
-                        </div>
-                        <div class="col-md-2">
-                            <label for="filtroEstado" class="form-label mb-1">Estado</label>
-                            <select id="filtroEstado" name="estado" class="form-select form-select-sm" onchange="this.form.submit()">
-                                <option value="">Todos</option>
-                                {% for estado in estados_disponibles %}
-                                <option value="{{ estado.id }}" {% if estado_seleccionado == estado.id|stringformat:'s' %}selected{% endif %}>{{ estado.nombre }}</option>
-                                {% endfor %}
+                          </div>
+                          <div data-filtro-panel="buscar" data-filtro-titulo="Buscar" data-filtro-modo="grupo" class="d-none">
+                            <select id="tablaBuscarCampo" data-filtro-param="campo" class="form-select form-select-sm mb-1" data-orden-lista="no" aria-label="Buscar en">
+                              <option value="all">Todos los campos</option>
+                              {% if tipo == 'todos' %}
+                              <option value="tipo">Tipo</option>
+                              <option value="identificador">Identificador</option>
+                              <option value="descripcion">Descripción</option>
+                              <option value="tecnico">Técnico</option>
+                              <option value="estado">Estado</option>
+                              <option value="cliente">Cliente</option>
+                              <option value="proyecto">Proyecto</option>
+                              {% elif tipo == 'medidor' %}
+                              <option value="serie">Serie</option>
+                              <option value="marca">Marca</option>
+                              <option value="caja">Caja</option>
+                              <option value="modulo">Módulo</option>
+                              <option value="tipo_medidor">Tipo Medidor</option>
+                              <option value="entregado_a">Entregado A</option>
+                              <option value="proyecto">Proyecto</option>
+                              <option value="estado">Estado</option>
+                              <option value="cliente">Cliente</option>
+                              {% elif tipo == 'sim' %}
+                              <option value="imei">IMEI</option>
+                              <option value="operador">Operador</option>
+                              <option value="abonado">Abonado</option>
+                              <option value="direccion_ip">Dirección IP</option>
+                              <option value="entregado_a">Entregado A</option>
+                              <option value="proyecto">Proyecto</option>
+                              <option value="estado">Estado</option>
+                              <option value="cliente">Cliente</option>
+                              {% elif tipo == 'modem' %}
+                              <option value="marca">Marca</option>
+                              <option value="modelo">Modelo</option>
+                              <option value="imei">IMEI</option>
+                              <option value="serie">Serie</option>
+                              <option value="caja">Caja</option>
+                              <option value="tecnico">Técnico</option>
+                              <option value="estado">Estado</option>
+                              <option value="cliente">Cliente</option>
+                              <option value="proyecto">Proyecto</option>
+                              {% endif %}
                             </select>
-                        </div>
-                        <div class="col-md-3">
-                            <label for="tablaBuscarCampo" class="form-label mb-1">Buscar en</label>
-                            <select id="tablaBuscarCampo" name="campo" class="form-select form-select-sm">
-                                <option value="all" {% if campo_busqueda == 'all' %}selected{% endif %}>Todos los campos</option>
-                                {% if tipo == 'todos' %}
-                                <option value="tipo" {% if campo_busqueda == 'tipo' %}selected{% endif %}>Tipo</option>
-                                <option value="identificador" {% if campo_busqueda == 'identificador' %}selected{% endif %}>Identificador</option>
-                                <option value="descripcion" {% if campo_busqueda == 'descripcion' %}selected{% endif %}>Descripción</option>
-                                <option value="tecnico" {% if campo_busqueda == 'tecnico' %}selected{% endif %}>Técnico</option>
-                                <option value="estado" {% if campo_busqueda == 'estado' %}selected{% endif %}>Estado</option>
-                                <option value="cliente" {% if campo_busqueda == 'cliente' %}selected{% endif %}>Cliente</option>
-                                <option value="proyecto" {% if campo_busqueda == 'proyecto' %}selected{% endif %}>Proyecto</option>
-                                {% elif tipo == 'medidor' %}
-                                <option value="serie" {% if campo_busqueda == 'serie' %}selected{% endif %}>Serie</option>
-                                <option value="marca" {% if campo_busqueda == 'marca' %}selected{% endif %}>Marca</option>
-                                <option value="caja" {% if campo_busqueda == 'caja' %}selected{% endif %}>Caja</option>
-                                <option value="modulo" {% if campo_busqueda == 'modulo' %}selected{% endif %}>Módulo</option>
-                                <option value="tipo_medidor" {% if campo_busqueda == 'tipo_medidor' %}selected{% endif %}>Tipo Medidor</option>
-                                <option value="entregado_a" {% if campo_busqueda == 'entregado_a' %}selected{% endif %}>Entregado A</option>
-                                <option value="proyecto" {% if campo_busqueda == 'proyecto' %}selected{% endif %}>Proyecto</option>
-                                <option value="estado" {% if campo_busqueda == 'estado' %}selected{% endif %}>Estado</option>
-                                <option value="cliente" {% if campo_busqueda == 'cliente' %}selected{% endif %}>Cliente</option>
-                                {% elif tipo == 'sim' %}
-                                <option value="imei" {% if campo_busqueda == 'imei' %}selected{% endif %}>IMEI</option>
-                                <option value="operador" {% if campo_busqueda == 'operador' %}selected{% endif %}>Operador</option>
-                                <option value="abonado" {% if campo_busqueda == 'abonado' %}selected{% endif %}>Abonado</option>
-                                <option value="direccion_ip" {% if campo_busqueda == 'direccion_ip' %}selected{% endif %}>Dirección IP</option>
-                                <option value="entregado_a" {% if campo_busqueda == 'entregado_a' %}selected{% endif %}>Entregado A</option>
-                                <option value="proyecto" {% if campo_busqueda == 'proyecto' %}selected{% endif %}>Proyecto</option>
-                                <option value="estado" {% if campo_busqueda == 'estado' %}selected{% endif %}>Estado</option>
-                                <option value="cliente" {% if campo_busqueda == 'cliente' %}selected{% endif %}>Cliente</option>
-                                {% elif tipo == 'modem' %}
-                                <option value="marca" {% if campo_busqueda == 'marca' %}selected{% endif %}>Marca</option>
-                                <option value="modelo" {% if campo_busqueda == 'modelo' %}selected{% endif %}>Modelo</option>
-                                <option value="imei" {% if campo_busqueda == 'imei' %}selected{% endif %}>IMEI</option>
-                                <option value="serie" {% if campo_busqueda == 'serie' %}selected{% endif %}>Serie</option>
-                                <option value="caja" {% if campo_busqueda == 'caja' %}selected{% endif %}>Caja</option>
-                                <option value="tecnico" {% if campo_busqueda == 'tecnico' %}selected{% endif %}>Técnico</option>
-                                <option value="estado" {% if campo_busqueda == 'estado' %}selected{% endif %}>Estado</option>
-                                <option value="cliente" {% if campo_busqueda == 'cliente' %}selected{% endif %}>Cliente</option>
-                                <option value="proyecto" {% if campo_busqueda == 'proyecto' %}selected{% endif %}>Proyecto</option>
-                                {% endif %}
+                            <input type="text" id="tablaBuscar" data-filtro-param="q" class="form-control form-control-sm" placeholder="Escribe para filtrar..." aria-label="Buscar">
+                          </div>
+                          <div data-filtro-panel="proyecto" data-filtro-titulo="Proyecto" data-filtro-param="proyecto" class="d-none">
+                            <select id="filtroProyecto" class="form-select form-select-sm" aria-label="Proyecto">
+                              <option value="">Elige</option>
+                              {% for proyecto in proyectos_disponibles %}<option value="{{ proyecto }}">{{ proyecto }}</option>{% endfor %}
                             </select>
-                        </div>
-                        <div class="col-md-5">
-                            <label for="tablaBuscar" class="form-label mb-1">Buscar</label>
-                            <input type="text" id="tablaBuscar" name="q" value="{{ busqueda|default:'' }}" class="form-control form-control-sm" placeholder="{% if campo_busqueda == 'estado' %}Ej: Devuelta, Sin Conexion, Trayecto...{% else %}Escribe para filtrar...{% endif %}">
-                        </div>
-                        <div class="col-md-2">
-                            <label for="filtroProyecto" class="form-label mb-1">Proyecto</label>
-                            <select id="filtroProyecto" name="proyecto" class="form-select form-select-sm">
-                                <option value="">Todos</option>
-                                {% for proyecto in proyectos_disponibles %}
-                                <option value="{{ proyecto }}" {% if proyecto == proyecto_seleccionado %}selected{% endif %}>{{ proyecto }}</option>
-                                {% endfor %}
+                          </div>
+                          {% if tipo == 'medidor' or tipo == 'todos' %}
+                          <div data-filtro-panel="tipo_medidor" data-filtro-titulo="Tipo medidor" data-filtro-param="tipo_medidor" class="d-none">
+                            <select id="filtroTipoMedidor" class="form-select form-select-sm" data-orden-lista="no" aria-label="Tipo medidor">
+                              <option value="">Elige</option>
+                              {% for codigo, nombre in tipo_medidor_choices %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}
                             </select>
+                          </div>
+                          {% endif %}
+                          {% if tipo != 'sim' %}
+                          <div data-filtro-panel="caja" data-filtro-titulo="Caja" data-filtro-param="caja" class="d-none">
+                            <input type="text" id="filtroCaja" class="form-control form-control-sm" placeholder="N° caja..." aria-label="Caja">
+                          </div>
+                          {% endif %}
                         </div>
-                        {% if tipo == 'medidor' or tipo == 'todos' %}
-                        <div class="col-md-2">
-                            <label for="filtroTipoMedidor" class="form-label mb-1">Tipo Medidor</label>
-                            <select id="filtroTipoMedidor" name="tipo_medidor" class="form-select form-select-sm">
-                                <option value="">Todos</option>
-                                {% for codigo, nombre in tipo_medidor_choices %}
-                                <option value="{{ codigo }}" {% if codigo == tipo_medidor_seleccionado %}selected{% endif %}>{{ nombre }}</option>
-                                {% endfor %}
-                            </select>
+                        <div class="col-12 col-md-auto">
+                          <button type="button" class="btn btn-sm btn-primary js-filtro-agregar" id="btnAplicarFiltroTabla"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
                         </div>
+                      </div>
+                      <div class="delco-filtro-activos js-filtro-activos">
+                        {% if estado_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'estado' %}"><span class="delco-filtro-chip-tipo">Estado</span><span>{% for estado in estados_disponibles %}{% if estado_seleccionado == estado.id|stringformat:'s' %}{{ estado.nombre }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                        {% if busqueda %}<a class="delco-filtro-chip" href="?{% url_sin 'q' 'campo' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ busqueda }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                        {% if proyecto_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'proyecto' %}"><span class="delco-filtro-chip-tipo">Proyecto</span><span>{{ proyecto_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                        {% if tipo_medidor_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'tipo_medidor' %}"><span class="delco-filtro-chip-tipo">Tipo medidor</span><span>{{ tipo_medidor_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                        {% if caja_seleccionada %}<a class="delco-filtro-chip" href="?{% url_sin 'caja' %}"><span class="delco-filtro-chip-tipo">Caja</span><span>{{ caja_seleccionada }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                        {% if estado_seleccionado or busqueda or proyecto_seleccionado or tipo_medidor_seleccionado or caja_seleccionada %}
+                        <a class="delco-filtro-limpiar" id="btnLimpiarFiltroTabla" href="{% url 'inventario_list' %}?tipo={{ tipo }}&per_page={{ per_page }}">Quitar filtros</a>
                         {% endif %}
-                        <div class="col-md-2 {% if tipo == 'sim' %}d-none{% endif %}">
-                            <label for="filtroCaja" class="form-label mb-1">Caja</label>
-                            <input type="text" id="filtroCaja" name="caja" class="form-control form-control-sm" value="{{ caja_seleccionada|default:'' }}" placeholder="N° caja...">
-                        </div>
-                        <div class="col-md-2 d-flex gap-2">
-                            <button type="submit" class="btn btn-primary btn-sm flex-grow-1" id="btnAplicarFiltroTabla">
-                                <i class="bi bi-funnel"></i> Filtrar
-                            </button>
-                            <a href="{% url 'inventario_list' %}?tipo={{ tipo }}" class="btn btn-secondary btn-sm" id="btnLimpiarFiltroTabla">
-                                <i class="bi bi-arrow-clockwise"></i> Limpiar
-                            </a>
-                        </div>
-                    </form>
+                      </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -235,21 +237,14 @@
                         Sin resultados
                         {% endif %}
                     </span>
-                    <form method="get" class="d-flex align-items-center gap-2 mb-0">
-                        <input type="hidden" name="tipo" value="{{ tipo }}">
-                        {% if busqueda %}<input type="hidden" name="q" value="{{ busqueda }}">{% endif %}
-                        {% if campo_busqueda and campo_busqueda != 'all' %}<input type="hidden" name="campo" value="{{ campo_busqueda }}">{% endif %}
-                        {% if estado_seleccionado %}<input type="hidden" name="estado" value="{{ estado_seleccionado }}">{% endif %}
-                        {% if proyecto_seleccionado %}<input type="hidden" name="proyecto" value="{{ proyecto_seleccionado }}">{% endif %}
-                        {% if caja_seleccionada %}<input type="hidden" name="caja" value="{{ caja_seleccionada }}">{% endif %}
-                        {% if tipo_medidor_seleccionado %}<input type="hidden" name="tipo_medidor" value="{{ tipo_medidor_seleccionado }}">{% endif %}
+                    <div class="d-flex align-items-center gap-2 mb-0">
                         <label class="small text-muted mb-0" for="perPageInventario">Por página</label>
-                        <select id="perPageInventario" name="per_page" class="form-select form-select-sm" style="width:auto" onchange="this.form.submit()">
+                        <select id="perPageInventario" class="form-select form-select-sm" style="width:auto" data-orden-lista="no" onchange="var p=new URLSearchParams(location.search); p.set('per_page', this.value); p.delete('page'); location.search=p.toString();">
                             {% for opt in per_page_options %}
                             <option value="{{ opt }}" {% if per_page == opt %}selected{% endif %}>{{ opt }}</option>
                             {% endfor %}
                         </select>
-                    </form>
+                    </div>
                 </div>
                 <div class="table-responsive">
                     <table id="tablaInventario" class="table table-hover mb-0">
@@ -2338,12 +2333,13 @@ function construirUrlExportacionInventario(modo) {
     const url = new URL("{% url 'inventario_exportar' %}", window.location.origin);
     url.searchParams.append('tipo', '{{ tipo }}');
 
-    const search = document.getElementById('tablaBuscar')?.value || '';
-    const searchField = document.getElementById('tablaBuscarCampo')?.value || 'all';
-    const proyecto = document.getElementById('filtroProyecto')?.value || '';
-    const caja = document.getElementById('filtroCaja')?.value || '';
-    const tipoMedidor = document.getElementById('filtroTipoMedidor')?.value || '';
-    const estado = document.getElementById('filtroEstado')?.value || '';
+    const params = new URLSearchParams(window.location.search);
+    const search = document.getElementById('tablaBuscar')?.value || params.get('q') || '';
+    const searchField = document.getElementById('tablaBuscarCampo')?.value || params.get('campo') || 'all';
+    const proyecto = document.getElementById('filtroProyecto')?.value || params.get('proyecto') || '';
+    const caja = document.getElementById('filtroCaja')?.value || params.get('caja') || '';
+    const tipoMedidor = document.getElementById('filtroTipoMedidor')?.value || params.get('tipo_medidor') || '';
+    const estado = document.getElementById('filtroEstado')?.value || params.get('estado') || '';
 
     if (search) url.searchParams.append('search', search);
     url.searchParams.append('search_field', searchField);

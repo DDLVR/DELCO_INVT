@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load custom_filters %}
 
 {% block title %}Catálogo de diagnóstico{% endblock %}
 
@@ -15,25 +16,43 @@
 
     <div class="card shadow-sm mb-3 delco-panel-card">
         <div class="card-body">
-            <form method="get" class="row g-2 align-items-end">
-                <div class="col-md-4">
-                    <label class="form-label" for="catalogoDiagCategoria">Categoría</label>
-                    <select name="categoria" id="catalogoDiagCategoria" class="form-select">
-                        <option value="">Todas</option>
-                        {% for value, label in categorias %}
-                        <option value="{{ value }}" {% if categoria_actual == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
+            <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
+              <div class="row g-2 align-items-end">
+                <div class="col-12 col-md-4">
+                  <label class="form-label small mb-1">Tipo de filtro</label>
+                  <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+                </div>
+                <div class="col-12 col-md-5">
+                  <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+                  <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+                  <div data-filtro-panel="categoria" data-filtro-titulo="Categoría" data-filtro-param="categoria" class="d-none">
+                    <select id="catalogoDiagCategoria" class="form-select form-select-sm" data-orden-lista="no" aria-label="Categoría">
+                      <option value="">Elige una categoría</option>
+                      {% for value, label in categorias %}
+                      <option value="{{ value }}">{{ label }}</option>
+                      {% endfor %}
                     </select>
+                  </div>
+                  <div data-filtro-panel="q" data-filtro-titulo="Buscar" data-filtro-param="q" class="d-none">
+                    <input type="text" id="catalogoDiagQ" class="form-control form-control-sm" placeholder="Causa, MoreApp, listado, medidor…" aria-label="Buscar">
+                  </div>
                 </div>
-                <div class="col-md-5">
-                    <label class="form-label" for="catalogoDiagQ">Buscar</label>
-                    <input type="text" name="q" id="catalogoDiagQ" value="{{ q }}" class="form-control"
-                           placeholder="Causa, MoreApp, listado, medidor…">
+                <div class="col-12 col-md-auto">
+                  <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
                 </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn btn-primary w-100">Filtrar</button>
-                </div>
-            </form>
+              </div>
+              <div class="delco-filtro-activos js-filtro-activos">
+                {% if categoria_actual %}
+                <a class="delco-filtro-chip" href="?{% url_sin 'categoria' %}"><span class="delco-filtro-chip-tipo">Categoría</span><span>{% for value, label in categorias %}{% if value == categoria_actual %}{{ label }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>
+                {% endif %}
+                {% if q %}
+                <a class="delco-filtro-chip" href="?{% url_sin 'q' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ q }}</span><i class="bi bi-x-lg"></i></a>
+                {% endif %}
+                {% if categoria_actual or q %}
+                <a class="delco-filtro-limpiar" href="?{% url_sin 'categoria' 'q' %}">Quitar filtros</a>
+                {% endif %}
+              </div>
+            </div>
             <p class="small text-muted mb-0 mt-2">{{ total }} registro{{ total|pluralize }}</p>
         </div>
     </div>
