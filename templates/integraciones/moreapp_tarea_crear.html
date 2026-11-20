@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Nueva tarea MoreApp{% endblock %}
 
@@ -24,12 +25,21 @@
   <div class="alert alert-warning">{{ error }}</div>
   {% endif %}
 
-  <form method="post" class="delco-tarea-form delco-catalogo-panel delco-catalogo-panel-body" id="formTareaMoreApp">
+  <form method="post" class="delco-tarea-form delco-catalogo-panel delco-catalogo-panel-body" id="formTareaMoreApp" data-tarea-pasos>
     {% csrf_token %}
-    <section class="delco-import-section">
+    <p class="small text-muted" data-paso-status>Elige el formulario que hay que llenar.</p>
+    <ol class="delco-tarea-pasos" aria-label="Pasos de la tarea">
+      <li data-paso-marca="1">Formulario</li>
+      <li data-paso-marca="2">Trabajo</li>
+      <li data-paso-marca="3">Destinatarios</li>
+      <li data-paso-marca="4">Mensaje</li>
+      <li data-paso-marca="5">Ubicación</li>
+      <li data-paso-marca="6">Campos</li>
+    </ol>
+    <section class="delco-import-section delco-tarea-paso" data-paso="1">
       <div class="delco-import-section-label">1. Formulario</div>
         <label class="form-label" for="form_id">Formulario a llenar</label>
-        <select name="form_id" id="form_id" class="form-select" required>
+        <select name="form_id" id="form_id" class="form-select" required data-paso-campo="formulario">
           <option value="">— Elige un formulario —</option>
           {% for form in formularios %}
           <option value="{{ form.id }}" {% if form.id == form_id %}selected{% endif %}>{{ form.name }}</option>
@@ -38,12 +48,12 @@
         <p class="small text-muted mb-0 mt-2">Solo aparecen formularios con versión publicada. Los destinatarios ya deben tener acceso en MoreApp.</p>
     </section>
 
-    <section class="delco-import-section">
+    <section class="delco-import-section delco-tarea-paso" data-paso="2" hidden>
       <div class="delco-import-section-label">2. Datos del trabajo</div>
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label" for="titulo">Título</label>
-            <input type="text" name="titulo" id="titulo" class="form-control" maxlength="200" value="{{ titulo }}" placeholder="Ej: Instalación medidor casa 12">
+            <input type="text" name="titulo" id="titulo" class="form-control" maxlength="200" value="{{ titulo }}" placeholder="Ej: Instalación medidor casa 12" data-paso-campo="titulo">
             <small class="text-muted">Si lo dejas vacío se usa el mensaje corto.</small>
           </div>
           <div class="col-md-6">
@@ -92,7 +102,7 @@
         </div>
     </section>
 
-    <section class="delco-import-section">
+    <section class="delco-import-section delco-tarea-paso" data-paso="3" hidden>
       <div class="delco-import-section-label">3. Destinatarios</div>
         <p class="small text-muted js-destinatarios-hint">Elige un formulario para ver quién tiene acceso en MoreApp.</p>
         <div class="row g-3">
@@ -135,38 +145,43 @@
         </div>
     </section>
 
-    <section class="delco-import-section">
+    <section class="delco-import-section delco-tarea-paso" data-paso="4" hidden>
       <div class="delco-import-section-label">4. Mensaje y cuándo llega</div>
       <div class="row g-3">
         <div class="col-12">
           <label class="form-label" for="mensaje">Mensaje corto</label>
-          <textarea name="mensaje" id="mensaje" class="form-control" rows="2" maxlength="500" required>{{ mensaje }}</textarea>
+          <textarea name="mensaje" id="mensaje" class="form-control" rows="2" maxlength="500" data-paso-campo="mensaje">{{ mensaje }}</textarea>
+          <small class="text-muted">Si lo dejas vacío se usa el título.</small>
         </div>
         <div class="col-md-4">
           <label class="form-label" for="envio">Envío</label>
-          <select name="envio" id="envio" class="form-select">
+          <select name="envio" id="envio" class="form-select" data-paso-campo="envio">
             <option value="IMMEDIATE" {% if envio != 'SCHEDULED' %}selected{% endif %}>Al momento</option>
             <option value="SCHEDULED" {% if envio == 'SCHEDULED' %}selected{% endif %}>Fecha y hora programadas</option>
           </select>
         </div>
         <div class="col-md-4 js-programada">
           <label class="form-label" for="programada_para">Programada para</label>
-          <input type="datetime-local" name="programada_para" id="programada_para" class="form-control" value="{{ programada_para }}">
+          <input type="datetime-local" name="programada_para" id="programada_para" class="form-control" value="{{ programada_para }}" data-paso-campo="programada">
         </div>
         <div class="col-md-4">
           <label class="form-label" for="fecha_limite">Fecha límite (opcional)</label>
           <input type="datetime-local" name="fecha_limite" id="fecha_limite" class="form-control" value="{{ fecha_limite }}">
         </div>
       </div>
+      <div class="delco-tarea-continuar">
+        <button type="button" class="btn btn-outline-primary btn-sm" data-paso-continuar="4">Continuar</button>
+        <p class="small text-danger mb-0 mt-2 d-none" data-paso-aviso="4"></p>
+      </div>
     </section>
 
-    <section class="delco-import-section">
+    <section class="delco-import-section delco-tarea-paso" data-paso="5" hidden>
       <div class="delco-import-section-label">5. Ubicación</div>
         <p class="small text-muted">Opcional. En la app se ve dónde hay que hacer el trabajo.</p>
         <div class="row g-3">
           <div class="col-md-6">
             <label class="form-label" for="ubicacion">Lugar</label>
-            <input type="text" name="ubicacion" id="ubicacion" class="form-control" value="{{ ubicacion }}" placeholder="Dirección o nombre del sitio">
+            <input type="text" name="ubicacion" id="ubicacion" class="form-control" value="{{ ubicacion }}" placeholder="Dirección o nombre del sitio" data-paso-campo="ubicacion">
           </div>
           <div class="col-md-3">
             <label class="form-label" for="latitud">Latitud</label>
@@ -177,9 +192,12 @@
             <input type="text" name="longitud" id="longitud" class="form-control" value="{{ longitud }}">
           </div>
         </div>
+      <div class="delco-tarea-continuar">
+        <button type="button" class="btn btn-outline-primary btn-sm" data-paso-continuar="5">Continuar</button>
+      </div>
     </section>
 
-    <section class="delco-import-section mb-0">
+    <section class="delco-import-section delco-tarea-paso mb-0" data-paso="6" hidden>
       <div class="delco-import-section-label">6. Precargar campos</div>
         <p class="small text-muted mb-2">Rellena lo que ya conoces. Pin, firma, catálogo, dibujo y archivo no se pueden precargar.</p>
         <div id="js-campos-precarga" class="row g-2">
@@ -187,7 +205,7 @@
         </div>
     </section>
 
-    <button type="submit" class="btn btn-success mt-3">
+    <button type="submit" class="btn btn-success mt-3" data-paso-enviar hidden>
       <i class="bi bi-send"></i> Crear tarea
     </button>
   </form>
@@ -278,4 +296,5 @@
   filtrarDestinatariosPagina();
 })();
 </script>
+<script src="{% static 'js/delco_tarea_pasos.js' %}?v=pasos1"></script>
 {% endblock %}

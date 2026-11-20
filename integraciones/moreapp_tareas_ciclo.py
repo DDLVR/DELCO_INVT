@@ -273,7 +273,14 @@ def intentar_completar_por_informe(registro) -> Optional[MoreAppTareaEnviada]:
         if len(por_cuenta) == 1:
             elegida = por_cuenta[0]
         elif len(por_cuenta) > 1:
-            elegida = por_cuenta[0]
+            limite = timezone.now() - timedelta(days=VENTANA_MATCH_DIAS)
+            recientes = [
+                item for item in por_cuenta
+                if item.fecha_creacion and item.fecha_creacion >= limite
+            ]
+            if not recientes:
+                return None
+            elegida = max(recientes, key=lambda item: item.fecha_creacion)
     if elegida is None:
         limite = timezone.now() - timedelta(days=VENTANA_MATCH_DIAS)
         recientes = [

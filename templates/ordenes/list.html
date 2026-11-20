@@ -27,6 +27,8 @@
                     <span class="delco-action-btn-icon"><i class="bi bi-upload"></i></span>
                     Importar Excel
                 </button>
+                {% endif %}
+                {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' or request.user.rol == 'GERENCIA' or request.user.rol == 'AUDITOR' %}
                 <div class="delco-action-split">
                     <a href="{% url 'ordenes_exportar' %}?filtrar=1{% if query_string %}&{{ query_string }}{% endif %}" class="delco-action-btn is-export">
                         <span class="delco-action-btn-icon"><i class="bi bi-download"></i></span>
@@ -50,6 +52,8 @@
                         </li>
                     </ul>
                 </div>
+                {% endif %}
+                {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
                 <button type="button" class="delco-action-btn is-help" id="btnAsignarMasivo">
                     <span class="delco-action-btn-icon"><i class="bi bi-person-check"></i></span>
                     Asignar

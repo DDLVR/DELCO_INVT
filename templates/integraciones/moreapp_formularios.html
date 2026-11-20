@@ -17,10 +17,12 @@
         {% endif %}
       </div>
       <div class="delco-action-bar">
+        {% if es_admin %}
         <a href="{% url 'moreapp_api_catalogo' %}" class="delco-action-btn is-help">
           <span class="delco-action-btn-icon"><i class="bi bi-grid"></i></span>
           Catálogo
         </a>
+        {% endif %}
       </div>
     </div>
   </div>

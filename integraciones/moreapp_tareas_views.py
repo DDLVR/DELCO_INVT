@@ -1968,7 +1968,7 @@ def _clientes_lote(request) -> Tuple[List[Cliente], int]:
         if line.strip()
     ]
     if not ids and not numeros:
-        return []
+        return [], 0
     qs = Cliente.objects.filter(activo=True).exclude(numero_cliente__in=["", "0"])
     if ids and numeros:
         qs = qs.filter(Q(pk__in=ids) | Q(numero_cliente__in=numeros))

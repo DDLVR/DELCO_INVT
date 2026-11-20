@@ -66,6 +66,7 @@
                     Importar Excel
                 </button>
                 {% endif %}
+                {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'TECNICO' %}
                 <button type="button" class="delco-inv-btn is-export" id="btnExportar">
                     <span class="delco-inv-btn-icon"><i class="bi bi-download"></i></span>
                     Exportar Excel
@@ -79,6 +80,7 @@
                     <span class="delco-inv-btn-icon"><i class="bi bi-info-lg"></i></span>
                     Formato
                 </button>
+                {% endif %}
                 {% endif %}
             </div>
         </div>
@@ -377,6 +379,7 @@
                                 </td>
                                 {% endif %}
                                 <td>
+                                    {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' or user.rol == 'TECNICO' %}
                                     <button class="btn btn-sm btn-primary" 
                                             data-bs-toggle="modal" 
                                             data-bs-target="#modalModificar"
@@ -384,6 +387,7 @@
                                             data-equipo-tipo="{% if tipo == 'todos' %}{{ equipo.tipo }}{% else %}{{ tipo }}{% endif %}">
                                         <i class="bi bi-pencil-square"></i> Modificar
                                     </button>
+                                    {% endif %}
                                 </td>
                             {% empty %}
                             <tr>
@@ -1932,7 +1936,7 @@ document.getElementById('modalModificar').addEventListener('show.bs.modal', func
                 if (medidorObservaciones) medidorObservaciones.value = equipoData.observaciones || 'No hay';
                 
                 if (fechaInput) {
-                    fechaInput.value = equipoData.fecha_entrega || obtenerFechaHoy();
+                    fechaInput.value = equipoData.fecha_entrega || '';
                 }
                 if (estadoSelect && equipoData.estado_id) {
                     estadoSelect.value = equipoData.estado_id;

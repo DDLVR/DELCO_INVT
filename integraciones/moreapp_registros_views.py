@@ -775,7 +775,7 @@ def registros_form_view(request, form_id: str):
         preview_keys = _preview_keys(campos)
         preview_labels = [labels.get(key, key) for key in preview_keys]
         page_size = _EXPORT_PAGE_SIZE if (exportar or tecnico or num_cliente) else _PAGE_SIZE
-        pages = range(_EXPORT_MAX_PAGES) if exportar else [page]
+        pages = range(_EXPORT_MAX_PAGES) if (exportar or tecnico or num_cliente) else [page]
         collected: List[Dict[str, Any]] = []
         has_next = False
         for page_idx in pages:
@@ -794,10 +794,11 @@ def registros_form_view(request, form_id: str):
                 page_has_next = len(items) >= page_size
             else:
                 page_has_next = (page_idx * page_size + len(items)) < int(total)
-            if not exportar:
+            if not exportar and not (tecnico or num_cliente):
                 has_next = page_has_next
                 break
             if not items or not page_has_next:
+                has_next = False
                 break
         emails = []
         for item in collected:

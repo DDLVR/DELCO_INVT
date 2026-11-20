@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Tareas MoreApp{% endblock %}
 
@@ -564,6 +565,7 @@
   });
 })();
 </script>
+<script src="{% static 'js/delco_tarea_pasos.js' %}?v=pasos1"></script>
 <script>
 (function () {
   var refreshSeconds = Number({{ tareas_auto_refresh_seconds|default:20 }}) || 20;
@@ -1416,7 +1418,7 @@
             return '<option value="' + escapeHtml(item) + '">';
           }).join('');
         }
-        if (status) status.textContent = 'Elige formulario, datos del trabajo y técnicos.';
+        if (window.DelcoTareaPasos) window.DelcoTareaPasos.refresh(document.getElementById('formNuevaTarea'));
       })
       .catch(function () {
         if (errBox) {

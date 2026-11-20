@@ -5,7 +5,7 @@ Decoradores para validación de permisos por rol de usuario.
 from functools import wraps
 from django.shortcuts import redirect
 from django.contrib import messages
-from django.http import HttpResponseForbidden
+from django.http import JsonResponse
 
 
 def role_required(allowed_roles):
@@ -30,8 +30,11 @@ def role_required(allowed_roles):
             
             # Si su rol no está en la lista permitida
             if request.user.rol not in allowed_roles:
-                messages.error(request, f'Tu rol ({request.user.rol}) no tiene acceso a esta sección')
-                return HttpResponseForbidden('No tienes permisos suficientes')
+                aviso = f'Tu rol ({request.user.rol}) no tiene acceso a esta sección'
+                messages.error(request, aviso)
+                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+                    return JsonResponse({'success': False, 'message': aviso}, status=403)
+                return redirect('dashboard')
             
             # Todo bien, ejecutar la vista
             return view_func(request, *args, **kwargs)
@@ -81,14 +84,13 @@ def admin_or_formulario_asignado(view_func):
             usuario=request.user, form_id=form_id
         ).exists():
             return view_func(request, *args, **kwargs)
-        if (
-            form_id
-            and rol in ('ADMINISTRATIVO', 'AUDITOR', 'GERENCIA')
-            and MoreAppFormularioAsignado.objects.filter(form_id=form_id).exists()
-        ):
-            return view_func(request, *args, **kwargs)
         messages.error(request, 'No tienes este formulario asignado')
-        return HttpResponseForbidden('No tiene este formulario asignado')
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse(
+                {'success': False, 'message': 'No tienes este formulario asignado'},
+                status=403,
+            )
+        return redirect('dashboard')
 
     return wrapper
 
@@ -107,6 +109,11 @@ def admin_or_tiene_formulario_asignado(view_func):
         if MoreAppFormularioAsignado.objects.filter(usuario=request.user).exists():
             return view_func(request, *args, **kwargs)
         messages.error(request, 'No tienes formularios MoreApp asignados')
-        return HttpResponseForbidden('No tiene formularios asignados')
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            return JsonResponse(
+                {'success': False, 'message': 'No tienes formularios MoreApp asignados'},
+                status=403,
+            )
+        return redirect('dashboard')
 
     return wrapper

@@ -17,8 +17,8 @@
                     <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
                     Volver
                 </a>
-                {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' %}
-                <a href="{% url 'ordenes_exportar' %}?filtrar=1&estado=FINALIZADA" class="delco-action-btn is-export">
+                {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' or request.user.rol == 'GERENCIA' or request.user.rol == 'AUDITOR' %}
+                <a href="{% url 'ordenes_exportar' %}?filtrar=1&ambito=terminadas&{{ request.GET.urlencode }}" class="delco-action-btn is-export">
                     <span class="delco-action-btn-icon"><i class="bi bi-download"></i></span>
                     Exportar
                 </a>

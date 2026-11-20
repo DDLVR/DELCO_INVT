@@ -246,6 +246,42 @@ def _registrar_movimiento_inventario(
     MovimientoItem.objects.create(**item_kwargs)
 
 
+def _responsable_cambio(antes_id, antes_otro, nuevo, manual):
+    """True solo si el responsable guardado es distinto del que ya tenía el equipo."""
+    if not (nuevo or manual):
+        return False
+    nuevo_id = getattr(nuevo, 'pk', None)
+    return nuevo_id != antes_id or (manual or '') != (antes_otro or '')
+
+
+def _alinear_cliente_con_medidor(medidor):
+    """Si el inventario asigna un medidor, la ficha lo muestra cuando aún no tiene otro."""
+    cliente = medidor.cliente
+    if cliente is None:
+        Cliente.objects.filter(medidor_actual=medidor).update(medidor_actual=None)
+        return
+    campos = []
+    if not cliente.medidor_actual_id or cliente.medidor_actual_id == medidor.pk:
+        if cliente.medidor_actual_id != medidor.pk:
+            cliente.medidor_actual = medidor
+            campos.append('medidor_actual')
+        if not (cliente.meter_serial_n_1 or '').strip() and medidor.serie:
+            cliente.meter_serial_n_1 = medidor.serie
+            campos.append('meter_serial_n_1')
+    if campos:
+        cliente.save(update_fields=campos)
+
+
+def _vincular_medidor_de_ficha(cliente, medidor):
+    """El medidor del inventario queda apuntando a la ficha que lo declara."""
+    anterior_id = cliente.medidor_actual_id
+    if medidor is not None and medidor.cliente_id != cliente.pk:
+        medidor.cliente = cliente
+        medidor.save(update_fields=['cliente'])
+    if anterior_id and (medidor is None or anterior_id != medidor.pk):
+        Medidor.objects.filter(pk=anterior_id, cliente_id=cliente.pk).update(cliente=None)
+
+
 def _consumir_aviso_export_reportes(request):
     """Muestra aviso pendiente de export PDF→Excel (la descarga no renderiza HTML)."""
     aviso = request.session.pop('reportes_aviso_export', None)
@@ -259,16 +295,20 @@ def login_view(request):
         return redirect('dashboard')
 
     if request.method == "POST":
-        rut = (request.POST.get("username") or "").strip()
+        rut = (request.POST.get("username") or "").strip().upper()
         password = request.POST.get("password")
-        rut_limpio = rut.replace('.', '').replace('-', '').upper()
+        compacto = rut.replace('.', '').replace(' ', '')
+        cuerpo = compacto.replace('-', '')
+        formas = {rut, compacto, cuerpo}
+        if len(cuerpo) >= 2:
+            formas.add(cuerpo[:-1] + '-' + cuerpo[-1])
         from usuarios.models import Usuario
         try:
             candidatos = {
-                usuario.rut: usuario
-                for usuario in Usuario.objects.filter(rut__in=[rut, rut_limpio])
+                (usuario.rut or '').upper(): usuario
+                for usuario in Usuario.objects.filter(rut__in=list(formas))
             }
-            usuario = candidatos.get(rut) or candidatos.get(rut_limpio)
+            usuario = next((candidatos[forma] for forma in formas if forma in candidatos), None)
             if not usuario:
                 messages.error(request, "RUT no encontrado en el sistema.")
             else:
@@ -501,8 +541,12 @@ def dashboard_view(request):
         return render(request, 'dashboards/admin_dashboard.html', context)
     elif rol == 'TECNICO':
         from ordenes_trabajo.models import OrdenTrabajo
-        mis_ordenes_qs = OrdenTrabajo.objects.filter(tecnico_responsable=request.user)
+        mis_ordenes_qs = OrdenTrabajo.objects.filter(
+            tecnico_responsable=request.user,
+            eliminado=False,
+        )
         context['mis_ordenes'] = mis_ordenes_qs.order_by('-fecha_creacion')[:10]
+        context['mis_ordenes_total'] = mis_ordenes_qs.count()
         context['en_ejecucion'] = mis_ordenes_qs.filter(estado='EN_EJECUCION').count()
         context['finalizadas'] = mis_ordenes_qs.filter(
             estado__in={'REALIZADA', 'VALIDADA', 'FINALIZADA'}
@@ -512,8 +556,9 @@ def dashboard_view(request):
     # GERENCIA: KPIs y reportes
     elif rol == 'GERENCIA':
         from ordenes_trabajo.models import OrdenTrabajo
-        total = OrdenTrabajo.objects.count()
+        total = OrdenTrabajo.objects.filter(eliminado=False).count()
         finalizadas = OrdenTrabajo.objects.filter(
+            eliminado=False,
             estado__in={'REALIZADA', 'VALIDADA', 'FINALIZADA'}
         ).count()
         context['ordenes_finalizadas'] = finalizadas
@@ -525,9 +570,11 @@ def dashboard_view(request):
     # AUDITOR: Auditoría y logs
     elif rol == 'AUDITOR':
         from ordenes_trabajo.models import OrdenTrabajo
-        context['ultimas_ordenes'] = OrdenTrabajo.objects.select_related(
+        context['ultimas_ordenes'] = OrdenTrabajo.objects.filter(
+            eliminado=False,
+        ).select_related(
             'cliente', 'tecnico_responsable'
-        ).order_by('-fecha_creacion')[:10]
+        ).order_by('-fecha_creacion')[:20]
         context['clientes_ip_duplicada'] = count_clientes_con_ip_duplicada()
         context['clientes_medidor_duplicado'] = count_clientes_con_medidor_duplicado()
         return render(request, 'dashboards/auditor_dashboard.html', context)
@@ -1105,7 +1152,11 @@ def inventario_list_view(request):
                 'marca': 'marca__icontains',
                 'caja': 'caja__icontains',
                 'tipo_medidor': 'tipo_medidor__icontains',
-                'entregado_a': 'entregado_a__nombre_interno__icontains',
+                'entregado_a': [
+                    'entregado_a__nombre_interno__icontains',
+                    'entregado_a_otro__icontains',
+                    'entregado_a_info__icontains',
+                ],
                 'proyecto': 'proyecto__icontains',
                 'cliente': 'cliente__numero_cliente__icontains',
             }
@@ -1115,6 +1166,8 @@ def inventario_list_view(request):
                 'caja__icontains',
                 'tipo_medidor__icontains',
                 'entregado_a__nombre_interno__icontains',
+                'entregado_a_otro__icontains',
+                'entregado_a_info__icontains',
                 'proyecto__icontains',
                 'estado_inventario__nombre__icontains',
                 'cliente__numero_cliente__icontains',
@@ -1636,9 +1689,10 @@ def inventario_modificar_view(request, pk):
             cliente_obj, cliente_manual = _resolver_cliente(cliente_id, cliente_texto)
             medidor_obj, medidor_manual = _resolver_medidor(medidor_id, medidor_otro)
             custodia_obj, custodia_manual = _resolver_responsable(en_custodia_de_id)
+            custodia_antes_id = equipo.en_custodia_de_id
+            custodia_antes_otro = equipo.entregado_a_otro
             
-            if fecha_entrega:
-                equipo.fecha_entrega = fecha_entrega
+            equipo.fecha_entrega = fecha_entrega or None
             
             if estado_id:
                 try:
@@ -1668,7 +1722,7 @@ def inventario_modificar_view(request, pk):
                 equipo.medidor = None
                 equipo.medidor_otro = ''
 
-            if custodia_obj or custodia_manual:
+            if _responsable_cambio(custodia_antes_id, custodia_antes_otro, custodia_obj, custodia_manual):
                 equipo.estado_inventario = _obtener_estado_inventario(
                     'En Trayecto',
                     'Equipo entregado a tecnico o tercero y en traslado operativo',
@@ -1692,6 +1746,8 @@ def inventario_modificar_view(request, pk):
             cliente_obj, cliente_manual = _resolver_cliente(cliente_id, cliente_otro)
             medidor_obj, medidor_manual = _resolver_medidor(medidor_id, medidor_otro)
             entregado_a_obj_modem, entregado_a_manual_modem = _resolver_responsable(entregado_a_id_modem)
+            entregado_antes_id = equipo.entregado_a_id
+            entregado_antes_otro = equipo.entregado_a_otro
 
             fecha_entrega = request.POST.get('fecha_entrega', '').strip()
             if fecha_entrega:
@@ -1736,7 +1792,7 @@ def inventario_modificar_view(request, pk):
                     equipo.estado_inventario = estado_obj
                 except (ValueError, TypeError, EstadoInventario.DoesNotExist):
                     pass
-            if entregado_a_obj_modem or entregado_a_manual_modem:
+            if _responsable_cambio(entregado_antes_id, entregado_antes_otro, entregado_a_obj_modem, entregado_a_manual_modem):
                 equipo.estado_inventario = _obtener_estado_inventario(
                     'En Trayecto',
                     'Equipo entregado a tecnico o tercero y en traslado operativo',
@@ -1752,6 +1808,8 @@ def inventario_modificar_view(request, pk):
             tipo_medidor = request.POST.get('tipo_medidor', '').strip().upper()
             cliente_obj, cliente_manual = _resolver_cliente(cliente_id, cliente_texto)
             entregado_a_obj, entregado_a_manual = _resolver_responsable(entregado_a_id)
+            entregado_antes_id = equipo.entregado_a_id
+            entregado_antes_otro = equipo.entregado_a_otro
 
             if tipo_medidor not in {'DIRECTO', 'INDIRECTO'}:
                 return JsonResponse({
@@ -1759,8 +1817,7 @@ def inventario_modificar_view(request, pk):
                     'message': 'El tipo de medidor es obligatorio (DIRECTO o INDIRECTO)'
                 }, status=400)
             
-            if fecha_entrega:
-                equipo.fecha_entrega = fecha_entrega
+            equipo.fecha_entrega = fecha_entrega or None
             
             if estado_id:
                 try:
@@ -1782,7 +1839,7 @@ def inventario_modificar_view(request, pk):
             else:
                 equipo.cliente = None
                 equipo.cliente_otro = ''
-            if entregado_a_obj or entregado_a_manual:
+            if _responsable_cambio(entregado_antes_id, entregado_antes_otro, entregado_a_obj, entregado_a_manual):
                 equipo.estado_inventario = _obtener_estado_inventario(
                     'En Trayecto',
                     'Equipo entregado a tecnico o tercero y en traslado operativo',
@@ -1792,6 +1849,8 @@ def inventario_modificar_view(request, pk):
         
         # Guardar cambios
         equipo.save()
+        if tipo == 'medidor':
+            _alinear_cliente_con_medidor(equipo)
 
         # Detectar cambios y registrar Kardex
         if tipo == 'medidor':
@@ -2099,76 +2158,105 @@ def inventario_modificar_masivo_view(request):
     actualizados = 0
     sin_cambios = 0
 
-    for equipo in queryset:
-        campos = []
+    from django.db import transaction
+    with transaction.atomic():
+        for equipo in queryset:
+            antes = {
+                'estado_id': getattr(equipo, 'estado_inventario_id', None),
+                'cliente_id': getattr(equipo, 'cliente_id', None),
+                'proyecto': getattr(equipo, 'proyecto', '') or '',
+                'entregado_a_id': getattr(equipo, 'entregado_a_id', None),
+                'en_custodia_de_id': getattr(equipo, 'en_custodia_de_id', None),
+                'medidor_id': getattr(equipo, 'medidor_id', None),
+                'tipo_medidor': getattr(equipo, 'tipo_medidor', '') or '',
+            }
+            campos = []
 
-        # Cambio de estado
-        if estado_obj and getattr(equipo, 'estado_inventario_id', None) != estado_obj.id:
-            equipo.estado_inventario = estado_obj
-            campos.append('Estado')
+            if estado_obj and getattr(equipo, 'estado_inventario_id', None) != estado_obj.id:
+                equipo.estado_inventario = estado_obj
+                campos.append('Estado')
 
-        # Cambios por tipo de equipo
-        if tipo == 'medidor':
-            if entregado_obj and equipo.entregado_a_id != entregado_obj.id:
-                equipo.entregado_a = entregado_obj
-                campos.append('Entregado A')
-            if cliente_obj and equipo.cliente_id != cliente_obj.id:
-                equipo.cliente = cliente_obj
-                campos.append('Cliente')
-            if proyecto and equipo.proyecto != proyecto:
-                equipo.proyecto = proyecto
-                campos.append('Proyecto')
-            if tipo_medidor in {'DIRECTO', 'INDIRECTO'} and equipo.tipo_medidor != tipo_medidor:
-                equipo.tipo_medidor = tipo_medidor
-                campos.append('Tipo Medidor')
+            if tipo == 'medidor':
+                if entregado_obj and equipo.entregado_a_id != entregado_obj.id:
+                    equipo.entregado_a = entregado_obj
+                    campos.append('Entregado A')
+                if cliente_obj and equipo.cliente_id != cliente_obj.id:
+                    equipo.cliente = cliente_obj
+                    campos.append('Cliente')
+                if proyecto and equipo.proyecto != proyecto:
+                    equipo.proyecto = proyecto
+                    campos.append('Proyecto')
+                if tipo_medidor in {'DIRECTO', 'INDIRECTO'} and equipo.tipo_medidor != tipo_medidor:
+                    equipo.tipo_medidor = tipo_medidor
+                    campos.append('Tipo Medidor')
 
-        elif tipo == 'sim':
-            if entregado_obj and equipo.en_custodia_de_id != entregado_obj.id:
-                equipo.en_custodia_de = entregado_obj
-                campos.append('Entregado A')
-            if cliente_obj and equipo.cliente_id != cliente_obj.id:
-                equipo.cliente = cliente_obj
-                campos.append('Cliente')
-            if medidor_obj and equipo.medidor_id != medidor_obj.id:
-                equipo.medidor = medidor_obj
-                campos.append('Medidor')
-            if proyecto and equipo.proyecto != proyecto:
-                equipo.proyecto = proyecto
-                campos.append('Proyecto')
+            elif tipo == 'sim':
+                if entregado_obj and equipo.en_custodia_de_id != entregado_obj.id:
+                    equipo.en_custodia_de = entregado_obj
+                    campos.append('Entregado A')
+                if cliente_obj and equipo.cliente_id != cliente_obj.id:
+                    equipo.cliente = cliente_obj
+                    campos.append('Cliente')
+                if medidor_obj and equipo.medidor_id != medidor_obj.id:
+                    equipo.medidor = medidor_obj
+                    campos.append('Medidor')
+                if proyecto and equipo.proyecto != proyecto:
+                    equipo.proyecto = proyecto
+                    campos.append('Proyecto')
 
-        elif tipo == 'modem':
-            if entregado_obj and equipo.entregado_a_id != entregado_obj.id:
-                equipo.entregado_a = entregado_obj
-                campos.append('Entregado A')
-            if cliente_obj and equipo.cliente_id != cliente_obj.id:
-                equipo.cliente = cliente_obj
-                campos.append('Cliente')
-            if medidor_obj and equipo.medidor_id != medidor_obj.id:
-                equipo.medidor = medidor_obj
-                campos.append('Medidor')
-            if proyecto and equipo.proyecto != proyecto:
-                equipo.proyecto = proyecto
-                campos.append('Proyecto')
+            elif tipo == 'modem':
+                if entregado_obj and equipo.entregado_a_id != entregado_obj.id:
+                    equipo.entregado_a = entregado_obj
+                    campos.append('Entregado A')
+                if cliente_obj and equipo.cliente_id != cliente_obj.id:
+                    equipo.cliente = cliente_obj
+                    campos.append('Cliente')
+                if medidor_obj and equipo.medidor_id != medidor_obj.id:
+                    equipo.medidor = medidor_obj
+                    campos.append('Medidor')
+                if proyecto and equipo.proyecto != proyecto:
+                    equipo.proyecto = proyecto
+                    campos.append('Proyecto')
 
-        if not campos:
-            sin_cambios += 1
-            continue
+            if not campos:
+                sin_cambios += 1
+                continue
 
-        equipo.save()
+            equipo.save()
+            if tipo == 'medidor':
+                _alinear_cliente_con_medidor(equipo)
+            despues = {
+                'estado_id': getattr(equipo, 'estado_inventario_id', None),
+                'cliente_id': getattr(equipo, 'cliente_id', None),
+                'proyecto': getattr(equipo, 'proyecto', '') or '',
+                'entregado_a_id': getattr(equipo, 'entregado_a_id', None),
+                'en_custodia_de_id': getattr(equipo, 'en_custodia_de_id', None),
+                'medidor_id': getattr(equipo, 'medidor_id', None),
+                'tipo_medidor': getattr(equipo, 'tipo_medidor', '') or '',
+            }
+            audit_field_changes(
+                actor_id=getattr(request.user, 'id', None),
+                action='INVENTORY_BULK_EDIT',
+                entity=tipo_item,
+                entity_id=str(equipo.pk),
+                before=antes,
+                after=despues,
+                reason=observacion or 'Edición múltiple',
+            )
 
-        if tipo_item == 'MEDIDOR':
-            identificador = equipo.serie
-        elif tipo_item == 'SIM':
-            identificador = equipo.imei or equipo.abonado or str(equipo.pk)
-        else:
-            identificador = equipo.serie
+            if tipo_item == 'MEDIDOR':
+                identificador = equipo.serie
+            elif tipo_item == 'SIM':
+                identificador = equipo.imei or equipo.abonado or str(equipo.pk)
+            else:
+                identificador = equipo.serie
 
-        detalle = observacion or f'Edición múltiple {tipo_item}'
-        _registrar_movimiento_inventario(
-            equipo, tipo_item, request.user,
-            f'Edición múltiple {tipo_item} {identificador}. Campos: {", ".join(campos)}. {detalle}'
-        )
-        actualizados += 1
+            detalle = observacion or f'Edición múltiple {tipo_item}'
+            _registrar_movimiento_inventario(
+                equipo, tipo_item, request.user,
+                f'Edición múltiple {tipo_item} {identificador}. Campos: {", ".join(campos)}. {detalle}'
+            )
+            actualizados += 1
 
     return JsonResponse({
         'success': True,
@@ -2247,7 +2335,11 @@ def inventario_exportar_view(request):
                 'marca': 'marca',
                 'caja': 'caja',
                 'tipo_medidor': 'tipo_medidor',
-                'entregado_a': 'entregado_a__nombre_interno',
+                'entregado_a': [
+                    'entregado_a__nombre_interno',
+                    'entregado_a_otro',
+                    'entregado_a_info',
+                ],
                 'proyecto': 'proyecto',
                 'estado': 'estado_inventario__nombre',
                 'cliente': 'cliente__numero_cliente',
@@ -2283,6 +2375,7 @@ def inventario_exportar_view(request):
                     | Q(caja__icontains=search)
                     | Q(tipo_medidor__icontains=search)
                     | Q(entregado_a__nombre_interno__icontains=search)
+                    | Q(entregado_a_otro__icontains=search)
                     | Q(entregado_a_info__icontains=search)
                     | Q(estado_inventario__nombre__icontains=search)
                     | Q(cliente__numero_cliente__icontains=search)
@@ -2293,6 +2386,9 @@ def inventario_exportar_view(request):
                     Q(imei__icontains=search)
                     | Q(operador__icontains=search)
                     | Q(abonado__icontains=search)
+                    | Q(direccion_ip__icontains=search)
+                    | Q(ip_fija__icontains=search)
+                    | Q(apn__icontains=search)
                     | Q(en_custodia_de__nombre_interno__icontains=search)
                     | Q(entregado_a_nombre__icontains=search)
                     | Q(entregado_a_otro__icontains=search)
@@ -3190,6 +3286,7 @@ def clientes_list_view(request):
 
     from web.services.dashboard_metrics import ALARMAS_CLIENTES_LABELS
     alarma_label = ALARMAS_CLIENTES_LABELS.get(alarma, '')
+    puede_editar = request.user.rol in ['ADMIN', 'ADMINISTRATIVO']
 
     context = {
         'clientes': page_obj.object_list,
@@ -3222,7 +3319,9 @@ def clientes_list_view(request):
         'numeros_duplicados_json': json.dumps(sorted(numeros_duplicados)),
         'total_numeros_duplicados': len(numeros_duplicados),
         'ultima_importacion_total_filas': ultima_importacion_clientes.total_filas if ultima_importacion_clientes else None,
-        'puede_editar': request.user.rol in ['ADMIN', 'ADMINISTRATIVO'],
+        'puede_editar': puede_editar,
+        'tipo_medidor_choices': Medidor.TIPO_MEDIDOR_CHOICES if puede_editar else [],
+        'estados_disponibles': _estados_medidor_alta() if puede_editar else [],
         'paginacion_servidor': True,
         'estado_restriccion_choices': _cliente_estado_restriccion_choices(),
     }
@@ -3328,287 +3427,275 @@ def clientes_importar_view(request):
         return JsonResponse({'success': False, 'message': f'Error durante la importación: {str(e)}'})
 
 
+def _url_alta_cliente():
+    from django.urls import reverse
+    return reverse('clientes_list') + '?nuevo=1'
+
+
+def _estados_medidor_alta():
+    estados_permitidos = [
+        'En bodega', 'En Trayecto', 'Instalado', 'Retirado',
+        'En reparación', 'Dado de baja', 'En peaje',
+    ]
+    estados = list(EstadoInventario.objects.filter(nombre__in=estados_permitidos))
+    estados.sort(key=lambda e: (e.nombre or '').casefold())
+    return estados
+
+
 @login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO'])
 def cliente_crear_view(request):
-    """Crear cliente (roles ADMIN y ADMINISTRATIVO)."""
-    if request.method == 'POST':
-        numero_cliente = request.POST.get('numero_cliente', '').strip()
-        comuna = request.POST.get('comuna', '').strip()
-        tipo_suministro = request.POST.get('tipo_suministro', '').strip()
-        sector = request.POST.get('sector', '').strip()
-        customer_name = request.POST.get('customer_name', '').strip()
-        installation_address = request.POST.get('installation_address', '').strip()
-        # Dirección base se deriva de la instalación (ya no se pide por separado).
-        direccion = installation_address
-        proyecto = request.POST.get('proyecto', '').strip()
-        medidor_opcion = request.POST.get('medidor_opcion', '').strip().lower()
-        if medidor_opcion not in {'crear_medidor', 'sin_medidor', 'asignar_lista'}:
-            # Compatibilidad: si viene serie sin opción, asumir asignación.
-            if request.POST.get('meter_serial_n_1', '').strip():
-                medidor_opcion = 'asignar_lista'
-            else:
-                medidor_opcion = ''
-        sin_medidor = medidor_opcion == 'sin_medidor'
-        meter_manufacturer_id = request.POST.get('meter_manufacturer_id', '').strip()
-        meter_serial_n_1 = '' if sin_medidor else request.POST.get('meter_serial_n_1', '').strip()
-        ultimo_acceso = request.POST.get('ultimo_acceso', '').strip()
-        ultimo_perfil_carga = request.POST.get('ultimo_perfil_carga', '').strip()
-        ultimo_reset = request.POST.get('ultimo_reset', '').strip()
-        ultimo_registro_facturacion = request.POST.get('ultimo_registro_facturacion', '').strip()
-        note = request.POST.get('note', '').strip()
-        ip = normalize_ip_value(request.POST.get('ip', '').strip()) or ''
-        puerto = request.POST.get('puerto', '').strip()
-        modem = request.POST.get('modem', '').strip()
-        fecha_registro = request.POST.get('fecha_registro', '').strip()
-        estado_restriccion = (request.POST.get('estado_restriccion') or '').strip().upper()
-        justificacion_restriccion = (request.POST.get('justificacion_restriccion') or '').strip()
-        codigos_ok = {c for c, _ in _cliente_estado_restriccion_choices()}
-        if estado_restriccion and estado_restriccion not in codigos_ok:
-            estado_restriccion = ''
+    """Crear cliente (roles ADMIN y ADMINISTRATIVO). El formulario vive en el popup de la lista."""
+    if request.method != 'POST':
+        return redirect(_url_alta_cliente())
+    numero_cliente = request.POST.get('numero_cliente', '').strip()
+    comuna = request.POST.get('comuna', '').strip()
+    tipo_suministro = request.POST.get('tipo_suministro', '').strip()
+    sector = request.POST.get('sector', '').strip()
+    customer_name = request.POST.get('customer_name', '').strip()
+    installation_address = request.POST.get('installation_address', '').strip()
+    # Dirección base se deriva de la instalación (ya no se pide por separado).
+    direccion = installation_address
+    proyecto = request.POST.get('proyecto', '').strip()
+    medidor_opcion = request.POST.get('medidor_opcion', '').strip().lower()
+    if medidor_opcion not in {'crear_medidor', 'sin_medidor', 'asignar_lista'}:
+        # Compatibilidad: si viene serie sin opción, asumir asignación.
+        if request.POST.get('meter_serial_n_1', '').strip():
+            medidor_opcion = 'asignar_lista'
+        else:
+            medidor_opcion = ''
+    sin_medidor = medidor_opcion == 'sin_medidor'
+    meter_manufacturer_id = request.POST.get('meter_manufacturer_id', '').strip()
+    meter_serial_n_1 = '' if sin_medidor else request.POST.get('meter_serial_n_1', '').strip()
+    ultimo_acceso = request.POST.get('ultimo_acceso', '').strip()
+    ultimo_perfil_carga = request.POST.get('ultimo_perfil_carga', '').strip()
+    ultimo_reset = request.POST.get('ultimo_reset', '').strip()
+    ultimo_registro_facturacion = request.POST.get('ultimo_registro_facturacion', '').strip()
+    note = request.POST.get('note', '').strip()
+    ip = normalize_ip_value(request.POST.get('ip', '').strip()) or ''
+    puerto = request.POST.get('puerto', '').strip()
+    modem = request.POST.get('modem', '').strip()
+    fecha_registro = request.POST.get('fecha_registro', '').strip()
+    estado_restriccion = (request.POST.get('estado_restriccion') or '').strip().upper()
+    justificacion_restriccion = (request.POST.get('justificacion_restriccion') or '').strip()
+    codigos_ok = {c for c, _ in _cliente_estado_restriccion_choices()}
+    if estado_restriccion and estado_restriccion not in codigos_ok:
+        estado_restriccion = ''
 
-        proyecto_final = proyecto or None
-        ultimo_perfil_carga_final = ultimo_perfil_carga or 'SIN PERFIL'
-        meter_exists_other_active = bool(
-            meter_serial_n_1
-            and Cliente.objects.filter(meter_serial_n_1__iexact=meter_serial_n_1, activo=True).exists()
-        )
-        modem_assigned_other_active = bool(
-            modem
-            and Cliente.objects.filter(modem__iexact=modem, activo=True).exists()
-        )
-        ip_assigned_other_active = bool(
-            ip
-            and Cliente.objects.filter(ip__iexact=ip, activo=True).exists()
-        )
-        modem_estado = None
-        if modem:
-            modem_obj = Modem.objects.filter(serie__iexact=modem).select_related('estado_inventario').first()
-            if modem_obj and modem_obj.estado_inventario:
-                modem_estado = modem_obj.estado_inventario.nombre
+    proyecto_final = proyecto or None
+    ultimo_perfil_carga_final = ultimo_perfil_carga or 'SIN PERFIL'
+    meter_exists_other_active = bool(
+        meter_serial_n_1
+        and Cliente.objects.filter(meter_serial_n_1__iexact=meter_serial_n_1, activo=True).exists()
+    )
+    modem_assigned_other_active = bool(
+        modem
+        and Cliente.objects.filter(modem__iexact=modem, activo=True).exists()
+    )
+    ip_assigned_other_active = bool(
+        ip
+        and Cliente.objects.filter(ip__iexact=ip, activo=True).exists()
+    )
+    modem_estado = None
+    if modem:
+        modem_obj = Modem.objects.filter(serie__iexact=modem).select_related('estado_inventario').first()
+        if modem_obj and modem_obj.estado_inventario:
+            modem_estado = modem_obj.estado_inventario.nombre
 
-        validation_issues = merge_issues(
-            validate_ip_format(ip),
-            validate_ip_port_coherence(ip, puerto),
-            validate_ip_duplicate_on_active_clients(ip, ip_assigned_other_active),
-            validate_ip_restricted_status(estado_restriccion, justificacion_restriccion, ip),
-            validate_restriccion_con_justificacion(estado_restriccion, justificacion_restriccion),
-            validate_meter_uniqueness(meter_serial_n_1, meter_exists_other_active),
-            validate_meter_required_fields(meter_serial_n_1, meter_manufacturer_id),
-            validate_modem_assignment(modem, modem_assigned_other_active),
-            validate_modem_inventory_status(modem_estado),
-        )
+    validation_issues = merge_issues(
+        validate_ip_format(ip),
+        validate_ip_port_coherence(ip, puerto),
+        validate_ip_duplicate_on_active_clients(ip, ip_assigned_other_active),
+        validate_ip_restricted_status(estado_restriccion, justificacion_restriccion, ip),
+        validate_restriccion_con_justificacion(estado_restriccion, justificacion_restriccion),
+        validate_meter_uniqueness(meter_serial_n_1, meter_exists_other_active),
+        validate_meter_required_fields(meter_serial_n_1, meter_manufacturer_id),
+        validate_modem_assignment(modem, modem_assigned_other_active),
+        validate_modem_inventory_status(modem_estado),
+    )
 
-        blocking_errors = [issue for issue in validation_issues if issue.severity == 'error']
-        if blocking_errors:
-            for issue in blocking_errors:
-                messages.error(request, issue.message)
-            return redirect('cliente_crear')
+    blocking_errors = [issue for issue in validation_issues if issue.severity == 'error']
+    if blocking_errors:
+        for issue in blocking_errors:
+            messages.error(request, issue.message)
+        return redirect(_url_alta_cliente())
 
-        for issue in validation_issues:
-            if issue.severity == 'warning':
-                messages.warning(request, issue.message)
+    for issue in validation_issues:
+        if issue.severity == 'warning':
+            messages.warning(request, issue.message)
 
-        campos_obligatorios = [
-            numero_cliente,
-            comuna,
-            tipo_suministro,
-            sector,
-            customer_name,
-            installation_address,
-        ]
-        if not sin_medidor:
-            campos_obligatorios.append(meter_serial_n_1)
+    campos_obligatorios = [
+        numero_cliente,
+        comuna,
+        tipo_suministro,
+        sector,
+        customer_name,
+        installation_address,
+    ]
+    if not sin_medidor:
+        campos_obligatorios.append(meter_serial_n_1)
 
-        if not medidor_opcion or not all(campos_obligatorios):
-            if not medidor_opcion or (not sin_medidor and not meter_serial_n_1):
-                messages.error(
-                    request,
-                    'El medidor es obligatorio. Elige uno de la lista, créalo con el popup o selecciona “Sin medidor”.',
-                )
-            else:
-                messages.error(request, 'Faltan campos obligatorios: asegúrate de completar todos los datos requeridos.')
-            return redirect('cliente_crear')
+    if not medidor_opcion or not all(campos_obligatorios):
+        if not medidor_opcion or (not sin_medidor and not meter_serial_n_1):
+            messages.error(
+                request,
+                'El medidor es obligatorio. Elige uno de la lista, créalo con el popup o selecciona “Sin medidor”.',
+            )
+        else:
+            messages.error(request, 'Faltan campos obligatorios: asegúrate de completar todos los datos requeridos.')
+        return redirect(_url_alta_cliente())
 
-        if sin_medidor:
-            duplicado_sin_medidor = Cliente.objects.filter(
-                numero_cliente=numero_cliente,
-                activo=True,
-            ).filter(
-                models.Q(meter_serial_n_1__isnull=True) | models.Q(meter_serial_n_1=''),
-            ).exists()
-            if duplicado_sin_medidor:
-                messages.error(
-                    request,
-                    f'Ya existe un cliente activo con número {numero_cliente} sin medidor.',
-                )
-                return redirect('cliente_crear')
-        elif Cliente.objects.filter(
+    if sin_medidor:
+        duplicado_sin_medidor = Cliente.objects.filter(
             numero_cliente=numero_cliente,
+            activo=True,
+        ).filter(
+            models.Q(meter_serial_n_1__isnull=True) | models.Q(meter_serial_n_1=''),
+        ).exists()
+        if duplicado_sin_medidor:
+            messages.error(
+                request,
+                f'Ya existe un cliente activo con número {numero_cliente} sin medidor.',
+            )
+            return redirect(_url_alta_cliente())
+    elif Cliente.objects.filter(
+        numero_cliente=numero_cliente,
+        meter_serial_n_1__iexact=meter_serial_n_1,
+        activo=True,
+    ).exists():
+        messages.error(request, f'Ya existe un cliente activo con numero {numero_cliente} y la misma serie {meter_serial_n_1}.')
+        return redirect(_url_alta_cliente())
+
+    cliente_duplicado_serie_distinta = False
+    if meter_serial_n_1:
+        cliente_duplicado_serie_distinta = Cliente.objects.filter(
+            numero_cliente=numero_cliente,
+            activo=True,
+        ).exclude(
+            meter_serial_n_1__iexact=meter_serial_n_1,
+        ).exists()
+    elif not sin_medidor:
+        cliente_duplicado_serie_distinta = Cliente.objects.filter(
+            numero_cliente=numero_cliente,
+            activo=True,
+        ).exists()
+
+    ip_duplicada_serie_distinta = False
+    if ip:
+        if meter_serial_n_1 and Cliente.objects.filter(
+            ip__iexact=ip,
             meter_serial_n_1__iexact=meter_serial_n_1,
             activo=True,
         ).exists():
-            messages.error(request, f'Ya existe un cliente activo con numero {numero_cliente} y la misma serie {meter_serial_n_1}.')
-            return redirect('cliente_crear')
+            messages.error(request, f'La IP {ip} ya está asignada a un cliente activo con la misma serie {meter_serial_n_1}.')
+            return redirect(_url_alta_cliente())
 
-        cliente_duplicado_serie_distinta = False
         if meter_serial_n_1:
-            cliente_duplicado_serie_distinta = Cliente.objects.filter(
-                numero_cliente=numero_cliente,
+            ip_duplicada_serie_distinta = Cliente.objects.filter(
+                ip__iexact=ip,
                 activo=True,
             ).exclude(
                 meter_serial_n_1__iexact=meter_serial_n_1,
             ).exists()
-        elif not sin_medidor:
-            cliente_duplicado_serie_distinta = Cliente.objects.filter(
-                numero_cliente=numero_cliente,
+        else:
+            ip_duplicada_serie_distinta = Cliente.objects.filter(
+                ip__iexact=ip,
                 activo=True,
             ).exists()
 
-        ip_duplicada_serie_distinta = False
-        if ip:
-            if meter_serial_n_1 and Cliente.objects.filter(
-                ip__iexact=ip,
-                meter_serial_n_1__iexact=meter_serial_n_1,
-                activo=True,
-            ).exists():
-                messages.error(request, f'La IP {ip} ya está asignada a un cliente activo con la misma serie {meter_serial_n_1}.')
-                return redirect('cliente_crear')
+    medidor_obj = None
+    if meter_serial_n_1:
+        medidor_obj = Medidor.objects.filter(serie=meter_serial_n_1, eliminado=False).first()
+        if not medidor_obj:
+            messages.error(request, f'No existe un medidor con serie {meter_serial_n_1}. Créalo con el popup de medidor.')
+            return redirect(_url_alta_cliente())
+        if Cliente.objects.filter(medidor_actual=medidor_obj, activo=True).exists():
+            messages.error(request, f'El medidor {meter_serial_n_1} ya está asignado a otro cliente o está duplicado.')
+            return redirect(_url_alta_cliente())
+        if not meter_manufacturer_id and medidor_obj.marca:
+            meter_manufacturer_id = medidor_obj.marca
 
-            if meter_serial_n_1:
-                ip_duplicada_serie_distinta = Cliente.objects.filter(
-                    ip__iexact=ip,
-                    activo=True,
-                ).exclude(
-                    meter_serial_n_1__iexact=meter_serial_n_1,
-                ).exists()
-            else:
-                ip_duplicada_serie_distinta = Cliente.objects.filter(
-                    ip__iexact=ip,
-                    activo=True,
-                ).exists()
-
-        medidor_obj = None
-        if meter_serial_n_1:
-            medidor_obj = Medidor.objects.filter(serie=meter_serial_n_1).first()
-            if not medidor_obj:
-                messages.error(request, f'No existe un medidor con serie {meter_serial_n_1}. Créalo con el popup de medidor.')
-                return redirect('cliente_crear')
-            if Cliente.objects.filter(medidor_actual=medidor_obj, activo=True).exists():
-                messages.error(request, f'El medidor {meter_serial_n_1} ya está asignado a otro cliente o está duplicado.')
-                return redirect('cliente_crear')
-            if not meter_manufacturer_id and medidor_obj.marca:
-                meter_manufacturer_id = medidor_obj.marca
-
-        nuevo_cliente = Cliente.objects.create(
-            numero_cliente=numero_cliente,
-            direccion=direccion,
-            comuna=comuna,
-            tipo_suministro=tipo_suministro,
-            sector=sector,
-            city=None,
-            customer_name=customer_name,
-            installation_address=installation_address,
-            proyecto=proyecto_final,
-            meter_manufacturer_id=meter_manufacturer_id or None,
-            meter_serial_n_1=meter_serial_n_1 or None,
-            client_type=None,
-            ultimo_acceso=ultimo_acceso,
-            ultimo_perfil_carga=ultimo_perfil_carga_final,
-            ultimo_perfil_instrumentacion=None,
-            ultimo_reset=ultimo_reset or None,
-            ultimo_registro_facturacion=ultimo_registro_facturacion or None,
-            note=note or None,
-            trabajo=None,
-            ip=ip or None,
-            puerto=puerto or None,
-            modem=modem or None,
-            fecha_registro=fecha_registro or None,
-            medidor_actual=medidor_obj,
-            estado_telemetria='SIN_MEDIDOR' if sin_medidor else 'OPERATIVO',
-            estado_restriccion=estado_restriccion,
-            justificacion_restriccion=justificacion_restriccion if estado_restriccion else '',
-            activo=True,
-        )
-        from clientes.proyecto_historial import registrar_cambio_proyecto
-        registrar_cambio_proyecto(
-            nuevo_cliente,
-            proyecto_final,
-            usuario=request.user,
-            motivo='Alta de cliente',
-            actualizar_campo=True,
-        )
-        register_audit_event(
-            AuditEvent(
-                actor_id=getattr(request.user, 'id', None),
-                action='CLIENT_CREATE',
-                entity='Cliente',
-                entity_id=str(nuevo_cliente.id),
-                field_name='numero_cliente',
-                old_value=None,
-                new_value=numero_cliente,
-                reason='Alta de cliente desde gestión manual',
-            )
-        )
-        audit_field_changes(
+    nuevo_cliente = Cliente.objects.create(
+        numero_cliente=numero_cliente,
+        direccion=direccion,
+        comuna=comuna,
+        tipo_suministro=tipo_suministro,
+        sector=sector,
+        city=None,
+        customer_name=customer_name,
+        installation_address=installation_address,
+        proyecto=proyecto_final,
+        meter_manufacturer_id=meter_manufacturer_id or None,
+        meter_serial_n_1=meter_serial_n_1 or None,
+        client_type=None,
+        ultimo_acceso=ultimo_acceso,
+        ultimo_perfil_carga=ultimo_perfil_carga_final,
+        ultimo_perfil_instrumentacion=None,
+        ultimo_reset=ultimo_reset or None,
+        ultimo_registro_facturacion=ultimo_registro_facturacion or None,
+        note=note or None,
+        trabajo=None,
+        ip=ip or None,
+        puerto=puerto or None,
+        modem=modem or None,
+        fecha_registro=fecha_registro or None,
+        medidor_actual=medidor_obj,
+        estado_telemetria='SIN_MEDIDOR' if sin_medidor else 'OPERATIVO',
+        estado_restriccion=estado_restriccion,
+        justificacion_restriccion=justificacion_restriccion if estado_restriccion else '',
+        activo=True,
+    )
+    _vincular_medidor_de_ficha(nuevo_cliente, medidor_obj)
+    from clientes.proyecto_historial import registrar_cambio_proyecto
+    registrar_cambio_proyecto(
+        nuevo_cliente,
+        proyecto_final,
+        usuario=request.user,
+        motivo='Alta de cliente',
+        actualizar_campo=True,
+    )
+    register_audit_event(
+        AuditEvent(
             actor_id=getattr(request.user, 'id', None),
-            action='CLIENT_CREATE_FIELD',
+            action='CLIENT_CREATE',
             entity='Cliente',
             entity_id=str(nuevo_cliente.id),
-            before={'meter_serial_n_1': None, 'ip': None, 'puerto': None, 'modem': None},
-            after={
-                'meter_serial_n_1': meter_serial_n_1 or None,
-                'ip': ip or None,
-                'puerto': puerto or None,
-                'modem': modem or None,
-            },
-            reason='Equipos y conectividad en alta de cliente',
+            field_name='numero_cliente',
+            old_value=None,
+            new_value=numero_cliente,
+            reason='Alta de cliente desde gestión manual',
         )
-        if cliente_duplicado_serie_distinta:
-            serie_msg = meter_serial_n_1 or 'sin medidor'
-            messages.warning(
-                request,
-                f'Cliente duplicado detectado: el numero {numero_cliente} ya existía con otra serie. '
-                f'Se creó el cliente con serie distinta ({serie_msg}).'
-            )
-        if ip_duplicada_serie_distinta:
-            serie_msg = meter_serial_n_1 or 'sin medidor'
-            messages.warning(
-                request,
-                f'IP duplicada detectada: la IP {ip} ya existía con otra serie de medidor. '
-                f'Se creó el cliente con serie distinta ({serie_msg}).'
-            )
-        messages.success(request, f'Cliente {numero_cliente} creado correctamente.')
-        return redirect('clientes_list')
-
-    estados_disponibles.sort(key=lambda e: (e.nombre or '').casefold())
-
-    asignados_ids = set(
-        Cliente.objects.filter(activo=True, medidor_actual_id__isnull=False)
-        .values_list('medidor_actual_id', flat=True)
     )
-    # La tabla se llena por búsqueda (API); no cargar miles de filas en el HTML.
-    medidores_libres = []
-
-    from web.services.filtros_export import es_sin_proyecto
-    proyectos_disponibles = sorted({
-        (p or '').strip()
-        for p in Cliente.objects.filter(activo=True)
-        .exclude(proyecto__isnull=True)
-        .exclude(proyecto='')
-        .values_list('proyecto', flat=True)
-        if (p or '').strip()
-        and not es_sin_proyecto(p)
-    }, key=lambda x: x.casefold())
-
-    return render(request, 'clientes/crear.html', {
-        'tipo_medidor_choices': Medidor.TIPO_MEDIDOR_CHOICES,
-        'estados_disponibles': estados_disponibles,
-        'medidores_libres': medidores_libres,
-        'medidores_asignados_count': len(asignados_ids),
-        'estado_restriccion_choices': _cliente_estado_restriccion_choices(),
-        'proyectos_disponibles': proyectos_disponibles,
-    })
+    audit_field_changes(
+        actor_id=getattr(request.user, 'id', None),
+        action='CLIENT_CREATE_FIELD',
+        entity='Cliente',
+        entity_id=str(nuevo_cliente.id),
+        before={'meter_serial_n_1': None, 'ip': None, 'puerto': None, 'modem': None},
+        after={
+            'meter_serial_n_1': meter_serial_n_1 or None,
+            'ip': ip or None,
+            'puerto': puerto or None,
+            'modem': modem or None,
+        },
+        reason='Equipos y conectividad en alta de cliente',
+    )
+    if cliente_duplicado_serie_distinta:
+        serie_msg = meter_serial_n_1 or 'sin medidor'
+        messages.warning(
+            request,
+            f'Cliente duplicado detectado: el numero {numero_cliente} ya existía con otra serie. '
+            f'Se creó el cliente con serie distinta ({serie_msg}).'
+        )
+    if ip_duplicada_serie_distinta:
+        serie_msg = meter_serial_n_1 or 'sin medidor'
+        messages.warning(
+            request,
+            f'IP duplicada detectada: la IP {ip} ya existía con otra serie de medidor. '
+            f'Se creó el cliente con serie distinta ({serie_msg}).'
+        )
+    messages.success(request, f'Cliente {numero_cliente} creado correctamente.')
+    return redirect('clientes_list')
 
 
 @login_required
@@ -3789,6 +3876,22 @@ def cliente_editar_view(request, pk):
         if fecha_registro is False:
             return _responder_error('Fecha registro inválida. Usa formato AAAA-MM-DD o DD/MM/AAAA.')
 
+        ip = normalize_ip_value(ip) or ''
+        ip_en_otro = bool(
+            ip and Cliente.objects.filter(ip__iexact=ip, activo=True).exclude(pk=cliente.pk).exists()
+        )
+        errores_ip = [
+            issue for issue in merge_issues(
+                validate_ip_format(ip),
+                validate_ip_port_coherence(ip, puerto),
+                validate_ip_duplicate_on_active_clients(ip, ip_en_otro),
+                validate_ip_restricted_status(estado_restriccion, justificacion_restriccion, ip),
+            )
+            if issue.severity == 'error'
+        ]
+        if errores_ip:
+            return _responder_error(errores_ip[0].message)
+
         restriccion_issues = validate_restriccion_con_justificacion(
             estado_restriccion,
             justificacion_restriccion,
@@ -3890,6 +3993,7 @@ def cliente_editar_view(request, pk):
                 'Revisa el registro de errores del servidor o contacta a soporte. '
                 f'({exc.__class__.__name__})'
             )
+        _vincular_medidor_de_ficha(cliente, medidor_obj)
 
         from clientes.proyecto_historial import registrar_cambio_proyecto
         try:
@@ -4420,6 +4524,7 @@ def cliente_historial_view(request, pk):
         'estado_sim_choices': [('', 'Sin estado')] + list(getattr(Cliente, 'ESTADO_SIM_CHOICES', [])),
         'estado_stb_choices': list(getattr(Cliente, 'ESTADO_SISTEMA_EXTERNO_CHOICES', [])),
         'proyectos_disponibles': proyectos_disponibles,
+        'ordenes_habilitadas': _ordenes_trabajo_habilitadas(),
     }
     return render(request, 'clientes/historial.html', context)
 

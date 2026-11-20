@@ -1,28 +1,18 @@
-{% extends 'base.html' %}
-
-{% block title %}Crear Cliente{% endblock %}
-
-{% block content %}
-<div class="container-fluid py-4 delco-catalogo" style="max-width: 960px;">
-  <div class="delco-catalogo-hero mb-3">
-    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-      <div>
-        <p class="delco-catalogo-kicker mb-1">Clientes</p>
-        <h1 class="h3 mb-1">Crear cliente</h1>
-        <p class="text-muted mb-0">Completa los datos para registrar un nuevo cliente.</p>
+<div class="modal fade" id="modalNuevoCliente" tabindex="-1" aria-labelledby="modalNuevoClienteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable modal-fullscreen-sm-down">
+    <div class="modal-content delco-import-clientes-modal">
+      <div class="modal-header delco-import-clientes-header">
+        <div>
+          <h5 class="modal-title" id="modalNuevoClienteLabel">
+            <i class="bi bi-plus-circle me-2" aria-hidden="true"></i>Nuevo cliente
+          </h5>
+          <p class="delco-import-clientes-subtitle mb-0">Completa los datos para registrar un nuevo cliente.</p>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
-      <div class="delco-action-bar">
-        <a href="{% url 'clientes_list' %}" class="delco-action-btn is-help">
-          <span class="delco-action-btn-icon"><i class="bi bi-arrow-left"></i></span>
-          Volver
-        </a>
-      </div>
-    </div>
-  </div>
+      <form method="post" action="{% url 'cliente_crear' %}" id="formCrearCliente">
+        <div class="modal-body">
 
-  <div class="card shadow-sm delco-panel-card">
-    <div class="card-body p-4">
-      <form method="post" id="formCrearCliente">
         {% csrf_token %}
         <input type="hidden" name="medidor_opcion" id="medidorOpcion" value="">
         <input type="hidden" name="meter_serial_n_1" id="meterSerial" value="">
@@ -203,9 +193,11 @@
         <!-- ═════════════════════════════════════════════════════ -->
         <!-- BOTONES -->
         <!-- ═════════════════════════════════════════════════════ -->
-        <div class="d-flex gap-2">
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
           <button type="submit" class="btn btn-primary">✓ Guardar Cliente</button>
-          <a href="{% url 'clientes_list' %}" class="btn btn-secondary">Cancelar</a>
         </div>
       </form>
     </div>
@@ -275,9 +267,7 @@
     </div>
   </div>
 </div>
-{% endblock %}
 
-{% block extra_js %}
 <script>
 (function () {
   const medidorOpcion = document.getElementById('medidorOpcion');
@@ -388,7 +378,16 @@
 
   document.getElementById('btnSinMedidor').addEventListener('click', marcarSinMedidor);
   document.getElementById('btnCrearMedidor').addEventListener('click', function () {
-    bootstrap.Modal.getOrCreateInstance(document.getElementById('modalCrearMedidor')).show();
+    var modalMedidor = document.getElementById('modalCrearMedidor');
+    if (modalMedidor && !modalMedidor.dataset.stackBound) {
+      modalMedidor.dataset.stackBound = '1';
+      modalMedidor.addEventListener('shown.bs.modal', function () {
+        modalMedidor.style.zIndex = '1065';
+        var backs = document.querySelectorAll('.modal-backdrop');
+        if (backs.length) backs[backs.length - 1].style.zIndex = '1060';
+      });
+    }
+    bootstrap.Modal.getOrCreateInstance(modalMedidor).show();
   });
 
   if (tbody) {
@@ -489,4 +488,15 @@
   });
 })();
 </script>
-{% endblock %}
+
+<script>
+(function () {
+  function abrirNuevoCliente() {
+    if (new URLSearchParams(window.location.search).get('nuevo') !== '1') return;
+    var el = document.getElementById('modalNuevoCliente');
+    if (el && window.bootstrap) bootstrap.Modal.getOrCreateInstance(el).show();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', abrirNuevoCliente);
+  else abrirNuevoCliente();
+})();
+</script>

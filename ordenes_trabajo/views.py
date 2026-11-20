@@ -1172,6 +1172,8 @@ def ordenes_exportar_view(request):
     usar_filtros = (not exportar_todas) and (forzar_filtrar or tiene_filtros)
 
     qs = _queryset_ordenes_filtrado(request, aplicar_filtros=usar_filtros)
+    if (request.GET.get('ambito') or '') == 'terminadas' and not (request.GET.get('estado') or '').strip():
+        qs = qs.filter(estado__in=['REALIZADA', 'VALIDADA', 'FINALIZADA'])
     wb = exportar_ordenes_excel(list(qs))
 
     stream = BytesIO()

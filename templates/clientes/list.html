@@ -23,10 +23,10 @@
       </div>
       <div class="delco-action-bar">
         {% if puede_editar %}
-        <a href="{% url 'cliente_crear' %}" class="delco-action-btn is-add">
+        <button type="button" class="delco-action-btn is-add" data-bs-toggle="modal" data-bs-target="#modalNuevoCliente">
           <span class="delco-action-btn-icon"><i class="bi bi-plus-lg"></i></span>
           Nuevo cliente
-        </a>
+        </button>
         <button type="button" class="delco-action-btn is-import" data-bs-toggle="modal" data-bs-target="#modalImportarClientes">
           <span class="delco-action-btn-icon"><i class="bi bi-upload"></i></span>
           Importar
@@ -36,6 +36,7 @@
           Eliminar
         </button>
         {% endif %}
+        {% if request.user.rol == 'ADMIN' or request.user.rol == 'ADMINISTRATIVO' or request.user.rol == 'GERENCIA' or request.user.rol == 'AUDITOR' %}
         <div class="dropdown">
           <button type="button" class="delco-action-btn is-export" data-bs-toggle="dropdown" aria-expanded="false">
             <span class="delco-action-btn-icon"><i class="bi bi-download"></i></span>
@@ -63,6 +64,7 @@
             </li>
           </ul>
         </div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -1078,4 +1080,7 @@
           }
         });
         </script>
+        {% if puede_editar %}
+        {% include 'clientes/_cliente_crear_modal.html' %}
+        {% endif %}
         {% endblock %}

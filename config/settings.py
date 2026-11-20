@@ -40,9 +40,11 @@ DEBUG = os.getenv('DEBUG', 'True').strip().lower() in ('1', 'true', 'yes', 'on')
 
 
 ALLOWED_HOSTS = [
-    'inventario.delcochile',          # el dominio donde corre la app
-    'www.inventario.delcochile',      # opcional, si existe
-    'localhost',                      # para acceso local/ssh
+    'inventario.delcochile.cl',
+    'www.inventario.delcochile.cl',
+    'inventario.delcochile',
+    'www.inventario.delcochile',
+    'localhost',
 ]
 # Solo agregar 127.0.0.1 en modo desarrollo
 if os.getenv('DJANGO_SETTINGS_MODULE', '') != 'config.settings_production':

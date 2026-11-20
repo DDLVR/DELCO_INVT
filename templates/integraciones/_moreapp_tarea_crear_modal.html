@@ -10,27 +10,35 @@
         </div>
         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
       </div>
-      <form method="post" action="{% url 'moreapp_tarea_crear' %}" id="formNuevaTarea">
+      <form method="post" action="{% url 'moreapp_tarea_crear' %}" id="formNuevaTarea" data-tarea-pasos>
         {% csrf_token %}
         <div class="modal-body">
           <div class="alert alert-warning js-crear-error d-none"></div>
-          <p class="small text-muted" id="js-crear-status">Elige formulario, datos del trabajo y técnicos.</p>
+          <p class="small text-muted" id="js-crear-status" data-paso-status>Elige el formulario que hay que llenar.</p>
+          <ol class="delco-tarea-pasos" aria-label="Pasos de la tarea">
+            <li data-paso-marca="1">Formulario</li>
+            <li data-paso-marca="2">Trabajo</li>
+            <li data-paso-marca="3">Destinatarios</li>
+            <li data-paso-marca="4">Mensaje</li>
+            <li data-paso-marca="5">Ubicación</li>
+            <li data-paso-marca="6">Campos</li>
+          </ol>
 
-          <section class="delco-import-section">
+          <section class="delco-import-section delco-tarea-paso" data-paso="1">
             <div class="delco-import-section-label">1. Formulario</div>
             <label class="form-label" for="crear_form_id">Formulario a llenar</label>
-            <select name="form_id" id="crear_form_id" class="form-select" required>
+            <select name="form_id" id="crear_form_id" class="form-select" required data-paso-campo="formulario">
               <option value="">— Elige un formulario —</option>
             </select>
             <p class="small text-muted mb-0 mt-2">Solo aparecen formularios publicados. Al elegir uno, se listan únicamente los técnicos y grupos con acceso en MoreApp.</p>
           </section>
 
-          <section class="delco-import-section">
+          <section class="delco-import-section delco-tarea-paso" data-paso="2" hidden>
             <div class="delco-import-section-label">2. Datos del trabajo</div>
             <div class="row g-3">
               <div class="col-md-6">
                 <label class="form-label" for="crear_titulo">Título</label>
-                <input type="text" name="titulo" id="crear_titulo" class="form-control" maxlength="200" placeholder="Ej: Instalación medidor casa 12">
+                <input type="text" name="titulo" id="crear_titulo" class="form-control" maxlength="200" placeholder="Ej: Instalación medidor casa 12" data-paso-campo="titulo">
               </div>
               <div class="col-md-6">
                 <label class="form-label" for="crear_tipo_trabajo">Tipo de trabajo</label>
@@ -65,7 +73,7 @@
             </div>
           </section>
 
-          <section class="delco-import-section">
+          <section class="delco-import-section delco-tarea-paso" data-paso="3" hidden>
             <div class="delco-import-section-label">3. Destinatarios</div>
             <p class="small text-muted js-destinatarios-hint">Elige un formulario para ver quién tiene acceso.</p>
             <div class="row g-3">
@@ -84,38 +92,42 @@
             </div>
           </section>
 
-          <section class="delco-import-section">
+          <section class="delco-import-section delco-tarea-paso" data-paso="4" hidden>
             <div class="delco-import-section-label">4. Mensaje y cuándo llega</div>
             <div class="row g-3">
               <div class="col-12">
                 <label class="form-label" for="crear_mensaje">Mensaje corto</label>
-                <textarea name="mensaje" id="crear_mensaje" class="form-control" rows="2" maxlength="500"></textarea>
+                <textarea name="mensaje" id="crear_mensaje" class="form-control" rows="2" maxlength="500" data-paso-campo="mensaje"></textarea>
                 <small class="text-muted">Si lo dejas vacío se usa el título.</small>
               </div>
               <div class="col-md-4">
                 <label class="form-label" for="crear_envio">Envío</label>
-                <select name="envio" id="crear_envio" class="form-select">
+                <select name="envio" id="crear_envio" class="form-select" data-paso-campo="envio">
                   <option value="IMMEDIATE" selected>Al momento</option>
                   <option value="SCHEDULED">Fecha y hora programadas</option>
                 </select>
               </div>
               <div class="col-md-4 js-crear-programada d-none">
                 <label class="form-label" for="crear_programada_para">Programada para</label>
-                <input type="datetime-local" name="programada_para" id="crear_programada_para" class="form-control">
+                <input type="datetime-local" name="programada_para" id="crear_programada_para" class="form-control" data-paso-campo="programada">
               </div>
               <div class="col-md-4">
                 <label class="form-label" for="crear_fecha_limite">Fecha límite (opcional)</label>
                 <input type="datetime-local" name="fecha_limite" id="crear_fecha_limite" class="form-control">
               </div>
             </div>
+            <div class="delco-tarea-continuar">
+              <button type="button" class="btn btn-outline-primary btn-sm" data-paso-continuar="4">Continuar</button>
+              <p class="small text-danger mb-0 mt-2 d-none" data-paso-aviso="4"></p>
+            </div>
           </section>
 
-          <section class="delco-import-section">
+          <section class="delco-import-section delco-tarea-paso" data-paso="5" hidden>
             <div class="delco-import-section-label">5. Ubicación</div>
             <div class="row g-3">
               <div class="col-md-6">
                 <label class="form-label" for="crear_ubicacion">Lugar</label>
-                <input type="text" name="ubicacion" id="crear_ubicacion" class="form-control" placeholder="Dirección o nombre del sitio">
+                <input type="text" name="ubicacion" id="crear_ubicacion" class="form-control" placeholder="Dirección o nombre del sitio" data-paso-campo="ubicacion">
               </div>
               <div class="col-md-3">
                 <label class="form-label" for="crear_latitud">Latitud</label>
@@ -126,9 +138,12 @@
                 <input type="text" name="longitud" id="crear_longitud" class="form-control">
               </div>
             </div>
+            <div class="delco-tarea-continuar">
+              <button type="button" class="btn btn-outline-primary btn-sm" data-paso-continuar="5">Continuar</button>
+            </div>
           </section>
 
-          <section class="delco-import-section mb-0">
+          <section class="delco-import-section delco-tarea-paso mb-0" data-paso="6" hidden>
             <div class="delco-import-section-label">6. Precargar campos</div>
             <p class="small text-muted mb-2">Rellena lo que ya conoces. Pin, firma, catálogo, dibujo y archivo no se pueden precargar.</p>
             <div id="js-crear-campos" class="row g-2">
@@ -149,7 +164,7 @@
         </div>
         <div class="modal-footer delco-import-clientes-footer">
           <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-success" id="btnNuevaTareaSubmit">
+          <button type="submit" class="btn btn-success" id="btnNuevaTareaSubmit" data-paso-enviar hidden>
             <i class="bi bi-send me-1"></i>Crear tarea
           </button>
         </div>

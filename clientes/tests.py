@@ -171,16 +171,18 @@ class ClienteFlujoViewTests(TestCase):
 		)
 
 	def test_formulario_crear_no_pide_direccion_base_ni_ciudad(self):
-		response = self.client.get(reverse('cliente_crear'))
+		response = self.client.get(reverse('clientes_list'))
 		self.assertEqual(response.status_code, 200)
 		html = response.content.decode()
 		self.assertNotIn('Dirección Base', html)
 		self.assertNotIn('name="city"', html)
+		self.assertIn('modalNuevoCliente', html)
 		self.assertIn('Sin medidor', html)
 		self.assertIn('Crear medidor', html)
-		self.assertIn('medidorSelect', html)
 		self.assertIn('modalCrearMedidor', html)
-		self.assertContains(response, self.medidor.serie)
+		alta = self.client.get(reverse('cliente_crear'))
+		self.assertEqual(alta.status_code, 302)
+		self.assertIn('nuevo=1', alta.url)
 
 	def test_formulario_excluye_medidor_ya_asignado(self):
 		Cliente.objects.create(
@@ -191,11 +193,14 @@ class ClienteFlujoViewTests(TestCase):
 			medidor_actual=self.medidor,
 			activo=True,
 		)
-		response = self.client.get(reverse('cliente_crear'))
+		response = self.client.get(
+			reverse('api_buscar_medidores'),
+			{'q': 'MED-TEST', 'libres': '1'},
+		)
 		self.assertEqual(response.status_code, 200)
-		html = response.content.decode()
-		self.assertNotIn(f'data-serie="{self.medidor.serie}"', html)
-		self.assertIn(f'data-serie="{self.medidor_alt.serie}"', html)
+		series = [item.get('serie') for item in response.json().get('results', [])]
+		self.assertNotIn(self.medidor.serie, series)
+		self.assertIn(self.medidor_alt.serie, series)
 
 	def test_listado_editar_apunta_al_historial_sin_modal(self):
 		cliente = Cliente.objects.create(

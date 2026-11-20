@@ -1239,6 +1239,42 @@ td.cliente-numero-duplicado strong {
   margin-bottom: 1.15rem;
 }
 
+.delco-tarea-pasos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.delco-tarea-pasos li {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--bs-tertiary-bg);
+  color: #6c757d;
+}
+
+.delco-tarea-pasos li.is-actual {
+  background: #124b79;
+  color: #fff;
+}
+
+.delco-tarea-pasos li.is-listo {
+  background: rgba(25, 135, 84, 0.15);
+  color: #146c43;
+}
+
+.delco-tarea-paso[hidden],
+[data-paso-enviar][hidden] {
+  display: none !important;
+}
+
+.delco-tarea-continuar {
+  margin-top: 0.75rem;
+}
+
 .delco-import-section-label {
   font-size: 0.72rem;
   font-weight: 700;
