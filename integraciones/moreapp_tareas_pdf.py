@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.utils.text import get_valid_filename
@@ -102,43 +101,6 @@ def campos_rellenados_tarea(tarea: MoreAppTareaEnviada) -> List[Dict[str, str]]:
     for item in _flatten(precarga):
         _add(item["label"], item["text"])
     return out
-
-
-def _informe_pdf_bytes(tarea: MoreAppTareaEnviada) -> Optional[Tuple[bytes, str]]:
-    registro = getattr(tarea, "integracion", None)
-    if registro is None:
-        return None
-    try:
-        from ordenes_trabajo.models import InformeCliente
-        from ordenes_trabajo.utils import _buscar_pdfs_en_carpeta
-    except Exception:
-        return None
-    informe = (
-        InformeCliente.objects.filter(registro_moreapp_id=registro.pk)
-        .exclude(archivo="")
-        .order_by("-id")
-        .first()
-    )
-    if informe and informe.archivo:
-        try:
-            informe.archivo.open("rb")
-            try:
-                raw = informe.archivo.read()
-            finally:
-                informe.archivo.close()
-            if raw:
-                return raw, informe.nombre_archivo or os.path.basename(informe.archivo.name)
-        except Exception:
-            pass
-    for path in _buscar_pdfs_en_carpeta(getattr(registro, "ruta_carpeta", "") or ""):
-        try:
-            with open(path, "rb") as handle:
-                raw = handle.read()
-            if raw:
-                return raw, os.path.basename(path)
-        except OSError:
-            continue
-    return None
 
 
 def tarea_permite_pdf(tarea: MoreAppTareaEnviada) -> bool:
@@ -258,9 +220,6 @@ def pdf_bytes_tarea(tarea: MoreAppTareaEnviada) -> Tuple[bytes, str]:
         raw = (archivo or {}).get("content") or b""
         if raw.startswith(b"%PDF"):
             return raw, _nombre_informe((archivo or {}).get("filename") or "", tarea)
-    existente = _informe_pdf_bytes(tarea)
-    if existente and existente[0].startswith(b"%PDF"):
-        return existente
     raise InformeMoreAppNoDisponible(
         "MoreApp todavía no entrega el informe de este formulario."
     )
