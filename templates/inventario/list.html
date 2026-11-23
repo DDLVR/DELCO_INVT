@@ -2224,8 +2224,7 @@ if (btnEliminarSeleccion) {
         body.set('tipo', '{{ tipo }}');
         body.set('ids', Array.from(set).join(','));
         btnEliminarSeleccion.disabled = true;
-        {% url 'inventario_eliminar_masivo' as inventario_eliminar_masivo_url %}
-        fetch("{{ inventario_eliminar_masivo_url|default:'/inventario/eliminar-masivo/' }}", {
+        fetch("/inventario/eliminar-masivo/", {
             method: 'POST',
             headers: {
                 'X-CSRFToken': csrf,
