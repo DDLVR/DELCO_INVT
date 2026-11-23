@@ -1013,54 +1013,34 @@
     }).join('');
   }
 
-  function itemTieneFormulario(item, formId, conoce) {
-    if (!formId || !conoce) return true;
-    var ids = item.form_ids || [];
-    for (var i = 0; i < ids.length; i += 1) {
-      if (String(ids[i]) === String(formId)) return true;
-    }
-    return false;
+  function destinatariosDeCatalogo(data) {
+    return {
+      usuarios: (data && data.usuarios) || [],
+      grupos: (data && data.grupos) || []
+    };
   }
 
-  function filtrarCatalogoDestinatarios(data, formId) {
-    var conoce = !!(data && data.conoce_permisos);
-    var usuarios = ((data && data.usuarios) || []).filter(function (item) {
-      return itemTieneFormulario(item, formId, conoce);
-    });
-    var grupos = ((data && data.grupos) || []).filter(function (item) {
-      return itemTieneFormulario(item, formId, conoce);
-    });
-    return { usuarios: usuarios, grupos: grupos, conoce: conoce };
-  }
-
-  function hintDestinatarios(root, formId, filtrado) {
+  function hintDestinatarios(root, formId, usuarios) {
     var hint = (root || document).querySelector('.js-destinatarios-hint');
     if (!hint) return;
+    var total = (usuarios || []).length;
     if (!formId) {
-      hint.textContent = 'Elige un formulario para ver quién tiene acceso en MoreApp.';
+      hint.textContent = 'Elige un formulario y después los técnicos que recibirán la tarea.';
       return;
     }
-    if (!filtrado.conoce) {
-      hint.textContent = 'No se pudieron leer los permisos de MoreApp. Se muestran todas las cuentas.';
-      return;
-    }
-    hint.textContent = 'Solo aparecen técnicos y grupos con este formulario en MoreApp (' +
-      filtrado.usuarios.length + ' correo' + (filtrado.usuarios.length === 1 ? '' : 's') + ').';
+    hint.textContent = 'La tarea se asigna a cualquier técnico o grupo. Ver el formulario sigue limitado a quien lo tenga asignado (' +
+      total + ' técnico' + (total === 1 ? '' : 's') + ').';
   }
 
   function pintarDestinatarios(data, formSelectId, usuariosId, gruposId, rootSelector) {
     var formSelect = document.getElementById(formSelectId);
     var formId = formSelect ? formSelect.value : '';
-    var filtrado = filtrarCatalogoDestinatarios(data, formId);
-    var emptyUsers = formId && filtrado.conoce
-      ? 'Nadie tiene este formulario asignado en MoreApp.'
-      : 'No hay cuentas MoreApp activas.';
-    var emptyGroups = formId && filtrado.conoce
-      ? 'Ningún grupo tiene este formulario asignado.'
-      : 'No hay grupos para mostrar.';
-    fillChecks(document.getElementById(usuariosId), filtrado.usuarios, 'usuarios', [], emptyUsers);
-    fillChecks(document.getElementById(gruposId), filtrado.grupos, 'grupos', [], emptyGroups);
-    hintDestinatarios(rootSelector ? document.querySelector(rootSelector) : document, formId, filtrado);
+    var catalogo = destinatariosDeCatalogo(data);
+    var emptyUsers = 'No hay técnicos MoreApp activos.';
+    var emptyGroups = 'No hay grupos para mostrar.';
+    fillChecks(document.getElementById(usuariosId), catalogo.usuarios, 'usuarios', [], emptyUsers);
+    fillChecks(document.getElementById(gruposId), catalogo.grupos, 'grupos', [], emptyGroups);
+    hintDestinatarios(rootSelector ? document.querySelector(rootSelector) : document, formId, catalogo.usuarios);
   }
 
   function fillClientes(box, items, selected) {
@@ -1126,20 +1106,20 @@
     clientesModal.addEventListener('show.bs.modal', loadClientesModal);
   }
 
-  function fillDestinoSelect(select, data, formId) {
+  function fillDestinoSelect(select, data) {
     if (!select) return;
     var current = select.value || '';
-    var filtrado = filtrarCatalogoDestinatarios(data, formId || '');
+    var catalogo = destinatariosDeCatalogo(data);
     var html = '<option value="">— Técnico o grupo —</option>';
     html += '<optgroup label="Técnicos">';
-    (filtrado.usuarios || []).forEach(function (item) {
+    (catalogo.usuarios || []).forEach(function (item) {
       var value = 'user:' + (item.email || '');
       var label = item.tecnico_nombre || item.nombre || item.email || '';
       html += '<option value="' + escapeHtml(value) + '"' + (current === value ? ' selected' : '') + '>' +
         escapeHtml(label) + '</option>';
     });
     html += '</optgroup><optgroup label="Grupos">';
-    (filtrado.grupos || []).forEach(function (item) {
+    (catalogo.grupos || []).forEach(function (item) {
       var value = 'group:' + (item.id || '');
       var label = item.nombre || item.id || '';
       html += '<option value="' + escapeHtml(value) + '"' + (current === value ? ' selected' : '') + '>' +
@@ -1194,7 +1174,7 @@
     if (table.querySelectorAll('.js-listado-fila').length >= maxFilasListado) return;
     var row = tpl.content.cloneNode(true);
     fillSelect(row.querySelector('.js-listado-form'), listadoCatalogo.formularios || []);
-    fillDestinoSelect(row.querySelector('.js-listado-dest'), listadoCatalogo, '');
+    fillDestinoSelect(row.querySelector('.js-listado-dest'), listadoCatalogo);
     table.appendChild(row);
     var inserted = table.querySelector('.js-listado-fila:last-of-type');
     if (inserted) syncListadoNotas(inserted);
@@ -1271,7 +1251,7 @@
       var formSel = ev.target.closest('.js-listado-form');
       if (formSel && listadoCatalogo) {
         var rowForm = formSel.closest('.js-listado-fila');
-        if (rowForm) fillDestinoSelect(rowForm.querySelector('.js-listado-dest'), listadoCatalogo, formSel.value);
+        if (rowForm) fillDestinoSelect(rowForm.querySelector('.js-listado-dest'), listadoCatalogo);
       }
     });
     filasBox.addEventListener('input', function (ev) {

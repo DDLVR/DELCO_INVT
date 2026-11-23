@@ -52,7 +52,6 @@ from .moreapp_api import assert_safe_id
 from .moreapp_permisos import (
     anotar_permisos_grupos,
     anotar_permisos_usuarios,
-    filtrar_destinatarios_por_formulario,
 )
 from .moreapp_registros_views import _campos_desde_formulario
 from .moreapp_tareas_lote import (
@@ -137,7 +136,7 @@ def _tiene_version_publicada(row: Dict[str, Any]) -> bool:
 
 
 def _ids_formularios_asignados(usuario) -> Optional[set]:
-    """None = todos (ADMIN). Conjunto vacío = ninguno asignado."""
+    """None = todos (ADMIN). El resto solo ve los formularios que tiene asignados."""
     if usuario is None or getattr(usuario, "rol", "") == "ADMIN":
         return None
     return set(
@@ -145,15 +144,14 @@ def _ids_formularios_asignados(usuario) -> Optional[set]:
     )
 
 
-def _usuario_puede_usar_formulario(usuario, form_id: str) -> bool:
+def _usuario_puede_ver_formulario(usuario, form_id: str) -> bool:
     permitidos = _ids_formularios_asignados(usuario)
     if permitidos is None:
         return True
     return str(form_id or "").strip() in permitidos
 
 
-def _formularios_activos(usuario=None) -> List[Dict[str, Any]]:
-    permitidos = _ids_formularios_asignados(usuario)
+def _formularios_publicados() -> List[Dict[str, Any]]:
     rows = []
     for item in list_all_forms():
         if not isinstance(item, dict):
@@ -163,12 +161,20 @@ def _formularios_activos(usuario=None) -> List[Dict[str, Any]]:
             continue
         if not _tiene_version_publicada(row):
             continue
-        form_id = str(row.get("id") or "")
-        if permitidos is not None and form_id not in permitidos:
-            continue
         rows.append(row)
     rows.sort(key=lambda row: (row.get("name") or "").casefold())
     return rows
+
+
+def _formularios_visibles(rows: List[Dict[str, Any]], usuario) -> List[Dict[str, Any]]:
+    permitidos = _ids_formularios_asignados(usuario)
+    if permitidos is None:
+        return rows
+    return [row for row in rows if str(row.get("id") or "") in permitidos]
+
+
+def _formularios_activos(usuario=None) -> List[Dict[str, Any]]:
+    return _formularios_visibles(_formularios_publicados(), usuario)
 
 
 def _group_ids_de_usuario(item: Dict[str, Any]) -> List[str]:
@@ -475,7 +481,6 @@ def _destinatarios_finales(
     emails: List[str],
     group_ids: List[str],
     usuarios: List[Dict[str, Any]],
-    form_id: str = "",
 ) -> Tuple[List[str], List[str], str]:
     emails_sel = unicos(emails)
     groups_sel = unicos(group_ids)
@@ -484,10 +489,7 @@ def _destinatarios_finales(
         if groups_sel:
             return [], groups_sel, "El grupo elegido no tiene usuarios MoreApp activos con correo."
         return [], groups_sel, "Asigna la tarea a un usuario o grupo de MoreApp."
-    filtrados, permiso_error = filtrar_destinatarios_por_formulario(all_recipients, usuarios, form_id)
-    if permiso_error:
-        return [], groups_sel, permiso_error
-    return filtrados, groups_sel, ""
+    return all_recipients, groups_sel, ""
 
 
 def _enviar_tarea_registrada(
@@ -593,7 +595,7 @@ def _enviar_tarea_registrada(
         return tarea, translated
 
 
-def _contexto_destinatarios(request):
+def _contexto_destinatarios(request, *, para_asignar=False):
     context = {
         "formularios": [],
         "usuarios": [],
@@ -608,7 +610,9 @@ def _contexto_destinatarios(request):
         "max_lote": MAX_LOTE,
     }
     try:
-        context["formularios"] = _formularios_activos(getattr(request, "user", None))
+        publicados = _formularios_publicados()
+        usuario = getattr(request, "user", None)
+        context["formularios"] = publicados if para_asignar else _formularios_visibles(publicados, usuario)
         usuarios, grupos = _usuarios_moreapp()
         context["usuarios"] = usuarios
         context["grupos"] = grupos
@@ -1609,7 +1613,7 @@ def tareas_eliminar_masivo_view(request):
 def tarea_campos_view(request, form_id: str):
     try:
         form_id = assert_safe_id(form_id, "formId")
-        if not _usuario_puede_usar_formulario(request.user, form_id):
+        if not _usuario_puede_ver_formulario(request.user, form_id):
             return JsonResponse(
                 {"ok": False, "error": "No tienes este formulario asignado.", "campos": []},
                 status=403,
@@ -1712,7 +1716,7 @@ def tarea_crear_view(request):
     elegido = next((item for item in context["formularios"] if str(item.get("id") or "") == form_id), None)
     if not form_id:
         return _fail_crear("Elige el formulario que hay que llenar.")
-    if not _usuario_puede_usar_formulario(request.user, form_id):
+    if not _usuario_puede_ver_formulario(request.user, form_id):
         return _fail_crear("No tienes este formulario asignado.")
     if not elegido or not _tiene_version_publicada(elegido):
         return _fail_crear(
@@ -1720,20 +1724,11 @@ def tarea_crear_view(request):
         )
     if not recipients and not groups:
         return _fail_crear("Asigna la tarea a uno o varios usuarios, o a un grupo.")
-    group_emails = _emails_de_grupos(context["usuarios"], groups)
-    all_recipients: List[str] = []
-    seen_emails = set()
-    for email in recipients + group_emails:
-        if email and email not in seen_emails:
-            seen_emails.add(email)
-            all_recipients.append(email)
-    if not all_recipients:
-        return _fail_crear("El grupo elegido no tiene usuarios MoreApp activos con correo.")
-    all_recipients, permiso_error = filtrar_destinatarios_por_formulario(
-        all_recipients, context["usuarios"], form_id
+    all_recipients, _grupos, dest_error = _destinatarios_finales(
+        recipients, groups, context["usuarios"]
     )
-    if permiso_error:
-        return _fail_crear(permiso_error)
+    if dest_error:
+        return _fail_crear(dest_error)
     titulo = (context.get("titulo") or "").strip()
     if not mensaje and titulo:
         mensaje = titulo[:500]
@@ -1800,7 +1795,7 @@ def tarea_lote_plantilla_view(request):
 def tarea_lote_csv_view(request):
     if request.method != "POST":
         return redirect(reverse("moreapp_tareas_list") + "?lote=csv")
-    context = _contexto_destinatarios(request)
+    context = _contexto_destinatarios(request, para_asignar=True)
     context["archivo_nombre"] = ""
     if context["error"]:
         return _respuesta_lote_csv(
@@ -1860,7 +1855,7 @@ def tarea_lote_csv_view(request):
         }
         form = resolver_formulario(fila.get("formulario") or "", context["formularios"])
         if not form:
-            resultado["error"] = "Formulario no encontrado, sin publicar o no asignado a tu usuario."
+            resultado["error"] = "Formulario no encontrado o sin publicar."
             resultados.append(resultado)
             continue
         form_id = str(form.get("id") or "").strip()
@@ -1881,7 +1876,7 @@ def tarea_lote_csv_view(request):
             resultados.append(resultado)
             continue
         all_recipients, groups_sel, dest_error = _destinatarios_finales(
-            emails, group_ids, context["usuarios"], form_id
+            emails, group_ids, context["usuarios"]
         )
         if dest_error:
             resultado["error"] = dest_error
@@ -2017,12 +2012,12 @@ def tarea_lote_clientes_view(request):
             % (total_clientes, MAX_LOTE),
         )
     all_recipients, groups_sel, dest_error = _destinatarios_finales(
-        context["usuarios_sel"], context["grupos_sel"], context["usuarios"], form_id
+        context["usuarios_sel"], context["grupos_sel"], context["usuarios"]
     )
     if not form_id:
         messages.error(request, "Elige un formulario publicado.")
         return _render_tareas_list(request, context, lote_modal="clientes")
-    if not _usuario_puede_usar_formulario(request.user, form_id):
+    if not _usuario_puede_ver_formulario(request.user, form_id):
         messages.error(request, "No tienes este formulario asignado.")
         return _render_tareas_list(request, context, lote_modal="clientes")
     if not elegido:
@@ -2177,7 +2172,7 @@ def tarea_lote_listado_view(request):
             )
             continue
         all_recipients, groups_sel, dest_error = _destinatarios_finales(
-            emails, group_ids, context["usuarios"], form_id
+            emails, group_ids, context["usuarios"]
         )
         if dest_error:
             resultados.append(

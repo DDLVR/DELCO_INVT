@@ -2215,6 +2215,77 @@ class MoreAppApiModulosTests(TestCase):
         MOREAPP_API_KEY='test-key',
         MOREAPP_CUSTOMER_ID='123',
     )
+    @mock.patch('integraciones.moreapp_tareas_views.create_task')
+    @mock.patch('integraciones.moreapp_tareas_views.get_form')
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_lote_csv_asigna_tecnico_sin_formulario(
+        self,
+        mocked_forms,
+        mocked_users,
+        mocked_get_form,
+        mocked_create,
+    ):
+        form = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Instalacion',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_forms.return_value = [form]
+        mocked_get_form.return_value = form
+        mocked_users.return_value = [
+            {
+                'id': 'u1',
+                'emailAddress': 'campo@more.app',
+                'disabled': False,
+                'grants': [{'resourceType': 'FORM', 'resourceId': 'abc123abc123abc123abc123'}],
+            },
+            {
+                'id': 'u2',
+                'emailAddress': 'otro@more.app',
+                'disabled': False,
+                'settings': {'displayName': 'Tecnico Sin Formulario'},
+                'grants': [{'resourceType': 'FORM', 'resourceId': 'zzzzzzzzzzzzzzzzzzzzzzzz'}],
+            },
+        ]
+        mocked_create.return_value = {'id': 'task-csv-tecnico'}
+        oficina = Usuario.objects.create_user(
+            rut='55555555-5',
+            email='oficina-api@delco.cl',
+            password=self.password,
+            nombre='Oficina',
+            apellido='Api',
+            nombre_interno='oficina_api',
+            rol='ADMINISTRATIVO',
+            is_active=True,
+        )
+        csv_body = 'Mensaje,Formulario,Destinatario\nVisita,Instalacion,Tecnico Sin Formulario\n'
+        self.client.login(username=oficina.rut, password=self.password)
+        resp = self.client.post(
+            reverse('moreapp_tareas_lote_csv'),
+            {
+                'archivo': SimpleUploadedFile(
+                    'lote.csv',
+                    csv_body.encode('utf-8'),
+                    content_type='text/csv',
+                )
+            },
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        payload = resp.json()
+        self.assertTrue(payload['success'])
+        self.assertEqual(payload['exitosas'], 1)
+        mocked_create.assert_called_once()
+        self.assertEqual(mocked_create.call_args[0][1]['recipients'], ['otro@more.app'])
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
     @mock.patch('integraciones.moreapp_tareas_views.list_datasource_entry_rows')
     @mock.patch('integraciones.moreapp_tareas_views._campos_desde_formulario')
     @mock.patch('integraciones.moreapp_tareas_views.get_form')
@@ -3300,7 +3371,7 @@ class MoreAppPermisosFormularioTests(TestCase):
     @mock.patch('integraciones.moreapp_tareas_views.get_form')
     @mock.patch('integraciones.moreapp_tareas_views.list_users')
     @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
-    def test_crear_tarea_rechaza_tecnico_sin_formulario(
+    def test_crear_tarea_asigna_tecnico_aunque_no_tenga_el_formulario(
         self,
         mocked_forms,
         mocked_users,
@@ -3332,7 +3403,8 @@ class MoreAppPermisosFormularioTests(TestCase):
             },
         ]
         self.client.login(username=self.admin.rut, password=self.password)
-        denied = self.client.post(
+        mocked_create.return_value = {'id': 'task-ok'}
+        ok = self.client.post(
             reverse('moreapp_tarea_crear'),
             {
                 'form_id': 'abc123abc123abc123abc123',
@@ -3343,29 +3415,11 @@ class MoreAppPermisosFormularioTests(TestCase):
             HTTP_X_REQUESTED_WITH='XMLHttpRequest',
             HTTP_ACCEPT='application/json',
         )
-        self.assertEqual(denied.status_code, 400)
-        denied_body = denied.json()
-        self.assertFalse(denied_body.get('success') or denied_body.get('ok'))
-        self.assertIn('formulario', (denied_body.get('message') or denied_body.get('error') or '').lower())
-        mocked_create.assert_not_called()
-
-        mocked_create.return_value = {'id': 'task-ok'}
-        ok = self.client.post(
-            reverse('moreapp_tarea_crear'),
-            {
-                'form_id': 'abc123abc123abc123abc123',
-                'mensaje': 'Instalar',
-                'envio': 'IMMEDIATE',
-                'usuarios': ['campo@more.app'],
-            },
-            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
-            HTTP_ACCEPT='application/json',
-        )
         self.assertEqual(ok.status_code, 200)
         self.assertTrue(ok.json()['success'])
         mocked_create.assert_called_once()
         recipients = mocked_create.call_args[0][1]['recipients']
-        self.assertEqual(recipients, ['campo@more.app'])
+        self.assertEqual(recipients, ['otro@more.app'])
 
     @override_settings(
         MOREAPP_API_ENABLED=True,
