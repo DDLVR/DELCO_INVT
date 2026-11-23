@@ -1472,7 +1472,7 @@ def tarea_detalle_view(request, pk: int):
 @require_GET
 @admin_or_administrativo
 def tarea_pdf_view(request, pk: int):
-    from .moreapp_tareas_pdf import pdf_bytes_tarea, tarea_permite_pdf
+    from .moreapp_tareas_pdf import InformeMoreAppNoDisponible, pdf_bytes_tarea, tarea_permite_pdf
 
     tarea = get_object_or_404(
         MoreAppTareaEnviada.objects.select_related("integracion"),
@@ -1481,7 +1481,11 @@ def tarea_pdf_view(request, pk: int):
     if not tarea_permite_pdf(tarea):
         messages.warning(request, "El PDF está disponible cuando la tarea ya está completada.")
         return redirect("moreapp_tarea_detalle", pk=tarea.pk)
-    pdf_bytes, nombre = pdf_bytes_tarea(tarea)
+    try:
+        pdf_bytes, nombre = pdf_bytes_tarea(tarea)
+    except InformeMoreAppNoDisponible as exc:
+        messages.warning(request, str(exc))
+        return redirect("moreapp_tarea_detalle", pk=tarea.pk)
     response = HttpResponse(pdf_bytes, content_type="application/pdf")
     response["Content-Disposition"] = 'inline; filename="%s"' % nombre.replace('"', "")
     return response
@@ -1494,7 +1498,7 @@ def tareas_exportar_view(request):
     exportar_todas = request.GET.get("todas") == "1"
     usar_filtros = (not exportar_todas) and (forzar_filtrar or tiene_filtros)
     qs = _queryset_tareas_filtrado(request, aplicar_filtros=usar_filtros)
-    wb = _exportar_tareas_excel(list(qs[:5000]))
+    wb = _exportar_tareas_excel(list(qs))
     stream = BytesIO()
     wb.save(stream)
     stream.seek(0)

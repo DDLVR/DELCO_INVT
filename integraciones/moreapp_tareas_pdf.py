@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import os
-from io import BytesIO
 from typing import Any, Dict, List, Optional, Tuple
 
 from django.utils.text import get_valid_filename
 
 from .models import MoreAppTareaEnviada
-from .moreapp_cuentas import etiquetas_destinatarios
 
 _SKIP_PROCESADOS = {
     "resultado_operativo",
@@ -151,162 +149,119 @@ def nombre_archivo_pdf_tarea(tarea: MoreAppTareaEnviada) -> str:
     return get_valid_filename("tarea_moreapp_%s.pdf" % tarea.pk)
 
 
+class InformeMoreAppNoDisponible(Exception):
+    """La tarea no tiene todavía el PDF que genera MoreApp al completar el formulario."""
+
+
+def _file_id_informe(item: Any) -> str:
+    if not isinstance(item, dict):
+        return ""
+    mails = item.get("mailStatuses")
+    if not isinstance(mails, list):
+        return ""
+    for mail in mails:
+        if not isinstance(mail, dict):
+            continue
+        file_id = str(mail.get("pdfFileId") or "").strip()
+        if file_id:
+            return file_id
+    return ""
+
+
+def _envio_guardado(tarea: MoreAppTareaEnviada) -> Optional[Dict[str, Any]]:
+    registro = getattr(tarea, "integracion", None)
+    if registro is None:
+        return None
+    data = getattr(registro, "datos_recibidos", None)
+    return data if isinstance(data, dict) else None
+
+
+def _submission_id(tarea: MoreAppTareaEnviada) -> str:
+    registro = getattr(tarea, "integracion", None)
+    if registro is None:
+        return ""
+    return str(getattr(registro, "moreapp_submission_id", "") or "").strip()
+
+
+def _envio_moreapp(tarea: MoreAppTareaEnviada) -> Optional[Dict[str, Any]]:
+    """Envío de MoreApp: el guardado, el id del informe, o el que corresponde a la tarea."""
+    from .moreapp_api import (
+        MoreAppApiConfigError,
+        MoreAppApiError,
+        assert_safe_id,
+        get_submission,
+        list_submissions,
+    )
+
+    guardado = _envio_guardado(tarea)
+    if _file_id_informe(guardado):
+        return guardado
+    sid = _submission_id(tarea)
+    if sid:
+        try:
+            return get_submission(assert_safe_id(sid, "submissionId"))
+        except (MoreAppApiConfigError, MoreAppApiError, ValueError):
+            return guardado
+    form_id = str(tarea.form_id or "").strip()
+    task_id = str(tarea.task_id or "").strip()
+    if not form_id or not task_id:
+        return guardado
+    try:
+        raw = list_submissions(
+            assert_safe_id(form_id, "formId"),
+            0,
+            {
+                "pageSize": 5,
+                "query": [{"path": "meta.taskId", "type": "string", "value": task_id}],
+            },
+        )
+    except (MoreAppApiConfigError, MoreAppApiError, ValueError):
+        return guardado
+    elements = raw.get("elements") if isinstance(raw, dict) else raw if isinstance(raw, list) else []
+    for item in elements or []:
+        if not isinstance(item, dict):
+            continue
+        meta = item.get("meta") if isinstance(item.get("meta"), dict) else {}
+        if str(meta.get("taskId") or "").strip() == task_id:
+            return item
+    return guardado
+
+
+def _nombre_informe(filename: str, tarea: MoreAppTareaEnviada) -> str:
+    from urllib.parse import unquote
+
+    nombre = unquote(str(filename or "")).replace('"', "").replace("\\", "/").split("/")[-1].strip()
+    if not nombre.lower().endswith(".pdf"):
+        return nombre_archivo_pdf_tarea(tarea)
+    try:
+        nombre.encode("latin-1")
+    except UnicodeEncodeError:
+        return nombre_archivo_pdf_tarea(tarea)
+    return nombre
+
+
 def pdf_bytes_tarea(tarea: MoreAppTareaEnviada) -> Tuple[bytes, str]:
+    """PDF que MoreApp genera al completar el formulario."""
+    from .moreapp_api import (
+        MoreAppApiConfigError,
+        MoreAppApiError,
+        assert_safe_id,
+        download_registration_file,
+    )
+
+    file_id = _file_id_informe(_envio_moreapp(tarea))
+    if file_id:
+        try:
+            archivo = download_registration_file(assert_safe_id(file_id, "fileId"))
+        except (MoreAppApiConfigError, MoreAppApiError, ValueError):
+            archivo = None
+        raw = (archivo or {}).get("content") or b""
+        if raw.startswith(b"%PDF"):
+            return raw, _nombre_informe((archivo or {}).get("filename") or "", tarea)
     existente = _informe_pdf_bytes(tarea)
-    if existente:
+    if existente and existente[0].startswith(b"%PDF"):
         return existente
-    return generar_pdf_tarea(tarea), nombre_archivo_pdf_tarea(tarea)
-
-
-def _fmt(dt) -> str:
-    if not dt:
-        return "—"
-    try:
-        return dt.strftime("%d/%m/%Y %H:%M")
-    except Exception:
-        return "—"
-
-
-def generar_pdf_tarea(tarea: MoreAppTareaEnviada) -> bytes:
-    try:
-        from reportlab.lib import colors
-        from reportlab.lib.pagesizes import letter
-        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-        from reportlab.lib.units import cm
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-    except ImportError:
-        return _pdf_minimo(tarea)
-
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=letter,
-        leftMargin=1.6 * cm,
-        rightMargin=1.6 * cm,
-        topMargin=1.4 * cm,
-        bottomMargin=1.4 * cm,
-        title="Tarea MoreApp #%s" % tarea.pk,
+    raise InformeMoreAppNoDisponible(
+        "MoreApp todavía no entrega el informe de este formulario."
     )
-    styles = getSampleStyleSheet()
-    title = ParagraphStyle("TareaPdfTitle", parent=styles["Heading1"], fontSize=14, spaceAfter=8)
-    label = ParagraphStyle("TareaPdfLabel", parent=styles["Normal"], textColor=colors.HexColor("#64748b"), fontSize=8)
-    body = ParagraphStyle("TareaPdfBody", parent=styles["Normal"], fontSize=10, leading=13)
-    from xml.sax.saxutils import escape as xml_escape
 
-    story = [
-        Paragraph("Tarea MoreApp #%s" % tarea.pk, title),
-        Paragraph(xml_escape(tarea.form_name or tarea.form_id or "Formulario"), body),
-        Spacer(1, 8),
-    ]
-    meta = [
-        ["Estado", tarea.get_estado_display()],
-        ["Mensaje", tarea.mensaje or "—"],
-        ["CUENTA", tarea.cuenta or "—"],
-        ["Creada", _fmt(tarea.fecha_creacion)],
-        ["Asignada", _fmt(tarea.fecha_asignacion)],
-        ["Completada", _fmt(tarea.fecha_completado)],
-        ["Destinatarios", ", ".join(getattr(tarea, "destinatarios_visibles", None) or etiquetas_destinatarios(tarea.destinatarios or [])) or "—"],
-    ]
-    table = Table(meta, colWidths=[4 * cm, 13 * cm])
-    table.setStyle(
-        TableStyle(
-            [
-                ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ]
-        )
-    )
-    story.append(table)
-    story.append(Spacer(1, 12))
-    story.append(Paragraph("Contenido rellenado", label))
-    campos = campos_rellenados_tarea(tarea)
-    if not campos:
-        story.append(Paragraph("Sin campos con valor.", body))
-    else:
-        rows = [[item["label"], item["text"][:400]] for item in campos[:40]]
-        campos_table = Table(rows, colWidths=[5 * cm, 12 * cm])
-        campos_table.setStyle(
-            TableStyle(
-                [
-                    ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
-                    ("FONTSIZE", (0, 0), (-1, -1), 8),
-                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                    ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
-                    ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#e2e8f0")),
-                ]
-            )
-        )
-        story.append(campos_table)
-    try:
-        from .moreapp_api import download_registration_file
-        from .moreapp_api import assert_safe_id
-        from .moreapp_registro_pdf import anexar_adjuntos_texto
-        from .moreapp_respuestas import respuestas_desde_registro
-
-        registro = getattr(tarea, "integracion", None)
-        respuestas = respuestas_desde_registro(registro) if registro is not None else []
-        sheet = getSampleStyleSheet()
-        pdf_styles = {
-            "label": label,
-            "body": body,
-            "mono": ParagraphStyle(
-                "TareaPdfMono",
-                parent=sheet["Code"],
-                fontName="Courier",
-                fontSize=7.5,
-                leading=9.5,
-            ),
-        }
-
-        def _fetch(file_id: str):
-            try:
-                return download_registration_file(assert_safe_id(file_id, "fileId"))
-            except Exception:
-                return None
-
-        anexar_adjuntos_texto(story, respuestas, pdf_styles, _fetch)
-    except Exception:
-        pass
-    doc.build(story)
-    return buffer.getvalue()
-
-
-def _pdf_minimo(tarea: MoreAppTareaEnviada) -> bytes:
-    lines = [
-        "Tarea MoreApp #%s" % tarea.pk,
-        tarea.form_name or tarea.form_id or "",
-        tarea.mensaje or "",
-        "Estado: %s" % tarea.estado,
-        "CUENTA: %s" % (tarea.cuenta or "—"),
-    ]
-    for item in campos_rellenados_tarea(tarea)[:20]:
-        lines.append("%s: %s" % (item["label"], item["text"]))
-    content = " | ".join(part for part in lines if part).replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-    objects = [
-        "1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj\n",
-        "2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj\n",
-    ]
-    stream = "BT /F1 10 Tf 50 750 Td (%s) Tj ET" % content[:1800]
-    objects.append(
-        "3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-        "/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>endobj\n"
-    )
-    objects.append("4 0 obj<< /Length {} >>stream\n{}\nendstream endobj\n".format(len(stream), stream))
-    objects.append("5 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj\n")
-    out = BytesIO()
-    out.write(b"%PDF-1.4\n")
-    offsets = [0]
-    for obj in objects:
-        offsets.append(out.tell())
-        out.write(obj.encode("latin-1", errors="replace"))
-    xref_pos = out.tell()
-    out.write("xref\n0 {}\n".format(len(offsets)).encode("ascii"))
-    out.write(b"0000000000 65535 f \n")
-    for off in offsets[1:]:
-        out.write("{:010d} 00000 n \n".format(off).encode("ascii"))
-    out.write(
-        "trailer<< /Size {} /Root 1 0 R >>\nstartxref\n{}\n%%EOF\n".format(len(offsets), xref_pos).encode("ascii")
-    )
-    return out.getvalue()

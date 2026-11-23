@@ -3052,21 +3052,30 @@ class MoreAppTareaCicloTests(TestCase):
         self.assertIn(reverse('moreapp_tarea_detalle', args=[tarea.pk]), body)
         self.assertIn('> Ver</a>', body)
 
-    def test_detalle_muestra_contenido_rellenado_y_pdf(self):
+    @mock.patch('integraciones.moreapp_api.download_registration_file')
+    def test_detalle_muestra_contenido_rellenado_y_pdf(self, mocked_download):
         from ordenes_trabajo.models import IntegracionMoreApp
         from integraciones.models import MoreAppTareaEvento
         from integraciones.moreapp_tareas_ciclo import completar_tarea
 
+        mocked_download.return_value = {
+            'content': b'%PDF-1.4 informe moreapp',
+            'content_type': 'application/pdf',
+            'filename': 'Informe%20MoreApp.pdf',
+        }
         tarea = self._tarea()
         registro = IntegracionMoreApp.objects.create(
             moreapp_submission_id='sub-detalle-1',
             nombre_formulario='Instalacion',
             estado_sincronizacion='PROCESADO',
-            datos_recibidos={'data': {
-                'lectura': '1234',
-                'Search': {'CUENTA': '1001', 'NOMBRE': 'Cliente Norte'},
-                'fachada': 'gridfs://registrationFiles/7f555c8d-6a67-439c-ad41-da32206657b9',
-            }},
+            datos_recibidos={
+                'mailStatuses': [{'pdfFileId': '7f555c8d-6a67-439c-ad41-da32206657b9'}],
+                'data': {
+                    'lectura': '1234',
+                    'Search': {'CUENTA': '1001', 'NOMBRE': 'Cliente Norte'},
+                    'fachada': 'gridfs://registrationFiles/7f555c8d-6a67-439c-ad41-da32206657b9',
+                },
+            },
             datos_procesados={'cliente_codigo': '1001', 'actividad': 'Cambio medidor'},
         )
         completar_tarea(tarea, origen=MoreAppTareaEvento.ORIGEN_INFORME, integracion=registro)
@@ -3083,7 +3092,9 @@ class MoreAppTareaCicloTests(TestCase):
         pdf = self.client.get(reverse('moreapp_tarea_pdf', args=[tarea.pk]))
         self.assertEqual(pdf.status_code, 200)
         self.assertEqual(pdf['Content-Type'], 'application/pdf')
-        self.assertTrue(pdf.content.startswith(b'%PDF'))
+        self.assertEqual(pdf.content, b'%PDF-1.4 informe moreapp')
+        self.assertIn('Informe MoreApp.pdf', pdf['Content-Disposition'])
+        mocked_download.assert_called_once()
 
     def test_pdf_solo_si_completada(self):
         tarea = self._tarea()
@@ -3091,6 +3102,19 @@ class MoreAppTareaCicloTests(TestCase):
         resp = self.client.get(reverse('moreapp_tarea_pdf', args=[tarea.pk]))
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp.url, reverse('moreapp_tarea_detalle', args=[tarea.pk]))
+
+    @mock.patch('integraciones.moreapp_api.list_submissions', return_value={'elements': []})
+    def test_pdf_sin_informe_moreapp_no_arma_uno_interno(self, _mocked_list):
+        from integraciones.models import MoreAppTareaEvento
+        from integraciones.moreapp_tareas_ciclo import completar_tarea
+
+        tarea = self._tarea()
+        completar_tarea(tarea, origen=MoreAppTareaEvento.ORIGEN_API)
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(reverse('moreapp_tarea_pdf', args=[tarea.pk]), follow=True)
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotIn('application/pdf', resp['Content-Type'])
+        self.assertContains(resp, 'MoreApp todavía no entrega el informe')
 
     def test_listado_y_detalle_operativos_tipo_ot(self):
         from clientes.models import Cliente

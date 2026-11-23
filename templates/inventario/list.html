@@ -35,27 +35,11 @@
                 <p class="text-muted small mb-0 mt-1">
                     Haz clic en una categoría de estado para filtrar. Las SIM <strong>Devuelta</strong> suelen venir sin IP / entrega / cliente.
                 </p>
-                {% elif tipo == 'todos' %}
-                <p class="text-muted small mb-0">Vista consolidada de medidores, SIM y módems en una sola lista.</p>
                 {% else %}
                 <p class="text-muted small mb-0">Consulta stock, estados y ubicación de equipos en bodega o en terreno.</p>
                 {% endif %}
             </div>
             <div class="delco-action-bar delco-inv-actions" role="group" aria-label="Acciones de inventario">
-                {% if tipo == 'todos' %}
-                <a href="{% url 'inventario_list' %}?tipo=medidor" class="delco-inv-btn is-add">
-                    <span class="delco-inv-btn-icon"><i class="bi bi-speedometer2"></i></span>
-                    Gestionar medidores
-                </a>
-                <a href="{% url 'inventario_list' %}?tipo=sim" class="delco-inv-btn is-export">
-                    <span class="delco-inv-btn-icon"><i class="bi bi-sim"></i></span>
-                    Gestionar SIM
-                </a>
-                <a href="{% url 'inventario_list' %}?tipo=modem" class="delco-inv-btn is-help">
-                    <span class="delco-inv-btn-icon"><i class="bi bi-router"></i></span>
-                    Gestionar módems
-                </a>
-                {% else %}
                 {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
                 <button type="button" class="delco-inv-btn is-add" data-bs-toggle="modal" data-bs-target="#modalAgregarEquipo">
                     <span class="delco-inv-btn-icon"><i class="bi bi-plus-lg"></i></span>
@@ -80,7 +64,6 @@
                     <span class="delco-inv-btn-icon"><i class="bi bi-info-lg"></i></span>
                     Formato
                 </button>
-                {% endif %}
                 {% endif %}
             </div>
         </div>
@@ -134,7 +117,7 @@
                           <label class="form-label small mb-1">Tipo de filtro</label>
                           <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
                         </div>
-                        <div class="col-12 col-md-5">
+                        <div class="col-12 col-md-4">
                           <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
                           <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
                           <div data-filtro-panel="estado" data-filtro-titulo="Estado" data-filtro-param="estado" class="d-none">
@@ -146,21 +129,13 @@
                           <div data-filtro-panel="buscar" data-filtro-titulo="Buscar" data-filtro-modo="grupo" class="d-none">
                             <select id="tablaBuscarCampo" data-filtro-param="campo" class="form-select form-select-sm mb-1" data-orden-lista="no" aria-label="Buscar en">
                               <option value="all">Todos los campos</option>
-                              {% if tipo == 'todos' %}
-                              <option value="tipo">Tipo</option>
-                              <option value="identificador">Identificador</option>
-                              <option value="descripcion">Descripción</option>
-                              <option value="tecnico">Técnico</option>
-                              <option value="estado">Estado</option>
-                              <option value="cliente">Cliente</option>
-                              <option value="proyecto">Proyecto</option>
-                              {% elif tipo == 'medidor' %}
+                              {% if tipo == 'medidor' %}
                               <option value="serie">Serie</option>
                               <option value="marca">Marca</option>
                               <option value="caja">Caja</option>
                               <option value="modulo">Módulo</option>
                               <option value="tipo_medidor">Tipo Medidor</option>
-                              <option value="entregado_a">Entregado A</option>
+                              <option value="entregado_a">Entregado a</option>
                               <option value="proyecto">Proyecto</option>
                               <option value="estado">Estado</option>
                               <option value="cliente">Cliente</option>
@@ -169,7 +144,8 @@
                               <option value="operador">Operador</option>
                               <option value="abonado">Abonado</option>
                               <option value="direccion_ip">Dirección IP</option>
-                              <option value="entregado_a">Entregado A</option>
+                              <option value="apn">APN</option>
+                              <option value="entregado_a">Entregado a</option>
                               <option value="proyecto">Proyecto</option>
                               <option value="estado">Estado</option>
                               <option value="cliente">Cliente</option>
@@ -179,7 +155,7 @@
                               <option value="imei">IMEI</option>
                               <option value="serie">Serie</option>
                               <option value="caja">Caja</option>
-                              <option value="tecnico">Técnico</option>
+                              <option value="tecnico">Entregado a</option>
                               <option value="estado">Estado</option>
                               <option value="cliente">Cliente</option>
                               <option value="proyecto">Proyecto</option>
@@ -193,7 +169,7 @@
                               {% for proyecto in proyectos_disponibles %}<option value="{{ proyecto }}">{{ proyecto }}</option>{% endfor %}
                             </select>
                           </div>
-                          {% if tipo == 'medidor' or tipo == 'todos' %}
+                          {% if tipo == 'medidor' %}
                           <div data-filtro-panel="tipo_medidor" data-filtro-titulo="Tipo medidor" data-filtro-param="tipo_medidor" class="d-none">
                             <select id="filtroTipoMedidor" class="form-select form-select-sm" data-orden-lista="no" aria-label="Tipo medidor">
                               <option value="">Elige</option>
@@ -206,6 +182,16 @@
                             <input type="text" id="filtroCaja" class="form-control form-control-sm" placeholder="N° caja..." aria-label="Caja">
                           </div>
                           {% endif %}
+                          <div data-filtro-panel="fecha_recepcion" data-filtro-titulo="Fecha recepción" data-filtro-modo="fecha" data-filtro-desde="fecha_recepcion_desde" data-filtro-hasta="fecha_recepcion_hasta" class="d-none">
+                            <input type="date" id="filtroFechaRecepcionDesde" class="form-control form-control-sm" aria-label="Desde">
+                          </div>
+                          <div data-filtro-panel="fecha_entrega" data-filtro-titulo="Fecha entrega" data-filtro-modo="fecha" data-filtro-desde="fecha_entrega_desde" data-filtro-hasta="fecha_entrega_hasta" class="d-none">
+                            <input type="date" id="filtroFechaEntregaDesde" class="form-control form-control-sm" aria-label="Desde">
+                          </div>
+                        </div>
+                        <div class="col-12 col-md-3 d-none js-filtro-rango">
+                          <label class="form-label small mb-1">Hasta</label>
+                          <input type="date" class="form-control form-control-sm js-filtro-hasta" aria-label="Hasta">
                         </div>
                         <div class="col-12 col-md-auto">
                           <button type="button" class="btn btn-sm btn-primary js-filtro-agregar" id="btnAplicarFiltroTabla"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
@@ -217,7 +203,9 @@
                         {% if proyecto_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'proyecto' %}"><span class="delco-filtro-chip-tipo">Proyecto</span><span>{{ proyecto_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
                         {% if tipo_medidor_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'tipo_medidor' %}"><span class="delco-filtro-chip-tipo">Tipo medidor</span><span>{{ tipo_medidor_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
                         {% if caja_seleccionada %}<a class="delco-filtro-chip" href="?{% url_sin 'caja' %}"><span class="delco-filtro-chip-tipo">Caja</span><span>{{ caja_seleccionada }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
-                        {% if estado_seleccionado or busqueda or proyecto_seleccionado or tipo_medidor_seleccionado or caja_seleccionada %}
+                        {% if fecha_recepcion_desde or fecha_recepcion_hasta %}<a class="delco-filtro-chip" href="?{% url_sin 'fecha_recepcion_desde' 'fecha_recepcion_hasta' %}"><span class="delco-filtro-chip-tipo">Fecha recepción</span><span>{{ fecha_recepcion_desde|default:"…" }} → {{ fecha_recepcion_hasta|default:"…" }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                        {% if fecha_entrega_desde or fecha_entrega_hasta %}<a class="delco-filtro-chip" href="?{% url_sin 'fecha_entrega_desde' 'fecha_entrega_hasta' %}"><span class="delco-filtro-chip-tipo">Fecha entrega</span><span>{{ fecha_entrega_desde|default:"…" }} → {{ fecha_entrega_hasta|default:"…" }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                        {% if estado_seleccionado or busqueda or proyecto_seleccionado or tipo_medidor_seleccionado or caja_seleccionada or fecha_recepcion_desde or fecha_recepcion_hasta or fecha_entrega_desde or fecha_entrega_hasta %}
                         <a class="delco-filtro-limpiar" id="btnLimpiarFiltroTabla" href="{% url 'inventario_list' %}?tipo={{ tipo }}&per_page={{ per_page }}">Quitar filtros</a>
                         {% endif %}
                       </div>
@@ -253,48 +241,31 @@
                         <thead class="table-delco">
                             <tr>
                                 <th>#</th>
-                                {% if tipo == 'todos' %}
-                                <th>Tipo</th>
-                                <th>Identificador</th>
-                                <th>Descripción</th>
-                                <th>Técnico</th>
-                                <th>Proyecto</th>
-                                <th>Fecha Recepción</th>
-                                {% elif tipo == 'medidor' %}
+                                {% if tipo == 'medidor' %}
                                 <th>Serie</th>
                                 <th>Marca</th>
                                 <th>Caja</th>
                                 <th>Módulo</th>
-                                <th>Tipo Medidor</th>
-                                <th>Fecha Recepción</th>
-                                <th>Fecha Entrega</th>
-                                <th>Entregado A</th>
-                                <th>Proyecto</th>
+                                <th>Tipo medidor</th>
                                 {% elif tipo == 'sim' %}
                                 <th>IMEI</th>
-                                <th>OPERADOR</th>
-                                <th>ABONADO</th>
-                                <th>DIRECCIÓN IP</th>
+                                <th>Operador</th>
+                                <th>Abonado</th>
+                                <th>Dirección IP</th>
                                 <th>APN</th>
-                                <th>FECHA RECEPCIÓN</th>
-                                <th>ENTREGADO A</th>
-                                <th>FECHA ENTREGA</th>
-                                <th>Proyecto</th>
                                 {% elif tipo == 'modem' %}
-                                <th>MARCA</th>
-                                <th>MODELO</th>
+                                <th>Marca</th>
+                                <th>Modelo</th>
                                 <th>IMEI</th>
-                                <th>SERIE</th>
-                                <th>FECHA RECEPCIÓN</th>
-                                <th>FECHA ENTREGA</th>
+                                <th>Serie</th>
                                 <th>Caja</th>
-                                <th>TÉCNICO RESPONSABLE</th>
                                 {% endif %}
+                                <th>Fecha recepción</th>
+                                <th>Fecha entrega</th>
+                                <th>Entregado a</th>
+                                <th>Proyecto</th>
                                 <th>Estado</th>
                                 <th>Cliente</th>
-                                {% if tipo == 'modem' %}
-                                <th>Proyecto</th>
-                                {% endif %}
                                 {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
                                 <th class="text-center">
                                     <input type="checkbox" id="selectAllEquipos" title="Seleccionar todos">
@@ -307,18 +278,7 @@
                             {% for equipo in equipos %}
                             <tr>
                                 <td>{{ page_obj.start_index|add:forloop.counter0 }}</td>
-                                {% if tipo == 'todos' %}
-                                <td>
-                                    <span class="badge {% if equipo.tipo == 'medidor' %}bg-primary{% elif equipo.tipo == 'sim' %}bg-info text-dark{% else %}bg-secondary{% endif %}">
-                                        {{ equipo.tipo_label }}
-                                    </span>
-                                </td>
-                                <td><strong>{{ equipo.identificador|default:"-" }}</strong></td>
-                                <td>{{ equipo.descripcion|default:"-" }}</td>
-                                <td>{{ equipo.tecnico_display|default:"-" }}</td>
-                                <td>{{ equipo.proyecto|default:"-" }}</td>
-                                <td>{{ equipo.fecha_recepcion|date:"d/m/Y"|default:"-" }}</td>
-                                {% elif tipo == 'medidor' %}
+                                {% if tipo == 'medidor' %}
                                 <td>{{ equipo.serie }}</td>
                                 <td>{% if equipo.marca %}{{ equipo.marca }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
                                 <td>{% if equipo.caja %}{{ equipo.caja }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
@@ -330,52 +290,32 @@
                                         {{ equipo.get_tipo_medidor_display|default:"No hay" }}
                                     </span>
                                 </td>
-                                <td>{% if equipo.fecha_recepcion %}{{ equipo.fecha_recepcion|date:"d/m/Y" }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
-                                <td>{% if equipo.fecha_entrega %}{{ equipo.fecha_entrega|date:"d/m/Y" }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
-                                <td>{% if equipo.tecnico_display %}{{ equipo.tecnico_display }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
-                                <td>{% if equipo.proyecto %}{{ equipo.proyecto }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
                                 {% elif tipo == 'sim' %}
                                 <td><strong>{{ equipo.imei|default:"Sin IMEI" }}</strong></td>
                                 <td>{% if equipo.operador %}{{ equipo.operador }}{% else %}<span class="text-muted">Sin operador</span>{% endif %}</td>
                                 <td>{% if equipo.abonado %}{{ equipo.abonado }}{% else %}<span class="text-muted">Sin abonado</span>{% endif %}</td>
                                 <td>{% if equipo.direccion_ip %}{{ equipo.direccion_ip }}{% else %}<span class="text-muted">Sin IP asignada</span>{% endif %}</td>
                                 <td>{% if equipo.apn %}{{ equipo.apn }}{% else %}<span class="text-muted">Sin APN</span>{% endif %}</td>
-                                <td>{% if equipo.fecha_recepcion %}{{ equipo.fecha_recepcion|date:"d/m/Y" }}{% else %}<span class="text-muted">Sin fecha recepción</span>{% endif %}</td>
-                                <td>{% if equipo.tecnico_display %}{{ equipo.tecnico_display }}{% else %}<span class="text-muted">Sin entrega</span>{% endif %}</td>
-                                <td>{% if equipo.fecha_entrega %}{{ equipo.fecha_entrega|date:"d/m/Y" }}{% else %}<span class="text-muted">Sin fecha entrega</span>{% endif %}</td>
-                                <td>{% if equipo.proyecto %}{{ equipo.proyecto }}{% else %}<span class="text-muted">Sin proyecto</span>{% endif %}</td>
                                 {% elif tipo == 'modem' %}
                                 <td>{% if equipo.marca %}{{ equipo.marca }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
                                 <td>{% if equipo.modelo %}{{ equipo.modelo }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
                                 <td><strong>{% if equipo.imei %}{{ equipo.imei }}{% else %}<span class="text-muted">No hay</span>{% endif %}</strong></td>
                                 <td>{{ equipo.serie }}</td>
+                                <td>{% if equipo.caja %}{{ equipo.caja }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
+                                {% endif %}
                                 <td>{% if equipo.fecha_recepcion %}{{ equipo.fecha_recepcion|date:"d/m/Y" }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
                                 <td>{% if equipo.fecha_entrega %}{{ equipo.fecha_entrega|date:"d/m/Y" }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
-                                <td>{% if equipo.caja %}{{ equipo.caja }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
                                 <td>{% if equipo.tecnico_display %}{{ equipo.tecnico_display }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
-                                {% endif %}
-                                <td>
-                                    {% if tipo == 'todos' %}
-                                        {% badge_inventario equipo.estado_nombre %}
-                                    {% else %}
-                                        {% badge_inventario equipo.estado_inventario.nombre %}
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if tipo == 'todos' %}
-                                        {% if equipo.cliente_numero %}{{ equipo.cliente_numero }}{% else %}<span class="text-muted">No hay</span>{% endif %}
-                                    {% elif tipo == 'medidor' or tipo == 'modem' %}
-                                        {% if equipo.cliente_display %}{{ equipo.cliente_display }}{% else %}<span class="text-muted">No hay</span>{% endif %}
-                                    {% else %}
-                                        {% if equipo.cliente_display %}{{ equipo.cliente_display }}{% else %}<span class="text-muted">Sin cliente</span>{% endif %}
-                                    {% endif %}
-                                </td>
-                                {% if tipo == 'modem' %}
                                 <td>{% if equipo.proyecto %}{{ equipo.proyecto }}{% else %}<span class="text-muted">No hay</span>{% endif %}</td>
-                                {% endif %}
+                                <td>
+                                    {% badge_inventario equipo.estado_inventario.nombre %}
+                                </td>
+                                <td>
+                                    {% if equipo.cliente_display %}{{ equipo.cliente_display }}{% else %}<span class="text-muted">No hay</span>{% endif %}
+                                </td>
                                 {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
                                 <td class="text-center">
-                                    <input type="checkbox" class="equipo-checkbox" value="{{ equipo.id }}" data-tipo="{% if tipo == 'todos' %}{{ equipo.tipo }}{% else %}{{ tipo }}{% endif %}">
+                                    <input type="checkbox" class="equipo-checkbox" value="{{ equipo.id }}" data-tipo="{{ tipo }}">
                                 </td>
                                 {% endif %}
                                 <td>
@@ -384,14 +324,15 @@
                                             data-bs-toggle="modal" 
                                             data-bs-target="#modalModificar"
                                             data-equipo-id="{{ equipo.id }}"
-                                            data-equipo-tipo="{% if tipo == 'todos' %}{{ equipo.tipo }}{% else %}{{ tipo }}{% endif %}">
+                                            data-equipo-tipo="{{ tipo }}">
                                         <i class="bi bi-pencil-square"></i> Modificar
                                     </button>
                                     {% endif %}
                                 </td>
+                            </tr>
                             {% empty %}
                             <tr>
-                                <td colspan="{% if tipo == 'todos' %}{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}11{% else %}10{% endif %}{% else %}{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}{% if tipo == 'medidor' %}14{% elif tipo == 'sim' %}14{% else %}14{% endif %}{% else %}{% if tipo == 'medidor' %}13{% elif tipo == 'sim' %}13{% else %}13{% endif %}{% endif %}{% endif %}" class="text-center text-muted py-4">
+                                <td colspan="{% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}14{% else %}13{% endif %}" class="text-center text-muted py-4">
                                     No hay equipos registrados
                                 </td>
                             </tr>
@@ -453,7 +394,6 @@
     </div>
 
     {% if user.rol == 'ADMIN' or user.rol == 'ADMINISTRATIVO' %}
-    {% if tipo != 'todos' %}
     <div id="inventarioSeleccionBandeja" class="delco-seleccion-bandeja mt-3 p-3 rounded d-none">
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
@@ -461,11 +401,11 @@
             </div>
             <div class="d-flex gap-2">
                 <button type="button" class="btn btn-sm btn-outline-dark" id="btnAbrirMasivoBandeja">Modificar selección</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" id="btnEliminarSeleccionInventario">Eliminar selección</button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimpiarSeleccionInventario">Limpiar selección</button>
             </div>
         </div>
     </div>
-    {% endif %}
     {% endif %}
 </div>
 
@@ -1480,6 +1420,7 @@
 </style>
 
 <script>
+(function () {
 // Eliminar registro con confirmación simple para evitar bloqueo de modales
 const btnEliminar = document.getElementById('btnEliminarRegistro');
 if (btnEliminar) {
@@ -1719,6 +1660,9 @@ const modalModificar = new bootstrap.Modal(document.getElementById('modalModific
 
 document.getElementById('modalModificar').addEventListener('show.bs.modal', function(e) {
     const button = e.relatedTarget;
+    if (!button) {
+        return;
+    }
     const equipoId = button.getAttribute('data-equipo-id');
     const equipoTipo = button.getAttribute('data-equipo-tipo');
     
@@ -2257,6 +2201,55 @@ restaurarChecksInventario();
 
 const btnAbrirMasivoBandeja = document.getElementById('btnAbrirMasivoBandeja');
 if (btnAbrirMasivoBandeja) btnAbrirMasivoBandeja.addEventListener('click', abrirModalMasivoInventario);
+const btnEliminarSeleccion = document.getElementById('btnEliminarSeleccionInventario');
+if (btnEliminarSeleccion) {
+    btnEliminarSeleccion.addEventListener('click', async function() {
+        const set = getInvSelectedSet();
+        if (!set.size) {
+            showToast('Marca al menos un equipo en la lista para eliminar varios a la vez.', 'warning');
+            return;
+        }
+        const confirmado = window.showConfirm
+            ? await window.showConfirm(
+                'Se eliminarán ' + set.size + ' equipo(s). Dejarán de verse en el inventario y quedarán en Movimientos.',
+                'Eliminar selección',
+                'Sí, eliminar',
+                'Cancelar'
+            )
+            : confirm('¿Eliminar ' + set.size + ' equipos?');
+        if (!confirmado) return;
+
+        const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        const body = new URLSearchParams();
+        body.set('tipo', '{{ tipo }}');
+        body.set('ids', Array.from(set).join(','));
+        btnEliminarSeleccion.disabled = true;
+        fetch("{% url 'inventario_eliminar_masivo' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrf,
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
+            },
+            body: body.toString()
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message || 'Equipos eliminados.', 'success');
+                saveInvSelectedSet(new Set());
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showToast(data.message || 'No se pudieron eliminar los equipos.', 'danger');
+                btnEliminarSeleccion.disabled = false;
+            }
+        })
+        .catch(() => {
+            showToast('No hay conexión con el servidor. Intenta de nuevo.', 'danger');
+            btnEliminarSeleccion.disabled = false;
+        });
+    });
+}
 const btnLimpiarInv = document.getElementById('btnLimpiarSeleccionInventario');
 if (btnLimpiarInv) {
     btnLimpiarInv.addEventListener('click', function() {
@@ -2326,6 +2319,7 @@ if (formAgregarEquipo) {
 }
 
 }); // Fin de DOMContentLoaded
+})();
 </script>
 
 
@@ -2333,6 +2327,7 @@ if (formAgregarEquipo) {
 
 {% block extra_js %}
 <script>
+(function () {
 function construirUrlExportacionInventario(modo) {
     const url = new URL("{% url 'inventario_exportar' %}", window.location.origin);
     url.searchParams.append('tipo', '{{ tipo }}');
@@ -2353,6 +2348,10 @@ function construirUrlExportacionInventario(modo) {
     if (caja) url.searchParams.append('caja', caja);
     if (tipoMedidor) url.searchParams.append('tipo_medidor', tipoMedidor);
     if (estado) url.searchParams.append('estado', estado);
+    ['fecha_recepcion_desde', 'fecha_recepcion_hasta', 'fecha_entrega_desde', 'fecha_entrega_hasta'].forEach(function (clave) {
+        const valor = params.get(clave);
+        if (valor) url.searchParams.append(clave, valor);
+    });
 
     return url;
 }
@@ -2503,5 +2502,6 @@ document.querySelectorAll('.nav-tabs a').forEach(link => {
     });
 });
 
+})();
 </script>
 {% endblock %}

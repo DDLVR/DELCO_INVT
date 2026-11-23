@@ -157,6 +157,8 @@
         params.set(box.getAttribute("data-filtro-desde") || "fecha_desde", fechas.desde);
         params.set(box.getAttribute("data-filtro-hasta") || "fecha_hasta", fechas.hasta);
       } else if (modo === "grupo") {
+        var textoGrupo = box.querySelector("input[data-filtro-param], textarea[data-filtro-param]");
+        if (textoGrupo && !String(textoGrupo.value || "").trim()) return;
         var alguno = false;
         box.querySelectorAll("[data-filtro-param]").forEach(function (el) {
           var valor = String(el.value || "").trim();
@@ -194,5 +196,14 @@
     });
   }
 
-  document.querySelectorAll(".delco-filtro-builder[data-filtro-auto]").forEach(init);
+  function boot() {
+    document.querySelectorAll(".delco-filtro-builder[data-filtro-auto]").forEach(function (root) {
+      if (root.getAttribute("data-filtro-listo") === "1") return;
+      root.setAttribute("data-filtro-listo", "1");
+      init(root);
+    });
+  }
+
+  boot();
+  window.addEventListener("delco:page-ready", boot);
 })();

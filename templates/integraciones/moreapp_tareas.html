@@ -349,7 +349,7 @@
               <td class="text-nowrap js-tarea-acciones">
                 <a href="{% url 'moreapp_tarea_detalle' tarea.pk %}" class="btn btn-sm btn-primary"><i class="bi bi-eye"></i> <span class="d-none d-md-inline">Ver</span></a>
                 {% if tarea.puede_pdf %}
-                <a href="{% url 'moreapp_tarea_pdf' tarea.pk %}" class="btn btn-sm btn-outline-danger js-tarea-pdf" title="Ver PDF del contenido rellenado" target="_blank" rel="noopener">
+                <a href="{% url 'moreapp_tarea_pdf' tarea.pk %}" class="btn btn-sm btn-outline-danger js-tarea-pdf" title="Ver el informe que generó MoreApp" target="_blank" rel="noopener">
                   <i class="bi bi-file-earmark-pdf"></i> <span class="d-none d-md-inline">PDF</span>
                 </a>
                 {% endif %}
@@ -563,6 +563,10 @@
     ev.preventDefault();
     cargarLista(link.href, { history: 'push' });
   });
+
+  window.delcoRecargarTareas = function () {
+    cargarLista(window.location.href, { history: 'none' });
+  };
 })();
 </script>
 <script src="{% static 'js/delco_tarea_pasos.js' %}?v=pasos1"></script>
@@ -621,7 +625,7 @@
       if (acciones && tarea.puede_pdf && tarea.pdf_url && !acciones.querySelector('.js-tarea-pdf')) {
         acciones.insertAdjacentHTML(
           'beforeend',
-          ' <a href="' + tarea.pdf_url + '" class="btn btn-sm btn-outline-danger js-tarea-pdf" title="Ver PDF del contenido rellenado" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> PDF</a>'
+          ' <a href="' + tarea.pdf_url + '" class="btn btn-sm btn-outline-danger js-tarea-pdf" title="Ver el informe que generó MoreApp" target="_blank" rel="noopener"><i class="bi bi-file-earmark-pdf"></i> PDF</a>'
         );
       }
       if (!visibleSegunFiltro(tarea.estado, cola, estadoFiltro)) row.remove();
@@ -729,21 +733,12 @@
     }
   }
 
-  function quitarFilasTareas(ids) {
-    var set = {};
-    (ids || []).forEach(function (id) { set[String(id)] = true; });
-    var quitadas = 0;
-    document.querySelectorAll('tr[data-tarea-id]').forEach(function (row) {
-      if (set[row.getAttribute('data-tarea-id')]) {
-        quitadas += 1;
-        row.remove();
-      }
-    });
-    document.querySelectorAll('[data-kpi="resumen.total"]').forEach(function (el) {
-      var actual = parseInt(String(el.textContent).replace(/\D/g, ''), 10) || 0;
-      el.textContent = String(Math.max(0, actual - quitadas));
-    });
-    actualizarSeleccionTareas();
+  function quitarFilasTareas() {
+    if (typeof window.delcoRecargarTareas === 'function') {
+      window.delcoRecargarTareas();
+      return;
+    }
+    window.location.reload();
   }
 
   function postEliminarTareas(url, ids) {

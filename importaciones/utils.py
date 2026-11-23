@@ -564,6 +564,7 @@ def importar_equipos_excel(archivo, usuario, tipo_equipo='MEDIDORES'):
         try:
             movimiento = MovimientoInventario.objects.create(
                 tipo='IMPORTACION',
+                origen_sistema='IMPORTACION',
                 origen=bodega,
                 destino=bodega,
                 responsable=usuario,

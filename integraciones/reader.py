@@ -492,11 +492,13 @@ def _mapear_tipo_movimiento(estado_nombre: str) -> str:
         return 'INSTALACION'
     if 'retir' in estado or 'baja' in estado:
         return 'RETIRO'
-    if 'repar' in estado:
+    if 'repar' in estado or 'devuel' in estado:
         return 'DEVOLUCION'
     if 'bodega' in estado:
         return 'RECEPCION'
-    return 'ENTREGA'
+    if 'trayecto' in estado:
+        return 'ENTREGA'
+    return 'AJUSTE'
 
 
 def _registrar_movimiento_equipo(
@@ -525,12 +527,14 @@ def _registrar_movimiento_equipo(
     estado_norm = _normalizar_texto(estado_nombre)
     if 'instal' in estado_norm:
         destino = _obtener_o_crear_ubicacion('CLIENTE', 'Instalado en cliente')
-    elif 'retir' in estado_norm or 'baja' in estado_norm:
+    elif 'retir' in estado_norm or 'baja' in estado_norm or 'devuel' in estado_norm:
         destino = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
     elif 'repar' in estado_norm:
         destino = _obtener_o_crear_ubicacion('PROVEEDOR', 'Proveedor/Reparación')
-    else:
+    elif 'trayecto' in estado_norm or 'bodega' in estado_norm:
         destino = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+    else:
+        destino = origen
 
     tipo_mov = tipo_override if tipo_override else _mapear_tipo_movimiento(estado_nombre)
 

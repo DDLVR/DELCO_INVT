@@ -2,7 +2,7 @@ from django.urls import path
 # MoreApp: catálogo asigna formularios; moreapp_formularios_list es el listado del usuario.
 from .views import (
     login_view, logout_view, dashboard_view,
-    inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, inventario_eliminar_view, inventario_crear_view, inventario_modificar_masivo_view, profile_view, update_profile_view,
+    inventario_list_view, inventario_exportar_view, inventario_importar_view, inventario_obtener_datos_view, inventario_modificar_view, inventario_eliminar_view, inventario_eliminar_masivo_view, inventario_crear_view, inventario_modificar_masivo_view, profile_view, update_profile_view,
     usuarios_list_view, usuario_crear_view, usuario_editar_view, usuario_reset_password_view, usuario_eliminar_view,
     clientes_list_view, clientes_exportar_view, clientes_importar_view, cliente_crear_view, cliente_editar_view, cliente_historial_view, cliente_eliminar_view,
     cliente_marcar_sci4_actualizado_view,
@@ -94,6 +94,8 @@ urlpatterns = [
     path('inventario/importar/', inventario_importar_view, name='inventario_importar'),
     path('inventario/crear/', inventario_crear_view, name='inventario_crear'),
     path('inventario/modificar-masivo/', inventario_modificar_masivo_view, name='inventario_modificar_masivo'),
+    # Selección múltiple: misma baja suave que eliminar un equipo.
+    path('inventario/eliminar-masivo/', inventario_eliminar_masivo_view, name='inventario_eliminar_masivo'),
     path('inventario/<int:pk>/obtener-datos/', inventario_obtener_datos_view, name='inventario_obtener_datos'),
     path('inventario/<int:pk>/modificar/', inventario_modificar_view, name='inventario_modificar'),
 
