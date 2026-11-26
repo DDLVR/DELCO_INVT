@@ -2172,10 +2172,10 @@ class MoreAppApiModulosTests(TestCase):
         wb = load_workbook(io.BytesIO(resp.content))
         ws = wb.active
         self.assertEqual(
-            [ws.cell(1, col).value for col in range(1, 4)],
-            ['Mensaje', 'Formulario', 'Destinatario'],
+            [ws.cell(1, col).value for col in range(1, 5)],
+            ['Mensaje', 'Formulario', 'Destinatario', 'Cliente'],
         )
-        self.assertIsNone(ws.cell(1, 4).value)
+        self.assertIsNone(ws.cell(1, 5).value)
         self.assertIsNone(ws.cell(2, 1).value)
         self.assertNotEqual(ws.cell(1, 1).value, ws.cell(1, 2).value)
 
@@ -2289,6 +2289,73 @@ class MoreAppApiModulosTests(TestCase):
         self.assertEqual(payload['fallidas'], 1)
         self.assertEqual(len(payload['resultados']), 3)
         self.assertIn('Formulario no encontrado', payload['resultados'][2]['error'])
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_tareas_views.list_datasource_entry_rows')
+    @mock.patch('integraciones.moreapp_tareas_views._campos_desde_formulario')
+    @mock.patch('integraciones.moreapp_tareas_views.get_form')
+    @mock.patch('integraciones.moreapp_tareas_views.create_task')
+    @mock.patch('integraciones.moreapp_tareas_views.list_users')
+    @mock.patch('integraciones.moreapp_tareas_views.list_all_forms')
+    def test_lote_csv_con_cliente_precarga_la_busqueda(
+        self,
+        mocked_forms,
+        mocked_users,
+        mocked_create,
+        mocked_get_form,
+        mocked_campos,
+        mocked_rows,
+    ):
+        from integraciones.models import MoreAppTareaEnviada
+
+        form = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Instalacion',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_forms.return_value = [form]
+        mocked_users.return_value = [
+            {'id': 'u1', 'emailAddress': 'campo@more.app', 'disabled': False, 'settings': {}, 'groups': []}
+        ]
+        mocked_get_form.return_value = form
+        mocked_campos.return_value = [
+            {'widget': 'text', 'data_name': 'cliente', 'label': 'Cliente'},
+            {'widget': 'text', 'data_name': 'nombreDelContacto', 'label': 'Nombre del contacto'},
+            {'widget': 'search', 'data_name': 'Buscar_cliente', 'label': 'Buscar cliente',
+             'datasource_id': 'dscliente1dscliente1ds01'},
+        ]
+        mocked_rows.return_value = {'rows': [{'NROCLIENTE': '1001', 'NOMBRE': 'Cliente Uno'}]}
+        mocked_create.side_effect = [{'id': 'task-cli-1'}, {'id': 'task-cli-2'}]
+        csv_body = (
+            'Mensaje,Formulario,Destinatario,Cliente\n'
+            'Visita,Instalacion,campo@more.app,1001\n'
+            'Visita,Instalacion,campo@more.app,9999\n'
+        )
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.post(
+            reverse('moreapp_tareas_lote_csv'),
+            {'archivo': SimpleUploadedFile('lote.csv', csv_body.encode('utf-8'), content_type='text/csv')},
+            HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+            HTTP_ACCEPT='application/json',
+        )
+        payload = resp.json()
+        self.assertEqual(payload['exitosas'], 2)
+        primera = mocked_create.call_args_list[0][0][1]
+        self.assertEqual(
+            primera['data'],
+            {'cliente': '1001', 'Buscar_cliente': {'NROCLIENTE': '1001', 'NOMBRE': 'Cliente Uno'}},
+        )
+        self.assertEqual(mocked_create.call_args_list[1][0][1]['data'], {'cliente': '9999'})
+        self.assertEqual([r['precarga'] for r in payload['resultados']], [True, False])
+        self.assertEqual(mocked_rows.call_count, 1)
+        self.assertEqual(
+            set(MoreAppTareaEnviada.objects.values_list('cuenta', flat=True)), {'1001', '9999'}
+        )
 
     @override_settings(
         MOREAPP_API_ENABLED=True,

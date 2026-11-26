@@ -367,3 +367,39 @@ class MoreAppValidacionAdministrativaTests(TestCase):
 		procesar_payload_moreapp(_payload_minimo('sub-validar-2'), ruta_context='webhook-test')
 		registro.refresh_from_db()
 		self.assertEqual(registro.estado_revision, 'REVISADO')
+
+
+class MoreAppPrecargaBuscarClienteTests(TestCase):
+	"""La búsqueda de cliente de la tarea se llena con la fila de la fuente MoreApp."""
+
+	def _campos(self):
+		from integraciones.moreapp_catalogo_views import _extract_version_fields
+		return _extract_version_fields({'fields': [{
+			'widget': 'com.moreapps:search:1',
+			'properties': {
+				'data_name': 'Buscar_cliente',
+				'data_source_configuration': {'id': 'ds-clientes', 'mapping': {'NROCLIENTE': True}},
+			},
+		}]})
+
+	def test_lee_la_fuente_desde_data_source_configuration(self):
+		self.assertEqual(self._campos()[0]['datasource_id'], 'ds-clientes')
+
+	def test_usa_la_copia_local_antes_que_la_api(self):
+		from unittest import mock
+		from integraciones.models import MoreAppFuenteFila, MoreAppFuenteInterna
+		from integraciones.moreapp_tareas_views import _precarga_search_cliente
+		fuente = MoreAppFuenteInterna.objects.create(datasource_id='ds-clientes', nombre='Clientes')
+		MoreAppFuenteFila.objects.create(fuente=fuente, entry_id='1', valores={'id': '1', 'NROCLIENTE': 9000002})
+		with mock.patch('integraciones.moreapp_tareas_views.list_datasource_entry_rows') as api:
+			data = _precarga_search_cliente(self._campos(), '9000002', {})
+		api.assert_not_called()
+		self.assertEqual(data, {'Buscar_cliente': {'id': '1', 'NROCLIENTE': 9000002}})
+
+	def test_sin_copia_local_busca_en_la_api(self):
+		from unittest import mock
+		from integraciones.moreapp_tareas_views import _precarga_search_cliente
+		filas = {'rows': [{'NROCLIENTE': '9000003'}]}
+		with mock.patch('integraciones.moreapp_tareas_views.list_datasource_entry_rows', return_value=filas):
+			data = _precarga_search_cliente(self._campos(), '9000003', {})
+		self.assertEqual(data, {'Buscar_cliente': {'NROCLIENTE': '9000003'}})

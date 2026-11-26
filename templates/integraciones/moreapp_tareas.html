@@ -900,7 +900,9 @@
     msg.textContent = data.message || (ok ? 'Tareas enviadas.' : 'Revisa el archivo.');
     body.innerHTML = (data.resultados || []).map(function (item) {
       var estado = item.ok
-        ? '<span class="badge text-bg-success">Enviada</span>' + (item.precarga ? '<div class="small text-muted">Search precargado</div>' : '')
+        ? '<span class="badge text-bg-success">Enviada</span>' + (item.precarga
+          ? '<div class="small text-muted">Cliente ' + escapeHtml(item.cliente || '') + ' precargado</div>'
+          : (item.cliente ? '<div class="small text-warning">Cliente ' + escapeHtml(item.cliente) + ' no está en la fuente del formulario: la búsqueda queda para el técnico</div>' : ''))
         : '<span class="badge text-bg-danger">Error</span><div class="small text-danger">' + escapeHtml(item.error || '') + '</div>';
       return '<tr><td>' + escapeHtml(item.fila) + '</td><td>' + escapeHtml(item.formulario) +
         '</td><td class="small">' + escapeHtml(item.destinatario) + '</td><td>' + estado + '</td></tr>';

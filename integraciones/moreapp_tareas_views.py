@@ -53,12 +53,14 @@ from .moreapp_permisos import (
     anotar_permisos_grupos,
     anotar_permisos_usuarios,
 )
+from .moreapp_fuentes import fold_header
 from .moreapp_registros_views import _campos_desde_formulario
 from .moreapp_tareas_lote import (
     MAX_CANTIDAD,
     MAX_FILAS_LISTADO,
     MAX_LOTE,
     destino_listado,
+    fila_cliente_en_copia_local,
     fila_cliente_en_fuente,
     parse_filas_listado,
     mensaje_tarea_listado,
@@ -463,6 +465,10 @@ def _precarga_search_cliente(
         ds_id = str(campo.get("datasource_id") or "").strip()
         if not key or not ds_id:
             continue
+        fila = fila_cliente_en_copia_local(ds_id, numero)
+        if fila:
+            data[key] = fila
+            break
         if ds_id not in cache:
             try:
                 payload = list_datasource_entry_rows(ds_id)
@@ -475,6 +481,45 @@ def _precarga_search_cliente(
             data[key] = fila
             break
     return data
+
+
+_CAMPOS_NUMERO_CLIENTE = {
+    "cliente",
+    "numerocliente",
+    "numerodecliente",
+    "nrocliente",
+    "nrodecliente",
+    "ndecliente",
+    "cuenta",
+    "numerocuenta",
+    "numerodecuenta",
+    "nrocuenta",
+}
+
+
+def _precarga_cliente(
+    campos: List[Dict[str, Any]],
+    numero_cliente: str,
+    cache: Dict[str, List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    """Número de cliente en los campos de texto que lo piden, más la fila de la búsqueda de cliente."""
+    numero = (numero_cliente or "").strip()
+    if not numero:
+        return {}
+    data: Dict[str, Any] = {}
+    for campo in campos:
+        key = str(campo.get("data_name") or "").strip()
+        if not key or str(campo.get("widget") or "") not in ("text", "barcode"):
+            continue
+        nombres = {fold_header(key), fold_header(campo.get("label") or "")}
+        if nombres & _CAMPOS_NUMERO_CLIENTE:
+            data[key] = numero
+    data.update(_precarga_search_cliente(campos, numero, cache))
+    return data
+
+
+def _busqueda_precargada(data: Dict[str, Any]) -> bool:
+    return any(isinstance(value, dict) for value in data.values())
 
 
 def _destinatarios_finales(
@@ -1698,6 +1743,7 @@ def tarea_crear_view(request):
     limite = _dt_from_local(context["fecha_limite"])
     nombres = {row["id"]: row["name"] for row in context["formularios"]}
     permitidos = set()
+    campos: List[Dict[str, Any]] = []
     try:
         form_id = assert_safe_id(form_id, "formId")
         formulario = get_form(form_id)
@@ -1743,6 +1789,9 @@ def tarea_crear_view(request):
         return _fail_crear("Indica la fecha y hora programadas de envío.")
 
     cliente = _cliente_por_id(context.get("cliente_id"))
+    if cliente is not None:
+        for key, value in _precarga_cliente(campos, cliente.numero_cliente, {}).items():
+            data.setdefault(key, value)
     tarea, error = _enviar_tarea_registrada(
         form_id=form_id,
         form_name=nombres.get(form_id) or form_id,
@@ -1847,6 +1896,8 @@ def tarea_lote_csv_view(request):
 
     resultados = []
     enviadas = 0
+    campos_cache: Dict[str, List[Dict[str, Any]]] = {}
+    ds_cache: Dict[str, List[Dict[str, Any]]] = {}
     for idx, fila in enumerate(filas, start=2):
         resultado = {
             "fila": idx,
@@ -1889,6 +1940,17 @@ def tarea_lote_csv_view(request):
         mensaje = (fila.get("mensaje") or "").strip()[:500]
         if not mensaje:
             mensaje = "Tarea asignada desde la intranet"
+        numero = (fila.get("cliente") or "").strip()
+        data: Dict[str, Any] = {}
+        cliente_obj = None
+        ubicacion = ""
+        if numero:
+            data = _precarga_cliente(_campos_formulario(form_id, campos_cache), numero, ds_cache)
+            cliente_obj = Cliente.objects.filter(numero_cliente=numero).first()
+            if cliente_obj is not None:
+                ubicacion = " ".join(
+                    part for part in (cliente_obj.direccion, cliente_obj.comuna) if part
+                ).strip()
         _tarea, error = _enviar_tarea_registrada(
             form_id=form_id,
             form_name=str(form.get("name") or form_id),
@@ -1896,17 +1958,17 @@ def tarea_lote_csv_view(request):
             groups_sel=groups_sel,
             all_recipients=all_recipients,
             mensaje=mensaje,
-            data={},
+            data=data,
             limite=None,
-            ubicacion="",
+            ubicacion=ubicacion[:255],
             lat="",
             lng="",
             user=request.user,
-            cuenta="",
-            cliente=None,
+            cuenta=numero,
+            cliente=cliente_obj,
         )
         resultado["ok"] = not error
-        resultado["precarga"] = False
+        resultado["precarga"] = _busqueda_precargada(data)
         resultado["error"] = error
         if resultado["ok"]:
             enviadas += 1
@@ -2051,7 +2113,7 @@ def tarea_lote_clientes_view(request):
     form_name = str(elegido.get("name") or form_id)
     for cliente in clientes:
         numero = (cliente.numero_cliente or "").strip()
-        data = _precarga_search_cliente(campos, numero, ds_cache)
+        data = _precarga_cliente(campos, numero, ds_cache)
         ubicacion = " ".join(
             part for part in (cliente.direccion, cliente.comuna) if part
         ).strip()
@@ -2080,7 +2142,7 @@ def tarea_lote_clientes_view(request):
                 "destinatario": ", ".join(all_recipients),
                 "cliente": numero,
                 "ok": ok,
-                "precarga": bool(data),
+                "precarga": _busqueda_precargada(data),
                 "error": error,
             }
         )

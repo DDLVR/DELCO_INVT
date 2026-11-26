@@ -143,14 +143,43 @@ def split_destinatarios(value: str) -> List[str]:
     return [item.strip() for item in parts if item.strip()]
 
 
+_CLAVES_CUENTA = ("cuenta", "numerocliente", "nrocliente", "cliente", "numero")
+
+
 def cuenta_de_fila(row: Dict[str, Any]) -> str:
     if not isinstance(row, dict):
         return ""
     for key, val in row.items():
         folded = _norm(key)
-        if folded in ("cuenta", "numerocliente", "nrocliente", "cliente", "numero"):
+        if folded in _CLAVES_CUENTA:
             return str(val or "").strip()
     return str(row.get("CUENTA") or row.get("cuenta") or "").strip()
+
+
+def fila_cliente_en_copia_local(datasource_id: str, numero_cliente: str) -> Optional[Dict[str, Any]]:
+    """Busca el cliente en la copia de la fuente guardada en la intranet (la API solo entrega las primeras filas)."""
+    from .models import MoreAppFuenteInterna
+
+    numero = (numero_cliente or "").strip()
+    fuente = MoreAppFuenteInterna.objects.filter(datasource_id=datasource_id).first()
+    if not numero or fuente is None:
+        return None
+    muestra = fuente.filas.values_list("valores", flat=True).first()
+    if not isinstance(muestra, dict):
+        return None
+    valores_buscados: List[Any] = [numero]
+    if numero.isdigit():
+        valores_buscados.append(int(numero))
+    for columna in [key for key in muestra if _norm(key) in _CLAVES_CUENTA]:
+        for valor in valores_buscados:
+            fila = (
+                fuente.filas.filter(**{"valores__%s" % columna: valor})
+                .values_list("valores", flat=True)
+                .first()
+            )
+            if isinstance(fila, dict):
+                return fila
+    return None
 
 
 def fila_cliente_en_fuente(
@@ -171,6 +200,7 @@ _PLANTILLA_COLUMNAS = (
     "Mensaje",
     "Formulario",
     "Destinatario",
+    "Cliente",
 )
 
 
@@ -184,11 +214,13 @@ def plantilla_xlsx() -> bytes:
         "Mensaje": "Texto corto que ve quien recibe la tarea.",
         "Formulario": "Nombre o ID del formulario publicado en MoreApp.",
         "Destinatario": "Nombre del técnico enlazado, correo MoreApp, o el nombre del grupo.",
+        "Cliente": "Opcional. Número de cliente: rellena la búsqueda de cliente del formulario (ej. «Buscar cliente»).",
     }
     anchos = {
         "Mensaje": 36,
         "Formulario": 28,
         "Destinatario": 32,
+        "Cliente": 18,
     }
     wb = Workbook()
     ws = wb.active
@@ -203,7 +235,7 @@ def plantilla_xlsx() -> bytes:
         cell.comment = Comment(ayudas[nombre], "DELCO")
         ws.column_dimensions[get_column_letter(col)].width = anchos[nombre]
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = "A1:C1"
+    ws.auto_filter.ref = "A1:%s1" % get_column_letter(len(_PLANTILLA_COLUMNAS))
 
     guia = wb.create_sheet("Instrucciones")
     guia["A1"] = "Columna"
@@ -217,8 +249,11 @@ def plantilla_xlsx() -> bytes:
         guia.cell(row=idx, column=2, value=ayudas[nombre])
     guia.column_dimensions["A"].width = 18
     guia.column_dimensions["B"].width = 70
-    guia["A6"] = "Una fila = una tarea. Completa desde la fila 2 solo Mensaje, Formulario y Destinatario."
-    guia.merge_cells("A6:B6")
+    guia["A7"] = (
+        "Una fila = una tarea. Completa desde la fila 2 Mensaje, Formulario y Destinatario; "
+        "agrega Cliente cuando la tarea es para un cliente."
+    )
+    guia.merge_cells("A7:B7")
 
     buffer = io.BytesIO()
     wb.save(buffer)

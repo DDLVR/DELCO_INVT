@@ -168,8 +168,14 @@ def _extract_fields(fields: Any, depth: int = 0) -> List[Dict[str, Any]]:
         props = field.get("properties") if isinstance(field.get("properties"), dict) else {}
         short = _widget_short(str(field.get("widget") or ""))
         search_cfg = props.get("search") if isinstance(props.get("search"), dict) else {}
+        ds_cfg = (
+            props.get("data_source_configuration")
+            if isinstance(props.get("data_source_configuration"), dict)
+            else {}
+        )
         datasource_id = str(
-            props.get("dataSourceId")
+            ds_cfg.get("id")
+            or props.get("dataSourceId")
             or props.get("datasourceId")
             or props.get("data_source")
             or props.get("datasource")

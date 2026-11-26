@@ -37,9 +37,11 @@
               <span class="delco-import-col-chip">Mensaje</span>
               <span class="delco-import-col-chip is-required">Formulario</span>
               <span class="delco-import-col-chip is-required">Destinatario</span>
+              <span class="delco-import-col-chip">Cliente</span>
             </div>
             <p class="small text-muted mb-0">
-              Solo esas tres columnas. Destinatario: nombre del técnico enlazado, correo MoreApp o nombre de grupo.
+              Destinatario: nombre del técnico enlazado, correo MoreApp o nombre de grupo.
+              Cliente: número de cliente; rellena la búsqueda de cliente del formulario.
             </p>
           </section>
 
@@ -78,7 +80,7 @@
                     <td>
                       {% if item.ok %}
                       <span class="badge text-bg-success">Enviada</span>
-                      {% if item.precarga %}<div class="small text-muted">Search precargado</div>{% endif %}
+                      {% if item.precarga %}<div class="small text-muted">Cliente {{ item.cliente }} precargado</div>{% elif item.cliente %}<div class="small text-warning">Cliente {{ item.cliente }} no está en la fuente del formulario: la búsqueda queda para el técnico</div>{% endif %}
                       {% else %}
                       <span class="badge text-bg-danger">Error</span>
                       <div class="small text-danger">{{ item.error }}</div>
