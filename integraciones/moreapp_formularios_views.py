@@ -23,6 +23,24 @@ from .moreapp_catalogo_views import _catalogo_return_url, _fold_text, _form_row
 from .moreapp_api import assert_safe_id
 
 
+def _nombres_formularios(rows):
+    return sorted({
+        (row.get("name") or "").strip()
+        for row in rows
+        if (row.get("name") or "").strip()
+    })
+
+
+def _nombres_asignados(rows):
+    nombres = set()
+    for row in rows:
+        for nombre in row.get("asignados") or []:
+            texto = (nombre or "").strip()
+            if texto:
+                nombres.add(texto)
+    return sorted(nombres)
+
+
 def contexto_formularios_asignados(request, *, todos: bool = False):
     query = (request.GET.get("query") or "").strip()
     rol = getattr(request.user, "rol", "")
@@ -62,6 +80,8 @@ def contexto_formularios_asignados(request, *, todos: bool = False):
             asignados = por_form.get(form_id, [])
             nombre = asignados[0].form_name if asignados else form_id
             visibles.append(fila_asignada(form_id, nombre, asignados))
+        context["nombres_formularios"] = _nombres_formularios(visibles)
+        context["nombres_asignados"] = _nombres_asignados(visibles)
         if query:
             needle = _fold_text(query)
             visibles = [row for row in visibles if needle in _fold_text(row.get("name"))]
@@ -74,6 +94,8 @@ def contexto_formularios_asignados(request, *, todos: bool = False):
             asignados = por_form.get(form_id, [])
             nombre = asignados[0].form_name if asignados else form_id
             rows.append(fila_asignada(form_id, nombre, asignados))
+        context["nombres_formularios"] = _nombres_formularios(rows)
+        context["nombres_asignados"] = _nombres_asignados(rows)
         if query:
             needle = _fold_text(query)
             rows = [row for row in rows if needle in _fold_text(row.get("name"))]

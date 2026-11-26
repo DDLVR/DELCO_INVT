@@ -287,6 +287,25 @@ class ReportesSetMinimoPunto9Tests(TestCase):
 			'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 		)
 
+	def test_plantilla_inventario_trae_las_columnas_a_llenar(self):
+		from io import BytesIO
+		from openpyxl import load_workbook
+
+		esperado = {
+			'medidor': ('Medidores', '#', 'Tipo Medidor', 12),
+			'sim': ('SIM', 'IMEI', 'MEDIDOR', 11),
+			'modem': ('Modems', 'MARCA', 'Proyecto', 18),
+		}
+		for tipo, (hoja, primera, ultima, total) in esperado.items():
+			response = self.client.get(reverse('inventario_plantilla') + '?tipo=' + tipo)
+			self.assertEqual(response.status_code, 200)
+			wb = load_workbook(BytesIO(response.content))
+			ws = wb[hoja]
+			self.assertEqual(ws['A1'].value, primera)
+			self.assertEqual(ws.cell(row=1, column=total).value, ultima)
+			self.assertEqual(ws.max_row, 1)
+			self.assertIn('Como llenarla', wb.sheetnames)
+
 	def test_exportar_ordenes_disponible(self):
 		response = self.client.get(reverse('ordenes_exportar'))
 		self.assertIn(response.status_code, [200, 302])

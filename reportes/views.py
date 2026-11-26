@@ -1,15 +1,11 @@
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.db.models import Q
 from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect, render
 from urllib.parse import urlencode
 import logging
 
-from ordenes_trabajo.models import OrdenTrabajo
-from usuarios.models import Usuario
 from web.decorators import role_required
-from web.perf_cache import cache_get_or_set, TTL_CORTO
 
 from .exports import PdfExportUnavailable, build_excel_response, build_pdf_response
 from .services import REPORT_CATALOG, parse_report_filters, run_report
@@ -17,196 +13,113 @@ from .services import REPORT_CATALOG, parse_report_filters, run_report
 logger = logging.getLogger(__name__)
 
 
-def _opciones_filtro_reportes():
-    """Opciones reales para el hub (cacheadas; valores con sentido operativo)."""
-    from reportes.operational_scope import clientes_operativos_qs
+def _filtros_descarga(request):
+    """Fecha, técnico y n° de cliente que viajan al Excel y al PDF."""
+    params = {}
+    for clave in ('fecha_desde', 'fecha_hasta', 'tecnico', 'num_cliente'):
+        valor = (request.GET.get(clave) or '').strip()
+        if valor:
+            params[clave] = valor
+    return urlencode(params)
 
-    def _calc():
-        tecnico_ids = set(
-            OrdenTrabajo.objects.filter(eliminado=False)
-            .exclude(tecnico_responsable_id=None)
-            .values_list('tecnico_responsable_id', flat=True)
-            .distinct()
+
+def _conteo_registros(form_id, fecha_desde, fecha_hasta, num_cliente):
+    """Total que informa MoreApp para la fecha y el cliente. El técnico se aplica al archivo."""
+    from integraciones.moreapp_registros_views import _cargar_submissions
+
+    try:
+        _items, raw = _cargar_submissions(
+            form_id,
+            page=0,
+            page_size=1,
+            tecnico='',
+            num_cliente=num_cliente,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
         )
-        tecnicos = list(
-            Usuario.objects.filter(
-                Q(rol='TECNICO', is_active=True) | Q(pk__in=tecnico_ids)
-            ).order_by('nombre_interno').values('id', 'nombre_interno')
-        )
+    except Exception:
+        logger.exception('No se pudo contar los registros del formulario %s', form_id)
+        return None
+    if not isinstance(raw, dict) or raw.get('totalSize') is None:
+        return None
+    try:
+        return int(raw.get('totalSize'))
+    except (TypeError, ValueError):
+        return None
 
-        empresas = list(
-            clientes_operativos_qs()
-            .exclude(empresa__isnull=True)
-            .exclude(empresa='')
-            .order_by('empresa')
-            .values_list('empresa', flat=True)
-            .distinct()[:200]
-        )
-        if not empresas:
-            empresas = list(
-                OrdenTrabajo.objects.filter(eliminado=False)
-                .exclude(cliente__empresa__isnull=True)
-                .exclude(cliente__empresa='')
-                .order_by('cliente__empresa')
-                .values_list('cliente__empresa', flat=True)
-                .distinct()[:200]
-            )
 
-        comunas = list(
-            clientes_operativos_qs()
-            .exclude(comuna__isnull=True)
-            .exclude(comuna='')
-            .order_by('comuna')
-            .values_list('comuna', flat=True)
-            .distinct()[:200]
-        )
-        if not comunas:
-            comunas = list(
-                OrdenTrabajo.objects.filter(eliminado=False)
-                .exclude(cliente__comuna__isnull=True)
-                .exclude(cliente__comuna='')
-                .order_by('cliente__comuna')
-                .values_list('cliente__comuna', flat=True)
-                .distinct()[:200]
-            )
+def _conteo_cacheado(form_id, fecha_desde, fecha_hasta, num_cliente):
+    from web.perf_cache import TTL_CORTO, cache_get_or_set
 
-        return {
-            'tecnicos': tecnicos,
-            'empresas': empresas,
-            'comunas': comunas,
-            'estados_ot': list(OrdenTrabajo.ESTADO_CHOICES),
-            'tipos_trabajo': list(OrdenTrabajo.TIPO_TRABAJO_CHOICES),
-        }
-
-    return cache_get_or_set('reportes:opciones_filtro', _calc, TTL_CORTO)
+    clave = 'reportes:conteo:%s:%s:%s:%s' % (form_id, fecha_desde, fecha_hasta, num_cliente)
+    return cache_get_or_set(
+        clave,
+        lambda: _conteo_registros(form_id, fecha_desde, fecha_hasta, num_cliente),
+        TTL_CORTO,
+    )
 
 
 @login_required
 @role_required(['ADMIN', 'ADMINISTRATIVO', 'GERENCIA', 'AUDITOR'])
 def reportes_hub_view(request):
-    """Hub de reportes con filtros y conteos por informe."""
+    """Catálogo de informes de los formularios asignados. El admin ve todos."""
     session = getattr(request, 'session', None)
     aviso_export = session.pop('reportes_aviso_export', None) if session is not None else None
     if aviso_export:
         messages.warning(request, aviso_export)
 
-    filters_raw = request.GET
-    query = urlencode({
-        k: v for k, v in {
-            'periodo': filters_raw.get('periodo', ''),
-            'tecnico_id': filters_raw.get('tecnico_id', ''),
-            'empresa': filters_raw.get('empresa', ''),
-            'estado_ot': filters_raw.get('estado_ot', ''),
-            'tipo_trabajo': filters_raw.get('tipo_trabajo', ''),
-            'comuna': filters_raw.get('comuna', ''),
-        }.items() if v
-    })
-
-    from reportes.operational_scope import hay_actividad_operativa, clientes_operativos_qs
-    from ordenes_trabajo.models import IntegracionMoreApp
+    from integraciones.moreapp_formularios_views import contexto_formularios_asignados
 
     try:
         from integraciones.moreapp_api_ingest import ingest_asignados_si_corresponde
+        from web.perf_cache import en_segundo_plano
 
-        ingest_asignados_si_corresponde(aplicar_operativo=False)
+        en_segundo_plano(lambda: ingest_asignados_si_corresponde(aplicar_operativo=False))
     except Exception:
         pass
 
-    tiene_actividad = hay_actividad_operativa()
-    hay_datos_exportables = (
-        OrdenTrabajo.objects.filter(eliminado=False).exists()
-        or clientes_operativos_qs().exists()
-        or IntegracionMoreApp.objects.filter(eliminado=False).exclude(
-            estado_sincronizacion__in=('ERROR_JSON', 'ERROR_LECTURA', 'ERROR'),
-        ).exists()
-    )
+    ve_todos = getattr(request.user, 'rol', '') == 'ADMIN'
+    context = contexto_formularios_asignados(request, todos=ve_todos)
+    asignado = (request.GET.get('asignado') or '').strip()
+    if ve_todos and asignado:
+        needle = asignado.casefold()
+        context['formularios'] = [
+            fila for fila in context.get('formularios') or []
+            if any(needle in (nombre or '').casefold() for nombre in (fila.get('asignados') or []))
+        ]
+    fecha_desde = (request.GET.get('fecha_desde') or '').strip()
+    fecha_hasta = (request.GET.get('fecha_hasta') or '').strip()
+    tecnico = (request.GET.get('tecnico') or '').strip()
+    num_cliente = (request.GET.get('num_cliente') or '').strip()
+    formularios = context.get('formularios') or []
+    total = 0
+    if formularios:
+        from concurrent.futures import ThreadPoolExecutor
 
-    filtros_parseados = parse_report_filters(filters_raw) if hay_datos_exportables else {}
+        def _uno(fila):
+            return _conteo_cacheado(fila.get('id') or '', fecha_desde, fecha_hasta, num_cliente)
 
-    def _conteos_catalogo():
-        items = []
-        for slug, meta in REPORT_CATALOG.items():
-            row_count = None
-            error = False
-            try:
-                if hay_datos_exportables and tiene_actividad:
-                    _, rows = run_report(slug, filtros_parseados)
-                    row_count = len(rows)
-                elif hay_datos_exportables:
-                    row_count = 0
-            except Exception:
-                logger.exception('Error calculando conteo reporte %s', slug)
-                error = True
-                row_count = None
-            items.append({
-                'slug': slug,
-                'title': meta.get('title') or slug,
-                'description': meta['description'],
-                'supports_date_range': meta.get('supports_date_range', False),
-                'supports_tecnico': meta.get('supports_tecnico', False),
-                'supports_empresa': meta.get('supports_empresa', False),
-                'supports_estado': meta.get('supports_estado', False),
-                'supports_tipo': meta.get('supports_tipo', False),
-                'supports_comuna': meta.get('supports_comuna', False),
-                'row_count': row_count,
-                'error': error,
-            })
-        return items
-
-    cache_key = f'reportes:hub_conteos:{query or "all"}'
-    if hay_datos_exportables:
-        catalog = cache_get_or_set(cache_key, _conteos_catalogo, TTL_CORTO)
-    else:
-        catalog = []
-        for slug, meta in REPORT_CATALOG.items():
-            catalog.append({
-                'slug': slug,
-                'title': meta.get('title') or slug,
-                'description': meta['description'],
-                'supports_date_range': meta.get('supports_date_range', False),
-                'supports_tecnico': meta.get('supports_tecnico', False),
-                'supports_empresa': meta.get('supports_empresa', False),
-                'supports_estado': meta.get('supports_estado', False),
-                'supports_tipo': meta.get('supports_tipo', False),
-                'supports_comuna': meta.get('supports_comuna', False),
-                'row_count': None,
-                'error': False,
-            })
-
-    opciones = _opciones_filtro_reportes()
-    tecnicos_ids = [t['id'] for t in opciones.get('tecnicos', [])]
-    tecnicos = (
-        Usuario.objects.filter(pk__in=tecnicos_ids).order_by('nombre_interno')
-        if tecnicos_ids else Usuario.objects.none()
-    )
-
-    filtros_activos = any([
-        request.GET.get('periodo'),
-        request.GET.get('tecnico_id'),
-        request.GET.get('empresa'),
-        request.GET.get('estado_ot'),
-        request.GET.get('tipo_trabajo'),
-        request.GET.get('comuna'),
-    ])
-
-    return render(request, 'reportes/hub.html', {
-        'catalog': catalog,
-        'filters': request.GET,
-        'filter_query': query,
-        'tecnicos': tecnicos,
-        'empresas': opciones.get('empresas', []),
-        'comunas': opciones.get('comunas', []),
-        'estados_ot': opciones.get('estados_ot', []),
-        'tipos_trabajo': opciones.get('tipos_trabajo', []),
-        'hay_actividad_operativa': tiene_actividad,
-        'hay_datos_en_reportes': hay_datos_exportables,
-        'mostrar_catalogo': bool(hay_datos_exportables),
-        'conteos_diferidos': False,
-        'filtros_activos': filtros_activos,
-        'total_registros_catalogo': sum(
-            (item.get('row_count') or 0) for item in catalog if not item.get('error')
+        trabajadores = min(4, len(formularios))
+        with ThreadPoolExecutor(max_workers=trabajadores) as pool:
+            conteos = list(pool.map(_uno, formularios))
+        for fila, conteo in zip(formularios, conteos):
+            fila['row_count'] = conteo
+            if conteo:
+                total += conteo
+    context.update({
+        've_todos': ve_todos,
+        'asignado': asignado,
+        'fecha_desde': fecha_desde,
+        'fecha_hasta': fecha_hasta,
+        'tecnico': tecnico,
+        'num_cliente': num_cliente,
+        'filtros_descarga': _filtros_descarga(request),
+        'total_registros': total,
+        'tiene_filtros': bool(
+            context.get('query') or asignado or fecha_desde or fecha_hasta or tecnico or num_cliente
         ),
     })
+    return render(request, 'reportes/hub.html', context)
 
 
 @login_required

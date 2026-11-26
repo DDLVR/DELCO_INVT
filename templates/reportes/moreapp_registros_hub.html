@@ -37,16 +37,35 @@
         <div class="col-12 col-md-5">
           <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
           <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
-          <div data-filtro-panel="query" data-filtro-titulo="Buscar" data-filtro-param="query" class="d-none">
-            <input type="search" class="form-control form-control-sm" id="query" placeholder="Nombre del formulario…" autocomplete="off" aria-label="Buscar">
+          <div data-filtro-panel="query" data-filtro-titulo="Formulario" data-filtro-param="query" class="d-none">
+            <input type="text" class="form-control form-control-sm" id="query" list="listaFormulariosMoreapp" placeholder="Elige o escribe un formulario" autocomplete="off" aria-label="Formulario">
+            <datalist id="listaFormulariosMoreapp">
+              {% for nombre in nombres_formularios %}<option value="{{ nombre }}"></option>{% endfor %}
+            </datalist>
           </div>
+          <div data-filtro-panel="fecha" data-filtro-titulo="Fecha" data-filtro-modo="fecha" data-filtro-desde="fecha_desde" data-filtro-hasta="fecha_hasta" class="d-none">
+            <input type="date" class="form-control form-control-sm" aria-label="Desde">
+          </div>
+          <div data-filtro-panel="tecnico" data-filtro-titulo="Técnico" data-filtro-param="tecnico" class="d-none">
+            <input type="text" class="form-control form-control-sm" placeholder="Nombre del técnico" aria-label="Técnico">
+          </div>
+          <div data-filtro-panel="num_cliente" data-filtro-titulo="N° cliente" data-filtro-param="num_cliente" class="d-none">
+            <input type="text" class="form-control form-control-sm" placeholder="Número de cliente" aria-label="N° cliente">
+          </div>
+        </div>
+        <div class="col-12 col-md-3 d-none js-filtro-rango">
+          <label class="form-label small mb-1">Hasta</label>
+          <input type="date" class="form-control form-control-sm js-filtro-hasta" aria-label="Hasta">
         </div>
         <div class="col-12 col-md-auto">
           <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
         </div>
       </div>
       <div class="delco-filtro-activos js-filtro-activos">
-        {% if query %}<a class="delco-filtro-chip" href="?{% url_sin 'query' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ query }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if query %}<a class="delco-filtro-chip" href="?{% url_sin 'query' %}"><span class="delco-filtro-chip-tipo">Formulario</span><span>{{ query }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if fecha_desde or fecha_hasta %}<a class="delco-filtro-chip" href="?{% url_sin 'fecha_desde' 'fecha_hasta' %}"><span class="delco-filtro-chip-tipo">Fecha</span><span>{{ fecha_desde|default:"…" }} → {{ fecha_hasta|default:"…" }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if tecnico %}<a class="delco-filtro-chip" href="?{% url_sin 'tecnico' %}"><span class="delco-filtro-chip-tipo">Técnico</span><span>{{ tecnico }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+        {% if num_cliente %}<a class="delco-filtro-chip" href="?{% url_sin 'num_cliente' %}"><span class="delco-filtro-chip-tipo">N° cliente</span><span>{{ num_cliente }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
         {% if tiene_filtros %}<a class="delco-filtro-limpiar" href="{% url 'reportes_moreapp_list' %}">Quitar filtros</a>{% endif %}
       </div>
     </div>
@@ -55,10 +74,12 @@
   {% if not formularios %}
   <div class="delco-catalogo-empty">
     <i class="bi bi-inboxes"></i>
-    {% if user.rol == 'ADMIN' %}
-    Aún no hay formularios en registros. Asigna uno desde el catálogo MoreApp para poder revisar aquí sus envíos.
+    {% if tiene_filtros %}
+    Ningún formulario coincide con ese filtro.
+    {% elif ve_todos %}
+    Aún no hay formularios asignados. Asínalos desde el catálogo MoreApp para revisar aquí sus reportes.
     {% else %}
-    No hay formularios asignados para revisar. Pide a un administrador que deje los formularios en registros.
+    No tienes formularios asignados. Pide a un administrador que te asigne los que vas a revisar.
     {% endif %}
   </div>
   {% else %}
@@ -93,7 +114,7 @@
             {% endif %}
           </div>
           <div class="mt-auto d-flex flex-wrap gap-2">
-            <a class="btn btn-sm btn-primary" href="{% url 'moreapp_api_form_registros' form.id %}?origen=reportes">
+            <a class="btn btn-sm btn-primary" href="{% url 'moreapp_api_form_registros' form.id %}?{{ filtros_registros }}">
               Revisar registros
             </a>
           </div>

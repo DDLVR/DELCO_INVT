@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Dict, Iterable, List, Optional
 
 from django.conf import settings
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 _CACHE_INGEST = "moreapp:api_ingest"
 _LOCK_INGEST = "moreapp:api_ingest_lock"
 _PAGE_SIZE = 50
+_DIAS_LLEGADA_INVENTARIO = 7
 
 
 def _items(raw: Any) -> List[Dict[str, Any]]:
@@ -28,6 +30,14 @@ def _items(raw: Any) -> List[Dict[str, Any]]:
         if isinstance(data, list):
             return [item for item in data if isinstance(item, dict)]
     return []
+
+
+def _fecha_item(item: Dict[str, Any]) -> float:
+    info = item.get("info") if isinstance(item.get("info"), dict) else {}
+    try:
+        return float(info.get("date") or 0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def asegurar_payload_api(item: Dict[str, Any], form_name: str = "") -> Dict[str, Any]:
@@ -76,6 +86,10 @@ def ingest_submission_items(
             )
         )
 
+    from integraciones.reader import _resolver_formulario
+
+    seleccion = []
+    cupo_nuevos = 0
     for item in lote:
         sid = str(item.get("id") or item.get("_id") or "").strip()
         if not sid:
@@ -85,15 +99,29 @@ def ingest_submission_items(
         if ya_existe and not aplicar_operativo:
             stats["omitidos"] += 1
             continue
-        if (not ya_existe) and stats["nuevos"] >= max_nuevos:
-            stats["omitidos"] += 1
-            continue
+        if not ya_existe:
+            if cupo_nuevos >= max_nuevos:
+                stats["omitidos"] += 1
+                continue
+            cupo_nuevos += 1
+        seleccion.append((item, sid, ya_existe))
+
+    # Movimientos de inventario en orden cronológico: la visita más reciente define el estado final.
+    seleccion.sort(key=lambda par: _fecha_item(par[0]))
+    # Un informe histórico que se registra tarde (lista, exportación) no debe reescribir el stock actual.
+    limite_llegada = (time.time() - _DIAS_LLEGADA_INVENTARIO * 86400) * 1000
+    for item, sid, ya_existe in seleccion:
         payload = asegurar_payload_api(item, form_name)
+        mueve_inventario = aplicar_operativo or (
+            not ya_existe
+            and _fecha_item(item) >= limite_llegada
+            and _resolver_formulario(payload["info"].get("formName") or "") == "MANTENIMIENTO_TELEMETRIA_V3"
+        )
         try:
             resultado = procesar_payload_moreapp(
                 payload,
                 ruta_context="api",
-                aplicar_operativo=aplicar_operativo,
+                aplicar_operativo=mueve_inventario,
             )
         except Exception:
             logger.exception("Ingesta MoreApp API falló id=%s", sid)

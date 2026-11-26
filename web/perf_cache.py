@@ -29,3 +29,22 @@ def cache_get_or_set(key: str, factory, ttl: int = TTL_CORTO):
 def cache_invalidate(*keys: str) -> None:
     for key in keys:
         cache.delete(key)
+
+
+def en_segundo_plano(funcion):
+    """Corre trabajo lento sin frenar la página. Durante las pruebas corre al tiro."""
+    if _en_tests():
+        return funcion()
+
+    import threading
+
+    from django.db import close_old_connections
+
+    def _run():
+        try:
+            funcion()
+        finally:
+            close_old_connections()
+
+    threading.Thread(target=_run, daemon=True).start()
+    return None

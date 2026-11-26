@@ -48,8 +48,10 @@ from .moreapp_respuestas import (
 )
 
 _PAGE_SIZE = 20
-_EXPORT_PAGE_SIZE = 50
-_EXPORT_MAX_PAGES = 20
+_FILTRO_PAGE_SIZE = 50
+_FILTRO_MAX_PAGES = 20
+_EXPORT_PAGE_SIZE = 500
+_EXPORT_MAX_PAGES = 100
 _SKIP_WIDGETS = {"header", "image"}
 _CLIENTE_KEYS = {
     "numcliente",
@@ -644,9 +646,7 @@ def _catalogo_qs_from_fechas(fecha_desde: str, fecha_hasta: str) -> str:
     return urlencode(params)
 
 
-def _excel_registros_response(formulario: Dict[str, Any], registros: List[Dict[str, Any]], preview_labels: List[str]):
-    from reportes.exports import build_excel_response
-
+def _filas_registros(registros: List[Dict[str, Any]], preview_labels: List[str]):
     headers = ["Fecha", "Técnico responsable", "N° cliente"] + list(preview_labels) + ["Estado", "ID"]
     rows = []
     for registro in registros:
@@ -663,6 +663,13 @@ def _excel_registros_response(formulario: Dict[str, Any], registros: List[Dict[s
         row.append(registro.get("status") or "")
         row.append(registro.get("id") or "")
         rows.append(row)
+    return headers, rows
+
+
+def _excel_registros_response(formulario: Dict[str, Any], registros: List[Dict[str, Any]], preview_labels: List[str]):
+    from reportes.exports import build_excel_response
+
+    headers, rows = _filas_registros(registros, preview_labels)
     title = "MoreApp · %s" % (formulario.get("name") or "Registros")
     return build_excel_response(
         "moreapp_registros.xlsx",
@@ -671,6 +678,14 @@ def _excel_registros_response(formulario: Dict[str, Any], registros: List[Dict[s
         title=title,
         sheet_title="Registros",
     )
+
+
+def _pdf_registros_response(formulario: Dict[str, Any], registros: List[Dict[str, Any]], preview_labels: List[str]):
+    from reportes.exports import build_pdf_response
+
+    headers, rows = _filas_registros(registros, preview_labels)
+    title = "MoreApp · %s" % (formulario.get("name") or "Registros")
+    return build_pdf_response("moreapp_registros.pdf", headers, rows, title=title)
 
 
 def _cargar_submissions(
@@ -712,6 +727,67 @@ def _cargar_submissions(
     return items, raw
 
 
+def _recolectar_exportacion(
+    form_id: str,
+    *,
+    tecnico: str,
+    num_cliente: str,
+    fecha_desde: str,
+    fecha_hasta: str,
+) -> Tuple[List[Dict[str, Any]], bool]:
+    """Todas las páginas del formulario. True si el tope de seguridad cortó la descarga."""
+
+    def _una(page_idx: int) -> Tuple[List[Dict[str, Any]], Any]:
+        return _cargar_submissions(
+            form_id,
+            page=page_idx,
+            page_size=_EXPORT_PAGE_SIZE,
+            tecnico=tecnico,
+            num_cliente=num_cliente,
+            fecha_desde=fecha_desde,
+            fecha_hasta=fecha_hasta,
+        )
+
+    items, raw = _una(0)
+    collected = list(items)
+    total = raw.get("totalSize") if isinstance(raw, dict) else None
+    try:
+        total_n = int(total) if total is not None else None
+    except (TypeError, ValueError):
+        total_n = None
+    if not items:
+        return collected, False
+    if total_n is None or total_n < len(items):
+        page_idx = 1
+        while page_idx < _EXPORT_MAX_PAGES and len(items) >= _EXPORT_PAGE_SIZE:
+            items, _raw = _una(page_idx)
+            collected.extend(items)
+            page_idx += 1
+            if not items:
+                break
+        return collected, page_idx >= _EXPORT_MAX_PAGES and len(items) >= _EXPORT_PAGE_SIZE
+
+    paginas = max(1, (total_n + _EXPORT_PAGE_SIZE - 1) // _EXPORT_PAGE_SIZE)
+    cortado = paginas > _EXPORT_MAX_PAGES
+    paginas = min(paginas, _EXPORT_MAX_PAGES)
+    if paginas == 1:
+        return collected, cortado
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    por_pagina: Dict[int, List[Dict[str, Any]]] = {}
+    workers = min(4, paginas - 1)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futuros = {pool.submit(_una, idx): idx for idx in range(1, paginas)}
+        for futuro in as_completed(futuros):
+            idx = futuros[futuro]
+            page_items, _raw = futuro.result()
+            por_pagina[idx] = page_items
+    for idx in range(1, paginas):
+        collected.extend(por_pagina.get(idx) or [])
+    return collected, cortado
+
+
 def _campos_desde_formulario(formulario: Dict[str, Any]) -> List[Dict[str, Any]]:
     published = formulario.get("publishedVersion") if isinstance(formulario.get("publishedVersion"), dict) else {}
     latest = formulario.get("latestVersion") if isinstance(formulario.get("latestVersion"), dict) else {}
@@ -743,7 +819,8 @@ def registros_form_view(request, form_id: str):
     fecha_hasta = (request.GET.get("fecha_hasta") or "").strip()
     origen = (request.GET.get("origen") or "").strip()
     page = _page_int(request.GET.get("page"))
-    exportar = (request.GET.get("export") or "").strip().lower() in ("xlsx", "excel", "1")
+    formato_export = (request.GET.get("export") or "").strip().lower()
+    exportar = formato_export in ("xlsx", "excel", "1", "pdf")
     ajax = (request.GET.get("ajax") or "").strip() == "1"
     if not ajax and not exportar:
         page = 0
@@ -774,32 +851,43 @@ def registros_form_view(request, form_id: str):
         labels = _label_map(campos)
         preview_keys = _preview_keys(campos)
         preview_labels = [labels.get(key, key) for key in preview_keys]
-        page_size = _EXPORT_PAGE_SIZE if (exportar or tecnico or num_cliente) else _PAGE_SIZE
-        pages = range(_EXPORT_MAX_PAGES) if (exportar or tecnico or num_cliente) else [page]
-        collected: List[Dict[str, Any]] = []
-        has_next = False
-        for page_idx in pages:
-            items, raw = _cargar_submissions(
+        if exportar:
+            collected, has_next = _recolectar_exportacion(
                 form_id,
-                page=page_idx,
-                page_size=page_size,
                 tecnico=tecnico,
                 num_cliente=num_cliente,
                 fecha_desde=fecha_desde,
                 fecha_hasta=fecha_hasta,
             )
-            collected.extend(items)
-            total = raw.get("totalSize") if isinstance(raw, dict) else None
-            if total is None or tecnico or num_cliente:
-                page_has_next = len(items) >= page_size
+        else:
+            page_size = _FILTRO_PAGE_SIZE if (tecnico or num_cliente) else _PAGE_SIZE
+            pages = range(_FILTRO_MAX_PAGES) if (tecnico or num_cliente) else [page]
+            collected = []
+            has_next = False
+            for page_idx in pages:
+                items, raw = _cargar_submissions(
+                    form_id,
+                    page=page_idx,
+                    page_size=page_size,
+                    tecnico=tecnico,
+                    num_cliente=num_cliente,
+                    fecha_desde=fecha_desde,
+                    fecha_hasta=fecha_hasta,
+                )
+                collected.extend(items)
+                total = raw.get("totalSize") if isinstance(raw, dict) else None
+                if total is None or tecnico or num_cliente:
+                    page_has_next = len(items) >= page_size
+                else:
+                    page_has_next = (page_idx * page_size + len(items)) < int(total)
+                if not (tecnico or num_cliente):
+                    has_next = page_has_next
+                    break
+                if not items or not page_has_next:
+                    has_next = False
+                    break
             else:
-                page_has_next = (page_idx * page_size + len(items)) < int(total)
-            if not exportar and not (tecnico or num_cliente):
-                has_next = page_has_next
-                break
-            if not items or not page_has_next:
                 has_next = False
-                break
         emails = []
         for item in collected:
             info = item.get("info") if isinstance(item.get("info"), dict) else {}
@@ -819,6 +907,24 @@ def registros_form_view(request, form_id: str):
                 )
             except Exception:
                 pass
+        if exportar and has_next:
+            request.session["reportes_aviso_export"] = (
+                "El archivo trae %s registros. "
+                "MoreApp tiene más y esta descarga llegó al tope de seguridad."
+            ) % len(registros)
+        if formato_export == "pdf":
+            from reportes.exports import PdfExportUnavailable
+
+            try:
+                return _pdf_registros_response(formulario_row, registros, preview_labels)
+            except PdfExportUnavailable as exc:
+                aviso = (
+                    "%s Se descargó el reporte en Excel. "
+                    "Instala reportlab en el servidor para exportar PDF."
+                ) % exc
+                request.session["reportes_aviso_export"] = aviso
+                messages.warning(request, aviso)
+                return _excel_registros_response(formulario_row, registros, preview_labels)
         if exportar:
             return _excel_registros_response(formulario_row, registros, preview_labels)
         es_lectura = es_formulario_lectura(str(formulario_row.get("name") or ""))
@@ -1091,7 +1197,7 @@ def registro_detail_view(request, form_id: str, submission_id: str):
             ingest_submission_items(
                 [item],
                 form_name=str(formulario_row.get("name") or ""),
-                aplicar_operativo=True,
+                aplicar_operativo=False,
             )
         except Exception:
             pass

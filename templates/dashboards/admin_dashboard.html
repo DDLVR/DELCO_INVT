@@ -483,7 +483,11 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const autoRefreshSeconds = Number('{{ moreapp_auto_refresh_seconds|default:300 }}') || 300;
-    if (autoRefreshSeconds >= 60) {
+    const chartsPendiente = {{ moreapp_charts_pendiente|yesno:"true,false" }};
+    const espera = chartsPendiente ? 12 : autoRefreshSeconds;
+    if (chartsPendiente) {
+        window.setTimeout(function() { window.location.reload(); }, espera * 1000);
+    } else if (autoRefreshSeconds >= 60) {
         window.setInterval(function() { window.location.reload(); }, autoRefreshSeconds * 1000);
     }
 

@@ -79,7 +79,7 @@
       <a class="list-group-item list-group-item-action app-nav-link {% if 'reportes_moreapp' in request.resolver_match.url_name or request.GET.origen == 'reportes' %}active bg-primary text-white{% endif %}" href="{% url 'reportes_moreapp_list' %}">
         <i class="bi bi-clipboard-data me-2"></i> Reportes MoreApp
       </a>
-      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'reportes_hub' %}active bg-primary text-white{% endif %}" href="{% url 'reportes_hub' %}">
+      <a class="list-group-item list-group-item-action app-nav-link {% if request.resolver_match.url_name == 'reportes_hub' or request.GET.origen == 'operativos' %}active bg-primary text-white{% endif %}" href="{% url 'reportes_hub' %}">
         <i class="bi bi-file-earmark-bar-graph me-2"></i> Reportes operativos
       </a>
     {% endif %}

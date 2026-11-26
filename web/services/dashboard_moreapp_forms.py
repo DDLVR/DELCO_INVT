@@ -183,6 +183,41 @@ def _contar_diagnosticos(form_id: str, extra: Iterable[Tuple[str, str]], list_su
     return conteo
 
 
+def charts_dashboard_rapidos() -> Tuple[Dict[str, Any], bool]:
+    """Devuelve las gráficas ya guardadas y refresca MoreApp sin frenar el inicio de sesión.
+
+    El segundo valor es True cuando todavía no hay gráficas y la página puede recargar pronto.
+    """
+    from django.core.cache import cache
+
+    from web.perf_cache import TTL_MEDIO, _en_tests, en_segundo_plano
+
+    if _en_tests():
+        return build_dashboard_formularios_moreapp(), False
+
+    clave = "dashboard:moreapp_form_charts_v3"
+    fresco = clave + ":fresco"
+    candado = clave + ":build"
+    guardado = cache.get(clave)
+    if guardado and cache.get(fresco):
+        return guardado, False
+
+    def _armar():
+        try:
+            try:
+                data = build_dashboard_formularios_moreapp()
+            except Exception:
+                data = _vacio()
+            cache.set(clave, data, 60 * 30)
+            cache.set(fresco, 1, TTL_MEDIO)
+        finally:
+            cache.delete(candado)
+
+    if cache.add(candado, 1, 120):
+        en_segundo_plano(_armar)
+    return guardado or _vacio(), guardado is None
+
+
 def build_dashboard_formularios_moreapp() -> Dict[str, Any]:
     if not bool(getattr(settings, "MOREAPP_API_ENABLED", False)):
         return _vacio()

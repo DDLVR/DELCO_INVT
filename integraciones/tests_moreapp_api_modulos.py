@@ -1081,6 +1081,86 @@ class MoreAppApiModulosTests(TestCase):
         self.assertIn('attachment', resp['Content-Disposition'])
         self.assertGreater(len(resp.content), 100)
 
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_registros_views.get_form_version')
+    @mock.patch('integraciones.moreapp_registros_views.list_submissions')
+    @mock.patch('integraciones.moreapp_registros_views.get_form')
+    def test_registros_exporta_pdf(self, mocked_form, mocked_subs, mocked_version):
+        mocked_form.return_value = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Reposición de Suministro',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_version.return_value = {'fields': []}
+        mocked_subs.return_value = {
+            'totalSize': 1,
+            'elements': [
+                {
+                    'id': 'sub123sub123sub123sub123',
+                    'info': {'userName': 'Juan Perez', 'date': '2026-10-14T12:00:00Z'},
+                    'data': {'numCliente': 858678, 'tecnicoResponsable': {'NOMBRES': 'Juan Perez'}},
+                }
+            ],
+        }
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(
+            reverse('moreapp_api_form_registros', args=['abc123abc123abc123abc123']),
+            {'tecnico': 'Juan', 'export': 'pdf'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp['Content-Type'], 'application/pdf')
+        self.assertTrue(resp.content.startswith(b'%PDF'))
+
+    @override_settings(
+        MOREAPP_API_ENABLED=True,
+        MOREAPP_API_KEY='test-key',
+        MOREAPP_CUSTOMER_ID='123',
+    )
+    @mock.patch('integraciones.moreapp_registros_views.get_form_version')
+    @mock.patch('integraciones.moreapp_registros_views.list_submissions')
+    @mock.patch('integraciones.moreapp_registros_views.get_form')
+    def test_registros_exporta_excel_completo_sobre_1000(self, mocked_form, mocked_subs, mocked_version):
+        total = 1200
+
+        def _pagina(form_id, page=0, payload=None):
+            size = int((payload or {}).get('pageSize') or 500)
+            start = page * size
+            elements = []
+            for n in range(start, min(total, start + size)):
+                elements.append({
+                    'id': 'sub%020d' % n,
+                    'info': {'userName': 'Juan Perez', 'date': '2026-10-14T12:00:00Z'},
+                    'data': {'numCliente': 858678},
+                })
+            return {'totalSize': total, 'elements': elements}
+
+        mocked_form.return_value = {
+            'id': 'abc123abc123abc123abc123',
+            'name': 'Reposición de Suministro',
+            'status': 'ACTIVE',
+            'publishedVersion': {'formVersion': 'ver123ver123ver123ver123'},
+        }
+        mocked_version.return_value = {'fields': []}
+        mocked_subs.side_effect = _pagina
+        self.client.login(username=self.admin.rut, password=self.password)
+        resp = self.client.get(
+            reverse('moreapp_api_form_registros', args=['abc123abc123abc123abc123']),
+            {'export': 'xlsx'},
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(mocked_subs.call_count, 3)
+        from io import BytesIO
+        from openpyxl import load_workbook
+        book = load_workbook(BytesIO(resp.content))
+        sheet = book.active
+        self.assertIn('1200 registro', str(sheet['A2'].value))
+        self.assertEqual(sheet.max_row, 1204)
+
     def test_usuarios_internos_distinguen_moreapp(self):
         self.client.login(username=self.admin.rut, password=self.password)
         resp = self.client.get(reverse('usuarios_list'))

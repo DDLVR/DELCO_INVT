@@ -1743,6 +1743,102 @@ def _serie_medidor_display(equipo) -> str:
     return str(getattr(equipo, 'medidor_otro', '') or '').strip()
 
 
+# Mismos títulos y orden que lee la importación. La planilla vacía y el Excel exportado los comparten.
+HEADERS_PLANTILLA_INVENTARIO = {
+    'MEDIDORES': [
+        '#', 'FECHA DE RECEPCION', 'BODEGA', 'MARCA', 'CAJA', 'MEDIDOR', 'MODULO',
+        'FECHA DE ENTREGA', 'ENTREGADO A:', 'ESTADO', 'CLIENTE', 'Tipo Medidor',
+    ],
+    'SIM': [
+        'IMEI', 'OPERADOR', 'ABONADO', 'DIRECCIÓN IP', 'APN', 'FECHA RECEPCIÓN',
+        'ENTREGADO A', 'FECHA ENTREGA', 'ESTADO', 'CLIENTE', 'MEDIDOR',
+    ],
+    'MODEMS': [
+        'MARCA', 'MODELO', 'IMEI', 'SERIE', 'Fecha Recepción', 'Fecha Entrega', 'Caja',
+        'Técnico Responsable', 'Cliente', 'Medidor', 'IP', 'Puerto', 'Marca Secundaria',
+        'Observaciones', 'Retirado', 'Serie Secundaria', 'Irregularidad', 'Proyecto',
+    ],
+}
+
+_AYUDA_PLANTILLA_INVENTARIO = {
+    'MEDIDORES': {
+        'hoja': 'Medidores',
+        'obligatorias': {'FECHA DE RECEPCION', 'MEDIDOR', 'Tipo Medidor'},
+        'lineas': [
+            'Medidores — una fila por equipo. No cambies los títulos de la primera fila.',
+            'Obligatorio: Fecha de recepción, Medidor (la serie) y Tipo medidor.',
+            'Tipo medidor: DIRECTO o INDIRECTO. Módulo: SI o NO.',
+            'Estado, si lo escribes: En bodega, En Trayecto, Instalado, Retirado, En reparación, Dado de baja o En peaje.',
+            'Fechas: 25-11-2026, 25/11/2026 o 2026-11-25.',
+            'Lo demás puede ir vacío. Proyecto se completa después en Modificar.',
+            'No repitas la serie. No uses fórmulas ni celdas combinadas.',
+        ],
+    },
+    'SIM': {
+        'hoja': 'SIM',
+        'obligatorias': {'IMEI', 'OPERADOR'},
+        'lineas': [
+            'SIM — una fila por chip. No cambies los títulos de la primera fila.',
+            'Obligatorio: IMEI y Operador.',
+            'Cliente: número de cliente. Si no existe, se crea.',
+            'Medidor: serie del medidor asociado, si ya está cargado.',
+            'Estado, si lo escribes: En bodega, En Trayecto, Instalado, Retirado, Devuelta, Sin Conexión, Con Problemas, En reparación o Dado de baja.',
+            'Fechas: 25-11-2026, 25/11/2026 o 2026-11-25.',
+            'Abonado, IP, APN y el resto pueden ir vacíos. Proyecto se completa en Modificar.',
+            'No repitas el IMEI. No uses fórmulas ni celdas combinadas.',
+        ],
+    },
+    'MODEMS': {
+        'hoja': 'Modems',
+        'obligatorias': {'SERIE'},
+        'lineas': [
+            'Módems — una fila por equipo. No cambies los títulos de la primera fila.',
+            'Obligatorio: Serie. Si Marca va vacía, queda como SIN MARCA.',
+            'Técnico responsable es quien figura como Entregado a en la lista.',
+            'Cliente: número de cliente. Medidor: serie del medidor asociado.',
+            'Estado: escríbelo en Observaciones. Valores: En bodega, En Trayecto, Instalado, Retirado, En reparación, Dado de baja o En peaje.',
+            'Caja: si solo la escribes en la primera fila de un grupo, las siguientes usan esa misma caja.',
+            'Fechas: 25-11-2026, 25/11/2026 o 2026-11-25. El resto puede ir vacío.',
+            'No repitas la serie. No uses fórmulas ni celdas combinadas.',
+        ],
+    },
+}
+
+
+def generar_plantilla_inventario(tipo_equipo='MEDIDORES'):
+    """Planilla vacía con las columnas que hay que rellenar para importar."""
+    from openpyxl.comments import Comment
+    from openpyxl.styles import Font, PatternFill
+
+    tipo = (tipo_equipo or 'MEDIDORES').upper()
+    if tipo not in HEADERS_PLANTILLA_INVENTARIO:
+        tipo = 'MEDIDORES'
+    ayuda = _AYUDA_PLANTILLA_INVENTARIO[tipo]
+    headers = HEADERS_PLANTILLA_INVENTARIO[tipo]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = ayuda['hoja']
+    ws.append(headers)
+    aplicar_estilo_hoja_exportacion(ws, auto_filter=False)
+    obligatorio_fill = PatternFill(start_color='C65911', end_color='C65911', fill_type='solid')
+    for col, header in enumerate(headers, start=1):
+        if header not in ayuda['obligatorias']:
+            continue
+        cell = ws.cell(row=1, column=col)
+        cell.fill = obligatorio_fill
+        cell.font = Font(bold=True, color='FFFFFF', size=11, name='Calibri')
+        cell.comment = Comment('Esta columna hay que llenarla.', 'DELCO')
+
+    guia = wb.create_sheet('Como llenarla')
+    guia['A1'] = 'Cómo llenar la planilla'
+    guia['A1'].font = Font(bold=True, size=14, name='Calibri')
+    for idx, linea in enumerate(ayuda['lineas'], start=3):
+        guia.cell(row=idx, column=1, value=linea)
+    guia.column_dimensions['A'].width = 110
+    return wb
+
+
 def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
     """
     Exporta equipos a archivo Excel.
@@ -1759,17 +1855,7 @@ def exportar_equipos_excel(equipos, tipo_equipo='MEDIDORES'):
     ws.title = tipo_equipo
     
     # Encabezados según tipo (mismos nombres/orden que usa la importación)
-    if tipo_equipo.upper() == 'MEDIDORES':
-        headers = [
-            '#', 'FECHA DE RECEPCION', 'BODEGA', 'MARCA', 'CAJA', 'MEDIDOR', 'MODULO',
-            'FECHA DE ENTREGA', 'ENTREGADO A:', 'ESTADO', 'CLIENTE', 'Tipo Medidor',
-        ]
-    elif tipo_equipo.upper() == 'SIM':
-        headers = ['IMEI', 'OPERADOR', 'ABONADO', 'DIRECCIÓN IP', 'APN', 'FECHA RECEPCIÓN', 'ENTREGADO A', 'FECHA ENTREGA', 'ESTADO', 'CLIENTE', 'MEDIDOR']
-    elif tipo_equipo.upper() == 'MODEMS':
-        headers = ['MARCA', 'MODELO', 'IMEI', 'SERIE', 'Fecha Recepción', 'Fecha Entrega', 'Caja', 'Técnico Responsable', 'Cliente', 'Medidor', 'IP', 'Puerto', 'Marca Secundaria', 'Observaciones', 'Retirado', 'Serie Secundaria', 'Irregularidad', 'Proyecto']
-    else:
-        headers = ['Datos']
+    headers = list(HEADERS_PLANTILLA_INVENTARIO.get((tipo_equipo or '').upper(), ['Datos']))
     
     ws.append(headers)
     

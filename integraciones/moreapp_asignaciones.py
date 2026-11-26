@@ -74,6 +74,8 @@ def formulario_esta_en_registros(form_id: str) -> bool:
 
 
 def volver_listado_name(user, origen: str = "") -> str:
+    if origen == "operativos":
+        return "reportes_hub"
     if origen == "reportes":
         return "reportes_moreapp_list"
     if getattr(user, "rol", "") == "ADMIN":

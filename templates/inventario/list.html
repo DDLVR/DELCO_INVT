@@ -121,10 +121,10 @@
                           <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
                           <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
                           <div data-filtro-panel="estado" data-filtro-titulo="Estado" data-filtro-param="estado" class="d-none">
-                            <select id="filtroEstado" class="form-select form-select-sm" aria-label="Estado">
-                              <option value="">Elige un estado</option>
-                              {% for estado in estados_disponibles %}<option value="{{ estado.id }}">{{ estado.nombre }}</option>{% endfor %}
-                            </select>
+                            <input type="text" id="filtroEstado" data-filtro-valor class="form-control form-control-sm" list="listaEstadosInventario" placeholder="Elige o escribe un estado" aria-label="Estado" autocomplete="off">
+                            <datalist id="listaEstadosInventario">
+                              {% for estado in estados_disponibles %}<option value="{{ estado.nombre }}"></option>{% endfor %}
+                            </datalist>
                           </div>
                           <div data-filtro-panel="buscar" data-filtro-titulo="Buscar" data-filtro-modo="grupo" class="d-none">
                             <select id="tablaBuscarCampo" data-filtro-param="campo" class="form-select form-select-sm mb-1" data-orden-lista="no" aria-label="Buscar en">
@@ -164,17 +164,17 @@
                             <input type="text" id="tablaBuscar" data-filtro-param="q" class="form-control form-control-sm" placeholder="Escribe para filtrar..." aria-label="Buscar">
                           </div>
                           <div data-filtro-panel="proyecto" data-filtro-titulo="Proyecto" data-filtro-param="proyecto" class="d-none">
-                            <select id="filtroProyecto" class="form-select form-select-sm" aria-label="Proyecto">
-                              <option value="">Elige</option>
-                              {% for proyecto in proyectos_disponibles %}<option value="{{ proyecto }}">{{ proyecto }}</option>{% endfor %}
-                            </select>
+                            <input type="text" id="filtroProyecto" data-filtro-valor class="form-control form-control-sm" list="listaProyectosInventario" placeholder="Elige o escribe un proyecto" aria-label="Proyecto" autocomplete="off">
+                            <datalist id="listaProyectosInventario">
+                              {% for proyecto in proyectos_disponibles %}<option value="{{ proyecto }}"></option>{% endfor %}
+                            </datalist>
                           </div>
                           {% if tipo == 'medidor' %}
                           <div data-filtro-panel="tipo_medidor" data-filtro-titulo="Tipo medidor" data-filtro-param="tipo_medidor" class="d-none">
-                            <select id="filtroTipoMedidor" class="form-select form-select-sm" data-orden-lista="no" aria-label="Tipo medidor">
-                              <option value="">Elige</option>
+                            <input type="text" id="filtroTipoMedidor" data-filtro-valor class="form-control form-control-sm" list="listaTiposMedidor" placeholder="Elige o escribe DIRECTO o INDIRECTO" aria-label="Tipo medidor" autocomplete="off">
+                            <datalist id="listaTiposMedidor">
                               {% for codigo, nombre in tipo_medidor_choices %}<option value="{{ codigo }}">{{ nombre }}</option>{% endfor %}
-                            </select>
+                            </datalist>
                           </div>
                           {% endif %}
                           {% if tipo != 'sim' %}
@@ -198,7 +198,7 @@
                         </div>
                       </div>
                       <div class="delco-filtro-activos js-filtro-activos">
-                        {% if estado_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'estado' %}"><span class="delco-filtro-chip-tipo">Estado</span><span>{% for estado in estados_disponibles %}{% if estado_seleccionado == estado.id|stringformat:'s' %}{{ estado.nombre }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+                        {% if estado_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'estado' %}"><span class="delco-filtro-chip-tipo">Estado</span><span>{{ estado_filtro_label }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
                         {% if busqueda %}<a class="delco-filtro-chip" href="?{% url_sin 'q' 'campo' %}"><span class="delco-filtro-chip-tipo">Buscar</span><span>{{ busqueda }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
                         {% if proyecto_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'proyecto' %}"><span class="delco-filtro-chip-tipo">Proyecto</span><span>{{ proyecto_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
                         {% if tipo_medidor_seleccionado %}<a class="delco-filtro-chip" href="?{% url_sin 'tipo_medidor' %}"><span class="delco-filtro-chip-tipo">Tipo medidor</span><span>{{ tipo_medidor_seleccionado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
@@ -411,90 +411,163 @@
 
 <!-- Modal de Ayuda - Formato de Importación -->
 <div class="modal fade" id="modalAyudaFormato" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content delco-formato">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title">
-                    <i class="bi bi-info-circle-fill"></i> Guía de Formato para Importación
+                    <i class="bi bi-table"></i> Cómo llenar la planilla
                 </h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="alert alert-primary">
-                    <h6 class="mb-2"><i class="bi bi-upload"></i> Pasos rápidos para subir archivos</h6>
-                    <ol class="mb-0 small">
-                        <li>Descarga la plantilla desde <strong>Exportar Excel</strong> del tipo que quieras cargar.</li>
-                        <li>Completa las columnas respetando el orden exacto de cada sección.</li>
-                        <li>Guarda el archivo en formato <code>.xlsx</code>.</li>
-                        <li>Usa el botón <strong>Importar Excel</strong>.</li>
-                        <li>Si hay errores, corrige desde el resumen de errores y reintenta.</li>
-                    </ol>
+                <ol class="delco-formato-pasos">
+                    <li><span class="delco-formato-paso-num">1</span><span><strong>Descarga</strong><small>la planilla vacía de este tipo</small></span></li>
+                    <li><span class="delco-formato-paso-num">2</span><span><strong>Llena</strong><small>una fila por equipo, desde la fila 2</small></span></li>
+                    <li><span class="delco-formato-paso-num">3</span><span><strong>Sube</strong><small>el .xlsx con Importar Excel</small></span></li>
+                </ol>
+                <div class="delco-formato-leyenda">
+                    <span><i class="delco-formato-muestra is-req"></i> Naranja: hay que llenarla</span>
+                    <span><i class="delco-formato-muestra"></i> El resto puede ir vacío</span>
+                    <span>No cambies los títulos de la primera fila.</span>
                 </div>
 
-                <!-- Pestañas para cada tipo -->
                 <ul class="nav nav-tabs mb-3" id="ayudaTabs" role="tablist">
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link {% if tipo == 'medidor' %}active{% endif %}" id="tab-medidores" data-bs-toggle="tab" data-bs-target="#ayuda-medidores" type="button">📏 Medidores</button>
+                        <button class="nav-link {% if tipo == 'medidor' %}active{% endif %}" id="tab-medidores" data-bs-toggle="tab" data-bs-target="#ayuda-medidores" type="button">Medidores</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link {% if tipo == 'sim' %}active{% endif %}" id="tab-sim" data-bs-toggle="tab" data-bs-target="#ayuda-sim" type="button">📱 SIM Cards</button>
+                        <button class="nav-link {% if tipo == 'sim' %}active{% endif %}" id="tab-sim" data-bs-toggle="tab" data-bs-target="#ayuda-sim" type="button">SIM Cards</button>
                     </li>
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link {% if tipo == 'modem' %}active{% endif %}" id="tab-modems" data-bs-toggle="tab" data-bs-target="#ayuda-modems" type="button">📡 Módems</button>
+                        <button class="nav-link {% if tipo == 'modem' %}active{% endif %}" id="tab-modems" data-bs-toggle="tab" data-bs-target="#ayuda-modems" type="button">Módems</button>
                     </li>
                 </ul>
 
                 <div class="tab-content" id="ayudaTabContent">
                     <div class="tab-pane fade {% if tipo == 'medidor' %}show active{% endif %}" id="ayuda-medidores" role="tabpanel">
-                        <h6 class="mb-2">Formato requerido (12 columnas)</h6>
-                        <p class="small text-muted mb-2">Orden exacto: <code>#, FECHA DE RECEPCION, BODEGA, MARCA, CAJA, MEDIDOR, MODULO, FECHA DE ENTREGA, ENTREGADO A:, ESTADO, CLIENTE, Tipo Medidor</code></p>
-                        <div class="alert alert-light border small mb-2">
-                            <strong>Obligatorio:</strong> Fecha Recepción, Medidor (serie) y Tipo Medidor.<br>
-                            <strong>Tipo Medidor válido:</strong> DIRECTO o INDIRECTO.<br>
-                            <strong>Estados del maestro:</strong> Disponible → En bodega, Trayecto → En Trayecto, Instalado → Instalado.<br>
-                            <strong>Estados válidos:</strong> En bodega, Instalado, Retirado, En reparación, Dado de baja.
+                        <div class="delco-formato-chips" aria-label="Columnas de medidores">
+                            <span class="delco-formato-chip"><b>1</b> #</span>
+                            <span class="delco-formato-chip is-req"><b>2</b> Fecha de recepción</span>
+                            <span class="delco-formato-chip"><b>3</b> Bodega</span>
+                            <span class="delco-formato-chip"><b>4</b> Marca</span>
+                            <span class="delco-formato-chip"><b>5</b> Caja</span>
+                            <span class="delco-formato-chip is-req"><b>6</b> Medidor</span>
+                            <span class="delco-formato-chip"><b>7</b> Módulo</span>
+                            <span class="delco-formato-chip"><b>8</b> Fecha de entrega</span>
+                            <span class="delco-formato-chip"><b>9</b> Entregado a</span>
+                            <span class="delco-formato-chip"><b>10</b> Estado</span>
+                            <span class="delco-formato-chip"><b>11</b> Cliente</span>
+                            <span class="delco-formato-chip is-req"><b>12</b> Tipo medidor</span>
                         </div>
-                        <div class="alert alert-secondary small mb-0">
-                            Recomendación: no cambies el orden de columnas. Puedes dejar campos no obligatorios vacíos.
+                        <p class="small text-muted mb-1">Así se ve una fila. Los valores son un ejemplo.</p>
+                        <div class="delco-formato-hoja">
+                            <table class="delco-formato-tabla">
+                                <thead>
+                                    <tr>
+                                        <th>#</th><th class="is-req">Fecha de recepción</th><th>Bodega</th><th>Marca</th><th>Caja</th><th class="is-req">Medidor</th><th>Módulo</th><th>Fecha de entrega</th><th>Entregado a</th><th>Estado</th><th>Cliente</th><th class="is-req">Tipo medidor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>1</td><td class="is-lleno">25-11-2026</td><td></td><td class="is-lleno">Landis</td><td class="is-lleno">014</td><td class="is-lleno">12345678</td><td class="is-lleno">SI</td><td></td><td></td><td class="is-lleno">En bodega</td><td></td><td class="is-lleno">DIRECTO</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
+                        <div class="delco-formato-notas">
+                            <div class="delco-formato-nota"><strong>Tipo medidor</strong>DIRECTO o INDIRECTO.</div>
+                            <div class="delco-formato-nota"><strong>Módulo</strong>SI o NO. Fechas: 25-11-2026, 25/11/2026 o 2026-11-25.</div>
+                            <div class="delco-formato-nota"><strong>Proyecto</strong>No va en esta planilla. Se completa en Modificar.</div>
+                        </div>
+                        <a class="btn btn-success" href="{% url 'inventario_plantilla' %}?tipo=medidor">
+                            <i class="bi bi-download"></i> Descargar planilla de medidores
+                        </a>
                     </div>
 
                     <div class="tab-pane fade {% if tipo == 'sim' %}show active{% endif %}" id="ayuda-sim" role="tabpanel">
-                        <h6 class="mb-2">Formato requerido (11 columnas)</h6>
-                        <p class="small text-muted mb-2">Orden exacto: <code>IMEI, OPERADOR, ABONADO, DIRECCIÓN IP, APN, FECHA RECEPCIÓN, ENTREGADO A, FECHA ENTREGA, ESTADO, CLIENTE, MEDIDOR</code></p>
-                        <div class="alert alert-light border small mb-2">
-                            <strong>Obligatorio:</strong> IMEI.<br>
-                            <strong>Cliente:</strong> usar número de cliente (si no existe, se crea automáticamente).
+                        <div class="delco-formato-chips" aria-label="Columnas de SIM">
+                            <span class="delco-formato-chip is-req"><b>1</b> IMEI</span>
+                            <span class="delco-formato-chip is-req"><b>2</b> Operador</span>
+                            <span class="delco-formato-chip"><b>3</b> Abonado</span>
+                            <span class="delco-formato-chip"><b>4</b> Dirección IP</span>
+                            <span class="delco-formato-chip"><b>5</b> APN</span>
+                            <span class="delco-formato-chip"><b>6</b> Fecha recepción</span>
+                            <span class="delco-formato-chip"><b>7</b> Entregado a</span>
+                            <span class="delco-formato-chip"><b>8</b> Fecha entrega</span>
+                            <span class="delco-formato-chip"><b>9</b> Estado</span>
+                            <span class="delco-formato-chip"><b>10</b> Cliente</span>
+                            <span class="delco-formato-chip"><b>11</b> Medidor</span>
                         </div>
-                        <div class="alert alert-secondary small mb-0">
-                            Los datos importados se pueden completar/ajustar desde el modal de modificar.
+                        <p class="small text-muted mb-1">Así se ve una fila. Los valores son un ejemplo.</p>
+                        <div class="delco-formato-hoja">
+                            <table class="delco-formato-tabla">
+                                <thead>
+                                    <tr>
+                                        <th class="is-req">IMEI</th><th class="is-req">Operador</th><th>Abonado</th><th>Dirección IP</th><th>APN</th><th>Fecha recepción</th><th>Entregado a</th><th>Fecha entrega</th><th>Estado</th><th>Cliente</th><th>Medidor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td class="is-lleno">895601000012345</td><td class="is-lleno">ENTEL</td><td></td><td></td><td></td><td class="is-lleno">25-11-2026</td><td></td><td></td><td></td><td class="is-lleno">100234</td><td></td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
+                        <div class="delco-formato-notas">
+                            <div class="delco-formato-nota"><strong>Cliente</strong>Es el número. Si no existe, se crea.</div>
+                            <div class="delco-formato-nota"><strong>Medidor</strong>Serie del medidor asociado, si ya está cargado.</div>
+                            <div class="delco-formato-nota"><strong>Proyecto</strong>No va en esta planilla. Se completa en Modificar.</div>
+                        </div>
+                        <a class="btn btn-success" href="{% url 'inventario_plantilla' %}?tipo=sim">
+                            <i class="bi bi-download"></i> Descargar planilla de SIM
+                        </a>
                     </div>
 
                     <div class="tab-pane fade {% if tipo == 'modem' %}show active{% endif %}" id="ayuda-modems" role="tabpanel">
-                        <h6 class="mb-2">Formato requerido (18 columnas)</h6>
-                        <p class="small text-muted mb-2">Orden exacto: <code>ID, MARCA, MODELO, IMEI, SERIE, Fecha de Recepción, Fecha Entrega, Caja, Técnico Responsable, Cliente, Medidor, IP, Puerto, Marca, Obs, Retirado, Serie, Irregularidad, Proyecto, Status</code></p>
-                        <div class="alert alert-light border small mb-2">
-                            <strong>Obligatorio:</strong> MARCA y SERIE.<br>
-                            <strong>Caja:</strong> en el maestro solo se escribe en la 1ª fila del grupo (ej. 5 módems); al importar se propaga a las filas siguientes. Se guarda el texto completo (ej. <code>Caja 260318 014</code>).<br>
-                            <strong>Estado/Obs:</strong> la columna Estado del Excel se muestra en Obs y también define el estado de inventario (Instalado, Trayecto, etc.).<br>
-                            <strong>Importante:</strong> no mover columnas ni cambiar encabezados.
+                        <div class="delco-formato-chips" aria-label="Columnas de módems">
+                            <span class="delco-formato-chip"><b>1</b> Marca</span>
+                            <span class="delco-formato-chip"><b>2</b> Modelo</span>
+                            <span class="delco-formato-chip"><b>3</b> IMEI</span>
+                            <span class="delco-formato-chip is-req"><b>4</b> Serie</span>
+                            <span class="delco-formato-chip"><b>5</b> Fecha recepción</span>
+                            <span class="delco-formato-chip"><b>6</b> Fecha entrega</span>
+                            <span class="delco-formato-chip"><b>7</b> Caja</span>
+                            <span class="delco-formato-chip"><b>8</b> Técnico responsable</span>
+                            <span class="delco-formato-chip"><b>9</b> Cliente</span>
+                            <span class="delco-formato-chip"><b>10</b> Medidor</span>
+                            <span class="delco-formato-chip"><b>11</b> IP</span>
+                            <span class="delco-formato-chip"><b>12</b> Puerto</span>
+                            <span class="delco-formato-chip"><b>13</b> Marca secundaria</span>
+                            <span class="delco-formato-chip"><b>14</b> Observaciones</span>
+                            <span class="delco-formato-chip"><b>15</b> Retirado</span>
+                            <span class="delco-formato-chip"><b>16</b> Serie secundaria</span>
+                            <span class="delco-formato-chip"><b>17</b> Irregularidad</span>
+                            <span class="delco-formato-chip"><b>18</b> Proyecto</span>
                         </div>
-                        <div class="alert alert-secondary small mb-0">
-                            Lo azul en plantilla se puede editar luego en el módulo de modificación.
+                        <p class="small text-muted mb-1">Así se ve una fila. Los valores son un ejemplo.</p>
+                        <div class="delco-formato-hoja">
+                            <table class="delco-formato-tabla">
+                                <thead>
+                                    <tr>
+                                        <th>Marca</th><th>Modelo</th><th>IMEI</th><th class="is-req">Serie</th><th>Fecha recepción</th><th>Fecha entrega</th><th>Caja</th><th>Técnico responsable</th><th>Cliente</th><th>Medidor</th><th>IP</th><th>Puerto</th><th>Marca secundaria</th><th>Observaciones</th><th>Retirado</th><th>Serie secundaria</th><th>Irregularidad</th><th>Proyecto</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td></td><td></td><td></td><td class="is-lleno">SN-1001</td><td class="is-lleno">25-11-2026</td><td></td><td class="is-lleno">Caja 014</td><td class="is-lleno">Juan Pérez</td><td></td><td></td><td></td><td></td><td></td><td class="is-lleno">En bodega</td><td></td><td></td><td></td><td></td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
+                        <div class="delco-formato-notas">
+                            <div class="delco-formato-nota"><strong>Marca vacía</strong>Queda como SIN MARCA.</div>
+                            <div class="delco-formato-nota"><strong>Estado</strong>Escríbelo en Observaciones, por ejemplo En bodega.</div>
+                            <div class="delco-formato-nota"><strong>Caja</strong>Si solo va en la primera fila del grupo, las siguientes usan esa misma. El técnico se ve como Entregado a.</div>
+                        </div>
+                        <a class="btn btn-success" href="{% url 'inventario_plantilla' %}?tipo=modem">
+                            <i class="bi bi-download"></i> Descargar planilla de módems
+                        </a>
                     </div>
-                </div>
-
-                <hr>
-                <div class="alert alert-secondary small mb-0">
-                    <strong>Buenas prácticas:</strong>
-                    <ul class="mb-0 mt-1">
-                        <li>Usa una fila por equipo.</li>
-                        <li>No repitas IMEI o Serie.</li>
-                        <li>Fechas aceptadas: <code>DD-MM-YYYY</code>, <code>DD/MM/YYYY</code>, <code>YYYY-MM-DD</code>.</li>
-                        <li>No agregues fórmulas ni celdas combinadas.</li>
-                    </ul>
                 </div>
             </div>
             <div class="modal-footer">
@@ -558,25 +631,23 @@
                                         <div class="accordion-body">
                                             {% if tipo == 'medidor' %}
                                             <ul class="delco-import-cols mb-2">
-                                                <li><strong>Obligatorias:</strong> Fecha Recepción, Serie (Medidor), Tipo Medidor (DIRECTO / INDIRECTO)</li>
-                                                <li><strong>Importar (amarillo):</strong> Bodega, Marca, Caja, Módulo</li>
-                                                <li><strong>Completar después (verde):</strong> Fecha Entrega, Entregado A, Estado, Cliente</li>
+                                                <li><strong>Hay que llenar:</strong> Fecha de recepción, Medidor (serie) y Tipo medidor (DIRECTO o INDIRECTO)</li>
+                                                <li>El resto de columnas puede ir vacío. El proyecto se completa en Modificar.</li>
                                             </ul>
                                             {% elif tipo == 'sim' %}
                                             <ul class="delco-import-cols mb-2">
-                                                <li><strong>Obligatoria:</strong> IMEI</li>
-                                                <li><strong>Importar:</strong> Operador, Abonado, Dirección IP, APN, Fecha Recepción, Entregado A</li>
-                                                <li><strong>Completar después:</strong> Fecha Entrega, Estado, Cliente, Medidor</li>
+                                                <li><strong>Hay que llenar:</strong> IMEI y Operador</li>
+                                                <li>Cliente es el número. El proyecto se completa en Modificar.</li>
                                             </ul>
                                             {% elif tipo == 'modem' %}
                                             <ul class="delco-import-cols mb-2">
-                                                <li><strong>Obligatorias:</strong> Marca, Serie</li>
-                                                <li><strong>Importar:</strong> Fecha Recepción, Bodega, Caja, Modelo, IMEI, etc.</li>
-                                                <li><strong>Completar después:</strong> Fecha Entrega, Entregado A, Estado, Cliente</li>
+                                                <li><strong>Hay que llenar:</strong> Serie. Marca vacía queda como SIN MARCA</li>
+                                                <li>El estado va en Observaciones. El técnico responsable se ve como Entregado a.</li>
                                             </ul>
                                             {% endif %}
                                             <p class="small text-muted mb-0">
-                                                Tip: usa <strong>Formato</strong> en la barra superior para la guía completa, o exporta una plantilla con <strong>Exportar Excel</strong>.
+                                                <a href="{% url 'inventario_plantilla' %}?tipo={{ tipo }}">Descarga la planilla vacía</a>
+                                                y no cambies los títulos. La guía completa está en <strong>Formato</strong>.
                                             </p>
                                         </div>
                                     </div>
@@ -590,10 +661,9 @@
                                     <div id="collapseReglasInventario" class="accordion-collapse collapse" aria-labelledby="headingReglasInventario" data-bs-parent="#accordionFormatoInventario">
                                         <div class="accordion-body">
                                             <ul class="delco-import-rules mb-0">
-                                                <li>Una fila por equipo; no repetir serie / IMEI.</li>
-                                                <li>Fechas: <code>DD-MM-YYYY</code>, <code>DD/MM/YYYY</code> o <code>YYYY-MM-DD</code>.</li>
-                                                <li>No uses fórmulas ni celdas combinadas.</li>
-                                                <li>Si un equipo ya existe, la importación lo actualiza (incluye reactivación soft-delete).</li>
+                                                <li>Una fila por equipo. No repitas la serie ni el IMEI.</li>
+                                                <li>Fechas: <code>25-11-2026</code>, <code>25/11/2026</code> o <code>2026-11-25</code>.</li>
+                                                <li>Sin fórmulas ni celdas combinadas. Si el equipo ya existe, se actualiza.</li>
                                             </ul>
                                         </div>
                                     </div>

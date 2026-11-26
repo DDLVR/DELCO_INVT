@@ -134,7 +134,7 @@ import traceback
 import hmac
 from io import BytesIO
 from datetime import datetime
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlencode
 from .decorators import role_required, admin_or_administrativo
 from inventario.models import Medidor, SimCard, Modem, EstadoInventario, Ubicacion
 from clientes.models import Cliente
@@ -147,6 +147,7 @@ from importaciones.utils import (
     importar_clientes_excel,
     exportar_equipos_excel,
     exportar_equipos_excel_completo,
+    generar_plantilla_inventario,
     exportar_clientes_excel,
     exportar_clientes_excel_completo,
 )
@@ -324,6 +325,29 @@ def _responsable_cambio(antes_id, antes_otro, nuevo, manual):
     return nuevo_id != antes_id or (manual or '') != (antes_otro or '')
 
 
+def _aplicar_llegada_bodega(equipo, tipo, estado_previo_id):
+    """Al pasar a un estado de bodega el equipo deja de estar a cargo de alguien y vuelve a una bodega física.
+
+    Devuelve la ubicación de origen cuando hubo traslado (para el Kardex).
+    """
+    estado = getattr(equipo, 'estado_inventario', None)
+    if not estado or estado.id == estado_previo_id or 'bodega' not in (estado.nombre or '').lower():
+        return None
+    origen = None
+    ubicacion_previa = getattr(equipo, 'ubicacion_actual', None)
+    if getattr(ubicacion_previa, 'tipo', '') not in ('BODEGA_DELCO', 'BODEGA_CONTRATISTA'):
+        origen = ubicacion_previa
+        equipo.ubicacion_actual = (
+            Ubicacion.objects.filter(nombre__iexact='Bodega Principal').first()
+            or Ubicacion.objects.create(tipo='BODEGA_DELCO', nombre='Bodega Principal')
+        )
+    equipo.en_custodia_de = None
+    if tipo != 'sim':
+        equipo.entregado_a = None
+    equipo.entregado_a_otro = ''
+    return origen
+
+
 def _alinear_cliente_con_medidor(medidor):
     """Si el inventario asigna un medidor, la ficha lo muestra cuando aún no tiene otro."""
     cliente = medidor.cliente
@@ -418,17 +442,31 @@ def dashboard_view(request):
     
     # ADMIN y ADMINISTRATIVO: Vista general de todo
     if rol in ['ADMIN', 'ADMINISTRATIVO']:
-        sync_stats = _ejecutar_autosync_moreapp_si_corresponde()
-        try:
-            from integraciones.moreapp_tareas_ciclo import sincronizar_tareas_si_corresponde
+        from django.core.cache import cache
+        from web.perf_cache import _en_tests, en_segundo_plano
 
-            sincronizar_tareas_si_corresponde()
-        except Exception:
-            logger.exception('Fallo al actualizar estado de tareas MoreApp')
-        if sync_stats and int(sync_stats.get('nuevos') or 0) > 0:
+        def _sync_moreapp_fondo():
+            stats = _ejecutar_autosync_moreapp_si_corresponde()
+            if stats and int(stats.get('nuevos') or 0) > 0:
+                cache.set('moreapp:nuevos_aviso', int(stats['nuevos']), 300)
+            try:
+                from integraciones.moreapp_tareas_ciclo import sincronizar_tareas_si_corresponde
+
+                sincronizar_tareas_si_corresponde()
+            except Exception:
+                logger.exception('Fallo al actualizar estado de tareas MoreApp')
+
+        if _en_tests():
+            _sync_moreapp_fondo()
+        else:
+            en_segundo_plano(_sync_moreapp_fondo)
+        sync_nuevos = cache.get('moreapp:nuevos_aviso')
+        if sync_nuevos:
+            cache.delete('moreapp:nuevos_aviso')
+        if sync_nuevos:
             messages.info(
                 request,
-                f'LLegaron {sync_stats["nuevos"]} informe(s) MoreApp nuevos. '
+                f'LLegaron {sync_nuevos} informe(s) MoreApp nuevos. '
                 'Revise la cola de pendientes para validar el trabajo.',
             )
 
@@ -590,11 +628,11 @@ def dashboard_view(request):
             context['moreapp_envejecidos'] = 0
             context['kpis_tareas_moreapp'] = {}
         try:
-            context['moreapp_form_charts'] = cache_get_or_set(
-                'dashboard:moreapp_form_charts_v3',
-                build_dashboard_formularios_moreapp,
-                TTL_MEDIO,
-            )
+            from web.services.dashboard_moreapp_forms import charts_dashboard_rapidos
+
+            charts, charts_pendiente = charts_dashboard_rapidos()
+            context['moreapp_form_charts'] = charts
+            context['moreapp_charts_pendiente'] = charts_pendiente
         except Exception:
             context['moreapp_form_charts'] = {
                 'por_formulario': [],
@@ -607,6 +645,7 @@ def dashboard_view(request):
                 'telemetria_diag_completo': False,
                 'error': '',
             }
+            context['moreapp_charts_pendiente'] = False
 
         return render(request, 'dashboards/admin_dashboard.html', context)
     elif rol == 'TECNICO':
@@ -1004,6 +1043,17 @@ def _ids_estado_por_busqueda(texto: str):
     return exactos or parciales
 
 
+def _etiqueta_estado_filtro(estado_filtro):
+    """Nombre visible del filtro de estado, venga como id o como texto escrito."""
+    texto = str(estado_filtro or '').strip()
+    if not texto:
+        return ''
+    if texto.isdigit():
+        nombre = EstadoInventario.objects.filter(pk=int(texto)).values_list('nombre', flat=True).first()
+        return nombre or texto
+    return texto
+
+
 def _aplicar_rango_fecha(qs, campo, desde, hasta):
     """Filtra un DateField. Fechas que no son YYYY-MM-DD se ignoran."""
     dia_desde = parse_fecha_iso((desde or "").strip()) if desde else None
@@ -1100,7 +1150,7 @@ def inventario_list_view(request):
         equipos = equipos.filter(caja__icontains=caja_filtro)
 
     if tipo == 'medidor' and tipo_medidor_filtro:
-        equipos = equipos.filter(tipo_medidor=tipo_medidor_filtro)
+        equipos = equipos.filter(tipo_medidor__iexact=tipo_medidor_filtro)
 
     equipos = _aplicar_rango_fecha(equipos, 'fecha_recepcion', fecha_recepcion_desde, fecha_recepcion_hasta)
     equipos = _aplicar_rango_fecha(equipos, 'fecha_entrega', fecha_entrega_desde, fecha_entrega_hasta)
@@ -1363,6 +1413,7 @@ def inventario_list_view(request):
         'ubicaciones_disponibles': ubicaciones_disponibles,
         'usuarios': usuarios,
         'estado_seleccionado': str(estado_filtro).strip() if estado_filtro else '',
+        'estado_filtro_label': _etiqueta_estado_filtro(estado_filtro),
         'ubicacion_seleccionada': ubicacion_filtro,
         'proyecto_seleccionado': proyecto_filtro,
         'caja_seleccionada': caja_filtro,
@@ -1831,6 +1882,8 @@ def inventario_modificar_view(request, pk):
             equipo.proyecto = proyecto
             equipo.tipo_medidor = tipo_medidor
         
+        origen_recepcion = _aplicar_llegada_bodega(equipo, tipo, before['estado_id'])
+
         # Guardar cambios
         equipo.save()
         if tipo == 'medidor':
@@ -1930,6 +1983,7 @@ def inventario_modificar_view(request, pk):
             observacion = f'Modificación {tipo_item} {identificador}. Campos: {", ".join(campos_cambiados)}'
             _registrar_movimiento_inventario(
                 equipo, tipo_item, request.user, observacion,
+                origen=origen_recepcion,
                 cambio_estado='Estado' in campos_cambiados,
             )
             audit_field_changes(
@@ -2222,6 +2276,13 @@ def inventario_modificar_masivo_view(request):
                 if 'Estado' not in campos:
                     campos.append('Estado')
 
+            origen_recepcion = _aplicar_llegada_bodega(equipo, tipo, antes['estado_id'])
+            if (
+                getattr(equipo, 'entregado_a_id', None) != antes['entregado_a_id']
+                or getattr(equipo, 'en_custodia_de_id', None) != antes['en_custodia_de_id']
+            ) and 'Entregado A' not in campos:
+                campos.append('Entregado A')
+
             equipo.save()
             if tipo == 'medidor':
                 _alinear_cliente_con_medidor(equipo)
@@ -2255,6 +2316,7 @@ def inventario_modificar_masivo_view(request):
             _registrar_movimiento_inventario(
                 equipo, tipo_item, request.user,
                 f'Edición múltiple {tipo_item} {identificador}. Campos: {", ".join(campos)}. {detalle}',
+                origen=origen_recepcion,
                 cambio_estado='Estado' in campos,
             )
             actualizados += 1
@@ -2268,6 +2330,31 @@ def inventario_modificar_masivo_view(request):
         'actualizados': actualizados,
         'sin_cambios': sin_cambios,
     })
+
+
+@login_required
+@role_required(['ADMIN', 'ADMINISTRATIVO', 'TECNICO'])
+@require_http_methods(["GET"])
+def inventario_plantilla_view(request):
+    """Descarga la planilla vacía con las columnas de importación del tipo pedido."""
+    tipo = (request.GET.get('tipo') or 'medidor').strip().lower()
+    if tipo == 'sim':
+        tipo_nombre, archivo = 'SIM', 'plantilla-sim.xlsx'
+    elif tipo == 'modem':
+        tipo_nombre, archivo = 'MODEMS', 'plantilla-modems.xlsx'
+    else:
+        tipo_nombre, archivo = 'MEDIDORES', 'plantilla-medidores.xlsx'
+
+    wb = generar_plantilla_inventario(tipo_nombre)
+    response = HttpResponse(
+        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    from web.services.export_filenames import nombre_exportacion_con_fecha
+    response['Content-Disposition'] = (
+        f'attachment; filename="{nombre_exportacion_con_fecha(archivo)}"'
+    )
+    wb.save(response)
+    return response
 
 
 @login_required
@@ -2324,7 +2411,7 @@ def inventario_exportar_view(request):
         equipos = equipos.filter(caja__icontains=caja_filtro)
 
     if tipo == 'medidor' and tipo_medidor_filtro:
-        equipos = equipos.filter(tipo_medidor=tipo_medidor_filtro)
+        equipos = equipos.filter(tipo_medidor__iexact=tipo_medidor_filtro)
 
     if estado_filtro:
         if estado_filtro.isdigit():
@@ -3242,25 +3329,15 @@ def clientes_list_view(request):
     base_activos = queryset_clientes_filtrado(request, aplicar_filtros=False)
     clientes_qs = queryset_clientes_filtrado(request, aplicar_filtros=True)
 
-    # order_by() limpia el ordenamiento: si no, sus campos entran al GROUP BY
-    # y cada grupo cuenta 1 (nunca se detectarían duplicados).
-    numeros_duplicados = set(
-        base_activos
-        .order_by()
-        .values('numero_cliente')
-        .annotate(c=Count('id'))
-        .filter(c__gt=1)
-        .values_list('numero_cliente', flat=True)
-    )
-
     def _valores_filtro(campo):
         """Valores únicos para combos (sin repetir por espacios/mayúsculas)."""
         unicos = {}
         for valor in (
-            base_activos.exclude(**{f'{campo}__isnull': True})
+            base_activos.order_by()
+            .exclude(**{f'{campo}__isnull': True})
             .exclude(**{campo: ''})
             .values_list(campo, flat=True)
-            .iterator()
+            .distinct()
         ):
             if valor is None:
                 continue
@@ -3278,12 +3355,37 @@ def clientes_list_view(request):
                 unicos[clave] = texto
         return sorted(unicos.values(), key=lambda item: item.casefold())
 
-    comunas_disponibles = _valores_filtro('comuna')
-    sectores_disponibles = _valores_filtro('sector')
-    tipos_suministro_disponibles = _valores_filtro('tipo_suministro')
-    proyectos_disponibles = _valores_filtro('proyecto')
-    marcas_disponibles = _valores_filtro('meter_manufacturer_id')
-    empresas_disponibles = _valores_filtro('empresa')
+    from web.perf_cache import TTL_MEDIO, cache_get_or_set
+
+    def _opciones_clientes():
+        # order_by() limpia el ordenamiento: si no, sus campos entran al GROUP BY
+        # y cada grupo cuenta 1 (nunca se detectarían duplicados).
+        duplicados = (
+            base_activos
+            .order_by()
+            .values('numero_cliente')
+            .annotate(c=Count('id'))
+            .filter(c__gt=1)
+            .values_list('numero_cliente', flat=True)
+        )
+        return {
+            'comunas': _valores_filtro('comuna'),
+            'sectores': _valores_filtro('sector'),
+            'tipos': _valores_filtro('tipo_suministro'),
+            'proyectos': _valores_filtro('proyecto'),
+            'marcas': _valores_filtro('meter_manufacturer_id'),
+            'empresas': _valores_filtro('empresa'),
+            'duplicados': sorted(duplicados),
+        }
+
+    opciones_clientes = cache_get_or_set('clientes:opciones_filtro', _opciones_clientes, TTL_MEDIO)
+    comunas_disponibles = opciones_clientes['comunas']
+    sectores_disponibles = opciones_clientes['sectores']
+    tipos_suministro_disponibles = opciones_clientes['tipos']
+    proyectos_disponibles = opciones_clientes['proyectos']
+    marcas_disponibles = opciones_clientes['marcas']
+    empresas_disponibles = opciones_clientes['empresas']
+    numeros_duplicados = set(opciones_clientes['duplicados'])
 
     total_fichas = clientes_qs.count()
     total_clientes = clientes_qs.values('numero_cliente').distinct().count()
@@ -6203,8 +6305,27 @@ def reportes_moreapp_list(request):
     except Exception:
         pass
 
-    context = contexto_formularios_asignados(request, todos=True)
+    ve_todos = request.user.rol in ROLES_REPORTES_LECTURA
+    context = contexto_formularios_asignados(request, todos=ve_todos)
     context['origen'] = 'reportes'
+    context['ve_todos'] = ve_todos
+    context['filtros_registros'] = urlencode({
+        clave: valor for clave, valor in {
+            'origen': 'reportes',
+            'fecha_desde': (request.GET.get('fecha_desde') or '').strip(),
+            'fecha_hasta': (request.GET.get('fecha_hasta') or '').strip(),
+            'tecnico': (request.GET.get('tecnico') or '').strip(),
+            'num_cliente': (request.GET.get('num_cliente') or '').strip(),
+        }.items() if valor
+    })
+    context['fecha_desde'] = (request.GET.get('fecha_desde') or '').strip()
+    context['fecha_hasta'] = (request.GET.get('fecha_hasta') or '').strip()
+    context['tecnico'] = (request.GET.get('tecnico') or '').strip()
+    context['num_cliente'] = (request.GET.get('num_cliente') or '').strip()
+    context['tiene_filtros'] = bool(
+        context.get('query') or context['fecha_desde'] or context['fecha_hasta']
+        or context['tecnico'] or context['num_cliente']
+    )
     return render(request, 'reportes/moreapp_registros_hub.html', context)
 
 

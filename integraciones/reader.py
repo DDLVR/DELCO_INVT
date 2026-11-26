@@ -505,7 +505,7 @@ def _registrar_movimiento_equipo(
     equipo, tipo_equipo: str, observacion: str, estado_nombre: str,
     origen_sistema: str = 'MANUAL', tipo_override: str = '',
     responsable_override=None, referencia_ot: str = '',
-    ubicacion_origen=None,
+    ubicacion_origen=None, destino_override=None,
 ):
     """Registra movimiento con origen = ubicación ANTES del cambio.
 
@@ -525,7 +525,9 @@ def _registrar_movimiento_equipo(
     )
 
     estado_norm = _normalizar_texto(estado_nombre)
-    if 'instal' in estado_norm:
+    if destino_override is not None:
+        destino = destino_override
+    elif 'instal' in estado_norm:
         destino = _obtener_o_crear_ubicacion('CLIENTE', 'Instalado en cliente')
     elif 'retir' in estado_norm or 'baja' in estado_norm or 'devuel' in estado_norm:
         destino = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
@@ -840,6 +842,7 @@ def _validar_reglas_operativas_previas(
     registro,
     observacion: str = '',
     registrar_pendiente=None,
+    exigir_medidor_instalado: bool = True,
 ) -> bool:
     """Reglas operativas antes de aceptar cambios de estado/custodia."""
     identificador = _identificador_equipo(equipo, tipo_equipo)
@@ -871,7 +874,7 @@ def _validar_reglas_operativas_previas(
             return False
 
     # Regla 3: compatibilidad módem/medidor en instalación.
-    if tipo_equipo == 'MODEM' and _es_estado_instalado(estado_obj):
+    if exigir_medidor_instalado and tipo_equipo == 'MODEM' and _es_estado_instalado(estado_obj):
         if medidor_asociado and hasattr(medidor_asociado, 'refresh_from_db'):
             medidor_asociado.refresh_from_db()
         if not medidor_asociado:
@@ -901,7 +904,13 @@ def _validar_reglas_operativas_previas(
 def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_obj, observacion: str,
                                  registro, medidor_asociado=None, ip_dejada: str = '', puerto: str = '',
                                  registrar_pendiente=None, responsable_movimiento=None,
-                                 referencia_ot: str = ''):
+                                 referencia_ot: str = '', exigir_medidor_instalado: bool = True,
+                                 custodia_visita: Optional[Dict[str, Any]] = None):
+    """``custodia_visita`` (Mantenimiento Telemetría): ``{'tecnico': Usuario|None, 'nombre': str}``.
+
+    Instalado: sin técnico a cargo y queda registrado quién lo instaló.
+    Retirado: a cargo del técnico de la visita, en Custodia técnico, hasta su recepción en bodega.
+    """
     cambios = []
     # Guardar ubicación/estado ANTES de mutar: el movimiento debe mostrar el trayecto real
     # (p. ej. Bodega → Instalado en cliente), no Instalado → Instalado.
@@ -920,6 +929,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
         registro,
         observacion=observacion,
         registrar_pendiente=registrar_pendiente,
+        exigir_medidor_instalado=exigir_medidor_instalado,
     ):
         return False
 
@@ -1000,7 +1010,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
         nombre_tecnico = ''
         if responsable_movimiento and getattr(responsable_movimiento, 'rol', None) == 'TECNICO':
             nombre_tecnico = _as_text(getattr(responsable_movimiento, 'nombre_interno', ''))
-            if getattr(equipo, 'en_custodia_de_id', None) != responsable_movimiento.id:
+            if custodia_visita is None and getattr(equipo, 'en_custodia_de_id', None) != responsable_movimiento.id:
                 equipo.en_custodia_de = responsable_movimiento
                 cambios.append('en_custodia_de')
         if nombre_actual.startswith('MoreApp auto') or (not nombre_actual and nombre_tecnico):
@@ -1019,6 +1029,37 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
         if puerto and getattr(equipo, 'puerto', '') != puerto:
             equipo.puerto = puerto
             cambios.append('puerto')
+
+    ubicacion_retiro = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+    # Una visita que encuentra el equipo ya instalado no lo instaló: no cambia quién lo instaló.
+    instalacion_real = es_instalacion and not _es_estado_instalado(estado_previo)
+    if custodia_visita is not None:
+        nombre_visita = _as_text(custodia_visita.get('nombre'))[:255]
+        if es_retiro:
+            ubicacion_retiro = _obtener_o_crear_ubicacion('TECNICO', 'Custodia técnico')
+        if es_instalacion or es_retiro:
+            # Medidor y Módem muestran y filtran la custodia por entregado_a; la SIM por en_custodia_de.
+            custodio = custodia_visita.get('tecnico') if es_retiro else None
+            campos_fk = {f.name for f in equipo._meta.fields}
+            for campo in ('en_custodia_de', 'entregado_a'):
+                if campo in campos_fk and getattr(equipo, f'{campo}_id') != getattr(custodio, 'id', None):
+                    setattr(equipo, campo, custodio)
+                    cambios.append(campo)
+            # Sin usuario técnico, el nombre informado en MoreApp queda como responsable "otro".
+            nombre_otro = nombre_visita if es_retiro and custodio is None else ''
+            if (equipo.entregado_a_otro or '') != nombre_otro:
+                equipo.entregado_a_otro = nombre_otro
+                cambios.append('entregado_a_otro')
+            if es_retiro and custodio is None and registrar_pendiente:
+                registrar_pendiente(
+                    tipo_equipo,
+                    _identificador_equipo(equipo, tipo_equipo),
+                    f'Técnico "{nombre_visita or "sin nombre"}" no está registrado como usuario: '
+                    'el equipo retirado queda a su nombre, sin usuario a cargo',
+                )
+        if instalacion_real and tipo_equipo == 'MODEM' and nombre_visita and equipo.tecnico_responsable != nombre_visita:
+            equipo.tecnico_responsable = nombre_visita
+            cambios.append('tecnico_responsable')
 
     # medidor_actual solo se toca al instalar; en retiro ya se liberó arriba.
     if (
@@ -1042,8 +1083,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
         if getattr(ubicacion_previa, 'id', None) != destino_esperado.id:
             necesita_movimiento_ubicacion = True
     elif es_retiro:
-        destino_esperado = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
-        if getattr(ubicacion_previa, 'id', None) != destino_esperado.id:
+        if getattr(ubicacion_previa, 'id', None) != ubicacion_retiro.id:
             necesita_movimiento_ubicacion = True
 
     if not cambios and not necesita_movimiento_ubicacion:
@@ -1064,6 +1104,11 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
         )
     else:
         observacion_mov = observacion
+    if custodia_visita is not None and nombre_visita:
+        if instalacion_real:
+            observacion_mov += f' | Instalado por: {nombre_visita}'
+        elif es_retiro:
+            observacion_mov += f' | Retirado por: {nombre_visita}, en su custodia hasta llegar a bodega'
 
     # Dedupe contra el texto que realmente se persiste (y el legacy sin "| Estado:").
     mov_existente = MovimientoInventario.objects.filter(
@@ -1084,7 +1129,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
             if es_instalacion:
                 equipo.ubicacion_actual = _obtener_o_crear_ubicacion('CLIENTE', 'Instalado en cliente')
             elif es_retiro:
-                equipo.ubicacion_actual = _obtener_o_crear_ubicacion('BODEGA_DELCO', 'Bodega Principal')
+                equipo.ubicacion_actual = ubicacion_retiro
             equipo.save(update_fields=['ubicacion_actual'])
         registro.actualizo_equipos = True
         if es_instalacion and cliente_obj:
@@ -1097,6 +1142,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
                 registrar_pendiente=registrar_pendiente,
                 responsable_movimiento=responsable_movimiento,
                 medidor_asociado=medidor_asociado,
+                custodia_visita=custodia_visita,
             )
         return True
 
@@ -1111,6 +1157,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
         responsable_override=responsable_movimiento,
         referencia_ot=referencia_ot,
         ubicacion_origen=ubicacion_previa,
+        destino_override=ubicacion_retiro if es_retiro else None,
     )
     registro.actualizo_equipos = True
 
@@ -1125,6 +1172,7 @@ def _actualizar_equipo_operativo(equipo, tipo_equipo: str, estado_obj, cliente_o
             registrar_pendiente=registrar_pendiente,
             responsable_movimiento=responsable_movimiento,
             medidor_asociado=medidor_asociado,
+            custodia_visita=custodia_visita,
         )
     return True
 
@@ -1138,6 +1186,7 @@ def _retirar_otros_instalados_en_cliente(
     registrar_pendiente=None,
     responsable_movimiento=None,
     medidor_asociado=None,
+    custodia_visita=None,
 ) -> int:
     """Al instalar un equipo nuevo, retira otros del mismo tipo ya instalados en el cliente.
 
@@ -1181,10 +1230,97 @@ def _retirar_otros_instalados_en_cliente(
             medidor_asociado=medidor_asociado if tipo_equipo != 'MEDIDOR' else None,
             registrar_pendiente=registrar_pendiente,
             responsable_movimiento=responsable_movimiento,
+            custodia_visita=custodia_visita,
         )
         if ok:
             movimientos += 1
     return movimientos
+
+
+def _fecha_envio_ms(payload) -> float:
+    info = _dict_o_vacio(payload.get('info') if isinstance(payload, dict) else None)
+    valor = info.get('date')
+    if isinstance(valor, (int, float)):
+        return float(valor)
+    texto = _as_text(valor)
+    if texto.isdigit():
+        return float(texto)
+    try:
+        return datetime.fromisoformat(texto.replace('Z', '+00:00')).timestamp() * 1000
+    except ValueError:
+        return 0.0
+
+
+def _visita_posterior_mantenimiento(registro, payload, cliente_codigo: str):
+    """Otra visita de Mantenimiento Telemetría más reciente que ya movió equipos del cliente."""
+    from ordenes_trabajo.models import IntegracionMoreApp
+
+    fecha = _fecha_envio_ms(payload)
+    if not cliente_codigo or not fecha:
+        return None
+    otras = (
+        IntegracionMoreApp.objects.filter(
+            eliminado=False,
+            actualizo_equipos=True,
+            datos_procesados__cliente_codigo=cliente_codigo,
+        )
+        .exclude(pk=registro.pk)
+        .only('id', 'moreapp_submission_id', 'nombre_formulario', 'datos_recibidos')
+    )
+    for otra in otras:
+        if (
+            _resolver_formulario(otra.nombre_formulario) == 'MANTENIMIENTO_TELEMETRIA_V3'
+            and _fecha_envio_ms(otra.datos_recibidos) > fecha
+        ):
+            return otra
+    return None
+
+
+def _actualizar_ficha_cliente_mantenimiento(cliente, instalados: Dict[str, Any], retirados: Dict[str, Any]) -> list:
+    """La ficha del cliente refleja los equipos que la visita dejó instalados o retiró."""
+    from clientes.sci4 import _norm
+
+    valores = {}
+    medidor = instalados.get('MEDIDOR')
+    if medidor:
+        valores['meter_serial_n_1'] = medidor.serie
+        if medidor.marca:
+            valores['meter_manufacturer_id'] = medidor.marca
+    elif retirados.get('MEDIDOR') and _norm(cliente.meter_serial_n_1) == _norm(retirados['MEDIDOR'].serie):
+        valores['meter_serial_n_1'] = ''
+
+    modem = instalados.get('MODEM')
+    if modem:
+        valores['modem'] = modem.serie
+        if modem.ip:
+            valores['ip'] = modem.ip
+        if modem.puerto:
+            valores['puerto'] = modem.puerto
+    elif retirados.get('MODEM') and _norm(cliente.modem) == _norm(retirados['MODEM'].serie):
+        valores['modem'] = ''
+
+    sim = instalados.get('SIM')
+    if sim:
+        iccid = sim.imei or sim.serie_plastico
+        if iccid:
+            valores['sim_iccid'] = iccid
+        if sim.operador:
+            valores['sim_operador'] = sim.operador
+        if sim.abonado:
+            valores['sim_abonado'] = sim.abonado
+        if sim.direccion_ip or sim.ip_fija:
+            valores['ip'] = sim.direccion_ip or sim.ip_fija
+    elif retirados.get('SIM'):
+        retirada = retirados['SIM']
+        if _norm(cliente.sim_iccid) and _norm(cliente.sim_iccid) in {_norm(retirada.imei), _norm(retirada.serie_plastico)}:
+            valores['sim_iccid'] = ''
+
+    campos = [campo for campo, valor in valores.items() if _norm(getattr(cliente, campo)) != _norm(valor)]
+    for campo in campos:
+        setattr(cliente, campo, valores[campo])
+    if campos:
+        cliente.save(update_fields=campos + ['fecha_actualizacion'])
+    return campos
 
 
 def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos_norm: Dict[str, Any], nombre_formulario: str):
@@ -1431,7 +1567,8 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
     )
     tecnico_moreapp = _as_text(datos_norm.get('tecnico_responsable'))
     responsable_movimiento = _resolver_responsable_moreapp(tecnico_moreapp) or _obtener_responsable_sistema()
-    medidor_principal = _buscar_medidor(medidor_serie)
+    es_mantenimiento = formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3'
+    medidor_principal = None if es_mantenimiento else _buscar_medidor(medidor_serie)
     equipo_vinculo_modem = None
     equipo_vinculo_sim = None
 
@@ -1441,6 +1578,243 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             _agregar_pendiente('MEDIDOR', medidor_serie, issue.message)
             _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
             _append_descripcion_alerta(registro, issue.message)
+
+    if es_mantenimiento:
+        # El medidor de clienteParaMantenimiento es del padrón del cliente, no inventario Delco:
+        # aquí no hay altas automáticas y las incidencias no mueven equipos.
+        ejecutada = 'ejecut' in _normalizar_texto(datos_norm.get('estado'))
+        posterior = _visita_posterior_mantenimiento(registro, payload, cliente_codigo) if ejecutada else None
+        if posterior:
+            aviso = (
+                f'Sin movimientos de inventario: la visita {posterior.moreapp_submission_id} '
+                f'del mismo cliente es más reciente y ya actualizó sus equipos.'
+            )
+            _asignar_estado_revision(registro, 'CON_ADVERTENCIA')
+            _append_descripcion_alerta(registro, aviso)
+        if ejecutada and not posterior:
+            estado_instalado = _obtener_estado_por_nombre('Instalado')
+            estado_retirado = _obtener_estado_por_nombre('Retirado')
+            tecnico_visita = (
+                responsable_movimiento
+                if getattr(responsable_movimiento, 'rol', None) == 'TECNICO'
+                else None
+            )
+            instalados_visita: Dict[str, Any] = {}
+            retirados_visita: Dict[str, Any] = {}
+            cambios_fisicos: list = []
+            if cliente_obj:
+                from clientes.sci4 import _snapshot_criticos
+
+                ficha_antes = _snapshot_criticos(cliente_obj)
+
+            def _id_equipo(valor, modo='general'):
+                ident = _identificador_operativo_util(valor, modo=modo)
+                return '' if re.fullmatch(r'0+', ident.replace(' ', '')) else ident
+
+            def _compacto(valor):
+                return re.sub(r'\s+', '', valor or '').upper()
+
+            def _mover(equipo, tipo_equipo, estado, detalle, **extra):
+                estaba_instalado = bool(equipo) and _es_estado_instalado(equipo.estado_inventario)
+                ok = bool(equipo) and _actualizar_equipo_operativo(
+                    equipo,
+                    tipo_equipo,
+                    estado,
+                    cliente_obj,
+                    f'{observacion_base} - {detalle}',
+                    registro,
+                    registrar_pendiente=_agregar_pendiente,
+                    responsable_movimiento=responsable_movimiento,
+                    exigir_medidor_instalado=False,
+                    custodia_visita={'tecnico': tecnico_visita, 'nombre': tecnico_moreapp},
+                    **extra,
+                )
+                if ok:
+                    resumen['movimientos_generados'] += 1
+                if not equipo or not cliente_obj:
+                    return
+                if estado == estado_instalado:
+                    if equipo.cliente_id == cliente_obj.id and _es_estado_instalado(equipo.estado_inventario):
+                        instalados_visita[tipo_equipo] = equipo
+                        if not estaba_instalado:
+                            cambios_fisicos.append(tipo_equipo)
+                elif equipo.estado_inventario_id == estado_retirado.id:
+                    retirados_visita[tipo_equipo] = equipo
+                    if ok:
+                        cambios_fisicos.append(tipo_equipo)
+
+            def _retirar(equipo, tipo_equipo, identificador, detalle):
+                estado_actual = getattr(equipo, 'estado_inventario', None)
+                if equipo and not _es_estado_instalado(estado_actual):
+                    from inventario.models import MovimientoInventario
+
+                    filtro_item = {'MEDIDOR': 'items__medidor', 'MODEM': 'items__modem', 'SIM': 'items__simcard'}[tipo_equipo]
+                    ya_retirado_aqui = MovimientoInventario.objects.filter(
+                        origen_sistema='MOREAPP',
+                        observacion__contains=f'submission: {registro.moreapp_submission_id}',
+                        **{filtro_item: equipo},
+                    ).exists()
+                    if not ya_retirado_aqui:
+                        _agregar_pendiente(
+                            tipo_equipo,
+                            identificador,
+                            'Informado como encontrado en el cliente, pero en inventario figura '
+                            f'"{_as_text(getattr(estado_actual, "nombre", "")) or "sin estado"}"; no se retiró',
+                        )
+                    return
+                _mover(equipo, tipo_equipo, estado_retirado, detalle)
+
+            def _en_custodia_de_otro(equipo, tipo_equipo, identificador):
+                if not tecnico_visita or _es_estado_instalado(getattr(equipo, 'estado_inventario', None)):
+                    return False
+                # El mismo campo que la pantalla muestra como "Entregado a" para cada tipo.
+                custodio_id = (
+                    getattr(equipo, 'en_custodia_de_id', None) if tipo_equipo == 'SIM'
+                    else getattr(equipo, 'entregado_a_id', None)
+                )
+                if custodio_id and custodio_id != tecnico_visita.id:
+                    _agregar_pendiente(
+                        tipo_equipo,
+                        identificador,
+                        'El equipo está a cargo de otro técnico; no se instaló automáticamente',
+                    )
+                    return True
+                return False
+
+            def _buscar_sim_por_numero(numero):
+                from django.db.models import Q
+
+                return SimCard.objects.filter(
+                    Q(imei__iexact=numero) | Q(serie_plastico__iexact=numero)
+                    | Q(abonado__iexact=numero) | Q(msisdn__iexact=numero),
+                    eliminado=False,
+                ).first()
+
+            serie_sistema = _id_equipo(medidor_serie)
+            serie_encontrada = _id_equipo(datos_norm.get('medidor_encontrado_numero')) or serie_sistema
+            serie_dejada = _id_equipo(datos_norm.get('medidor_dejado_numero'))
+            respuesta_cambio = _normalizar_texto(datos_norm.get('cambio_medidor'))
+            # Las versiones antiguas del formulario no tenían la pregunta del cambio físico.
+            cambio_medidor = respuesta_cambio == 'si' or (
+                not respuesta_cambio
+                and bool(serie_dejada)
+                and 'cambio de medidor' in _normalizar_texto(datos_norm.get('trabajo_principal'))
+            )
+            if respuesta_cambio == 'no' and serie_dejada:
+                _agregar_pendiente(
+                    'MEDIDOR',
+                    serie_dejada,
+                    'Medidor dejado informado, pero el cambio físico de medidor dice NO',
+                )
+            if cambio_medidor:
+                if not serie_dejada:
+                    _agregar_pendiente(
+                        'MEDIDOR',
+                        serie_encontrada or cliente_codigo,
+                        'Cambio de medidor informado sin número de medidor dejado',
+                    )
+                elif _compacto(serie_dejada) != _compacto(serie_encontrada):
+                    medidor_viejo = _buscar_medidor(serie_encontrada) if serie_encontrada else None
+                    _retirar(medidor_viejo, 'MEDIDOR', serie_encontrada, 'retiro medidor encontrado')
+                    medidor_nuevo = _buscar_medidor(serie_dejada)
+                    if not medidor_nuevo:
+                        _agregar_pendiente('MEDIDOR', serie_dejada, 'Medidor dejado no existe en inventario')
+                    elif not _en_custodia_de_otro(medidor_nuevo, 'MEDIDOR', serie_dejada):
+                        _mover(medidor_nuevo, 'MEDIDOR', estado_instalado, 'instalación medidor dejado')
+                        medidor_principal = medidor_nuevo
+                        if medidor_viejo and cliente_obj:
+                            for modelo in (Modem, SimCard):
+                                modelo.objects.filter(
+                                    medidor=medidor_viejo,
+                                    cliente=cliente_obj,
+                                    eliminado=False,
+                                ).update(medidor=medidor_nuevo)
+            if medidor_principal is None and serie_sistema:
+                medidor_principal = Medidor.objects.filter(serie__iexact=serie_sistema, eliminado=False).first()
+            if medidor_principal:
+                resumen['medidor_encontrado'] = True
+                medidor_principal.refresh_from_db()
+
+            modem_encontrado_id = _id_equipo(datos_norm.get('modem_encontrado'))
+            modem_dejado_id = _id_equipo(datos_norm.get('modem_dejado'))
+            mismo_modem = bool(
+                modem_encontrado_id and modem_dejado_id
+                and _compacto(modem_encontrado_id) == _compacto(modem_dejado_id)
+            )
+            if modem_encontrado_id and not mismo_modem:
+                _retirar(_buscar_modem(modem_encontrado_id), 'MODEM', modem_encontrado_id, 'retiro módem encontrado')
+            if modem_dejado_id:
+                equipo_vinculo_modem = _buscar_modem(modem_dejado_id)
+                if not equipo_vinculo_modem:
+                    _agregar_pendiente('MODEM', modem_dejado_id, 'Módem dejado no existe en inventario')
+                elif mismo_modem or not _en_custodia_de_otro(equipo_vinculo_modem, 'MODEM', modem_dejado_id):
+                    resumen['modem_encontrado'] = True
+                    _mover(
+                        equipo_vinculo_modem,
+                        'MODEM',
+                        estado_instalado,
+                        'módem sin cambio' if mismo_modem else 'instalación módem dejado',
+                        medidor_asociado=medidor_principal,
+                        ip_dejada=sim_ip,
+                        puerto=puerto_dejado,
+                    )
+
+            accion_sim = _normalizar_texto(datos_norm.get('sim_accion'))
+            sim_es_nueva = 'cambio' in accion_sim or 'instal' in accion_sim
+            sim_dejada = _buscar_sim_por_ip(sim_ip) if sim_ip else None
+            if 'cambio' in accion_sim:
+                numero_retirada = _id_equipo(datos_norm.get('sim_retirada'))
+                sim_retirada = _buscar_sim_por_numero(numero_retirada) if numero_retirada else None
+                if sim_retirada and sim_retirada != sim_dejada:
+                    _retirar(sim_retirada, 'SIM', numero_retirada, 'retiro SIM')
+                elif numero_retirada and not sim_retirada:
+                    _agregar_pendiente('SIM', numero_retirada, 'SIM retirada no existe en inventario')
+            if sim_dejada:
+                if not (sim_es_nueva and _en_custodia_de_otro(sim_dejada, 'SIM', sim_ip)):
+                    resumen['sim_encontrada'] = True
+                    _mover(
+                        sim_dejada,
+                        'SIM',
+                        estado_instalado,
+                        'instalación SIM' if sim_es_nueva else 'SIM sin cambio',
+                        medidor_asociado=medidor_principal,
+                        ip_dejada=sim_ip,
+                    )
+                    equipo_vinculo_sim = sim_dejada
+            elif sim_ip and sim_es_nueva:
+                _agregar_pendiente('SIM', sim_ip, 'IP dejada de SIM no encontrada en inventario')
+
+            if cliente_obj:
+                from clientes.sci4 import _snapshot_criticos, aplicar_pendiente_si_cambio_critico
+
+                cliente_obj.refresh_from_db()
+                if _actualizar_ficha_cliente_mantenimiento(cliente_obj, instalados_visita, retirados_visita):
+                    registro.actualizo_cliente = True
+                # Completar la ficha sin cambio físico no es un cambio para la base comercial.
+                if cambios_fisicos:
+                    aplicar_pendiente_si_cambio_critico(
+                        cliente_obj,
+                        ficha_antes,
+                        _snapshot_criticos(cliente_obj),
+                        actor_id=getattr(tecnico_visita, 'id', None),
+                    )
+
+        _estado_revision_tras_llegada(registro, resumen)
+        if cliente_obj:
+            from ordenes_trabajo.sync import vincular_moreapp_a_orden
+
+            orden_vinculada = vincular_moreapp_a_orden(
+                cliente_obj,
+                registro_moreapp=registro,
+                ruta_carpeta=getattr(registro, 'ruta_carpeta', '') or '',
+                medidor=medidor_principal,
+                modem=equipo_vinculo_modem,
+                simcard=equipo_vinculo_sim,
+            )
+            if orden_vinculada:
+                resumen['orden_actualizada'] = orden_vinculada.id
+                resumen['orden_estado'] = orden_vinculada.estado
+        return resumen
 
     if formulario_canonico == 'REGISTRO_MEDIDORES_TELEMETRIA_V3':
         medidor_retirado = _buscar_medidor(medidor_activo_serie)
@@ -1593,26 +1967,6 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             _agregar_pendiente('MEDIDOR', medidor_serie, 'Serie de medidor no encontrada en inventario')
 
     modem_encontrado = None
-    if formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3' and modem_encontrado_serie and modem_dejado_serie:
-        modem_retirado = _buscar_modem(modem_encontrado_serie)
-        if modem_retirado:
-            resumen['modem_encontrado'] = True
-            actualizado = _actualizar_equipo_operativo(
-                modem_retirado,
-                'MODEM',
-                _obtener_estado_por_nombre('Retirado') or estado_obj,
-                cliente_obj,
-                f'{observacion_base} - retiro módem por serie',
-                registro,
-                medidor_asociado=medidor_principal,
-                registrar_pendiente=_agregar_pendiente,
-                responsable_movimiento=responsable_movimiento,
-            )
-            if actualizado:
-                resumen['movimientos_generados'] += 1
-        else:
-            _agregar_pendiente('MODEM', modem_encontrado_serie, 'Serie de módem encontrado (retiro) no existe en inventario')
-
     if modem_serie:
         modem_encontrado = _buscar_modem(modem_serie)
         if not modem_encontrado:
@@ -1622,13 +1976,10 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
             )
     if modem_encontrado:
         resumen['modem_encontrado'] = True
-        estado_modem = estado_obj
-        if formulario_canonico == 'MANTENIMIENTO_TELEMETRIA_V3' and modem_dejado_serie:
-            estado_modem = _obtener_estado_por_nombre('Instalado') or estado_obj
         actualizado = _actualizar_equipo_operativo(
             modem_encontrado,
             'MODEM',
-            estado_modem,
+            estado_obj,
             cliente_obj,
             f'{observacion_base} - actualización módem por serie',
             registro,
@@ -1650,7 +2001,7 @@ def _aplicar_actualizaciones_operativas(registro, payload: Dict[str, Any], datos
     if sim:
         resumen['sim_encontrada'] = True
         estado_sim = estado_obj
-        if formulario_canonico in ('MANTENIMIENTO_TELEMETRIA_V3', 'REGISTRO_MEDIDORES_TELEMETRIA_V3') and sim_ip:
+        if formulario_canonico == 'REGISTRO_MEDIDORES_TELEMETRIA_V3' and sim_ip:
             estado_sim = _obtener_estado_por_nombre('Instalado') or estado_obj
         actualizado = _actualizar_equipo_operativo(
             sim,
@@ -1815,6 +2166,12 @@ def _extraer_mantenimiento(data: dict, info: dict, meta: dict) -> Dict[str, Any]
         'ip_dejada': _as_text(campos.get('iPDejada')),
         'puerto_dejado': _as_text(campos.get('puertoDejado')),
         'nombre_autoriza': _as_text(campos.get('nombreDeQuienAutoriza')),
+        'cambio_medidor': _as_text(campos.get('SeRealizoUnCambioFisicoDeMedidorEnEstaVisita')),
+        'medidor_encontrado_numero': _as_text(campos.get('numeroDeMedidorEncontrado')),
+        'medidor_dejado_numero': _as_text(campos.get('numeroDeMedidorDejado')),
+        'marca_medidor_dejado': _as_text(campos.get('marcaDeMedidorDejado')),
+        'sim_accion': _as_text(campos.get('accionRealizadaSobreSimCard')),
+        'sim_retirada': _as_text(campos.get('ingreseElNumeroDeLaSimCardRetirada')),
     }
 
 
@@ -2601,6 +2958,10 @@ def reprocesar_registro_moreapp(registro) -> Dict[str, Any]:
     nombre_formulario = registro.nombre_formulario or data.get('info', {}).get('formName', '')
     datos_norm = _extraer_datos_normalizados(data)
 
+    # Si el informe ya movió equipos o la ficha, un reproceso sin novedades no borra ese antecedente
+    # (la protección contra visitas antiguas depende de actualizo_equipos).
+    actualizo_cliente_previo = registro.actualizo_cliente
+    actualizo_equipos_previo = registro.actualizo_equipos
     registro.alerta_doble_trabajo = False
     registro.descripcion_alerta = ''
     registro.actualizo_cliente = False
@@ -2619,6 +2980,8 @@ def reprocesar_registro_moreapp(registro) -> Dict[str, Any]:
         datos_norm=datos_norm,
         nombre_formulario=nombre_formulario,
     )
+    registro.actualizo_cliente = registro.actualizo_cliente or actualizo_cliente_previo
+    registro.actualizo_equipos = registro.actualizo_equipos or actualizo_equipos_previo
     registro.datos_procesados = _finalizar_datos_procesados(datos_norm, data, registro, resumen)
     registro.fecha_procesamiento = timezone.now()
     if resumen.get('movimientos_generados', 0) > 0 or registro.actualizo_equipos:

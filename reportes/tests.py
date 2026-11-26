@@ -33,7 +33,8 @@ class ReportesPunto9Tests(TestCase):
         response = reportes_hub_view(request)
         content = response.content.decode()
         self.assertEqual(response.status_code, 200)
-        self.assertIn('Sin reportes operativos por ahora', content)
+        self.assertIn('Reportes operativos', content)
+        self.assertIn('Aún no hay formularios asignados', content)
         self.assertNotIn('Base completa de clientes', content)
 
     def test_export_clientes_completos_excel(self):
@@ -127,7 +128,10 @@ class ReportesSoloActividadOperativaTests(TestCase):
         request = RequestFactory().get('/reportes/')
         request.user = self.admin
         response = reportes_hub_view(request)
-        self.assertIn('Base completa de clientes', response.content.decode())
+        content = response.content.decode()
+        self.assertIn('Reportes operativos', content)
+        self.assertIn('formularios asignados', content)
+        self.assertNotIn('Base completa de clientes', content)
 
     def test_filtro_tipo_trabajo_pendientes(self):
         OrdenTrabajo.objects.create(
@@ -165,7 +169,8 @@ class ReportesSoloActividadOperativaTests(TestCase):
         request.user = self.admin
         response = reportes_hub_view(request)
         content = response.content.decode()
-        self.assertIn('Base completa de clientes', content)
+        self.assertIn('Reportes operativos', content)
+        self.assertIn('formularios asignados', content)
         self.assertNotIn('Sin reportes operativos por ahora', content)
 
     def test_reportes_usan_visitas_moreapp_sin_ot(self):
@@ -218,12 +223,72 @@ class ReportesSoloActividadOperativaTests(TestCase):
             creada_por=self.admin,
             estado='ASIGNADA',
         )
-        request = RequestFactory().get('/reportes/', {'tipo_trabajo': 'INSTALACION', 'estado_ot': 'ASIGNADA'})
+        request = RequestFactory().get('/reportes/', {'fecha_desde': '2026-11-01', 'tecnico': 'Ana'})
         request.user = self.admin
         response = reportes_hub_view(request)
         content = response.content.decode()
-        self.assertIn('Limpiar filtros', content)
-        self.assertIn('Estado OT', content)
-        self.assertIn('Período', content)
-        self.assertNotIn('Fecha desde', content)
-        self.assertIn('Filtros activos', content)
+        self.assertIn('Quitar filtros', content)
+        self.assertIn('Fecha', content)
+        self.assertIn('Técnico', content)
+        self.assertIn('N° cliente', content)
+        self.assertIn('2026-11-01', content)
+        self.assertIn('Ana', content)
+        self.assertNotIn('Estado OT', content)
+
+    def test_admin_ve_todos_los_formularios_asignados_y_filtra(self):
+        from unittest import mock
+        from django.test import RequestFactory
+        from integraciones.models import MoreAppFormularioAsignado
+        from reportes.views import reportes_hub_view
+
+        otro = Usuario.objects.create_user(
+            rut='98989898-8',
+            email='otro_rep@delco.cl',
+            password='admin1234',
+            nombre='Otro',
+            apellido='Rep',
+            nombre_interno='otro_rep',
+            rol='ADMINISTRATIVO',
+            is_active=True,
+        )
+        MoreAppFormularioAsignado.objects.create(
+            usuario=otro, form_id='formuno', form_name='Instalacion', asignado_por=self.admin,
+        )
+        MoreAppFormularioAsignado.objects.create(
+            usuario=otro, form_id='formdos', form_name='Retiro', asignado_por=self.admin,
+        )
+        forms = [
+            {'id': 'formuno', 'name': 'Instalacion', 'status': 'ACTIVE'},
+            {'id': 'formdos', 'name': 'Retiro', 'status': 'ACTIVE'},
+        ]
+        with mock.patch('integraciones.moreapp_formularios_views.list_all_forms', return_value=forms), \
+                mock.patch('integraciones.moreapp_api_ingest.ingest_asignados_si_corresponde'), \
+                mock.patch('reportes.views._conteo_cacheado', return_value=2):
+            request = RequestFactory().get('/reportes/', {'query': 'Retiro'})
+            request.user = self.admin
+            admin_body = reportes_hub_view(request).content.decode()
+            propio = RequestFactory().get('/reportes/')
+            propio.user = otro
+            propio_body = reportes_hub_view(propio).content.decode()
+            ajeno = Usuario.objects.create_user(
+                rut='97979798-5',
+                email='ajeno_rep@delco.cl',
+                password='admin1234',
+                nombre='Ajeno',
+                apellido='Rep',
+                nombre_interno='ajeno_rep',
+                rol='ADMINISTRATIVO',
+                is_active=True,
+            )
+            sin = RequestFactory().get('/reportes/')
+            sin.user = ajeno
+            sin_body = reportes_hub_view(sin).content.decode()
+        self.assertIn('formdos', admin_body)
+        self.assertIn('export=pdf', admin_body)
+        self.assertIn('export=xlsx', admin_body)
+        self.assertNotIn('Ver reporte', admin_body)
+        self.assertNotIn('formuno', admin_body)
+        self.assertIn('formuno', propio_body)
+        self.assertIn('formdos', propio_body)
+        self.assertIn('No tienes formularios asignados', sin_body)
+        self.assertNotIn('Retiro', sin_body)

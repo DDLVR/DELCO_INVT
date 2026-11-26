@@ -5,178 +5,170 @@
 
 {% block content %}
 <div class="container-fluid py-4 delco-catalogo">
-    <div class="delco-catalogo-hero mb-3">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
-            <div>
-                <p class="delco-catalogo-kicker mb-1">Reportes</p>
-                <h1 class="h3 mb-1">Reportes operativos</h1>
-                <p class="text-muted mb-0">
-                    Informes de OT y alertas de terreno. Exporta en Excel o PDF.
-                </p>
+  <div class="delco-catalogo-hero mb-3">
+    <div class="d-flex justify-content-between align-items-start flex-wrap gap-3">
+      <div>
+        <p class="delco-catalogo-kicker mb-1">Reportes</p>
+        <h1 class="h3 mb-1">Reportes operativos</h1>
+        {% if ve_todos %}
+        <p class="text-muted mb-0">Informes de los formularios asignados. Ves el total y descargas Excel o PDF. El admin ve el conjunto completo.</p>
+        {% else %}
+        <p class="text-muted mb-0">Informes de los formularios que te asignaron. Ves el total y descargas Excel o PDF.</p>
+        {% endif %}
+      </div>
+      {% if formularios %}
+      <div class="delco-catalogo-stat">
+        <span class="delco-catalogo-stat-icon"><i class="bi bi-table"></i></span>
+        <div>
+          <div class="text-muted small">Total filas</div>
+          <div class="fs-4 fw-semibold">{{ total_registros|default:0 }}</div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-warning">{{ error }}</div>
+  {% endif %}
+
+  <div class="card shadow-sm mb-4 delco-panel-card">
+    <div class="card-body">
+      <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+        <h3 class="h6 mb-0"><i class="bi bi-funnel me-1"></i> Filtros</h3>
+        {% if tiene_filtros %}<span class="badge bg-info text-dark">Filtros activos</span>{% endif %}
+      </div>
+      <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
+        <div class="row g-2 align-items-end">
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1">Tipo de filtro</label>
+            <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
+          </div>
+          <div class="col-12 col-md-4">
+            <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
+            <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
+            <div data-filtro-panel="query" data-filtro-titulo="Formulario" data-filtro-param="query" class="d-none">
+              <input type="text" id="query" data-filtro-valor class="form-control form-control-sm" list="listaFormulariosReporte" placeholder="Elige o escribe un formulario" autocomplete="off" aria-label="Formulario">
+              <datalist id="listaFormulariosReporte">
+                {% for nombre in nombres_formularios %}<option value="{{ nombre }}"></option>{% endfor %}
+              </datalist>
             </div>
-            {% if mostrar_catalogo %}
-            <div class="delco-catalogo-stat">
-                <span class="delco-catalogo-stat-icon"><i class="bi bi-table"></i></span>
-                <div>
-                    <div class="text-muted small">Total filas</div>
-                    <div class="fs-4 fw-semibold">{{ total_registros_catalogo|default:0 }}</div>
-                </div>
+            {% if ve_todos %}
+            <div data-filtro-panel="asignado" data-filtro-titulo="Asignado a" data-filtro-param="asignado" class="d-none">
+              <input type="text" id="filtroAsignado" data-filtro-valor class="form-control form-control-sm" list="listaAsignadosReporte" placeholder="Elige o escribe una persona" autocomplete="off" aria-label="Asignado a">
+              <datalist id="listaAsignadosReporte">
+                {% for nombre in nombres_asignados %}<option value="{{ nombre }}"></option>{% endfor %}
+              </datalist>
             </div>
             {% endif %}
-        </div>
-    </div>
-
-    {% if not mostrar_catalogo %}
-    <div class="card border-0 shadow-sm delco-panel-card">
-        <div class="card-body text-center py-5">
-            <div class="display-6 text-muted mb-3"><i class="bi bi-inbox"></i></div>
-            <h3 class="h5 mb-2">Sin reportes operativos por ahora</h3>
-            <p class="text-muted mb-0 mx-auto" style="max-width: 520px;">
-                {% if hay_actividad_operativa and not hay_datos_en_reportes %}
-                Hay registros de terreno sin datos exportables aún (por ejemplo, MoreApp sin cliente vinculado en el sistema).
-                Cuando crees OT o proceses trabajos con clientes en la base, los reportes aparecerán aquí.
-                {% else %}
-                No hay informes generados. Aparecerán aquí cuando registres órdenes de trabajo
-                o proceses registros de MoreApp en terreno con clientes en el sistema.
-                {% endif %}
-                Las importaciones de clientes siguen en Gestión de Clientes y en Auditoría.
-            </p>
-        </div>
-    </div>
-    {% else %}
-    <div class="card shadow-sm mb-4 delco-panel-card">
-        <div class="card-body">
-            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                <h3 class="h6 mb-0"><i class="bi bi-funnel me-1"></i> Filtros</h3>
-                {% if filtros_activos %}
-                <span class="badge bg-info text-dark">Filtros activos</span>
-                {% endif %}
+            <div data-filtro-panel="fecha" data-filtro-titulo="Fecha" data-filtro-modo="fecha" data-filtro-desde="fecha_desde" data-filtro-hasta="fecha_hasta" class="d-none">
+              <input type="date" id="fecha_desde" class="form-control form-control-sm" aria-label="Desde">
             </div>
-            <div class="delco-filtro-builder" data-filtro-auto data-navegacion="pagina">
-              <div class="row g-2 align-items-end">
-                <div class="col-12 col-md-4">
-                  <label class="form-label small mb-1">Tipo de filtro</label>
-                  <select class="form-select form-select-sm js-filtro-tipo" data-orden-lista="no"><option value="">Elige un filtro</option></select>
-                </div>
-                <div class="col-12 col-md-4">
-                  <label class="form-label small mb-1 js-filtro-valor-label">Qué buscar</label>
-                  <input class="form-control form-control-sm js-filtro-vacio" placeholder="Primero elige el tipo" disabled>
-                  <div data-filtro-panel="periodo" data-filtro-titulo="Período" data-filtro-param="periodo" class="d-none">
-                    <select id="filtroPeriodo" class="form-select form-select-sm" data-orden-lista="no" aria-label="Período">
-                      <option value="">Elige un período</option>
-                      <option value="hoy">Hoy</option>
-                      <option value="7">Últimos 7 días</option>
-                      <option value="30">Últimos 30 días</option>
-                      <option value="mes">Este mes</option>
-                    </select>
-                  </div>
-                  <div data-filtro-panel="estado_ot" data-filtro-titulo="Estado OT" data-filtro-param="estado_ot" class="d-none">
-                    <select id="filtroEstadoOt" class="form-select form-select-sm" data-orden-lista="no" aria-label="Estado">
-                      <option value="">Elige un estado</option>
-                      {% for codigo, label in estados_ot %}<option value="{{ codigo }}">{{ label }}</option>{% endfor %}
-                    </select>
-                  </div>
-                  <div data-filtro-panel="tipo_trabajo" data-filtro-titulo="Tipo de trabajo" data-filtro-param="tipo_trabajo" class="d-none">
-                    <select id="filtroTipoTrabajo" class="form-select form-select-sm" data-orden-lista="no" aria-label="Tipo">
-                      <option value="">Elige un tipo</option>
-                      {% for codigo, label in tipos_trabajo %}<option value="{{ codigo }}">{{ label }}</option>{% endfor %}
-                    </select>
-                  </div>
-                  <div data-filtro-panel="tecnico_id" data-filtro-titulo="Técnico" data-filtro-param="tecnico_id" class="d-none">
-                    <select id="filtroTecnico" class="form-select form-select-sm" aria-label="Técnico">
-                      <option value="">Elige un técnico</option>
-                      {% for tecnico in tecnicos %}<option value="{{ tecnico.id }}">{{ tecnico.nombre_interno }}</option>{% endfor %}
-                    </select>
-                  </div>
-                  <div data-filtro-panel="empresa" data-filtro-titulo="Empresa" data-filtro-param="empresa" class="d-none">
-                    <select id="filtroEmpresa" class="form-select form-select-sm" aria-label="Empresa">
-                      <option value="">Elige una empresa</option>
-                      {% for emp in empresas %}<option value="{{ emp }}">{{ emp }}</option>{% endfor %}
-                    </select>
-                  </div>
-                  <div data-filtro-panel="comuna" data-filtro-titulo="Comuna" data-filtro-param="comuna" class="d-none">
-                    <select id="filtroComuna" class="form-select form-select-sm" aria-label="Comuna">
-                      <option value="">Elige una comuna</option>
-                      {% for c in comunas %}<option value="{{ c }}">{{ c }}</option>{% endfor %}
-                    </select>
-                  </div>
-                </div>
-                <div class="col-12 col-md-auto">
-                  <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
-                </div>
-              </div>
-              <div class="delco-filtro-activos js-filtro-activos">
-                {% if filters.periodo %}<a class="delco-filtro-chip" href="?{% url_sin 'periodo' %}"><span class="delco-filtro-chip-tipo">Período</span><span>{{ filters.periodo }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
-                {% if filters.estado_ot %}<a class="delco-filtro-chip" href="?{% url_sin 'estado_ot' %}"><span class="delco-filtro-chip-tipo">Estado</span><span>{% for codigo, label in estados_ot %}{% if codigo == filters.estado_ot %}{{ label }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
-                {% if filters.tipo_trabajo %}<a class="delco-filtro-chip" href="?{% url_sin 'tipo_trabajo' %}"><span class="delco-filtro-chip-tipo">Tipo</span><span>{% for codigo, label in tipos_trabajo %}{% if codigo == filters.tipo_trabajo %}{{ label }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
-                {% if filters.tecnico_id %}<a class="delco-filtro-chip" href="?{% url_sin 'tecnico_id' %}"><span class="delco-filtro-chip-tipo">Técnico</span><span>{% for tecnico in tecnicos %}{% if filters.tecnico_id == tecnico.id|stringformat:"s" %}{{ tecnico.nombre_interno }}{% endif %}{% endfor %}</span><i class="bi bi-x-lg"></i></a>{% endif %}
-                {% if filters.empresa %}<a class="delco-filtro-chip" href="?{% url_sin 'empresa' %}"><span class="delco-filtro-chip-tipo">Empresa</span><span>{{ filters.empresa }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
-                {% if filters.comuna %}<a class="delco-filtro-chip" href="?{% url_sin 'comuna' %}"><span class="delco-filtro-chip-tipo">Comuna</span><span>{{ filters.comuna }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
-                {% if filtros_activos %}<a class="delco-filtro-limpiar" href="{% url 'reportes_hub' %}">Quitar filtros</a>{% endif %}
-              </div>
+            <div data-filtro-panel="tecnico" data-filtro-titulo="Técnico" data-filtro-param="tecnico" class="d-none">
+              <input type="text" id="tecnico" class="form-control form-control-sm" placeholder="Nombre del técnico" aria-label="Técnico">
             </div>
+            <div data-filtro-panel="num_cliente" data-filtro-titulo="N° cliente" data-filtro-param="num_cliente" class="d-none">
+              <input type="text" id="num_cliente" class="form-control form-control-sm" placeholder="Número de cliente" aria-label="N° cliente">
+            </div>
+          </div>
+          <div class="col-12 col-md-3 d-none js-filtro-rango">
+            <label class="form-label small mb-1">Hasta</label>
+            <input type="date" class="form-control form-control-sm js-filtro-hasta" aria-label="Hasta">
+          </div>
+          <div class="col-12 col-md-auto">
+            <button type="button" class="btn btn-sm btn-primary js-filtro-agregar"><i class="bi bi-plus-lg"></i> Agregar filtro</button>
+          </div>
         </div>
+        <div class="delco-filtro-activos js-filtro-activos">
+          {% if query %}<a class="delco-filtro-chip" href="?{% url_sin 'query' %}"><span class="delco-filtro-chip-tipo">Formulario</span><span>{{ query }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if asignado %}<a class="delco-filtro-chip" href="?{% url_sin 'asignado' %}"><span class="delco-filtro-chip-tipo">Asignado a</span><span>{{ asignado }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if fecha_desde or fecha_hasta %}<a class="delco-filtro-chip" href="?{% url_sin 'fecha_desde' 'fecha_hasta' %}"><span class="delco-filtro-chip-tipo">Fecha</span><span>{{ fecha_desde|default:"…" }} → {{ fecha_hasta|default:"…" }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if tecnico %}<a class="delco-filtro-chip" href="?{% url_sin 'tecnico' %}"><span class="delco-filtro-chip-tipo">Técnico</span><span>{{ tecnico }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if num_cliente %}<a class="delco-filtro-chip" href="?{% url_sin 'num_cliente' %}"><span class="delco-filtro-chip-tipo">N° cliente</span><span>{{ num_cliente }}</span><i class="bi bi-x-lg"></i></a>{% endif %}
+          {% if tiene_filtros %}<a class="delco-filtro-limpiar" href="{% url 'reportes_hub' %}">Quitar filtros</a>{% endif %}
+        </div>
+      </div>
     </div>
+  </div>
 
-    <div class="card shadow-sm delco-panel-card">
-        <div class="card-header bg-body d-flex justify-content-between align-items-center py-2">
-            <span><i class="bi bi-table me-1"></i> Catálogo de reportes</span>
-            <span class="small text-muted">{{ catalog|length }} informes</span>
-        </div>
-        <div class="table-responsive">
-            <table class="table table-hover mb-0 align-middle">
-                <thead class="table-delco">
-                    <tr>
-                        <th>Reporte</th>
-                        <th>Descripción</th>
-                        <th class="text-center" style="width:110px;">Registros</th>
-                        <th>Aplica</th>
-                        <th class="text-end" style="width:160px;">Exportar</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in catalog %}
-                    <tr>
-                        <td class="fw-semibold">{{ item.title }}</td>
-                        <td class="text-muted small">{{ item.description }}</td>
-                        <td class="text-center">
-                            {% if item.error %}
-                            <span class="badge bg-danger">Error</span>
-                            {% elif item.row_count is None %}
-                            <span class="badge bg-secondary">—</span>
-                            {% elif item.row_count == 0 %}
-                            <span class="badge bg-secondary">0</span>
-                            {% else %}
-                            <span class="badge bg-primary">{{ item.row_count }}</span>
-                            {% endif %}
-                        </td>
-                        <td class="small">
-                            {% if item.supports_date_range %}<span class="badge delco-badge-muted me-1">Período</span>{% endif %}
-                            {% if item.supports_estado %}<span class="badge delco-badge-muted me-1">Estado</span>{% endif %}
-                            {% if item.supports_tipo %}<span class="badge delco-badge-muted me-1">Tipo</span>{% endif %}
-                            {% if item.supports_tecnico %}<span class="badge delco-badge-muted me-1">Técnico</span>{% endif %}
-                            {% if item.supports_empresa %}<span class="badge delco-badge-muted me-1">Empresa</span>{% endif %}
-                            {% if item.supports_comuna %}<span class="badge delco-badge-muted me-1">Comuna</span>{% endif %}
-                            {% if not item.supports_date_range and not item.supports_estado and not item.supports_tipo and not item.supports_tecnico and not item.supports_empresa and not item.supports_comuna %}
-                            <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
-                        <td class="text-end text-nowrap">
-                            <a class="btn btn-sm btn-success"
-                               href="{% url 'reportes_export' item.slug %}?formato=excel{% if filter_query %}&{{ filter_query }}{% endif %}">
-                                Excel
-                            </a>
-                            <a class="btn btn-sm btn-outline-danger"
-                               href="{% url 'reportes_export' item.slug %}?formato=pdf{% if filter_query %}&{{ filter_query }}{% endif %}">
-                                PDF
-                            </a>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+  {% if not formularios %}
+  <div class="card border-0 shadow-sm delco-panel-card">
+    <div class="card-body text-center py-5">
+      <div class="display-6 text-muted mb-3"><i class="bi bi-inbox"></i></div>
+      <h3 class="h5 mb-2">
+        {% if tiene_filtros %}
+        Ningún formulario coincide con esos filtros.
+        {% elif ve_todos %}
+        Aún no hay formularios asignados
+        {% else %}
+        No tienes formularios asignados
+        {% endif %}
+      </h3>
+      <p class="text-muted mb-0 mx-auto" style="max-width: 520px;">
+        {% if tiene_filtros %}
+        Quita un filtro o escribe otro nombre para ver el informe.
+        {% elif ve_todos %}
+        Asínalos en el catálogo MoreApp para ver aquí el total y descargar el informe.
+        {% else %}
+        Pide a un administrador que te asigne los que vas a revisar.
+        {% endif %}
+      </p>
     </div>
-    {% endif %}
+  </div>
+  {% else %}
+  <div class="card shadow-sm delco-panel-card">
+    <div class="card-header bg-body d-flex justify-content-between align-items-center py-2">
+      <span><i class="bi bi-table me-1"></i> Catálogo de reportes</span>
+      <span class="small text-muted">{{ formularios|length }} informe{{ formularios|length|pluralize }}</span>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-hover mb-0 align-middle">
+        <thead class="table-delco">
+          <tr>
+            <th>Reporte</th>
+            {% if ve_todos %}<th>Asignado a</th>{% endif %}
+            <th class="text-center" style="width:110px;">Registros</th>
+            <th>Aplica</th>
+            <th class="text-end" style="width:160px;">Exportar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for form in formularios %}
+          <tr>
+            <td class="fw-semibold">{{ form.name }}</td>
+            {% if ve_todos %}
+            <td class="small text-muted">
+              {% if form.asignados %}{{ form.asignados|join:", " }}{% else %}—{% endif %}
+            </td>
+            {% endif %}
+            <td class="text-center">
+              {% if form.row_count is None %}
+              <span class="badge bg-secondary">—</span>
+              {% elif form.row_count == 0 %}
+              <span class="badge bg-secondary">0</span>
+              {% else %}
+              <span class="badge bg-primary">{{ form.row_count }}</span>
+              {% endif %}
+            </td>
+            <td class="small">
+              <span class="badge delco-badge-muted me-1">Fecha</span>
+              <span class="badge delco-badge-muted me-1">Técnico</span>
+              <span class="badge delco-badge-muted">N° cliente</span>
+            </td>
+            <td class="text-end text-nowrap">
+              <a class="btn btn-sm btn-success" href="{% url 'moreapp_api_form_registros' form.id %}?export=xlsx{% if filtros_descarga %}&amp;{{ filtros_descarga }}{% endif %}">Excel</a>
+              <a class="btn btn-sm btn-outline-danger" href="{% url 'moreapp_api_form_registros' form.id %}?export=pdf{% if filtros_descarga %}&amp;{{ filtros_descarga }}{% endif %}">PDF</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card-footer small text-muted">
+      La descarga incluye todos los registros del formulario. El número de la tabla es el total en MoreApp.
+      {% if tecnico %}El técnico se aplica al Excel y al PDF, no a ese total.{% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

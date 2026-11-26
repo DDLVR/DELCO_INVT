@@ -174,7 +174,7 @@ def _forms_from_payload(raw: Any) -> List[Any]:
     return []
 
 
-def list_all_forms(*, max_pages: int = 20, query_text: str = "") -> List[Any]:
+def _list_all_forms(*, max_pages: int = 20, query_text: str = "") -> List[Any]:
     collected: List[Any] = []
     seen = set()
     pages = max(1, int(max_pages or 1))
@@ -196,6 +196,18 @@ def list_all_forms(*, max_pages: int = 20, query_text: str = "") -> List[Any]:
         if added == 0:
             break
     return collected
+
+
+def list_all_forms(*, max_pages: int = 20, query_text: str = "") -> List[Any]:
+    if (query_text or "").strip():
+        return _list_all_forms(max_pages=max_pages, query_text=query_text)
+    from web.perf_cache import TTL_CORTO, cache_get_or_set
+
+    return cache_get_or_set(
+        "moreapp:all_forms",
+        lambda: _list_all_forms(max_pages=max_pages, query_text=""),
+        TTL_CORTO,
+    )
 
 
 def get_form(form_id: str) -> Any:

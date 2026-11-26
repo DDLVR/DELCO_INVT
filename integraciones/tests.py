@@ -193,6 +193,81 @@ class MoreAppMovimientoTrayectoTests(TestCase):
 		self.assertEqual(mov_viejo.movimiento.destino.nombre, 'Bodega Principal')
 
 
+class MoreAppMantenimientoTelemetriaInventarioTests(MoreAppMovimientoTrayectoTests):
+	"""Mantenimiento Telemetría mueve solo los equipos que la visita cambió."""
+
+	def _payload(self, submission_id, fecha_ms=None, **data):
+		base = {
+			'cliente': 'CLI-MOV-1',
+			'clienteParaMantenimiento': {'NROCLIENTE': 'CLI-MOV-1', 'NROAPARATO': 'MED-MOV-1'},
+			'estado': 'EJECUTADO',
+			'tecnicoResponsable': {'NOMBRES': 'Tecnico Prueba'},
+		}
+		base.update(data)
+		info = {'formName': 'Mantenimiento Telemetria V3'}
+		if fecha_ms is not None:
+			info['date'] = fecha_ms
+		return {'id': submission_id, 'info': info, 'meta': {}, 'data': base}
+
+	def test_cambio_de_medidor_instala_el_dejado_y_mantiene_el_mismo_modem(self):
+		from inventario.models import Medidor
+
+		medidor_nuevo = Medidor.objects.create(
+			serie='MED-NEW-1',
+			tipo_medidor='DIRECTO',
+			estado_inventario=self.estado_bodega,
+			ubicacion_actual=self.bodega,
+		)
+		procesar_payload_moreapp(self._payload(
+			'mant-cambio-medidor',
+			SeRealizoUnCambioFisicoDeMedidorEnEstaVisita='SI',
+			numeroDeMedidorDejado='MED-NEW-1',
+			numeroDeModemEncontrado='MODEM-OLD-1',
+			numeroModemDejado='MODEM-OLD-1',
+		), ruta_context='test')
+
+		medidor_nuevo.refresh_from_db()
+		self.medidor.refresh_from_db()
+		self.modem_viejo.refresh_from_db()
+		self.assertEqual(medidor_nuevo.estado_inventario.nombre, 'Instalado')
+		self.assertEqual(medidor_nuevo.cliente_id, self.cliente.id)
+		self.assertEqual(self.medidor.estado_inventario.nombre, 'Retirado')
+		self.assertEqual(self.modem_viejo.estado_inventario.nombre, 'Instalado')
+		self.assertEqual(self.modem_viejo.cliente_id, self.cliente.id)
+		self.cliente.refresh_from_db()
+		self.assertEqual(self.cliente.medidor_actual_id, medidor_nuevo.id)
+		self.assertEqual(self.cliente.meter_serial_n_1, 'MED-NEW-1')
+		self.assertEqual(self.cliente.modem, 'MODEM-OLD-1')
+		self.assertEqual(self.cliente.estado_sci4, 'PENDIENTE')
+
+	def test_incidencia_no_mueve_ni_crea_equipos(self):
+		from inventario.models import Medidor, MovimientoInventario
+
+		medidores_antes = Medidor.objects.count()
+		procesar_payload_moreapp(self._payload(
+			'mant-incidencia',
+			estado='INCIDENCIA',
+			clienteParaMantenimiento={'NROCLIENTE': 'CLI-MOV-1', 'NROAPARATO': 'PADRON-999'},
+		), ruta_context='test')
+		self.assertEqual(Medidor.objects.count(), medidores_antes)
+		self.assertFalse(MovimientoInventario.objects.filter(origen_sistema='MOREAPP').exists())
+
+	def test_ingesta_api_mueve_solo_visitas_recientes(self):
+		import time
+		from integraciones.moreapp_api_ingest import ingest_submission_items
+
+		cambio = {'numeroDeModemEncontrado': 'MODEM-OLD-1', 'numeroModemDejado': 'MODEM-NEW-1'}
+		ingest_submission_items([self._payload('mant-antigua', fecha_ms=1767225600000, **cambio)])
+		self.modem_nuevo.refresh_from_db()
+		self.assertEqual(self.modem_nuevo.estado_inventario.nombre, 'En bodega')
+
+		ingest_submission_items([self._payload('mant-reciente', fecha_ms=time.time() * 1000, **cambio)])
+		self.modem_nuevo.refresh_from_db()
+		self.modem_viejo.refresh_from_db()
+		self.assertEqual(self.modem_nuevo.estado_inventario.nombre, 'Instalado')
+		self.assertEqual(self.modem_viejo.estado_inventario.nombre, 'Retirado')
+
+
 class MoreAppApiIngestTests(TestCase):
 	def test_extractor_telemetria_sin_v3_en_el_nombre(self):
 		from integraciones.reader import _extraer_datos_normalizados, _resolver_formulario
